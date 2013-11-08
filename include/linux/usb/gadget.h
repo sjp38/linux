@@ -162,6 +162,12 @@ struct usb_ep_ops {
  *	enabled and remains valid until the endpoint is disabled.
  * @comp_desc: In case of SuperSpeed support, this is the endpoint companion
  *	descriptor that is used to configure the endpoint
+ * @has_bulk: endpoint supports bulk transfers
+ * @has_control: endpoint supports control transfers
+ * @has_interrupt: endpoint supports interrupt transfers
+ * @has_isochronous: endpoint supports isochronous transfers
+ * @has_dir_in: endpoint supports IN direction
+ * @has_dir_out: endpoint supports OUT direction
  *
  * the bus controller driver lists all the general purpose endpoints in
  * gadget->ep_list.  the control endpoint (gadget->ep0) is not in that list,
@@ -181,6 +187,13 @@ struct usb_ep {
 	u8			address;
 	const struct usb_endpoint_descriptor	*desc;
 	const struct usb_ss_ep_comp_descriptor	*comp_desc;
+
+	unsigned		has_bulk:1;
+	unsigned		has_control:1;
+	unsigned		has_interrupt:1;
+	unsigned		has_isochronous:1;
+	unsigned		has_dir_in:1;
+	unsigned		has_dir_out:1;
 };
 
 /*-------------------------------------------------------------------------*/
