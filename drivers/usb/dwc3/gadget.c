@@ -1652,6 +1652,18 @@ static int dwc3_gadget_init_hw_endpoints(struct dwc3 *dwc,
 		if (epnum == 0 || epnum == 1) {
 			usb_ep_set_maxpacket_limit(&dep->endpoint, 512);
 			dep->endpoint.maxburst = 1;
+			dep->endpoint.has_control = true;
+
+			/*
+			 * REVISIT here we lie a bit to gadget framework,
+			 * because gadget framework expects to see a single
+			 * USB Endpoint zero, and we want the driver to manage
+			 * HW endpoints, we must tell gadget framework that
+			 * HW Endpoint zero supports both directions.
+			 */
+			dep->endpoint.has_dir_in = true;
+			dep->endpoint.has_dir_out = true;
+
 			dep->endpoint.ops = &dwc3_gadget_ep0_ops;
 			if (!epnum)
 				dwc->gadget.ep0 = &dep->endpoint;
@@ -1660,6 +1672,13 @@ static int dwc3_gadget_init_hw_endpoints(struct dwc3 *dwc,
 
 			usb_ep_set_maxpacket_limit(&dep->endpoint, 1024);
 			dep->endpoint.max_streams = 15;
+
+			dep->endpoint.has_bulk = true;
+			dep->endpoint.has_interrupt = true;
+			dep->endpoint.has_isochronous = true;
+			dep->endpoint.has_dir_in = !!direction;
+			dep->endpoint.has_dir_out = !direction;
+
 			dep->endpoint.ops = &dwc3_gadget_ep_ops;
 			list_add_tail(&dep->endpoint.ep_list,
 					&dwc->gadget.ep_list);
