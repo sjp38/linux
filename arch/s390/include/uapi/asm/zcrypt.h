@@ -154,6 +154,46 @@ struct ica_xcRB {
 	unsigned short	priority_window;
 	unsigned int	status;
 } __attribute__((packed));
+
+/**
+ * EP11 CPRB
+ */
+struct ep11_cprb {
+	unsigned short	cprb_len;	/* CPRB header length	  0x0020    */
+	unsigned char	cprb_ver_id;	/* CPRB version id.	  0x04	    */
+	unsigned char	pad_000[2];	/* Alignment pad bytes		    */
+	unsigned char	flags;		/* Admin cmd 0x80 / func. cmd 0x00  */
+	unsigned char	func_id[2];	/* Function id / subtype  0x5434    */
+	unsigned int	source_id;	/* Source id [originator id]	    */
+	unsigned int	target_id;	/* Target id [usage/ctrl domain id] */
+	unsigned int	ret_code;	/* Return code			    */
+	unsigned int	reserved1;	/* Reserved			    */
+	unsigned int	reserved2;	/* Reserved			    */
+	unsigned int	payload_len;	/* Payload length		    */
+} __attribute__((packed));
+
+/**
+ * EP11 target device
+ */
+struct ep11_target_dev {
+	short ap_id;	/* AP device id    */
+	short dom_id;	/* Usage domain id */
+};
+
+/**
+ * EP11 user request block
+ */
+struct ep11_urb {
+	short			targets_num;	/* Number of target adapters */
+	struct target_list	*targets;	/* Target adapter list	     */
+	unsigned long		weight;		/* Level of request priority */
+	unsigned long		req_no;		/* Request id/number	     */
+	unsigned long		req_len;	/* Request length	     */
+	char __user		*req;		/* Pointer to request block  */
+	unsigned long		resp_len;	/* Response length	     */
+	char  __user		*resp;		/* Pointer to response block */
+} __attribute__((packed));
+
 #define AUTOSELECT ((unsigned int)0xFFFFFFFF)
 
 #define ZCRYPT_IOCTL_MAGIC 'z'
@@ -182,6 +222,9 @@ struct ica_xcRB {
  *
  *   ZSECSENDCPRB
  *     Send an arbitrary CPRB to a crypto card.
+ *
+ *   ZSENDEP11CPRB
+ *     Send an arbitrary EP11 CPRB to an EP11 coprocessor crypto card.
  *
  *   Z90STAT_STATUS_MASK
  *     Return an 64 element array of unsigned chars for the status of
@@ -256,6 +299,7 @@ struct ica_xcRB {
 #define ICARSAMODEXPO	_IOC(_IOC_READ|_IOC_WRITE, ZCRYPT_IOCTL_MAGIC, 0x05, 0)
 #define ICARSACRT	_IOC(_IOC_READ|_IOC_WRITE, ZCRYPT_IOCTL_MAGIC, 0x06, 0)
 #define ZSECSENDCPRB	_IOC(_IOC_READ|_IOC_WRITE, ZCRYPT_IOCTL_MAGIC, 0x81, 0)
+#define ZSENDEP11CPRB	_IOC(_IOC_READ|_IOC_WRITE, ZCRYPT_IOCTL_MAGIC, 0x04, 0)
 
 /* New status calls */
 #define Z90STAT_TOTALCOUNT	_IOR(ZCRYPT_IOCTL_MAGIC, 0x40, int)
