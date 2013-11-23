@@ -31,7 +31,8 @@ static int parse_subpart(struct cmdline_subpart **subpart, char *partdef)
 		new_subpart->size = (sector_t)memparse(partdef, &partdef);
 		if (new_subpart->size < (sector_t)PAGE_SIZE) {
 			pr_warn(PARSER "partition '%s' size '0x%llx' too small.",
-				partorg, new_subpart->size);
+				partorg,
+				(unsigned long long)new_subpart->size);
 			ret = -EINVAL;
 			goto fail;
 		}
@@ -273,7 +274,8 @@ int cmdline_parts_set(struct cmdline_parts *parts, sector_t disk_size,
 		if (from >= disk_size) {
 			pr_warn(PARSER "partition '%s' offset exceeds device"
 				" '%s' size '0x%llx', ignoring.",
-				subpart->name, parts->name, disk_size);
+				subpart->name, parts->name,
+				(unsigned long long)disk_size);
 			break;
 		}
 
@@ -281,7 +283,8 @@ int cmdline_parts_set(struct cmdline_parts *parts, sector_t disk_size,
 			if (subpart->size != (sector_t)(~0ULL))
 				pr_warn(PARSER "partition '%s' size exceeds "
 					"device '%s' size '0x%llx', truncating.",
-					subpart->name, parts->name, disk_size);
+					subpart->name, parts->name,
+					(unsigned long long)disk_size);
 			subpart->size = disk_size - from;
 		}
 
