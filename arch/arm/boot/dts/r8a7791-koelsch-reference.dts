@@ -1,6 +1,7 @@
 /*
- * Device Tree Source for the Lager board
+ * Device Tree Source for the Koelsch board
  *
+ * Copyright (C) 2013 Renesas Electronics Corporation
  * Copyright (C) 2013 Renesas Solutions Corp.
  *
  * This file is licensed under the terms of the GNU General Public License
@@ -9,11 +10,11 @@
  */
 
 /dts-v1/;
-#include "r8a7790.dtsi"
+#include "r8a7791.dtsi"
 
 / {
-	model = "Lager";
-	compatible = "renesas,lager", "renesas,r8a7790";
+	model = "Koelsch";
+	compatible = "renesas,koelsch-reference", "renesas,r8a7791";
 
 	chosen {
 		bootargs = "console=ttySC6,115200 ignore_loglevel rw root=/dev/nfs ip=dhcp";
@@ -27,5 +28,20 @@
 	lbsc {
 		#address-cells = <1>;
 		#size-cells = <1>;
+	};
+};
+
+&pfc {
+	pinctrl-0 = <&scif0_pins &scif1_pins>;
+	pinctrl-names = "default";
+
+	scif0_pins: serial0 {
+		renesas,groups = "scif0_data_d";
+		renesas,function = "scif0";
+	};
+
+	scif1_pins: serial1 {
+		renesas,groups = "scif1_data_d";
+		renesas,function = "scif1";
 	};
 };
