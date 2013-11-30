@@ -9,6 +9,7 @@
  *
  *  DMA uncached mapping support.
  */
+#include <linux/bootmem.h>
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/gfp.h>
@@ -162,6 +163,8 @@ static u64 get_coherent_dma_mask(struct device *dev)
 	u64 mask = (u64)DMA_BIT_MASK(32);
 
 	if (dev) {
+		unsigned long max_dma_pfn;
+
 		mask = dev->coherent_dma_mask;
 
 		/*
@@ -173,6 +176,8 @@ static u64 get_coherent_dma_mask(struct device *dev)
 			return 0;
 		}
 
+		max_dma_pfn = min(max_pfn, arm_dma_pfn_limit);
+
 		/*
 		 * If the mask allows for more memory than we can address,
 		 * and we actually have that much memory, then fail the
@@ -180,7 +185,7 @@ static u64 get_coherent_dma_mask(struct device *dev)
 		 */
 		if (sizeof(mask) != sizeof(dma_addr_t) &&
 		    mask > (dma_addr_t)~0 &&
-		    dma_to_pfn(dev, ~0) > arm_dma_pfn_limit) {
+		    dma_to_pfn(dev, ~0) > max_dma_pfn) {
 			dev_warn(dev, "Coherent DMA mask %#llx is larger than dma_addr_t allows\n",
 				 mask);
 			dev_warn(dev, "Driver did not use or check the return value from dma_set_coherent_mask()?\n");
@@ -192,7 +197,7 @@ static u64 get_coherent_dma_mask(struct device *dev)
 		 * fits within the allowable addresses which we can
 		 * allocate.
 		 */
-		if (dma_to_pfn(dev, mask) < arm_dma_pfn_limit) {
+		if (dma_to_pfn(dev, mask) < max_dma_pfn) {
 			dev_warn(dev, "Coherent DMA mask %#llx (pfn %#lx-%#lx) covers a smaller range of system memory than the DMA zone pfn 0x0-%#lx\n",
 				 mask,
 				 dma_to_pfn(dev, 0), dma_to_pfn(dev, mask) + 1,
@@ -361,7 +366,7 @@ void __init init_dma_coherent_pool_size(unsigned long size)
 static int __init atomic_pool_init(void)
 {
 	struct dma_pool *pool = &atomic_pool;
-	pgprot_t prot = pgprot_dmacoherent(pgprot_kernel);
+	pgprot_t prot = pgprot_dmacoherent(PAGE_KERNEL);
 	gfp_t gfp = GFP_KERNEL | GFP_DMA;
 	unsigned long nr_pages = pool->size >> PAGE_SHIFT;
 	unsigned long *bitmap;
@@ -609,7 +614,7 @@ static void __free_from_contiguous(struct device *dev, struct page *page,
 	if (PageHighMem(page))
 		__dma_free_remap(cpu_addr, size);
 	else
-		__dma_remap(page, size, pgprot_kernel);
+		__dma_remap(page, size, PAGE_KERNEL);
 	dma_release_from_contiguous(dev, page, size >> PAGE_SHIFT);
 }
 
@@ -1357,7 +1362,7 @@ static void __iommu_free_atomic(struct device *dev, void *cpu_addr,
 static void *arm_iommu_alloc_attrs(struct device *dev, size_t size,
 	    dma_addr_t *handle, gfp_t gfp, struct dma_attrs *attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, pgprot_kernel);
+	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
 	struct page **pages;
 	void *addr = NULL;
 
