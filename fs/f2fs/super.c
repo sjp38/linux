@@ -50,6 +50,7 @@ enum {
 	Opt_active_logs,
 	Opt_disable_ext_identify,
 	Opt_inline_xattr,
+	Opt_inline_data,
 	Opt_err,
 };
 
@@ -65,6 +66,7 @@ static match_table_t f2fs_tokens = {
 	{Opt_active_logs, "active_logs=%u"},
 	{Opt_disable_ext_identify, "disable_ext_identify"},
 	{Opt_inline_xattr, "inline_xattr"},
+	{Opt_inline_data, "inline_data"},
 	{Opt_err, NULL},
 };
 
@@ -175,6 +177,7 @@ F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_max_sleep_time, max_sleep_time);
 F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_no_gc_sleep_time, no_gc_sleep_time);
 F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_idle, gc_idle);
 F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, reclaim_segments, rec_prefree_segments);
+F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, max_small_discards, max_discards);
 
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
@@ -183,6 +186,7 @@ static struct attribute *f2fs_attrs[] = {
 	ATTR_LIST(gc_no_gc_sleep_time),
 	ATTR_LIST(gc_idle),
 	ATTR_LIST(reclaim_segments),
+	ATTR_LIST(max_small_discards),
 	NULL,
 };
 
@@ -310,6 +314,9 @@ static int parse_options(struct super_block *sb, char *options)
 			break;
 		case Opt_disable_ext_identify:
 			set_opt(sbi, DISABLE_EXT_IDENTIFY);
+			break;
+		case Opt_inline_data:
+			set_opt(sbi, INLINE_DATA);
 			break;
 		default:
 			f2fs_msg(sb, KERN_ERR,
@@ -508,7 +515,8 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 #endif
 	if (test_opt(sbi, DISABLE_EXT_IDENTIFY))
 		seq_puts(seq, ",disable_ext_identify");
-
+	if (test_opt(sbi, INLINE_DATA))
+		seq_puts(seq, ",inline_data");
 	seq_printf(seq, ",active_logs=%u", sbi->active_logs);
 
 	return 0;
@@ -818,6 +826,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	struct buffer_head *raw_super_buf;
 	struct inode *root;
 	long err = -EINVAL;
+	int i;
 
 	/* allocate memory for f2fs-specific super block info */
 	sbi = kzalloc(sizeof(struct f2fs_sb_info), GFP_KERNEL);
@@ -874,7 +883,11 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->node_write);
 	sbi->por_doing = false;
 	spin_lock_init(&sbi->stat_lock);
-	init_rwsem(&sbi->bio_sem);
+
+	mutex_init(&sbi->read_io.io_mutex);
+	for (i = 0; i < NR_PAGE_TYPE; i++)
+		mutex_init(&sbi->write_io[i].io_mutex);
+
 	init_rwsem(&sbi->cp_rwsem);
 	init_waitqueue_head(&sbi->cp_wait);
 	init_sb_info(sbi);
@@ -939,9 +952,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	/* if there are nt orphan nodes free them */
-	err = -EINVAL;
-	if (recover_orphan_inodes(sbi))
-		goto free_node_inode;
+	recover_orphan_inodes(sbi);
 
 	/* read root inode and dentry */
 	root = f2fs_iget(sb, F2FS_ROOT_INO(sbi));
@@ -950,8 +961,10 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 		err = PTR_ERR(root);
 		goto free_node_inode;
 	}
-	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size)
+	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size) {
+		err = -EINVAL;
 		goto free_root_inode;
+	}
 
 	sb->s_root = d_make_root(root); /* allocate root dentry */
 	if (!sb->s_root) {
@@ -1078,9 +1091,12 @@ static int __init init_f2fs_fs(void)
 	err = create_node_manager_caches();
 	if (err)
 		goto free_inodecache;
-	err = create_gc_caches();
+	err = create_segment_manager_caches();
 	if (err)
 		goto free_node_manager_caches;
+	err = create_gc_caches();
+	if (err)
+		goto free_segment_manager_caches;
 	err = create_checkpoint_caches();
 	if (err)
 		goto free_gc_caches;
@@ -1102,6 +1118,8 @@ free_checkpoint_caches:
 	destroy_checkpoint_caches();
 free_gc_caches:
 	destroy_gc_caches();
+free_segment_manager_caches:
+	destroy_segment_manager_caches();
 free_node_manager_caches:
 	destroy_node_manager_caches();
 free_inodecache:

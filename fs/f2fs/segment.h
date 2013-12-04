@@ -20,13 +20,8 @@
 #define GET_L2R_SEGNO(free_i, segno)	(segno - free_i->start_segno)
 #define GET_R2L_SEGNO(free_i, segno)	(segno + free_i->start_segno)
 
-#define IS_DATASEG(t)							\
-	((t == CURSEG_HOT_DATA) || (t == CURSEG_COLD_DATA) ||		\
-	(t == CURSEG_WARM_DATA))
-
-#define IS_NODESEG(t)							\
-	((t == CURSEG_HOT_NODE) || (t == CURSEG_COLD_NODE) ||		\
-	(t == CURSEG_WARM_NODE))
+#define IS_DATASEG(t)	(t <= CURSEG_COLD_DATA)
+#define IS_NODESEG(t)	(t >= CURSEG_HOT_NODE)
 
 #define IS_CURSEG(sbi, seg)						\
 	((seg == CURSEG_I(sbi, CURSEG_HOT_DATA)->segno) ||	\
@@ -83,24 +78,19 @@
 	(segno / SIT_ENTRY_PER_BLOCK)
 #define	START_SEGNO(sit_i, segno)		\
 	(SIT_BLOCK_OFFSET(sit_i, segno) * SIT_ENTRY_PER_BLOCK)
+#define SIT_BLK_CNT(sbi)			\
+	((TOTAL_SEGS(sbi) + SIT_ENTRY_PER_BLOCK - 1) / SIT_ENTRY_PER_BLOCK)
 #define f2fs_bitmap_size(nr)			\
 	(BITS_TO_LONGS(nr) * sizeof(unsigned long))
 #define TOTAL_SEGS(sbi)	(SM_I(sbi)->main_segments)
 #define TOTAL_SECS(sbi)	(sbi->total_sections)
 
 #define SECTOR_FROM_BLOCK(sbi, blk_addr)				\
-	(blk_addr << ((sbi)->log_blocksize - F2FS_LOG_SECTOR_SIZE))
+	(((sector_t)blk_addr) << (sbi)->log_sectors_per_block)
 #define SECTOR_TO_BLOCK(sbi, sectors)					\
-	(sectors >> ((sbi)->log_blocksize - F2FS_LOG_SECTOR_SIZE))
+	(sectors >> (sbi)->log_sectors_per_block)
 #define MAX_BIO_BLOCKS(max_hw_blocks)					\
 	(min((int)max_hw_blocks, BIO_MAX_PAGES))
-
-/* during checkpoint, bio_private is used to synchronize the last bio */
-struct bio_private {
-	struct f2fs_sb_info *sbi;
-	bool is_sync;
-	void *wait;
-};
 
 /*
  * indicate a block allocation direction: RIGHT and LEFT.
