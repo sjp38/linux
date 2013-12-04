@@ -32,8 +32,6 @@
 #include <linux/jiffies.h>
 #include <linux/stddef.h>
 #include <linux/acpi.h>
-#include <acpi/acpi_bus.h>
-#include <acpi/acpi_drivers.h>
 
 #define PREFIX "ACPI: "
 
@@ -323,14 +321,11 @@ static int dock_present(struct dock_station *ds)
  */
 static void dock_create_acpi_device(acpi_handle handle)
 {
-	struct acpi_device *device;
+	struct acpi_device *device = NULL;
 	int ret;
 
-	if (acpi_bus_get_device(handle, &device)) {
-		/*
-		 * no device created for this object,
-		 * so we should create one.
-		 */
+	acpi_bus_get_device(handle, &device);
+	if (!acpi_device_enumerated(device)) {
 		ret = acpi_bus_scan(handle);
 		if (ret)
 			pr_debug("error adding bus, %x\n", -ret);
