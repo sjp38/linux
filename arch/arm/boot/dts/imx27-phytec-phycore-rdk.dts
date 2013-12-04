@@ -16,23 +16,65 @@
 
 &cspi1 {
 	fsl,spi-num-chipselects = <2>;
-	cs-gpios = <&gpio4 28 0>, <&gpio4 27 0>;
+	cs-gpios = <&gpio4 28 GPIO_ACTIVE_HIGH>,
+		   <&gpio4 27 GPIO_ACTIVE_LOW>;
+};
+
+&i2c1 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c1>;
+	status = "okay";
+
+	camgpio: pca9536@41 {
+		compatible = "nxp,pca9536";
+		reg = <0x41>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+};
+
+&iomuxc {
+	imx27_phycore_rdk {
+		pinctrl_i2c1: i2c1grp {
+			fsl,pins = <MX27_I2C1_PINGRP1>;
+		};
+
+		pinctrl_uart1: uart1grp {
+			fsl,pins = <
+				MX27_UART1_PINGRP1
+				MX27_UART1_RTSCTS_PINGRP1
+			>;
+		};
+
+		pinctrl_uart2: uart2grp {
+			fsl,pins = <
+				MX27_UART2_PINGRP1
+				MX27_UART2_RTSCTS_PINGRP1
+			>;
+		};
+	};
 };
 
 &sdhci2 {
 	bus-width = <4>;
-	cd-gpios = <&gpio3 29 0>;
-	wp-gpios = <&gpio3 28 0>;
+	cd-gpios = <&gpio3 29 GPIO_ACTIVE_HIGH>;
+	wp-gpios = <&gpio3 28 GPIO_ACTIVE_HIGH>;
 	vmmc-supply = <&vmmc1_reg>;
 	status = "okay";
 };
 
 &uart1 {
 	fsl,uart-has-rtscts;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	status = "okay";
 };
 
 &uart2 {
 	fsl,uart-has-rtscts;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart2>;
 	status = "okay";
 };
 
@@ -41,7 +83,7 @@
 		compatible = "nxp,sja1000";
 		reg = <4 0x00000000 0x00000100>;
 		interrupt-parent = <&gpio5>;
-		interrupts = <19 0x2>;
+		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
 		nxp,external-clock-frequency = <16000000>;
 		nxp,tx-output-config = <0x16>;
 		nxp,no-comparator-bypass;

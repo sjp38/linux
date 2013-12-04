@@ -19,6 +19,20 @@
 	memory {
 		reg = <0xa0000000 0x08000000>;
 	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "3V3";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+	};
 };
 
 &audmux {
@@ -38,7 +52,7 @@
 
 &cspi1 {
 	fsl,spi-num-chipselects = <1>;
-	cs-gpios = <&gpio4 28 0>;
+	cs-gpios = <&gpio4 28 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	pmic: mc13783@0 {
@@ -48,7 +62,7 @@
 		spi-max-frequency = <20000000>;
 		reg = <0>;
 		interrupt-parent = <&gpio2>;
-		interrupts = <23 0x4>;
+		interrupts = <23 IRQ_TYPE_LEVEL_HIGH>;
 		fsl,mc13xxx-uses-adc;
 		fsl,mc13xxx-uses-rtc;
 
@@ -134,12 +148,18 @@
 };
 
 &fec {
-	phy-reset-gpios = <&gpio3 30 0>;
+	phy-mode = "mii";
+	phy-reset-gpios = <&gpio3 30 GPIO_ACTIVE_HIGH>;
+	phy-supply = <&reg_3v3>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1>;
 	status = "okay";
 };
 
 &i2c2 {
 	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
 	at24@52 {
@@ -159,13 +179,22 @@
 	};
 };
 
+&iomuxc {
+	imx27_phycard_s_som {
+		pinctrl_fec1: fec1grp {
+			fsl,pins = <MX27_FEC1_PINGRP1>;
+		};
+
+		pinctrl_i2c2: i2c2grp {
+			fsl,pins = <MX27_I2C2_PINGRP1>;
+		};
+	};
+};
+
 &nfc {
 	nand-bus-width = <8>;
 	nand-ecc-mode = "hw";
-	status = "okay";
-};
-
-&uart1 {
+	nand-on-flash-bbt;
 	status = "okay";
 };
 
