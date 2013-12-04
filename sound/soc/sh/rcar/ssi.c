@@ -457,6 +457,9 @@ static int rsnd_ssi_pio_start(struct rsnd_mod *mod,
 	/* enable PIO IRQ */
 	ssi->cr_etc = UIEN | OIEN | DIEN;
 
+	/* enable PIO interrupt */
+	rsnd_mod_write(&ssi->mod, INT_ENABLE, 0x0f000000);
+
 	rsnd_ssi_hw_start(ssi, rdai, io);
 
 	dev_dbg(dev, "%s.%d start\n", rsnd_mod_name(mod), rsnd_mod_id(mod));
@@ -650,7 +653,7 @@ int rsnd_ssi_probe(struct platform_device *pdev,
 
 		snprintf(name, RSND_SSI_NAME_SIZE, "ssi.%d", i);
 
-		clk = clk_get(dev, name);
+		clk = devm_clk_get(dev, name);
 		if (IS_ERR(clk))
 			return PTR_ERR(clk);
 
@@ -711,7 +714,6 @@ void rsnd_ssi_remove(struct platform_device *pdev,
 	int i;
 
 	for_each_rsnd_ssi(ssi, priv, i) {
-		clk_put(ssi->clk);
 		if (rsnd_ssi_dma_available(ssi))
 			rsnd_dma_quit(priv, rsnd_mod_to_dma(&ssi->mod));
 	}
