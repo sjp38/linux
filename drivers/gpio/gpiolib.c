@@ -151,9 +151,10 @@ EXPORT_SYMBOL_GPL(gpio_to_desc);
 static struct gpio_desc *gpiochip_offset_to_desc(struct gpio_chip *chip,
 						 unsigned int offset)
 {
-	unsigned int gpio = chip->base + offset;
+	if (offset >= chip->ngpio)
+		return ERR_PTR(-EINVAL);
 
-	return gpio_to_desc(gpio);
+	return &chip->desc[offset];
 }
 
 /**
@@ -1051,7 +1052,7 @@ static void gpiochip_unexport(struct gpio_chip *chip)
 	if (dev) {
 		put_device(dev);
 		device_unregister(dev);
-		chip->exported = 0;
+		chip->exported = false;
 		status = 0;
 	} else
 		status = -ENODEV;
