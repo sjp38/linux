@@ -118,7 +118,8 @@ struct alc_spec {
 
 	int init_amp;
 	int codec_variant;	/* flag for other variants */
-	bool has_alc5505_dsp;
+	unsigned int has_alc5505_dsp:1;
+	unsigned int no_depop_delay:1;
 
 	/* for PLL fix */
 	hda_nid_t pll_nid;
@@ -280,8 +281,11 @@ static void alc_auto_setup_eapd(struct hda_codec *codec, bool on)
  */
 static void alc_eapd_shutup(struct hda_codec *codec)
 {
+	struct alc_spec *spec = codec->spec;
+
 	alc_auto_setup_eapd(codec, false);
-	msleep(200);
+	if (!spec->no_depop_delay)
+		msleep(200);
 	snd_hda_shutup_pins(codec);
 }
 
@@ -362,6 +366,17 @@ static void alc_fixup_sku_ignore(struct hda_codec *codec,
 	if (action == HDA_FIXUP_ACT_PRE_PROBE) {
 		spec->cdefine.fixup = 1;
 		spec->cdefine.sku_cfg = ALC_FIXUP_SKU_IGNORE;
+	}
+}
+
+static void alc_fixup_no_depop_delay(struct hda_codec *codec,
+				    const struct hda_fixup *fix, int action)
+{
+	struct alc_spec *spec = codec->spec;
+
+	if (action == HDA_FIXUP_ACT_PROBE) {
+		spec->no_depop_delay = 1;
+		codec->depop_delay = 0;
 	}
 }
 
@@ -863,7 +878,10 @@ static int alc_suspend(struct hda_codec *codec)
 #ifdef CONFIG_PM
 static int alc_resume(struct hda_codec *codec)
 {
-	msleep(150); /* to avoid pop noise */
+	struct alc_spec *spec = codec->spec;
+
+	if (!spec->no_depop_delay)
+		msleep(150); /* to avoid pop noise */
 	codec->patch_ops.init(codec);
 	snd_hda_codec_resume_amp(codec);
 	snd_hda_codec_resume_cache(codec);
@@ -903,12 +921,19 @@ static int alc_codec_rename(struct hda_codec *codec, const char *name)
 }
 
 /*
- * Rename codecs appropriately from COEF value
+ * Rename codecs appropriately from COEF value or subvendor id
  */
 struct alc_codec_rename_table {
 	unsigned int vendor_id;
 	unsigned short coef_mask;
 	unsigned short coef_bits;
+	const char *name;
+};
+
+struct alc_codec_rename_pci_table {
+	unsigned int codec_vendor_id;
+	unsigned short pci_subvendor;
+	unsigned short pci_subdevice;
 	const char *name;
 };
 
@@ -931,9 +956,20 @@ static struct alc_codec_rename_table rename_tbl[] = {
 	{ } /* terminator */
 };
 
+static struct alc_codec_rename_pci_table rename_pci_tbl[] = {
+	{ 0x10ec0280, 0x1028, 0, "ALC3220" },
+	{ 0x10ec0282, 0x1028, 0, "ALC3221" },
+	{ 0x10ec0283, 0x1028, 0, "ALC3223" },
+	{ 0x10ec0292, 0x1028, 0, "ALC3226" },
+	{ 0x10ec0255, 0x1028, 0, "ALC3234" },
+	{ 0x10ec0668, 0x1028, 0, "ALC3661" },
+	{ } /* terminator */
+};
+
 static int alc_codec_rename_from_preset(struct hda_codec *codec)
 {
 	const struct alc_codec_rename_table *p;
+	const struct alc_codec_rename_pci_table *q;
 
 	for (p = rename_tbl; p->vendor_id; p++) {
 		if (p->vendor_id != codec->vendor_id)
@@ -941,6 +977,17 @@ static int alc_codec_rename_from_preset(struct hda_codec *codec)
 		if ((alc_get_coef0(codec) & p->coef_mask) == p->coef_bits)
 			return alc_codec_rename(codec, p->name);
 	}
+
+	for (q = rename_pci_tbl; q->codec_vendor_id; q++) {
+		if (q->codec_vendor_id != codec->vendor_id)
+			continue;
+		if (q->pci_subvendor != codec->bus->pci->subsystem_vendor)
+			continue;
+		if (!q->pci_subdevice ||
+		    q->pci_subdevice == codec->bus->pci->subsystem_device)
+			return alc_codec_rename(codec, q->name);
+	}
+
 	return 0;
 }
 
@@ -2314,6 +2361,7 @@ enum {
 	ALC262_FIXUP_BENQ,
 	ALC262_FIXUP_BENQ_T31,
 	ALC262_FIXUP_INV_DMIC,
+	ALC262_FIXUP_INTEL_BAYLEYBAY,
 };
 
 static const struct hda_fixup alc262_fixups[] = {
@@ -2378,6 +2426,10 @@ static const struct hda_fixup alc262_fixups[] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc_fixup_inv_dmic_0x12,
 	},
+	[ALC262_FIXUP_INTEL_BAYLEYBAY] = {
+		.type = HDA_FIXUP_FUNC,
+		.v.func = alc_fixup_no_depop_delay,
+	},
 };
 
 static const struct snd_pci_quirk alc262_fixup_tbl[] = {
@@ -2389,6 +2441,7 @@ static const struct snd_pci_quirk alc262_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x17aa, 0x384e, "Lenovo 3000", ALC262_FIXUP_LENOVO_3000),
 	SND_PCI_QUIRK(0x17ff, 0x0560, "Benq ED8", ALC262_FIXUP_BENQ),
 	SND_PCI_QUIRK(0x17ff, 0x058d, "Benq T31-16", ALC262_FIXUP_BENQ_T31),
+	SND_PCI_QUIRK(0x8086, 0x7270, "BayleyBay", ALC262_FIXUP_INTEL_BAYLEYBAY),
 	{}
 };
 
@@ -4490,7 +4543,7 @@ static int patch_alc269(struct hda_codec *codec)
 	}
 
 	if (snd_hda_codec_read(codec, 0x51, 0, AC_VERB_PARAMETERS, 0) == 0x10ec5505) {
-		spec->has_alc5505_dsp = true;
+		spec->has_alc5505_dsp = 1;
 		spec->init_hook = alc5505_dsp_init;
 	}
 
