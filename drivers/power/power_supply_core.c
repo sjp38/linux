@@ -15,6 +15,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/device.h>
+#include <linux/notifier.h>
 #include <linux/err.h>
 #include <linux/power_supply.h>
 #include <linux/thermal.h>
@@ -23,6 +24,9 @@
 /* exported for the APM Power driver, APM emulation */
 struct class *power_supply_class;
 EXPORT_SYMBOL_GPL(power_supply_class);
+
+ATOMIC_NOTIFIER_HEAD(power_supply_notifier);
+EXPORT_SYMBOL_GPL(power_supply_notifier);
 
 static struct device_type power_supply_dev_type;
 
@@ -80,6 +84,8 @@ static void power_supply_changed_work(struct work_struct *work)
 		class_for_each_device(power_supply_class, NULL, psy,
 				      __power_supply_changed_work);
 		power_supply_update_leds(psy);
+		atomic_notifier_call_chain(&power_supply_notifier,
+				PSY_EVENT_PROP_CHANGED, psy);
 		kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
 		spin_lock_irqsave(&psy->changed_lock, flags);
 	}
@@ -347,6 +353,18 @@ static void power_supply_dev_release(struct device *dev)
 	kfree(dev);
 }
 
+int power_supply_reg_notifier(struct notifier_block *nb)
+{
+	return atomic_notifier_chain_register(&power_supply_notifier, nb);
+}
+EXPORT_SYMBOL_GPL(power_supply_reg_notifier);
+
+void power_supply_unreg_notifier(struct notifier_block *nb)
+{
+	atomic_notifier_chain_unregister(&power_supply_notifier, nb);
+}
+EXPORT_SYMBOL_GPL(power_supply_unreg_notifier);
+
 #ifdef CONFIG_THERMAL
 static int power_supply_read_temp(struct thermal_zone_device *tzd,
 		unsigned long *temp)
@@ -511,6 +529,10 @@ int power_supply_register(struct device *parent, struct power_supply *psy)
 	dev_set_drvdata(dev, psy);
 	psy->dev = dev;
 
+	rc = dev_set_name(dev, "%s", psy->name);
+	if (rc)
+		goto dev_set_name_failed;
+
 	INIT_WORK(&psy->changed_work, power_supply_changed_work);
 
 	rc = power_supply_check_supplies(psy);
@@ -523,10 +545,6 @@ int power_supply_register(struct device *parent, struct power_supply *psy)
 	rc = device_init_wakeup(dev, true);
 	if (rc)
 		goto wakeup_init_failed;
-
-	rc = kobject_set_name(&dev->kobj, "%s", psy->name);
-	if (rc)
-		goto kobject_set_name_failed;
 
 	rc = device_add(dev);
 	if (rc)
@@ -553,11 +571,11 @@ create_triggers_failed:
 register_cooler_failed:
 	psy_unregister_thermal(psy);
 register_thermal_failed:
-wakeup_init_failed:
 	device_del(dev);
-kobject_set_name_failed:
 device_add_failed:
+wakeup_init_failed:
 check_supplies_failed:
+dev_set_name_failed:
 	put_device(dev);
 success:
 	return rc;
