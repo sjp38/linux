@@ -56,13 +56,18 @@
 #include <linux/pid_namespace.h>
 #include <linux/idr.h>
 #include <linux/vmalloc.h> /* TODO: replace with more sophisticated array */
-#include <linux/eventfd.h>
-#include <linux/poll.h>
 #include <linux/flex_array.h> /* used in cgroup_attach_task */
 #include <linux/kthread.h>
-#include <linux/file.h>
 
 #include <linux/atomic.h>
+
+/*
+ * pidlists linger the following amount before being destroyed.  The goal
+ * is avoiding frequent destruction in the middle of consecutive read calls
+ * Expiring in the middle is a performance problem not a correctness one.
+ * 1 sec should be enough.
+ */
+#define CGROUP_PIDLIST_DESTROY_DELAY	HZ
 
 /*
  * cgroup_mutex is the master lock.  Any modification to cgroup or its
@@ -98,6 +103,12 @@ static DEFINE_MUTEX(cgroup_root_mutex);
 static struct workqueue_struct *cgroup_destroy_wq;
 
 /*
+ * pidlist destructions need to be flushed on cgroup destruction.  Use a
+ * separate workqueue as flush domain.
+ */
+static struct workqueue_struct *cgroup_pidlist_destroy_wq;
+
+/*
  * Generate an array of cgroup subsystem pointers. At boot time, this is
  * populated with the built in subsystems, and modular subsystems are
  * registered after that. The mutable section of this array is protected by
@@ -130,36 +141,6 @@ struct cfent {
 
 	/* file xattrs */
 	struct simple_xattrs		xattrs;
-};
-
-/*
- * cgroup_event represents events which userspace want to receive.
- */
-struct cgroup_event {
-	/*
-	 * css which the event belongs to.
-	 */
-	struct cgroup_subsys_state *css;
-	/*
-	 * Control file which the event associated.
-	 */
-	struct cftype *cft;
-	/*
-	 * eventfd to signal userspace about the event.
-	 */
-	struct eventfd_ctx *eventfd;
-	/*
-	 * Each of these stored in a list by the cgroup.
-	 */
-	struct list_head list;
-	/*
-	 * All fields below needed to unregister event when
-	 * userspace closes eventfd.
-	 */
-	poll_table pt;
-	wait_queue_head_t *wqh;
-	wait_queue_t wait;
-	struct work_struct remove;
 };
 
 /* The list of hierarchy roots */
@@ -200,6 +181,7 @@ static int cgroup_destroy_locked(struct cgroup *cgrp);
 static int cgroup_addrm_files(struct cgroup *cgrp, struct cftype cfts[],
 			      bool is_add);
 static int cgroup_file_release(struct inode *inode, struct file *file);
+static void cgroup_pidlist_destroy_all(struct cgroup *cgrp);
 
 /**
  * cgroup_css - obtain a cgroup's css for the specified subsystem
@@ -863,11 +845,7 @@ static void cgroup_free_fn(struct work_struct *work)
 	 */
 	deactivate_super(cgrp->root->sb);
 
-	/*
-	 * if we're getting rid of the cgroup, refcount should ensure
-	 * that there are no pidlists left.
-	 */
-	BUG_ON(!list_empty(&cgrp->pidlists));
+	cgroup_pidlist_destroy_all(cgrp);
 
 	simple_xattrs_free(&cgrp->xattrs);
 
@@ -1352,8 +1330,6 @@ static void init_cgroup_housekeeping(struct cgroup *cgrp)
 	INIT_LIST_HEAD(&cgrp->pidlists);
 	mutex_init(&cgrp->pidlist_mutex);
 	cgrp->dummy_css.cgroup = cgrp;
-	INIT_LIST_HEAD(&cgrp->event_list);
-	spin_lock_init(&cgrp->event_list_lock);
 	simple_xattrs_init(&cgrp->xattrs);
 }
 
@@ -2483,17 +2459,13 @@ static int cgroup_file_open(struct inode *inode, struct file *file)
 static int cgroup_file_release(struct inode *inode, struct file *file)
 {
 	struct cfent *cfe = __d_cfe(file->f_dentry);
-	struct cftype *cft = __d_cft(file->f_dentry);
 	struct cgroup_subsys_state *css = cfe->css;
-	int ret = 0;
 
-	if (cft->release)
-		ret = cft->release(inode, file);
 	if (css->ss)
 		css_put(css);
 	if (file->f_op == &cgroup_seqfile_operations)
 		single_release(inode, file);
-	return ret;
+	return 0;
 }
 
 /*
@@ -2628,16 +2600,6 @@ static const struct inode_operations cgroup_dir_inode_operations = {
 	.listxattr = cgroup_listxattr,
 	.removexattr = cgroup_removexattr,
 };
-
-/*
- * Check if a file is a control file
- */
-static inline struct cftype *__file_cft(struct file *file)
-{
-	if (file_inode(file)->i_fop != &cgroup_file_operations)
-		return ERR_PTR(-EINVAL);
-	return __d_cft(file->f_dentry);
-}
 
 static int cgroup_create_file(struct dentry *dentry, umode_t mode,
 				struct super_block *sb)
@@ -3494,14 +3456,19 @@ struct cgroup_pidlist {
 	pid_t *list;
 	/* how many elements the above list has */
 	int length;
-	/* how many files are using the current array */
-	int use_count;
 	/* each of these stored in a list by its cgroup */
 	struct list_head links;
 	/* pointer to the cgroup we belong to, for list removal purposes */
 	struct cgroup *owner;
-	/* protects the other fields */
-	struct rw_semaphore rwsem;
+	/* for delayed destruction */
+	struct delayed_work destroy_dwork;
+};
+
+/* seq_file->private points to the following */
+struct cgroup_pidlist_open_file {
+	enum cgroup_filetype		type;
+	struct cgroup			*cgrp;
+	struct cgroup_pidlist		*pidlist;
 };
 
 /*
@@ -3517,12 +3484,54 @@ static void *pidlist_allocate(int count)
 	else
 		return kmalloc(count * sizeof(pid_t), GFP_KERNEL);
 }
+
 static void pidlist_free(void *p)
 {
 	if (is_vmalloc_addr(p))
 		vfree(p);
 	else
 		kfree(p);
+}
+
+/*
+ * Used to destroy all pidlists lingering waiting for destroy timer.  None
+ * should be left afterwards.
+ */
+static void cgroup_pidlist_destroy_all(struct cgroup *cgrp)
+{
+	struct cgroup_pidlist *l, *tmp_l;
+
+	mutex_lock(&cgrp->pidlist_mutex);
+	list_for_each_entry_safe(l, tmp_l, &cgrp->pidlists, links)
+		mod_delayed_work(cgroup_pidlist_destroy_wq, &l->destroy_dwork, 0);
+	mutex_unlock(&cgrp->pidlist_mutex);
+
+	flush_workqueue(cgroup_pidlist_destroy_wq);
+	BUG_ON(!list_empty(&cgrp->pidlists));
+}
+
+static void cgroup_pidlist_destroy_work_fn(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct cgroup_pidlist *l = container_of(dwork, struct cgroup_pidlist,
+						destroy_dwork);
+	struct cgroup_pidlist *tofree = NULL;
+
+	mutex_lock(&l->owner->pidlist_mutex);
+
+	/*
+	 * Destroy iff we didn't get queued again.  The state won't change
+	 * as destroy_dwork can only be queued while locked.
+	 */
+	if (!delayed_work_pending(dwork)) {
+		list_del(&l->links);
+		pidlist_free(l->list);
+		put_pid_ns(l->key.ns);
+		tofree = l;
+	}
+
+	mutex_unlock(&l->owner->pidlist_mutex);
+	kfree(tofree);
 }
 
 /*
@@ -3555,9 +3564,62 @@ after:
 	return dest;
 }
 
+/*
+ * The two pid files - task and cgroup.procs - guaranteed that the result
+ * is sorted, which forced this whole pidlist fiasco.  As pid order is
+ * different per namespace, each namespace needs differently sorted list,
+ * making it impossible to use, for example, single rbtree of member tasks
+ * sorted by task pointer.  As pidlists can be fairly large, allocating one
+ * per open file is dangerous, so cgroup had to implement shared pool of
+ * pidlists keyed by cgroup and namespace.
+ *
+ * All this extra complexity was caused by the original implementation
+ * committing to an entirely unnecessary property.  In the long term, we
+ * want to do away with it.  Explicitly scramble sort order if
+ * sane_behavior so that no such expectation exists in the new interface.
+ *
+ * Scrambling is done by swapping every two consecutive bits, which is
+ * non-identity one-to-one mapping which disturbs sort order sufficiently.
+ */
+static pid_t pid_fry(pid_t pid)
+{
+	unsigned a = pid & 0x55555555;
+	unsigned b = pid & 0xAAAAAAAA;
+
+	return (a << 1) | (b >> 1);
+}
+
+static pid_t cgroup_pid_fry(struct cgroup *cgrp, pid_t pid)
+{
+	if (cgroup_sane_behavior(cgrp))
+		return pid_fry(pid);
+	else
+		return pid;
+}
+
 static int cmppid(const void *a, const void *b)
 {
 	return *(pid_t *)a - *(pid_t *)b;
+}
+
+static int fried_cmppid(const void *a, const void *b)
+{
+	return pid_fry(*(pid_t *)a) - pid_fry(*(pid_t *)b);
+}
+
+static struct cgroup_pidlist *cgroup_pidlist_find(struct cgroup *cgrp,
+						  enum cgroup_filetype type)
+{
+	struct cgroup_pidlist *l;
+	/* don't need task_nsproxy() if we're looking at ourself */
+	struct pid_namespace *ns = task_active_pid_ns(current);
+
+	lockdep_assert_held(&cgrp->pidlist_mutex);
+
+	list_for_each_entry(l, &cgrp->pidlists, links)
+		if (l->key.type == type && l->key.ns == ns)
+			return l;
+	return NULL;
 }
 
 /*
@@ -3566,41 +3628,28 @@ static int cmppid(const void *a, const void *b)
  * of the use count, or returns NULL with no locks held if we're out of
  * memory.
  */
-static struct cgroup_pidlist *cgroup_pidlist_find(struct cgroup *cgrp,
-						  enum cgroup_filetype type)
+static struct cgroup_pidlist *cgroup_pidlist_find_create(struct cgroup *cgrp,
+						enum cgroup_filetype type)
 {
 	struct cgroup_pidlist *l;
-	/* don't need task_nsproxy() if we're looking at ourself */
-	struct pid_namespace *ns = task_active_pid_ns(current);
 
-	/*
-	 * We can't drop the pidlist_mutex before taking the l->rwsem in case
-	 * the last ref-holder is trying to remove l from the list at the same
-	 * time. Holding the pidlist_mutex precludes somebody taking whichever
-	 * list we find out from under us - compare release_pid_array().
-	 */
-	mutex_lock(&cgrp->pidlist_mutex);
-	list_for_each_entry(l, &cgrp->pidlists, links) {
-		if (l->key.type == type && l->key.ns == ns) {
-			/* make sure l doesn't vanish out from under us */
-			down_write(&l->rwsem);
-			mutex_unlock(&cgrp->pidlist_mutex);
-			return l;
-		}
-	}
+	lockdep_assert_held(&cgrp->pidlist_mutex);
+
+	l = cgroup_pidlist_find(cgrp, type);
+	if (l)
+		return l;
+
 	/* entry not found; create a new one */
 	l = kzalloc(sizeof(struct cgroup_pidlist), GFP_KERNEL);
-	if (!l) {
-		mutex_unlock(&cgrp->pidlist_mutex);
+	if (!l)
 		return l;
-	}
-	init_rwsem(&l->rwsem);
-	down_write(&l->rwsem);
+
+	INIT_DELAYED_WORK(&l->destroy_dwork, cgroup_pidlist_destroy_work_fn);
 	l->key.type = type;
-	l->key.ns = get_pid_ns(ns);
+	/* don't need task_nsproxy() if we're looking at ourself */
+	l->key.ns = get_pid_ns(task_active_pid_ns(current));
 	l->owner = cgrp;
 	list_add(&l->links, &cgrp->pidlists);
-	mutex_unlock(&cgrp->pidlist_mutex);
 	return l;
 }
 
@@ -3616,6 +3665,8 @@ static int pidlist_array_load(struct cgroup *cgrp, enum cgroup_filetype type,
 	struct css_task_iter it;
 	struct task_struct *tsk;
 	struct cgroup_pidlist *l;
+
+	lockdep_assert_held(&cgrp->pidlist_mutex);
 
 	/*
 	 * If cgroup gets more users after we read count, we won't have
@@ -3643,20 +3694,24 @@ static int pidlist_array_load(struct cgroup *cgrp, enum cgroup_filetype type,
 	css_task_iter_end(&it);
 	length = n;
 	/* now sort & (if procs) strip out duplicates */
-	sort(array, length, sizeof(pid_t), cmppid, NULL);
+	if (cgroup_sane_behavior(cgrp))
+		sort(array, length, sizeof(pid_t), fried_cmppid, NULL);
+	else
+		sort(array, length, sizeof(pid_t), cmppid, NULL);
 	if (type == CGROUP_FILE_PROCS)
 		length = pidlist_uniq(array, length);
-	l = cgroup_pidlist_find(cgrp, type);
+
+	l = cgroup_pidlist_find_create(cgrp, type);
 	if (!l) {
+		mutex_unlock(&cgrp->pidlist_mutex);
 		pidlist_free(array);
 		return -ENOMEM;
 	}
-	/* store array, freeing old if necessary - lock already held */
+
+	/* store array, freeing old if necessary */
 	pidlist_free(l->list);
 	l->list = array;
 	l->length = length;
-	l->use_count++;
-	up_write(&l->rwsem);
 	*lp = l;
 	return 0;
 }
@@ -3730,20 +3785,43 @@ static void *cgroup_pidlist_start(struct seq_file *s, loff_t *pos)
 	 * after a seek to the start). Use a binary-search to find the
 	 * next pid to display, if any
 	 */
-	struct cgroup_pidlist *l = s->private;
+	struct cgroup_pidlist_open_file *of = s->private;
+	struct cgroup *cgrp = of->cgrp;
+	struct cgroup_pidlist *l;
 	int index = 0, pid = *pos;
-	int *iter;
+	int *iter, ret;
 
-	down_read(&l->rwsem);
+	mutex_lock(&cgrp->pidlist_mutex);
+
+	/*
+	 * !NULL @of->pidlist indicates that this isn't the first start()
+	 * after open.  If the matching pidlist is around, we can use that.
+	 * Look for it.  Note that @of->pidlist can't be used directly.  It
+	 * could already have been destroyed.
+	 */
+	if (of->pidlist)
+		of->pidlist = cgroup_pidlist_find(cgrp, of->type);
+
+	/*
+	 * Either this is the first start() after open or the matching
+	 * pidlist has been destroyed inbetween.  Create a new one.
+	 */
+	if (!of->pidlist) {
+		ret = pidlist_array_load(of->cgrp, of->type, &of->pidlist);
+		if (ret)
+			return ERR_PTR(ret);
+	}
+	l = of->pidlist;
+
 	if (pid) {
 		int end = l->length;
 
 		while (index < end) {
 			int mid = (index + end) / 2;
-			if (l->list[mid] == pid) {
+			if (cgroup_pid_fry(cgrp, l->list[mid]) == pid) {
 				index = mid;
 				break;
-			} else if (l->list[mid] <= pid)
+			} else if (cgroup_pid_fry(cgrp, l->list[mid]) <= pid)
 				index = mid + 1;
 			else
 				end = mid;
@@ -3754,19 +3832,25 @@ static void *cgroup_pidlist_start(struct seq_file *s, loff_t *pos)
 		return NULL;
 	/* Update the abstract position to be the actual pid that we found */
 	iter = l->list + index;
-	*pos = *iter;
+	*pos = cgroup_pid_fry(cgrp, *iter);
 	return iter;
 }
 
 static void cgroup_pidlist_stop(struct seq_file *s, void *v)
 {
-	struct cgroup_pidlist *l = s->private;
-	up_read(&l->rwsem);
+	struct cgroup_pidlist_open_file *of = s->private;
+
+	if (of->pidlist)
+		mod_delayed_work(cgroup_pidlist_destroy_wq,
+				 &of->pidlist->destroy_dwork,
+				 CGROUP_PIDLIST_DESTROY_DELAY);
+	mutex_unlock(&of->cgrp->pidlist_mutex);
 }
 
 static void *cgroup_pidlist_next(struct seq_file *s, void *v, loff_t *pos)
 {
-	struct cgroup_pidlist *l = s->private;
+	struct cgroup_pidlist_open_file *of = s->private;
+	struct cgroup_pidlist *l = of->pidlist;
 	pid_t *p = v;
 	pid_t *end = l->list + l->length;
 	/*
@@ -3777,7 +3861,7 @@ static void *cgroup_pidlist_next(struct seq_file *s, void *v, loff_t *pos)
 	if (p >= end) {
 		return NULL;
 	} else {
-		*pos = *p;
+		*pos = cgroup_pid_fry(of->cgrp, *p);
 		return p;
 	}
 }
@@ -3798,50 +3882,11 @@ static const struct seq_operations cgroup_pidlist_seq_operations = {
 	.show = cgroup_pidlist_show,
 };
 
-static void cgroup_release_pid_array(struct cgroup_pidlist *l)
-{
-	/*
-	 * the case where we're the last user of this particular pidlist will
-	 * have us remove it from the cgroup's list, which entails taking the
-	 * mutex. since in pidlist_find the pidlist->lock depends on cgroup->
-	 * pidlist_mutex, we have to take pidlist_mutex first.
-	 */
-	mutex_lock(&l->owner->pidlist_mutex);
-	down_write(&l->rwsem);
-	BUG_ON(!l->use_count);
-	if (!--l->use_count) {
-		/* we're the last user if refcount is 0; remove and free */
-		list_del(&l->links);
-		mutex_unlock(&l->owner->pidlist_mutex);
-		pidlist_free(l->list);
-		put_pid_ns(l->key.ns);
-		up_write(&l->rwsem);
-		kfree(l);
-		return;
-	}
-	mutex_unlock(&l->owner->pidlist_mutex);
-	up_write(&l->rwsem);
-}
-
-static int cgroup_pidlist_release(struct inode *inode, struct file *file)
-{
-	struct cgroup_pidlist *l;
-	if (!(file->f_mode & FMODE_READ))
-		return 0;
-	/*
-	 * the seq_file will only be initialized if the file was opened for
-	 * reading; hence we check if it's not null only in that case.
-	 */
-	l = ((struct seq_file *)file->private_data)->private;
-	cgroup_release_pid_array(l);
-	return seq_release(inode, file);
-}
-
 static const struct file_operations cgroup_pidlist_operations = {
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.write = cgroup_file_write,
-	.release = cgroup_pidlist_release,
+	.release = seq_release_private,
 };
 
 /*
@@ -3853,26 +3898,18 @@ static const struct file_operations cgroup_pidlist_operations = {
 static int cgroup_pidlist_open(struct file *file, enum cgroup_filetype type)
 {
 	struct cgroup *cgrp = __d_cgrp(file->f_dentry->d_parent);
-	struct cgroup_pidlist *l;
-	int retval;
+	struct cgroup_pidlist_open_file *of;
 
-	/* Nothing to do for write-only files */
-	if (!(file->f_mode & FMODE_READ))
-		return 0;
-
-	/* have the array populated */
-	retval = pidlist_array_load(cgrp, type, &l);
-	if (retval)
-		return retval;
 	/* configure file information */
 	file->f_op = &cgroup_pidlist_operations;
 
-	retval = seq_open(file, &cgroup_pidlist_seq_operations);
-	if (retval) {
-		cgroup_release_pid_array(l);
-		return retval;
-	}
-	((struct seq_file *)file->private_data)->private = l;
+	of = __seq_open_private(file, &cgroup_pidlist_seq_operations,
+				sizeof(*of));
+	if (!of)
+		return -ENOMEM;
+
+	of->type = type;
+	of->cgrp = cgrp;
 	return 0;
 }
 static int cgroup_tasks_open(struct inode *unused, struct file *file)
@@ -3918,202 +3955,6 @@ static void cgroup_dput(struct cgroup *cgrp)
 	deactivate_super(sb);
 }
 
-/*
- * Unregister event and free resources.
- *
- * Gets called from workqueue.
- */
-static void cgroup_event_remove(struct work_struct *work)
-{
-	struct cgroup_event *event = container_of(work, struct cgroup_event,
-			remove);
-	struct cgroup_subsys_state *css = event->css;
-
-	remove_wait_queue(event->wqh, &event->wait);
-
-	event->cft->unregister_event(css, event->cft, event->eventfd);
-
-	/* Notify userspace the event is going away. */
-	eventfd_signal(event->eventfd, 1);
-
-	eventfd_ctx_put(event->eventfd);
-	kfree(event);
-	css_put(css);
-}
-
-/*
- * Gets called on POLLHUP on eventfd when user closes it.
- *
- * Called with wqh->lock held and interrupts disabled.
- */
-static int cgroup_event_wake(wait_queue_t *wait, unsigned mode,
-		int sync, void *key)
-{
-	struct cgroup_event *event = container_of(wait,
-			struct cgroup_event, wait);
-	struct cgroup *cgrp = event->css->cgroup;
-	unsigned long flags = (unsigned long)key;
-
-	if (flags & POLLHUP) {
-		/*
-		 * If the event has been detached at cgroup removal, we
-		 * can simply return knowing the other side will cleanup
-		 * for us.
-		 *
-		 * We can't race against event freeing since the other
-		 * side will require wqh->lock via remove_wait_queue(),
-		 * which we hold.
-		 */
-		spin_lock(&cgrp->event_list_lock);
-		if (!list_empty(&event->list)) {
-			list_del_init(&event->list);
-			/*
-			 * We are in atomic context, but cgroup_event_remove()
-			 * may sleep, so we have to call it in workqueue.
-			 */
-			schedule_work(&event->remove);
-		}
-		spin_unlock(&cgrp->event_list_lock);
-	}
-
-	return 0;
-}
-
-static void cgroup_event_ptable_queue_proc(struct file *file,
-		wait_queue_head_t *wqh, poll_table *pt)
-{
-	struct cgroup_event *event = container_of(pt,
-			struct cgroup_event, pt);
-
-	event->wqh = wqh;
-	add_wait_queue(wqh, &event->wait);
-}
-
-/*
- * Parse input and register new cgroup event handler.
- *
- * Input must be in format '<event_fd> <control_fd> <args>'.
- * Interpretation of args is defined by control file implementation.
- */
-static int cgroup_write_event_control(struct cgroup_subsys_state *dummy_css,
-				      struct cftype *cft, const char *buffer)
-{
-	struct cgroup *cgrp = dummy_css->cgroup;
-	struct cgroup_event *event;
-	struct cgroup_subsys_state *cfile_css;
-	unsigned int efd, cfd;
-	struct fd efile;
-	struct fd cfile;
-	char *endp;
-	int ret;
-
-	efd = simple_strtoul(buffer, &endp, 10);
-	if (*endp != ' ')
-		return -EINVAL;
-	buffer = endp + 1;
-
-	cfd = simple_strtoul(buffer, &endp, 10);
-	if ((*endp != ' ') && (*endp != '\0'))
-		return -EINVAL;
-	buffer = endp + 1;
-
-	event = kzalloc(sizeof(*event), GFP_KERNEL);
-	if (!event)
-		return -ENOMEM;
-
-	INIT_LIST_HEAD(&event->list);
-	init_poll_funcptr(&event->pt, cgroup_event_ptable_queue_proc);
-	init_waitqueue_func_entry(&event->wait, cgroup_event_wake);
-	INIT_WORK(&event->remove, cgroup_event_remove);
-
-	efile = fdget(efd);
-	if (!efile.file) {
-		ret = -EBADF;
-		goto out_kfree;
-	}
-
-	event->eventfd = eventfd_ctx_fileget(efile.file);
-	if (IS_ERR(event->eventfd)) {
-		ret = PTR_ERR(event->eventfd);
-		goto out_put_efile;
-	}
-
-	cfile = fdget(cfd);
-	if (!cfile.file) {
-		ret = -EBADF;
-		goto out_put_eventfd;
-	}
-
-	/* the process need read permission on control file */
-	/* AV: shouldn't we check that it's been opened for read instead? */
-	ret = inode_permission(file_inode(cfile.file), MAY_READ);
-	if (ret < 0)
-		goto out_put_cfile;
-
-	event->cft = __file_cft(cfile.file);
-	if (IS_ERR(event->cft)) {
-		ret = PTR_ERR(event->cft);
-		goto out_put_cfile;
-	}
-
-	if (!event->cft->ss) {
-		ret = -EBADF;
-		goto out_put_cfile;
-	}
-
-	/*
-	 * Determine the css of @cfile, verify it belongs to the same
-	 * cgroup as cgroup.event_control, and associate @event with it.
-	 * Remaining events are automatically removed on cgroup destruction
-	 * but the removal is asynchronous, so take an extra ref.
-	 */
-	rcu_read_lock();
-
-	ret = -EINVAL;
-	event->css = cgroup_css(cgrp, event->cft->ss);
-	cfile_css = css_from_dir(cfile.file->f_dentry->d_parent, event->cft->ss);
-	if (event->css && event->css == cfile_css && css_tryget(event->css))
-		ret = 0;
-
-	rcu_read_unlock();
-	if (ret)
-		goto out_put_cfile;
-
-	if (!event->cft->register_event || !event->cft->unregister_event) {
-		ret = -EINVAL;
-		goto out_put_css;
-	}
-
-	ret = event->cft->register_event(event->css, event->cft,
-			event->eventfd, buffer);
-	if (ret)
-		goto out_put_css;
-
-	efile.file->f_op->poll(efile.file, &event->pt);
-
-	spin_lock(&cgrp->event_list_lock);
-	list_add(&event->list, &cgrp->event_list);
-	spin_unlock(&cgrp->event_list_lock);
-
-	fdput(cfile);
-	fdput(efile);
-
-	return 0;
-
-out_put_css:
-	css_put(event->css);
-out_put_cfile:
-	fdput(cfile);
-out_put_eventfd:
-	eventfd_ctx_put(event->eventfd);
-out_put_efile:
-	fdput(efile);
-out_kfree:
-	kfree(event);
-
-	return ret;
-}
-
 static u64 cgroup_clone_children_read(struct cgroup_subsys_state *css,
 				      struct cftype *cft)
 {
@@ -4135,13 +3976,7 @@ static struct cftype cgroup_base_files[] = {
 		.name = "cgroup.procs",
 		.open = cgroup_procs_open,
 		.write_u64 = cgroup_procs_write,
-		.release = cgroup_pidlist_release,
 		.mode = S_IRUGO | S_IWUSR,
-	},
-	{
-		.name = "cgroup.event_control",
-		.write_string = cgroup_write_event_control,
-		.mode = S_IWUGO,
 	},
 	{
 		.name = "cgroup.clone_children",
@@ -4165,7 +4000,6 @@ static struct cftype cgroup_base_files[] = {
 		.flags = CFTYPE_INSANE,		/* use "procs" instead */
 		.open = cgroup_tasks_open,
 		.write_u64 = cgroup_tasks_write,
-		.release = cgroup_pidlist_release,
 		.mode = S_IRUGO | S_IWUSR,
 	},
 	{
@@ -4613,7 +4447,6 @@ static int cgroup_destroy_locked(struct cgroup *cgrp)
 	__releases(&cgroup_mutex) __acquires(&cgroup_mutex)
 {
 	struct dentry *d = cgrp->dentry;
-	struct cgroup_event *event, *tmp;
 	struct cgroup_subsys *ss;
 	struct cgroup *child;
 	bool empty;
@@ -4687,18 +4520,6 @@ static int cgroup_destroy_locked(struct cgroup *cgrp)
 	cgroup_addrm_files(cgrp, cgroup_base_files, false);
 	dget(d);
 	cgroup_d_remove_dir(d);
-
-	/*
-	 * Unregister events and notify userspace.
-	 * Notify userspace about cgroup removing only after rmdir of cgroup
-	 * directory to avoid race between userspace and kernelspace.
-	 */
-	spin_lock(&cgrp->event_list_lock);
-	list_for_each_entry_safe(event, tmp, &cgrp->event_list, list) {
-		list_del_init(&event->list);
-		schedule_work(&event->remove);
-	}
-	spin_unlock(&cgrp->event_list_lock);
 
 	return 0;
 };
@@ -5086,6 +4907,15 @@ static int __init cgroup_wq_init(void)
 	 */
 	cgroup_destroy_wq = alloc_workqueue("cgroup_destroy", 0, 1);
 	BUG_ON(!cgroup_destroy_wq);
+
+	/*
+	 * Used to destroy pidlists and separate to serve as flush domain.
+	 * Cap @max_active to 1 too.
+	 */
+	cgroup_pidlist_destroy_wq = alloc_workqueue("cgroup_pidlist_destroy",
+						    0, 1);
+	BUG_ON(!cgroup_pidlist_destroy_wq);
+
 	return 0;
 }
 core_initcall(cgroup_wq_init);
