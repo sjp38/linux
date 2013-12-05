@@ -800,10 +800,27 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 {
 	struct obd_device     *obd = class_exp2obd(exp);
 	struct ptlrpc_request *req;
-	int		    rc;
+	struct req_format     *req_fmt;
+	int                    rc;
+	int		       saved_rc = 0;
+
+
+	req_fmt = &RQF_MDS_CLOSE;
+	if (op_data->op_bias & MDS_HSM_RELEASE) {
+		req_fmt = &RQF_MDS_RELEASE_CLOSE;
+
+		/* allocate a FID for volatile file */
+		rc = mdc_fid_alloc(exp, &op_data->op_fid2, op_data);
+		if (rc < 0) {
+			CERROR("%s: "DFID" failed to allocate FID: %d\n",
+			       obd->obd_name, PFID(&op_data->op_fid1), rc);
+			/* save the errcode and proceed to close */
+			saved_rc = rc;
+		}
+	}
 
 	*request = NULL;
-	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_CLOSE);
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), req_fmt);
 	if (req == NULL)
 		return -ENOMEM;
 
@@ -893,7 +910,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	}
 	*request = req;
 	mdc_close_handle_reply(req, op_data, rc);
-	return rc;
+	return rc < 0 ? rc : saved_rc;
 }
 
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
@@ -1743,6 +1760,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 	case LL_IOC_HSM_STATE_SET:
 		rc = mdc_ioc_hsm_state_set(exp, karg);
+		GOTO(out, rc);
 	case LL_IOC_HSM_ACTION:
 		rc = mdc_ioc_hsm_current_action(exp, karg);
 		GOTO(out, rc);
@@ -1814,8 +1832,8 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		struct obd_quotactl *oqctl;
 
 		OBD_ALLOC_PTR(oqctl);
-		if (!oqctl)
-			return -ENOMEM;
+		if (oqctl == NULL)
+			GOTO(out, rc = -ENOMEM);
 
 		QCTL_COPY(oqctl, qctl);
 		rc = obd_quotactl(exp, oqctl);
@@ -1824,23 +1842,21 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			qctl->qc_valid = QC_MDTIDX;
 			qctl->obd_uuid = obd->u.cli.cl_target_uuid;
 		}
+
 		OBD_FREE_PTR(oqctl);
-		break;
+		GOTO(out, rc);
 	}
-	case LL_IOC_GET_CONNECT_FLAGS: {
-		if (copy_to_user(uarg,
-				     exp_connect_flags_ptr(exp),
-				     sizeof(__u64)))
+	case LL_IOC_GET_CONNECT_FLAGS:
+		if (copy_to_user(uarg, exp_connect_flags_ptr(exp),
+				 sizeof(*exp_connect_flags_ptr(exp))))
 			GOTO(out, rc = -EFAULT);
-		else
-			GOTO(out, rc = 0);
-	}
-	case LL_IOC_LOV_SWAP_LAYOUTS: {
+
+		GOTO(out, rc = 0);
+	case LL_IOC_LOV_SWAP_LAYOUTS:
 		rc = mdc_ioc_swap_layouts(exp, karg);
-		break;
-	}
+		GOTO(out, rc);
 	default:
-		CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
+		CERROR("unrecognised ioctl: cmd = %#x\n", cmd);
 		GOTO(out, rc = -ENOTTY);
 	}
 out:
@@ -1920,10 +1936,8 @@ static void lustre_swab_hal(struct hsm_action_list *h)
 	__swab32s(&h->hal_archive_id);
 	__swab64s(&h->hal_flags);
 	hai = hai_zero(h);
-	for (i = 0; i < h->hal_count; i++) {
+	for (i = 0; i < h->hal_count; i++, hai = hai_next(hai))
 		lustre_swab_hai(hai);
-		hai = hai_next(hai);
-	}
 }
 
 static void lustre_swab_kuch(struct kuc_hdr *l)

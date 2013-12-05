@@ -245,6 +245,9 @@ struct ost_id {
 #define LL_IOC_LMV_GETSTRIPE	    _IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY	    _IOWR('f', 242, __u64)
 
+#define LL_IOC_SET_LEASE		_IOWR('f', 243, long)
+#define LL_IOC_GET_LEASE		_IO('f', 244)
+
 #define LL_STATFS_LMV	   1
 #define LL_STATFS_LOV	   2
 #define LL_STATFS_NODELAY	4
@@ -425,8 +428,8 @@ struct obd_uuid {
 	char uuid[UUID_MAX];
 };
 
-static inline int obd_uuid_equals(const struct obd_uuid *u1,
-				  const struct obd_uuid *u2)
+static inline bool obd_uuid_equals(const struct obd_uuid *u1,
+				   const struct obd_uuid *u2)
 {
 	return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
 }
@@ -443,7 +446,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(struct obd_uuid *uuid)
+static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 {
 	if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
 		/* Obviously not safe, but for printfs, no real harm done...
@@ -620,10 +623,13 @@ struct if_quotactl {
 };
 
 /* swap layout flags */
-#define	SWAP_LAYOUTS_CHECK_DV1		(1 << 0)
-#define	SWAP_LAYOUTS_CHECK_DV2		(1 << 1)
-#define	SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
-#define	SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
+#define SWAP_LAYOUTS_CHECK_DV1		(1 << 0)
+#define SWAP_LAYOUTS_CHECK_DV2		(1 << 1)
+#define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
+#define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
+
+/* Swap XATTR_NAME_HSM as well, only on the MDT so far */
+#define SWAP_LAYOUTS_MDS_HSM		(1 << 31)
 struct lustre_swap_layouts {
 	__u64	sl_flags;
 	__u32	sl_fd;
@@ -1118,11 +1124,10 @@ static inline int hal_size(struct hsm_action_list *hal)
 
 	sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname));
 	hai = hai_zero(hal);
-	for (i = 0 ; i < hal->hal_count ; i++) {
+	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai))
 		sz += cfs_size_round(hai->hai_len);
-		hai = hai_next(hai);
-	}
-	return(sz);
+
+	return sz;
 }
 
 /* Copytool progress reporting */

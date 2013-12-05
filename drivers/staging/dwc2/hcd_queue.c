@@ -344,25 +344,17 @@ void dwc2_hcd_init_usecs(struct dwc2_hsotg *hsotg)
 static int dwc2_find_single_uframe(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 {
 	unsigned short utime = qh->usecs;
-	int done = 0;
-	int i = 0;
-	int ret = -1;
+	int i;
 
-	while (!done) {
+	for (i = 0; i < 8; i++) {
 		/* At the start hsotg->frame_usecs[i] = max_uframe_usecs[i] */
 		if (utime <= hsotg->frame_usecs[i]) {
 			hsotg->frame_usecs[i] -= utime;
 			qh->frame_usecs[i] += utime;
-			ret = i;
-			done = 1;
-		} else {
-			i++;
-			if (i == 8)
-				done = 1;
+			return i;
 		}
 	}
-
-	return ret;
+	return -ENOSPC;
 }
 
 /*
@@ -372,21 +364,14 @@ static int dwc2_find_multi_uframe(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 {
 	unsigned short utime = qh->usecs;
 	unsigned short xtime;
-	int t_left = utime;
-	int done = 0;
-	int i = 0;
+	int t_left;
+	int i;
 	int j;
-	int ret = -1;
+	int k;
 
-	while (!done) {
-		if (hsotg->frame_usecs[i] <= 0) {
-			i++;
-			if (i == 8) {
-				ret = -1;
-				done = 1;
-			}
+	for (i = 0; i < 8; i++) {
+		if (hsotg->frame_usecs[i] <= 0)
 			continue;
-		}
 
 		/*
 		 * we need n consecutive slots so use j as a start slot
@@ -400,50 +385,35 @@ static int dwc2_find_multi_uframe(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 			 */
 			if (xtime + hsotg->frame_usecs[j] < utime) {
 				if (hsotg->frame_usecs[j] <
-							max_uframe_usecs[j]) {
-					ret = -1;
-					break;
-				}
+							max_uframe_usecs[j])
+					continue;
 			}
 			if (xtime >= utime) {
-				ret = i;
-				break;
+				t_left = utime;
+				for (k = i; k < 8; k++) {
+					t_left -= hsotg->frame_usecs[k];
+					if (t_left <= 0) {
+						qh->frame_usecs[k] +=
+							hsotg->frame_usecs[k]
+								+ t_left;
+						hsotg->frame_usecs[k] = -t_left;
+						return i;
+					} else {
+						qh->frame_usecs[k] +=
+							hsotg->frame_usecs[k];
+						hsotg->frame_usecs[k] = 0;
+					}
+				}
 			}
 			/* add the frame time to x time */
 			xtime += hsotg->frame_usecs[j];
 			/* we must have a fully available next frame or break */
 			if (xtime < utime &&
-			   hsotg->frame_usecs[j] == max_uframe_usecs[j]) {
-				ret = -1;
-				break;
-			}
-		}
-		if (ret >= 0) {
-			t_left = utime;
-			for (j = i; t_left > 0 && j < 8; j++) {
-				t_left -= hsotg->frame_usecs[j];
-				if (t_left <= 0) {
-					qh->frame_usecs[j] +=
-						hsotg->frame_usecs[j] + t_left;
-					hsotg->frame_usecs[j] = -t_left;
-					ret = i;
-					done = 1;
-				} else {
-					qh->frame_usecs[j] +=
-						hsotg->frame_usecs[j];
-					hsotg->frame_usecs[j] = 0;
-				}
-			}
-		} else {
-			i++;
-			if (i == 8) {
-				ret = -1;
-				done = 1;
-			}
+			   hsotg->frame_usecs[j] == max_uframe_usecs[j])
+				continue;
 		}
 	}
-
-	return ret;
+	return -ENOSPC;
 }
 
 static int dwc2_find_uframe(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
@@ -517,12 +487,12 @@ static int dwc2_schedule_periodic(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 			frame = status - 1;
 
 		/* Set the new frame up */
-		if (frame > -1) {
+		if (frame >= 0) {
 			qh->sched_frame &= ~0x7;
 			qh->sched_frame |= (frame & 7);
 		}
 
-		if (status != -1)
+		if (status > 0)
 			status = 0;
 	} else {
 		status = dwc2_periodic_channel_available(hsotg);
@@ -609,7 +579,7 @@ static void dwc2_deschedule_periodic(struct dwc2_hsotg *hsotg,
  */
 int dwc2_hcd_qh_add(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 {
-	int status = 0;
+	int status;
 	u32 intr_mask;
 
 	if (dbg_qh(qh))
@@ -617,26 +587,27 @@ int dwc2_hcd_qh_add(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 
 	if (!list_empty(&qh->qh_list_entry))
 		/* QH already in a schedule */
-		return status;
+		return 0;
 
 	/* Add the new QH to the appropriate schedule */
 	if (dwc2_qh_is_non_per(qh)) {
 		/* Always start in inactive schedule */
 		list_add_tail(&qh->qh_list_entry,
 			      &hsotg->non_periodic_sched_inactive);
-	} else {
-		status = dwc2_schedule_periodic(hsotg, qh);
-		if (status == 0) {
-			if (!hsotg->periodic_qh_count) {
-				intr_mask = readl(hsotg->regs + GINTMSK);
-				intr_mask |= GINTSTS_SOF;
-				writel(intr_mask, hsotg->regs + GINTMSK);
-			}
-			hsotg->periodic_qh_count++;
-		}
+		return 0;
 	}
 
-	return status;
+	status = dwc2_schedule_periodic(hsotg, qh);
+	if (status)
+		return status;
+	if (!hsotg->periodic_qh_count) {
+		intr_mask = readl(hsotg->regs + GINTMSK);
+		intr_mask |= GINTSTS_SOF;
+		writel(intr_mask, hsotg->regs + GINTMSK);
+	}
+	hsotg->periodic_qh_count++;
+
+	return 0;
 }
 
 /**
@@ -661,14 +632,15 @@ void dwc2_hcd_qh_unlink(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 			hsotg->non_periodic_qh_ptr =
 					hsotg->non_periodic_qh_ptr->next;
 		list_del_init(&qh->qh_list_entry);
-	} else {
-		dwc2_deschedule_periodic(hsotg, qh);
-		hsotg->periodic_qh_count--;
-		if (!hsotg->periodic_qh_count) {
-			intr_mask = readl(hsotg->regs + GINTMSK);
-			intr_mask &= ~GINTSTS_SOF;
-			writel(intr_mask, hsotg->regs + GINTMSK);
-		}
+		return;
+	}
+
+	dwc2_deschedule_periodic(hsotg, qh);
+	hsotg->periodic_qh_count--;
+	if (!hsotg->periodic_qh_count) {
+		intr_mask = readl(hsotg->regs + GINTMSK);
+		intr_mask &= ~GINTSTS_SOF;
+		writel(intr_mask, hsotg->regs + GINTMSK);
 	}
 }
 
@@ -723,6 +695,8 @@ static void dwc2_sched_periodic_split(struct dwc2_hsotg *hsotg,
 void dwc2_hcd_qh_deactivate(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh,
 			    int sched_next_periodic_split)
 {
+	u16 frame_number;
+
 	if (dbg_qh(qh))
 		dev_vdbg(hsotg->dev, "%s()\n", __func__);
 
@@ -731,37 +705,36 @@ void dwc2_hcd_qh_deactivate(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh,
 		if (!list_empty(&qh->qtd_list))
 			/* Add back to inactive non-periodic schedule */
 			dwc2_hcd_qh_add(hsotg, qh);
-	} else {
-		u16 frame_number = dwc2_hcd_get_frame_number(hsotg);
-
-		if (qh->do_split) {
-			dwc2_sched_periodic_split(hsotg, qh, frame_number,
-						  sched_next_periodic_split);
-		} else {
-			qh->sched_frame = dwc2_frame_num_inc(qh->sched_frame,
-							     qh->interval);
-			if (dwc2_frame_num_le(qh->sched_frame, frame_number))
-				qh->sched_frame = frame_number;
-		}
-
-		if (list_empty(&qh->qtd_list)) {
-			dwc2_hcd_qh_unlink(hsotg, qh);
-		} else {
-			/*
-			 * Remove from periodic_sched_queued and move to
-			 * appropriate queue
-			 */
-			if ((hsotg->core_params->uframe_sched > 0 &&
-			     dwc2_frame_num_le(qh->sched_frame, frame_number))
-			 || (hsotg->core_params->uframe_sched <= 0 &&
-			     qh->sched_frame == frame_number))
-				list_move(&qh->qh_list_entry,
-					  &hsotg->periodic_sched_ready);
-			else
-				list_move(&qh->qh_list_entry,
-					  &hsotg->periodic_sched_inactive);
-		}
+		return;
 	}
+
+	frame_number = dwc2_hcd_get_frame_number(hsotg);
+
+	if (qh->do_split) {
+		dwc2_sched_periodic_split(hsotg, qh, frame_number,
+					  sched_next_periodic_split);
+	} else {
+		qh->sched_frame = dwc2_frame_num_inc(qh->sched_frame,
+						     qh->interval);
+		if (dwc2_frame_num_le(qh->sched_frame, frame_number))
+			qh->sched_frame = frame_number;
+	}
+
+	if (list_empty(&qh->qtd_list)) {
+		dwc2_hcd_qh_unlink(hsotg, qh);
+		return;
+	}
+	/*
+	 * Remove from periodic_sched_queued and move to
+	 * appropriate queue
+	 */
+	if ((hsotg->core_params->uframe_sched > 0 &&
+	     dwc2_frame_num_le(qh->sched_frame, frame_number)) ||
+	    (hsotg->core_params->uframe_sched <= 0 &&
+	     qh->sched_frame == frame_number))
+		list_move(&qh->qh_list_entry, &hsotg->periodic_sched_ready);
+	else
+		list_move(&qh->qh_list_entry, &hsotg->periodic_sched_inactive);
 }
 
 /**

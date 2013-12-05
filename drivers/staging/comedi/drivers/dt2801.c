@@ -289,13 +289,6 @@ static int dt2801_writedata(struct comedi_device *dev, unsigned int data)
 			outb_p(data & 0xff, dev->iobase + DT2801_DATA);
 			return 0;
 		}
-#if 0
-		if (stat & DT_S_READY) {
-			printk
-			    ("dt2801: ready flag set (bad!) in dt2801_writedata()\n");
-			return -EIO;
-		}
-#endif
 	} while (--timeout > 0);
 
 	return -ETIME;
@@ -343,11 +336,11 @@ static int dt2801_writecmd(struct comedi_device *dev, int command)
 
 	stat = inb_p(dev->iobase + DT2801_STATUS);
 	if (stat & DT_S_COMPOSITE_ERROR) {
-		printk
-		    ("dt2801: composite-error in dt2801_writecmd(), ignoring\n");
+		dev_dbg(dev->class_dev,
+			"composite-error in %s, ignoring\n", __func__);
 	}
 	if (!(stat & DT_S_READY))
-		printk("dt2801: !ready in dt2801_writecmd(), ignoring\n");
+		dev_dbg(dev->class_dev, "!ready in %s, ignoring\n", __func__);
 	outb_p(command, dev->iobase + DT2801_CMD);
 
 	return 0;
@@ -359,17 +352,12 @@ static int dt2801_reset(struct comedi_device *dev)
 	unsigned int stat;
 	int timeout;
 
-	DPRINTK("dt2801: resetting board...\n");
-	DPRINTK("fingerprint: 0x%02x 0x%02x\n", inb_p(dev->iobase),
-		inb_p(dev->iobase + 1));
-
 	/* pull random data from data port */
 	inb_p(dev->iobase + DT2801_DATA);
 	inb_p(dev->iobase + DT2801_DATA);
 	inb_p(dev->iobase + DT2801_DATA);
 	inb_p(dev->iobase + DT2801_DATA);
 
-	DPRINTK("dt2801: stop\n");
 	/* dt2801_writecmd(dev,DT_C_STOP); */
 	outb_p(DT_C_STOP, dev->iobase + DT2801_CMD);
 
@@ -382,12 +370,10 @@ static int dt2801_reset(struct comedi_device *dev)
 			break;
 	} while (timeout--);
 	if (!timeout)
-		printk("dt2801: timeout 1 status=0x%02x\n", stat);
+		dev_dbg(dev->class_dev, "timeout 1 status=0x%02x\n", stat);
 
-	/* printk("dt2801: reading dummy\n"); */
 	/* dt2801_readdata(dev,&board_code); */
 
-	DPRINTK("dt2801: reset\n");
 	outb_p(DT_C_RESET, dev->iobase + DT2801_CMD);
 	/* dt2801_writecmd(dev,DT_C_RESET); */
 
@@ -399,12 +385,9 @@ static int dt2801_reset(struct comedi_device *dev)
 			break;
 	} while (timeout--);
 	if (!timeout)
-		printk("dt2801: timeout 2 status=0x%02x\n", stat);
+		dev_dbg(dev->class_dev, "timeout 2 status=0x%02x\n", stat);
 
-	DPRINTK("dt2801: reading code\n");
 	dt2801_readdata(dev, &board_code);
-
-	DPRINTK("dt2801: ok.  code=0x%02x\n", board_code);
 
 	return board_code;
 }
@@ -465,12 +448,12 @@ static int dt2801_error(struct comedi_device *dev, int stat)
 {
 	if (stat < 0) {
 		if (stat == -ETIME)
-			printk("dt2801: timeout\n");
+			dev_dbg(dev->class_dev, "timeout\n");
 		else
-			printk("dt2801: error %d\n", stat);
+			dev_dbg(dev->class_dev, "error %d\n", stat);
 		return stat;
 	}
-	printk("dt2801: error status 0x%02x, resetting...\n", stat);
+	dev_dbg(dev->class_dev, "error status 0x%02x, resetting...\n", stat);
 
 	dt2801_reset(dev);
 	dt2801_reset(dev);
@@ -601,8 +584,8 @@ static int dt2801_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		if (boardtypes[type].boardcode == board_code)
 			goto havetype;
 	}
-	printk("dt2801: unrecognized board code=0x%02x, contact author\n",
-	       board_code);
+	dev_dbg(dev->class_dev,
+		"unrecognized board code=0x%02x, contact author\n", board_code);
 	type = 0;
 
 havetype:

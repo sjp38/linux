@@ -404,9 +404,7 @@ static int pcl812_ai_insn_read(struct comedi_device *dev,
 				goto conv_finish;
 			udelay(1);
 		}
-		printk
-		    ("comedi%d: pcl812: (%s at 0x%lx) A/D insn read timeout\n",
-		     dev->minor, dev->board_name, dev->iobase);
+		dev_dbg(dev->class_dev, "A/D insn read timeout\n");
 		outb(devpriv->mode_reg_int | 0, dev->iobase + PCL812_MODE);
 		return -ETIME;
 
@@ -441,9 +439,7 @@ static int acl8216_ai_insn_read(struct comedi_device *dev,
 				goto conv_finish;
 			udelay(1);
 		}
-		printk
-		    ("comedi%d: pcl812: (%s at 0x%lx) A/D insn read timeout\n",
-		     dev->minor, dev->board_name, dev->iobase);
+		dev_dbg(dev->class_dev, "A/D insn read timeout\n");
 		outb(0, dev->iobase + PCL812_MODE);
 		return -ETIME;
 
@@ -786,10 +782,7 @@ static irqreturn_t interrupt_pcl812_ai_int(int irq, void *d)
 	}
 
 	if (err) {
-		printk
-		    ("comedi%d: pcl812: (%s at 0x%lx) "
-		     "A/D cmd IRQ without DRDY!\n",
-		     dev->minor, dev->board_name, dev->iobase);
+		dev_dbg(dev->class_dev, "A/D cmd IRQ without DRDY!\n");
 		pcl812_ai_cancel(dev, s);
 		s->async->events |= COMEDI_CB_EOA | COMEDI_CB_ERROR;
 		comedi_event(dev, s);
@@ -1095,7 +1088,6 @@ static int pcl812_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	const struct pcl812_board *board = comedi_board(dev);
 	struct pcl812_private *devpriv;
 	int ret, subdev;
-	unsigned int irq;
 	unsigned int dma;
 	unsigned long pages;
 	struct comedi_subdevice *s;
@@ -1109,30 +1101,12 @@ static int pcl812_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	if (!devpriv)
 		return -ENOMEM;
 
-	irq = 0;
-	if (board->IRQbits != 0) {	/* board support IRQ */
-		irq = it->options[1];
-		if (irq) {	/* we want to use IRQ */
-			if (((1 << irq) & board->IRQbits) == 0) {
-				printk
-				    (", IRQ %u is out of allowed range, "
-				     "DISABLING IT", irq);
-				irq = 0;	/* Bad IRQ */
-			} else {
-				if (request_irq(irq, interrupt_pcl812, 0,
-						dev->board_name, dev)) {
-					printk
-					    (", unable to allocate IRQ %u, "
-					     "DISABLING IT", irq);
-					irq = 0;	/* Can't use IRQ */
-				} else {
-					printk(KERN_INFO ", irq=%u", irq);
-				}
-			}
-		}
+	if ((1 << it->options[1]) & board->IRQbits) {
+		ret = request_irq(it->options[1], interrupt_pcl812, 0,
+				  dev->board_name, dev);
+		if (ret == 0)
+			dev->irq = it->options[1];
 	}
-
-	dev->irq = irq;
 
 	dma = 0;
 	devpriv->dma = dma;
@@ -1141,21 +1115,22 @@ static int pcl812_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	if (board->DMAbits != 0) {	/* board support DMA */
 		dma = it->options[2];
 		if (((1 << dma) & board->DMAbits) == 0) {
-			printk(", DMA is out of allowed range, FAIL!\n");
+			dev_err(dev->class_dev,
+				"DMA is out of allowed range, FAIL!\n");
 			return -EINVAL;	/* Bad DMA */
 		}
 		ret = request_dma(dma, dev->board_name);
 		if (ret) {
-			printk(KERN_ERR ", unable to allocate DMA %u, FAIL!\n",
-			       dma);
+			dev_err(dev->class_dev,
+				"unable to allocate DMA %u, FAIL!\n", dma);
 			return -EBUSY;	/* DMA isn't free */
 		}
 		devpriv->dma = dma;
-		printk(KERN_INFO ", dma=%u", dma);
 		pages = 1;	/* we want 8KB */
 		devpriv->dmabuf[0] = __get_dma_pages(GFP_KERNEL, pages);
 		if (!devpriv->dmabuf[0]) {
-			printk(", unable to allocate DMA buffer, FAIL!\n");
+			dev_err(dev->class_dev,
+				"unable to allocate DMA buffer, FAIL!\n");
 			/*
 			 * maybe experiment with try_to_free_pages()
 			 * will help ....
@@ -1167,7 +1142,8 @@ static int pcl812_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 		devpriv->hwdmasize[0] = PAGE_SIZE * (1 << pages);
 		devpriv->dmabuf[1] = __get_dma_pages(GFP_KERNEL, pages);
 		if (!devpriv->dmabuf[1]) {
-			printk(KERN_ERR ", unable to allocate DMA buffer, FAIL!\n");
+			dev_err(dev->class_dev,
+				"unable to allocate DMA buffer, FAIL!\n");
 			return -EBUSY;
 		}
 		devpriv->dmapages[1] = pages;
@@ -1269,10 +1245,6 @@ no_dma:
 			default:
 				s->range_table = &range_bipolar10;
 				break;
-				printk
-				    (", incorrect range number %d, changing "
-				     "to 0 (+/-10V)", it->options[4]);
-				break;
 			}
 			break;
 			break;
@@ -1299,10 +1271,6 @@ no_dma:
 			default:
 				s->range_table = &range_iso813_1_ai;
 				break;
-				printk
-				    (", incorrect range number %d, "
-				     "changing to 0 ", it->options[1]);
-				break;
 			}
 			break;
 		case boardACL8113:
@@ -1323,10 +1291,6 @@ no_dma:
 				break;
 			default:
 				s->range_table = &range_acl8113_1_ai;
-				break;
-				printk
-				    (", incorrect range number %d, "
-				     "changing to 0 ", it->options[1]);
 				break;
 			}
 			break;
@@ -1402,7 +1366,7 @@ no_dma:
 		break;
 	case boardA821:
 		devpriv->max_812_ai_mode0_rangewait = 1;
-		devpriv->mode_reg_int = (irq << 4) & 0xf0;
+		devpriv->mode_reg_int = (dev->irq << 4) & 0xf0;
 		break;
 	case boardPCL813B:
 	case boardPCL813:
@@ -1413,7 +1377,6 @@ no_dma:
 		break;
 	}
 
-	printk(KERN_INFO "\n");
 	devpriv->valid = 1;
 
 	pcl812_reset(dev);

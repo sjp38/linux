@@ -250,11 +250,6 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 	/* The insn data is a mask in data[0] and the new data
 	 * in data[1], each channel cooresponding to a bit. */
 
-#ifdef DAMMIT_ITS_BROKEN
-	/* DEBUG */
-	printk(KERN_DEBUG "write mask: %08x  data: %08x\n", data[0], data[1]);
-#endif
-
 	s->state = 0;
 
 	for (byte_no = 0; byte_no < s->n_chan / CHANS_PER_PORT; ++byte_no) {
@@ -271,14 +266,6 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 
 		byte = inb(ioaddr);	/* read all 8-bits for this port */
 
-#ifdef DAMMIT_ITS_BROKEN
-		/* DEBUG */
-		printk
-		    (KERN_DEBUG "byte %d wmb %02x db %02x offset %02d io %04x,"
-		     " data_in %02x ", byte_no, (unsigned)write_mask_byte,
-		     (unsigned)data_byte, offset, ioaddr, (unsigned)byte);
-#endif
-
 		if (write_mask_byte) {
 			/*
 			 * this byte has some write_bits
@@ -291,21 +278,12 @@ static int pcmmio_dio_insn_bits(struct comedi_device *dev,
 			/* Write out the new digital output state */
 			outb(byte, ioaddr);
 		}
-#ifdef DAMMIT_ITS_BROKEN
-		/* DEBUG */
-		printk(KERN_DEBUG "data_out_byte %02x\n", (unsigned)byte);
-#endif
 		/* save the digital input lines for this byte.. */
 		s->state |= ((unsigned int)byte) << offset;
 	}
 
 	/* now return the DIO lines to data[1] - note they came inverted! */
 	data[1] = ~s->state;
-
-#ifdef DAMMIT_ITS_BROKEN
-	/* DEBUG */
-	printk(KERN_DEBUG "s->state %08x data_out %08x\n", s->state, data[1]);
-#endif
 
 	return insn->n;
 }
@@ -378,13 +356,6 @@ static void init_asics(struct comedi_device *dev)
 			     reg < FIRST_PAGED_REG + NUM_PAGED_REGS; ++reg)
 				outb(0, baseaddr + reg);
 		}
-
-		/* DEBUG  set rising edge interrupts on port0 of both asics */
-		/*switch_page(dev, asic, PAGE_POL);
-		   outb(0xff, baseaddr + REG_POL0);
-		   switch_page(dev, asic, PAGE_ENAB);
-		   outb(0xff, baseaddr + REG_ENAB0); */
-		/* END DEBUG */
 
 		/* switch back to default page 0 */
 		switch_page(dev, asic, 0);
@@ -505,9 +476,9 @@ static irqreturn_t interrupt_pcmmio(int irq, void *d)
 				 * TODO here: dispatch io lines to subdevs
 				 * with commands..
 				 */
-				printk
-				    (KERN_DEBUG "got edge detect interrupt %d asic %d which_chans: %06x\n",
-				     irq, asic, triggered);
+				dev_dbg(dev->class_dev,
+					"got edge detect interrupt %d asic %d which_chans: %06x\n",
+					irq, asic, triggered);
 				for (i = 2; i < dev->n_subdevices; i++) {
 					s = &dev->subdevices[i];
 					/*
@@ -1020,11 +991,8 @@ static int pcmmio_attach(struct comedi_device *dev, struct comedi_devconfig *it)
 	devpriv->sprivs =
 	    kcalloc(n_subdevs, sizeof(struct pcmmio_subdev_private),
 		    GFP_KERNEL);
-	if (!devpriv->sprivs) {
-		printk(KERN_ERR "comedi%d: cannot allocate subdevice private data structures\n",
-				dev->minor);
+	if (!devpriv->sprivs)
 		return -ENOMEM;
-	}
 
 	ret = comedi_alloc_subdevices(dev, n_subdevs);
 	if (ret)

@@ -855,55 +855,46 @@ static ctl_table_t lnet_table[] = {
 	 * to go via /proc for portability.
 	 */
 	{
-		INIT_CTL_NAME(PSDEV_LNET_STATS)
 		.procname = "stats",
 		.mode     = 0644,
 		.proc_handler = &proc_lnet_stats,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_ROUTES)
 		.procname = "routes",
 		.mode     = 0444,
 		.proc_handler = &proc_lnet_routes,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_ROUTERS)
 		.procname = "routers",
 		.mode     = 0444,
 		.proc_handler = &proc_lnet_routers,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_PEERS)
 		.procname = "peers",
 		.mode     = 0444,
 		.proc_handler = &proc_lnet_peers,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_PEERS)
 		.procname = "buffers",
 		.mode     = 0444,
 		.proc_handler = &proc_lnet_buffers,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_NIS)
 		.procname = "nis",
 		.mode     = 0444,
 		.proc_handler = &proc_lnet_nis,
 	},
 	{
-		INIT_CTL_NAME(PSDEV_LNET_PTL_ROTOR)
 		.procname = "portal_rotor",
 		.mode     = 0644,
 		.proc_handler = &proc_lnet_portal_rotor,
 	},
 	{
-		INIT_CTL_NAME(0)
 	}
 };
 
 static ctl_table_t top_table[] = {
 	{
-		INIT_CTL_NAME(CTL_LNET)
 		.procname = "lnet",
 		.mode     = 0555,
 		.data     = NULL,
@@ -911,28 +902,23 @@ static ctl_table_t top_table[] = {
 		.child    = lnet_table,
 	},
 	{
-		INIT_CTL_NAME(0)
 	}
 };
 
 void
 lnet_proc_init(void)
 {
-#ifdef CONFIG_SYSCTL
 	if (lnet_table_header == NULL)
 		lnet_table_header = register_sysctl_table(top_table);
-#endif
 }
 
 void
 lnet_proc_fini(void)
 {
-#ifdef CONFIG_SYSCTL
 	if (lnet_table_header != NULL)
 		unregister_sysctl_table(lnet_table_header);
 
 	lnet_table_header = NULL;
-#endif
 }
 
 #else

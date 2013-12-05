@@ -55,7 +55,6 @@
 
 static const char *dwc2_op_state_str(struct dwc2_hsotg *hsotg)
 {
-#ifdef DEBUG
 	switch (hsotg->op_state) {
 	case OTG_STATE_A_HOST:
 		return "a_host";
@@ -70,9 +69,6 @@ static const char *dwc2_op_state_str(struct dwc2_hsotg *hsotg)
 	default:
 		return "unknown";
 	}
-#else
-	return "";
-#endif
 }
 
 /**
@@ -419,12 +415,10 @@ static u32 dwc2_read_common_intr(struct dwc2_hsotg *hsotg)
 	gintmsk = readl(hsotg->regs + GINTMSK);
 	gahbcfg = readl(hsotg->regs + GAHBCFG);
 
-#ifdef DEBUG
 	/* If any common interrupts set */
 	if (gintsts & gintmsk_common)
 		dev_dbg(hsotg->dev, "gintsts=%08x  gintmsk=%08x\n",
 			gintsts, gintmsk);
-#endif
 
 	if (gahbcfg & GAHBCFG_GLBL_INTR_EN)
 		return gintsts & gintmsk & gintmsk_common;
@@ -451,8 +445,8 @@ irqreturn_t dwc2_handle_common_intr(int irq, void *dev)
 	u32 gintsts;
 	irqreturn_t retval = IRQ_NONE;
 
-	if (dwc2_check_core_status(hsotg) < 0) {
-		dev_warn(hsotg->dev, "Controller is disconnected\n");
+	if (!dwc2_is_controller_alive(hsotg)) {
+		dev_warn(hsotg->dev, "Controller is dead\n");
 		goto out;
 	}
 

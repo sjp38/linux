@@ -209,7 +209,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_FULL20   | OBD_CONNECT_64BITHASH|
 				  OBD_CONNECT_EINPROGRESS |
 				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE |
-				  OBD_CONNECT_LAYOUTLOCK | OBD_CONNECT_PINGLESS;
+				  OBD_CONNECT_LAYOUTLOCK |
+				  OBD_CONNECT_PINGLESS | OBD_CONNECT_MAX_EASIZE;
 
 	if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
 		data->ocd_connect_flags |= OBD_CONNECT_SOM;
@@ -381,6 +382,17 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (data->ocd_connect_flags & OBD_CONNECT_LAYOUTLOCK) {
 		LCONSOLE_INFO("Layout lock feature supported.\n");
 		sbi->ll_flags |= LL_SBI_LAYOUT_LOCK;
+	}
+
+	if (data->ocd_ibits_known & MDS_INODELOCK_XATTR) {
+		if (!(data->ocd_connect_flags & OBD_CONNECT_MAX_EASIZE)) {
+			LCONSOLE_INFO(
+				"%s: disabling xattr cache due to unknown maximum xattr size.\n",
+				dt);
+		} else {
+			sbi->ll_flags |= LL_SBI_XATTR_CACHE;
+			sbi->ll_xattr_cache_enabled = 1;
+		}
 	}
 
 	obd = class_name2obd(dt);
@@ -922,6 +934,9 @@ void ll_lli_init(struct ll_inode_info *lli)
 	lli->lli_layout_gen = LL_LAYOUT_GEN_NONE;
 	lli->lli_clob = NULL;
 
+	init_rwsem(&lli->lli_xattrs_list_rwsem);
+	mutex_init(&lli->lli_xattrs_enq_lock);
+
 	LASSERT(lli->lli_vfs_inode.i_mode != 0);
 	if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
 		mutex_init(&lli->lli_readdir_mutex);
@@ -1194,6 +1209,8 @@ void ll_clear_inode(struct inode *inode)
 		lli->lli_symlink_name = NULL;
 	}
 
+	ll_xattr_cache_destroy(inode);
+
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
 		LASSERT(lli->lli_posix_acl == NULL);
 		if (lli->lli_remote_perms) {
@@ -1353,6 +1370,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct md_op_data *op_data = NULL;
 	struct md_open_data *mod = NULL;
+	bool file_is_released = false;
 	int rc = 0, rc1 = 0;
 
 	CDEBUG(D_VFSTRACE, "%s: setattr inode %p/fid:"DFID" from %llu to %llu, "
@@ -1436,9 +1454,39 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 	    (attr->ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
 		op_data->op_flags = MF_EPOCH_OPEN;
 
+	/* truncate on a released file must failed with -ENODATA,
+	 * so size must not be set on MDS for released file
+	 * but other attributes must be set
+	 */
+	if (S_ISREG(inode->i_mode)) {
+		struct lov_stripe_md *lsm;
+		__u32 gen;
+
+		ll_layout_refresh(inode, &gen);
+		lsm = ccc_inode_lsm_get(inode);
+		if (lsm && lsm->lsm_pattern & LOV_PATTERN_F_RELEASED)
+			file_is_released = true;
+		ccc_inode_lsm_put(inode, lsm);
+	}
+
+	/* clear size attr for released file
+	 * we clear the attribute send to MDT in op_data, not the original
+	 * received from caller in attr which is used later to
+	 * decide return code */
+	if (file_is_released && (attr->ia_valid & ATTR_SIZE))
+		op_data->op_attr.ia_valid &= ~ATTR_SIZE;
+
 	rc = ll_md_setattr(dentry, op_data, &mod);
 	if (rc)
 		GOTO(out, rc);
+
+	/* truncate failed, others succeed */
+	if (file_is_released) {
+		if (attr->ia_valid & ATTR_SIZE)
+			GOTO(out, rc = -ENODATA);
+		else
+			GOTO(out, rc = 0);
+	}
 
 	/* RPC to MDT is sent, cancel data modification flag */
 	if (rc == 0 && (op_data->op_bias & MDS_DATA_MODIFIED)) {
@@ -1721,7 +1769,9 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 			 * lock on the client and set LLIF_MDS_SIZE_LOCK holding
 			 * it. */
 			mode = ll_take_md_lock(inode, MDS_INODELOCK_UPDATE,
-					       &lockh, LDLM_FL_CBPENDING);
+					       &lockh, LDLM_FL_CBPENDING,
+					       LCK_CR | LCK_CW |
+					       LCK_PR | LCK_PW);
 			if (mode) {
 				if (lli->lli_flags & (LLIF_DONE_WRITING |
 						      LLIF_EPOCH_PENDING |
@@ -1760,6 +1810,11 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 	if (body->valid & OBD_MD_FLOSSCAPA) {
 		LASSERT(md->oss_capa);
 		ll_add_capa(inode, md->oss_capa);
+	}
+
+	if (body->valid & OBD_MD_TSTATE) {
+		if (body->t_state & MS_RESTORE)
+			lli->lli_flags |= LLIF_FILE_RESTORING;
 	}
 }
 

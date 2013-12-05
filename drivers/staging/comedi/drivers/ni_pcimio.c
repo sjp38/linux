@@ -116,8 +116,6 @@ Bugs:
 #include "ni_stc.h"
 #include "mite.h"
 
-/* #define PCI_DEBUG */
-
 #define PCIDMA
 
 #define PCIMIO 1
@@ -1178,9 +1176,9 @@ static void m_series_stc_writew(struct comedi_device *dev, uint16_t data,
 		offset = M_Offset_AO_FIFO_Clear;
 		break;
 	case DIO_Control_Register:
-		printk
-		    ("%s: FIXME: register 0x%x does not map cleanly on to m-series boards.\n",
-		     __func__, reg);
+		dev_dbg(dev->class_dev,
+			"%s: FIXME: register 0x%x does not map cleanly on to m-series boards.\n",
+			__func__, reg);
 		return;
 		break;
 	case G_Autoincrement_Register(0):
@@ -1639,7 +1637,7 @@ static int ni_pcimio_pci_probe(struct pci_dev *dev,
 	return comedi_pci_auto_config(dev, &ni_pcimio_driver, id->driver_data);
 }
 
-static DEFINE_PCI_DEVICE_TABLE(ni_pcimio_pci_table) = {
+static const struct pci_device_id ni_pcimio_pci_table[] = {
 	{ PCI_VDEVICE(NI, 0x0162), BOARD_PCIMIO_16XE_50 },	/* 0x1620? */
 	{ PCI_VDEVICE(NI, 0x1170), BOARD_PCIMIO_16XE_10 },
 	{ PCI_VDEVICE(NI, 0x1180), BOARD_PCIMIO_16E_1 },
