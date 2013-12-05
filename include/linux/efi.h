@@ -653,6 +653,7 @@ extern int __init efi_setup_pcdp_console(char *);
 #define EFI_RUNTIME_SERVICES	3	/* Can we use runtime services? */
 #define EFI_MEMMAP		4	/* Can we use EFI memory map? */
 #define EFI_64BIT		5	/* Is the firmware 64-bit? */
+#define EFI_ARCH_1		6	/* First arch-specific bit */
 
 #ifdef CONFIG_EFI
 # ifdef CONFIG_X86
@@ -801,6 +802,8 @@ struct efivar_entry {
 	struct efi_variable var;
 	struct list_head list;
 	struct kobject kobj;
+	bool scanning;
+	bool deleting;
 };
 
 
@@ -865,6 +868,8 @@ void efivar_run_worker(void);
 
 #if defined(CONFIG_EFI_VARS) || defined(CONFIG_EFI_VARS_MODULE)
 int efivars_sysfs_init(void);
+
+#define EFIVARS_DATA_SIZE_MAX 1024
 
 #endif /* CONFIG_EFI_VARS */
 
