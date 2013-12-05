@@ -1824,16 +1824,6 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	unsigned int points = 0;
 	struct task_struct *chosen = NULL;
 
-	/*
-	 * If current has a pending SIGKILL or is exiting, then automatically
-	 * select it.  The goal is to allow it to allocate so that it may
-	 * quickly exit and free its memory.
-	 */
-	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
-		set_thread_flag(TIF_MEMDIE);
-		return;
-	}
-
 	check_panic_on_oom(CONSTRAINT_MEMCG, gfp_mask, order, NULL);
 	totalpages = mem_cgroup_get_limit(memcg) >> PAGE_SHIFT ? : 1;
 	for_each_mem_cgroup_tree(iter, memcg) {
@@ -2283,6 +2273,16 @@ bool mem_cgroup_oom_synchronize(bool handle)
 
 	if (!handle)
 		goto cleanup;
+
+	/*
+	 * If current has a pending SIGKILL or is exiting, then automatically
+	 * select it.  The goal is to allow it to allocate so that it may
+	 * quickly exit and free its memory.
+	 */
+	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
+		set_thread_flag(TIF_MEMDIE);
+		goto cleanup;
+	}
 
 	owait.memcg = memcg;
 	owait.wait.flags = 0;
@@ -2736,6 +2736,9 @@ static int __mem_cgroup_try_charge(struct mm_struct *mm,
 
 	if (unlikely(task_in_memcg_oom(current)))
 		goto bypass;
+
+	if (gfp_mask & __GFP_NOFAIL)
+		oom = false;
 
 	/*
 	 * We always charge the cgroup the mm_struct belongs to.
