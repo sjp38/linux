@@ -417,7 +417,7 @@ static int abx500_set_mode(struct pinctrl_dev *pctldev, struct gpio_chip *chip,
 			ret = abx500_gpio_set_bits(chip,
 					AB8500_GPIO_ALTFUN_REG,
 					af.alt_bit1,
-					!!(af.alta_val && BIT(0)));
+					!!(af.alta_val & BIT(0)));
 			if (ret < 0)
 				goto out;
 
@@ -438,7 +438,7 @@ static int abx500_set_mode(struct pinctrl_dev *pctldev, struct gpio_chip *chip,
 			goto out;
 
 		ret = abx500_gpio_set_bits(chip, AB8500_GPIO_ALTFUN_REG,
-				af.alt_bit1, !!(af.altb_val && BIT(0)));
+				af.alt_bit1, !!(af.altb_val & BIT(0)));
 		if (ret < 0)
 			goto out;
 
@@ -461,7 +461,7 @@ static int abx500_set_mode(struct pinctrl_dev *pctldev, struct gpio_chip *chip,
 			goto out;
 
 		ret = abx500_gpio_set_bits(chip, AB8500_GPIO_ALTFUN_REG,
-				af.alt_bit2, !!(af.altc_val && BIT(1)));
+				af.alt_bit2, !!(af.altc_val & BIT(1)));
 		break;
 
 	default:
