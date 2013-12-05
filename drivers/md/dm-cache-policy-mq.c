@@ -287,9 +287,8 @@ static struct entry *alloc_entry(struct entry_pool *ep)
 static struct entry *alloc_particular_entry(struct entry_pool *ep, dm_cblock_t cblock)
 {
 	struct entry *e = ep->entries + from_cblock(cblock);
-	list_del(&e->list);
 
-	INIT_LIST_HEAD(&e->list);
+	list_del_init(&e->list);
 	INIT_HLIST_NODE(&e->hlist);
 	ep->nr_allocated++;
 
@@ -730,15 +729,18 @@ static int pre_cache_entry_found(struct mq_policy *mq, struct entry *e,
 	int r = 0;
 	bool updated = updated_this_tick(mq, e);
 
-	requeue_and_update_tick(mq, e);
-
 	if ((!discarded_oblock && updated) ||
-	    !should_promote(mq, e, discarded_oblock, data_dir))
+	    !should_promote(mq, e, discarded_oblock, data_dir)) {
+		requeue_and_update_tick(mq, e);
 		result->op = POLICY_MISS;
-	else if (!can_migrate)
+
+	} else if (!can_migrate)
 		r = -EWOULDBLOCK;
-	else
+
+	else {
+		requeue_and_update_tick(mq, e);
 		r = pre_cache_to_cache(mq, e, result);
+	}
 
 	return r;
 }

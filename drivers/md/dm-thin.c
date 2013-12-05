@@ -645,7 +645,9 @@ static void process_prepared_mapping(struct dm_thin_new_mapping *m)
 	 */
 	r = dm_thin_insert_block(tc->td, m->virt_block, m->data_block);
 	if (r) {
-		DMERR_LIMIT("dm_thin_insert_block() failed");
+		DMERR_LIMIT("%s: dm_thin_insert_block() failed: error = %d",
+			    dm_device_name(pool->pool_md), r);
+		set_pool_mode(pool, PM_READ_ONLY);
 		cell_error(pool, m->cell);
 		goto out;
 	}
@@ -963,7 +965,7 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 		 * table reload).
 		 */
 		if (!free_blocks) {
-			DMWARN("%s: no free space available.",
+			DMWARN("%s: no free data space available.",
 			       dm_device_name(pool->pool_md));
 			spin_lock_irqsave(&pool->lock, flags);
 			pool->no_free_space = 1;
@@ -973,8 +975,16 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 	}
 
 	r = dm_pool_alloc_data_block(pool->pmd, result);
-	if (r)
+	if (r) {
+		if (r == -ENOSPC &&
+		    !dm_pool_get_free_metadata_block_count(pool->pmd, &free_blocks) &&
+		    !free_blocks) {
+			DMWARN("%s: no free metadata space available.",
+			       dm_device_name(pool->pool_md));
+			set_pool_mode(pool, PM_READ_ONLY);
+		}
 		return r;
+	}
 
 	return 0;
 }
