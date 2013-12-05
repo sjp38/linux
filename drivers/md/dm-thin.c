@@ -198,7 +198,7 @@ struct pool {
 };
 
 static enum pool_mode get_pool_mode(struct pool *pool);
-static void set_pool_mode(struct pool *pool, enum pool_mode mode);
+static void metadata_operation_failed(struct pool *pool, const char *op, int r);
 
 /*
  * Target context for a pool.
@@ -641,9 +641,7 @@ static void process_prepared_mapping(struct dm_thin_new_mapping *m)
 	 */
 	r = dm_thin_insert_block(tc->td, m->virt_block, m->data_block);
 	if (r) {
-		DMERR_LIMIT("%s: dm_thin_insert_block() failed: error = %d",
-			    dm_device_name(pool->pool_md), r);
-		set_pool_mode(pool, PM_READ_ONLY);
+		metadata_operation_failed(pool, "dm_thin_insert_block", r);
 		cell_error(pool, m->cell);
 		goto out;
 	}
@@ -904,11 +902,8 @@ static int commit(struct pool *pool)
 		return -EINVAL;
 
 	r = dm_pool_commit_metadata(pool->pmd);
-	if (r) {
-		DMERR_LIMIT("%s: dm_pool_commit_metadata failed: error = %d",
-			    dm_device_name(pool->pool_md), r);
-		set_pool_mode(pool, PM_READ_ONLY);
-	}
+	if (r)
+		metadata_operation_failed(pool, "dm_pool_commit_metadata", r);
 
 	return r;
 }
@@ -945,8 +940,10 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 		return -EINVAL;
 
 	r = dm_pool_get_free_block_count(pool->pmd, &free_blocks);
-	if (r)
+	if (r) {
+		metadata_operation_failed(pool, "dm_pool_get_free_block_count", r);
 		return r;
+	}
 
 	check_low_water_mark(pool, free_blocks);
 
@@ -960,8 +957,10 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 			return r;
 
 		r = dm_pool_get_free_block_count(pool->pmd, &free_blocks);
-		if (r)
+		if (r) {
+			metadata_operation_failed(pool, "dm_pool_get_free_block_count", r);
 			return r;
+		}
 
 		/*
 		 * If we still have no space we set a flag to avoid
@@ -984,11 +983,11 @@ static int alloc_data_block(struct thin_c *tc, dm_block_t *result)
 	if (r) {
 		if (r == -ENOSPC &&
 		    !dm_pool_get_free_metadata_block_count(pool->pmd, &free_blocks) &&
-		    !free_blocks) {
+		    !free_blocks)
 			DMWARN("%s: no free metadata space available.",
 			       dm_device_name(pool->pool_md));
-			set_pool_mode(pool, PM_READ_ONLY);
-		}
+
+		metadata_operation_failed(pool, "dm_pool_alloc_data_block", r);
 		return r;
 	}
 
@@ -1130,7 +1129,6 @@ static void break_sharing(struct thin_c *tc, struct bio *bio, dm_block_t block,
 	default:
 		DMERR_LIMIT("%s: alloc_data_block() failed: error = %d",
 			    __func__, r);
-		set_pool_mode(pool, PM_READ_ONLY);
 		cell_error(pool, cell);
 		break;
 	}
@@ -1209,7 +1207,6 @@ static void provision_block(struct thin_c *tc, struct bio *bio, dm_block_t block
 	default:
 		DMERR_LIMIT("%s: alloc_data_block() failed: error = %d",
 			    __func__, r);
-		set_pool_mode(pool, PM_READ_ONLY);
 		cell_error(pool, cell);
 		break;
 	}
@@ -1451,6 +1448,18 @@ static void set_pool_mode(struct pool *pool, enum pool_mode mode)
 		pool->process_prepared_discard = process_prepared_discard;
 		break;
 	}
+}
+
+/*
+ * Rather than calling set_pool_mode directly, use these which describe the
+ * reason for mode degradation.
+ */
+static void metadata_operation_failed(struct pool *pool, const char *op, int r)
+{
+	DMERR_LIMIT("%s: metadata operation '%s' failed: error = %d",
+		    dm_device_name(pool->pool_md), op, r);
+
+	set_pool_mode(pool, PM_READ_ONLY);
 }
 
 /*----------------------------------------------------------------*/
@@ -2213,9 +2222,7 @@ static int maybe_resize_data_dev(struct dm_target *ti, bool *need_commit)
 	} else if (data_size > sb_data_size) {
 		r = dm_pool_resize_data_dev(pool->pmd, data_size);
 		if (r) {
-			DMERR("%s: failed to resize data device",
-			      dm_device_name(pool->pool_md));
-			set_pool_mode(pool, PM_READ_ONLY);
+			metadata_operation_failed(pool, "dm_pool_resize_data_dev", r);
 			return r;
 		}
 
@@ -2252,8 +2259,7 @@ static int maybe_resize_metadata_dev(struct dm_target *ti, bool *need_commit)
 	} else if (metadata_dev_size > sb_metadata_dev_size) {
 		r = dm_pool_resize_metadata_dev(pool->pmd, metadata_dev_size);
 		if (r) {
-			DMERR("%s: failed to resize metadata device",
-			      dm_device_name(pool->pool_md));
+			metadata_operation_failed(pool, "dm_pool_resize_metadata_dev", r);
 			return r;
 		}
 
