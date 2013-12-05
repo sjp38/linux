@@ -256,8 +256,9 @@ static void intel_disable_lvds(struct intel_encoder *encoder)
 	POSTING_READ(lvds_encoder->reg);
 }
 
-static int intel_lvds_mode_valid(struct drm_connector *connector,
-				 struct drm_display_mode *mode)
+static enum drm_mode_status
+intel_lvds_mode_valid(struct drm_connector *connector,
+		      struct drm_display_mode *mode)
 {
 	struct intel_connector *intel_connector = to_intel_connector(connector);
 	struct drm_display_mode *fixed_mode = intel_connector->panel.fixed_mode;
@@ -446,9 +447,19 @@ static int intel_lid_notify(struct notifier_block *nb, unsigned long val,
 	if (dev_priv->modeset_restore == MODESET_DONE)
 		goto exit;
 
-	drm_modeset_lock_all(dev);
-	intel_modeset_setup_hw_state(dev, true);
-	drm_modeset_unlock_all(dev);
+	/*
+	 * Some old platform's BIOS love to wreak havoc while the lid is closed.
+	 * We try to detect this here and undo any damage. The split for PCH
+	 * platforms is rather conservative and a bit arbitrary expect that on
+	 * those platforms VGA disabling requires actual legacy VGA I/O access,
+	 * and as part of the cleanup in the hw state restore we also redisable
+	 * the vga plane.
+	 */
+	if (!HAS_PCH_SPLIT(dev)) {
+		drm_modeset_lock_all(dev);
+		intel_modeset_setup_hw_state(dev, true);
+		drm_modeset_unlock_all(dev);
+	}
 
 	dev_priv->modeset_restore = MODESET_DONE;
 

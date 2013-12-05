@@ -73,7 +73,7 @@ static const u32 hsw_ddi_translations_hdmi[] = {
 };
 
 static const u32 bdw_ddi_translations_edp[] = {
-	0x00FFFFFF, 0x00000012,		/* DP parameters */
+	0x00FFFFFF, 0x00000012,		/* eDP parameters */
 	0x00EBAFFF, 0x00020011,
 	0x00C71FFF, 0x0006000F,
 	0x00FFFFFF, 0x00020011,
@@ -713,8 +713,6 @@ bool intel_ddi_pll_mode_set(struct drm_crtc *crtc)
 	uint32_t reg, val;
 	int clock = intel_crtc->config.port_clock;
 
-	/* TODO: reuse PLLs when possible (compare values) */
-
 	intel_ddi_put_crtc_pll(crtc);
 
 	if (type == INTEL_OUTPUT_DISPLAYPORT || type == INTEL_OUTPUT_EDP) {
@@ -742,31 +740,40 @@ bool intel_ddi_pll_mode_set(struct drm_crtc *crtc)
 	} else if (type == INTEL_OUTPUT_HDMI) {
 		unsigned p, n2, r2;
 
-		if (plls->wrpll1_refcount == 0) {
-			DRM_DEBUG_KMS("Using WRPLL 1 on pipe %c\n",
-				      pipe_name(pipe));
-			plls->wrpll1_refcount++;
-			reg = WRPLL_CTL1;
-			intel_crtc->ddi_pll_sel = PORT_CLK_SEL_WRPLL1;
-		} else if (plls->wrpll2_refcount == 0) {
-			DRM_DEBUG_KMS("Using WRPLL 2 on pipe %c\n",
-				      pipe_name(pipe));
-			plls->wrpll2_refcount++;
-			reg = WRPLL_CTL2;
-			intel_crtc->ddi_pll_sel = PORT_CLK_SEL_WRPLL2;
-		} else {
-			DRM_ERROR("No WRPLLs available!\n");
-			return false;
-		}
-
-		WARN(I915_READ(reg) & WRPLL_PLL_ENABLE,
-		     "WRPLL already enabled\n");
-
 		intel_ddi_calculate_wrpll(clock * 1000, &r2, &n2, &p);
 
 		val = WRPLL_PLL_ENABLE | WRPLL_PLL_SELECT_LCPLL_2700 |
 		      WRPLL_DIVIDER_REFERENCE(r2) | WRPLL_DIVIDER_FEEDBACK(n2) |
 		      WRPLL_DIVIDER_POST(p);
+
+		if (val == I915_READ(WRPLL_CTL1)) {
+			DRM_DEBUG_KMS("Reusing WRPLL 1 on pipe %c\n",
+				      pipe_name(pipe));
+			reg = WRPLL_CTL1;
+		} else if (val == I915_READ(WRPLL_CTL2)) {
+			DRM_DEBUG_KMS("Reusing WRPLL 2 on pipe %c\n",
+				      pipe_name(pipe));
+			reg = WRPLL_CTL2;
+		} else if (plls->wrpll1_refcount == 0) {
+			DRM_DEBUG_KMS("Using WRPLL 1 on pipe %c\n",
+				      pipe_name(pipe));
+			reg = WRPLL_CTL1;
+		} else if (plls->wrpll2_refcount == 0) {
+			DRM_DEBUG_KMS("Using WRPLL 2 on pipe %c\n",
+				      pipe_name(pipe));
+			reg = WRPLL_CTL2;
+		} else {
+			DRM_ERROR("No WRPLLs available!\n");
+			return false;
+		}
+
+		if (reg == WRPLL_CTL1) {
+			plls->wrpll1_refcount++;
+			intel_crtc->ddi_pll_sel = PORT_CLK_SEL_WRPLL1;
+		} else {
+			plls->wrpll2_refcount++;
+			intel_crtc->ddi_pll_sel = PORT_CLK_SEL_WRPLL2;
+		}
 
 	} else if (type == INTEL_OUTPUT_ANALOG) {
 		if (plls->spll_refcount == 0) {

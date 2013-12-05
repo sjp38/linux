@@ -2746,7 +2746,6 @@ int i915_vma_unbind(struct i915_vma *vma)
 		obj->has_aliasing_ppgtt_mapping = 0;
 	}
 	i915_gem_gtt_finish_object(obj);
-	i915_gem_object_unpin_pages(obj);
 
 	list_del(&vma->mm_list);
 	/* Avoid an unnecessary call to unbind on rebind. */
@@ -2754,13 +2753,18 @@ int i915_vma_unbind(struct i915_vma *vma)
 		obj->map_and_fenceable = true;
 
 	drm_mm_remove_node(&vma->node);
-
 	i915_gem_vma_destroy(vma);
 
 	/* Since the unbound list is global, only move to that list if
 	 * no more VMAs exist. */
 	if (list_empty(&obj->vma_list))
 		list_move_tail(&obj->global_list, &dev_priv->mm.unbound_list);
+
+	/* And finally now the object is completely decoupled from this vma,
+	 * we can drop its hold on the backing storage and allow it to be
+	 * reaped by the shrinker.
+	 */
+	i915_gem_object_unpin_pages(obj);
 
 	return 0;
 }
@@ -4465,7 +4469,13 @@ i915_gem_init_hw(struct drm_device *dev)
 	 * XXX: There was some w/a described somewhere suggesting loading
 	 * contexts before PPGTT.
 	 */
-	i915_gem_context_init(dev);
+	ret = i915_gem_context_init(dev);
+	if (ret) {
+		i915_gem_cleanup_ringbuffer(dev);
+		DRM_ERROR("Context initialization failed %d\n", ret);
+		return ret;
+	}
+
 	if (dev_priv->mm.aliasing_ppgtt) {
 		ret = dev_priv->mm.aliasing_ppgtt->enable(dev);
 		if (ret) {
