@@ -9,6 +9,7 @@
 #include "strlist.h"
 #include "thread.h"
 #include <stdbool.h>
+#include <symbol/kallsyms.h>
 #include "unwind.h"
 
 int machine__init(struct machine *machine, const char *root_dir, pid_t pid)
@@ -502,15 +503,11 @@ static u64 machine__get_kernel_start_addr(struct machine *machine)
 	char path[PATH_MAX];
 	struct process_args args;
 
-	if (machine__is_host(machine)) {
-		filename = "/proc/kallsyms";
-	} else {
-		if (machine__is_default_guest(machine))
-			filename = (char *)symbol_conf.default_guest_kallsyms;
-		else {
-			sprintf(path, "%s/proc/kallsyms", machine->root_dir);
-			filename = path;
-		}
+	if (machine__is_default_guest(machine))
+		filename = (char *)symbol_conf.default_guest_kallsyms;
+	else {
+		sprintf(path, "%s/proc/kallsyms", machine->root_dir);
+		filename = path;
 	}
 
 	if (symbol__restricted_filename(filename, "/proc/kallsyms"))
@@ -767,8 +764,7 @@ static int map_groups__set_modules_path_dir(struct map_groups *mg,
 				ret = -1;
 				goto out;
 			}
-			dso__set_long_name(map->dso, long_name);
-			map->dso->lname_alloc = 1;
+			dso__set_long_name(map->dso, long_name, true);
 			dso__kernel_module_get_build_id(map->dso, "");
 		}
 	}
@@ -939,8 +935,7 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 		if (name == NULL)
 			goto out_problem;
 
-		map->dso->short_name = name;
-		map->dso->sname_alloc = 1;
+		dso__set_short_name(map->dso, name, true);
 		map->end = map->start + event->mmap.len;
 	} else if (is_kernel_mmap) {
 		const char *symbol_name = (event->mmap.filename +

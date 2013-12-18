@@ -9,7 +9,7 @@
 
 #include <byteswap.h>
 #include <linux/bitops.h>
-#include <lk/debugfs.h>
+#include <api/fs/debugfs.h>
 #include <traceevent/event-parse.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/perf_event.h>
@@ -23,6 +23,7 @@
 #include "target.h"
 #include "perf_regs.h"
 #include "debug.h"
+#include "trace-event.h"
 
 static struct {
 	bool sample_id_all;
@@ -162,6 +163,8 @@ void perf_evsel__init(struct perf_evsel *evsel,
 	evsel->idx	   = idx;
 	evsel->attr	   = *attr;
 	evsel->leader	   = evsel;
+	evsel->unit	   = "";
+	evsel->scale	   = 1.0;
 	INIT_LIST_HEAD(&evsel->node);
 	hists__init(&evsel->hists);
 	evsel->sample_size = __perf_evsel__sample_size(attr->sample_type);
@@ -178,47 +181,6 @@ struct perf_evsel *perf_evsel__new_idx(struct perf_event_attr *attr, int idx)
 	return evsel;
 }
 
-struct event_format *event_format__new(const char *sys, const char *name)
-{
-	int fd, n;
-	char *filename;
-	void *bf = NULL, *nbf;
-	size_t size = 0, alloc_size = 0;
-	struct event_format *format = NULL;
-
-	if (asprintf(&filename, "%s/%s/%s/format", tracing_events_path, sys, name) < 0)
-		goto out;
-
-	fd = open(filename, O_RDONLY);
-	if (fd < 0)
-		goto out_free_filename;
-
-	do {
-		if (size == alloc_size) {
-			alloc_size += BUFSIZ;
-			nbf = realloc(bf, alloc_size);
-			if (nbf == NULL)
-				goto out_free_bf;
-			bf = nbf;
-		}
-
-		n = read(fd, bf + size, alloc_size - size);
-		if (n < 0)
-			goto out_free_bf;
-		size += n;
-	} while (n > 0);
-
-	pevent_parse_format(&format, bf, size, sys);
-
-out_free_bf:
-	free(bf);
-	close(fd);
-out_free_filename:
-	free(filename);
-out:
-	return format;
-}
-
 struct perf_evsel *perf_evsel__newtp_idx(const char *sys, const char *name, int idx)
 {
 	struct perf_evsel *evsel = zalloc(sizeof(*evsel));
@@ -233,7 +195,7 @@ struct perf_evsel *perf_evsel__newtp_idx(const char *sys, const char *name, int 
 		if (asprintf(&evsel->name, "%s:%s", sys, name) < 0)
 			goto out_free;
 
-		evsel->tp_format = event_format__new(sys, name);
+		evsel->tp_format = trace_event__tp_format(sys, name);
 		if (evsel->tp_format == NULL)
 			goto out_free;
 
@@ -572,6 +534,7 @@ void perf_evsel__config(struct perf_evsel *evsel,
 	struct perf_evsel *leader = evsel->leader;
 	struct perf_event_attr *attr = &evsel->attr;
 	int track = !evsel->idx; /* only the first counter needs these */
+	bool per_cpu = opts->target.default_per_cpu && !opts->target.per_thread;
 
 	attr->sample_id_all = perf_missing_features.sample_id_all ? 0 : 1;
 	attr->inherit	    = !opts->no_inherit;
@@ -645,7 +608,7 @@ void perf_evsel__config(struct perf_evsel *evsel,
 		}
 	}
 
-	if (target__has_cpu(&opts->target) || opts->target.force_per_cpu)
+	if (target__has_cpu(&opts->target))
 		perf_evsel__set_sample_bit(evsel, CPU);
 
 	if (opts->period)
@@ -653,7 +616,7 @@ void perf_evsel__config(struct perf_evsel *evsel,
 
 	if (!perf_missing_features.sample_id_all &&
 	    (opts->sample_time || !opts->no_inherit ||
-	     target__has_cpu(&opts->target) || opts->target.force_per_cpu))
+	     target__has_cpu(&opts->target) || per_cpu))
 		perf_evsel__set_sample_bit(evsel, TIME);
 
 	if (opts->raw_samples) {
