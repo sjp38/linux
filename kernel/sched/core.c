@@ -2003,6 +2003,9 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	if (unlikely(prev_state == TASK_DEAD)) {
 		task_numa_free(prev);
 
+		if (prev->sched_class->task_dead)
+			prev->sched_class->task_dead(prev);
+
 		/*
 		 * Remove function-return probe instances associated with this
 		 * task and put them back on the free list.
@@ -2414,10 +2417,10 @@ static inline void schedule_debug(struct task_struct *prev)
 {
 	/*
 	 * Test if we are atomic. Since do_exit() needs to call into
-	 * schedule() atomically, we ignore that path for now.
-	 * Otherwise, whine if we are scheduling when we should not be.
+	 * schedule() atomically, we ignore that path. Otherwise whine
+	 * if we are scheduling when we should not.
 	 */
-	if (unlikely(in_atomic_preempt_off() && !prev->exit_state))
+	if (unlikely(in_atomic_preempt_off() && prev->state != TASK_DEAD))
 		__schedule_bug(prev);
 	rcu_sleep_check();
 
@@ -3653,7 +3656,7 @@ again:
 	}
 
 	double_rq_lock(rq, p_rq);
-	while (task_rq(p) != p_rq) {
+	if (task_rq(p) != p_rq) {
 		double_rq_unlock(rq, p_rq);
 		goto again;
 	}
@@ -4902,6 +4905,7 @@ DEFINE_PER_CPU(struct sched_domain *, sd_asym);
 static void update_top_cache_domain(int cpu)
 {
 	struct sched_domain *sd;
+	struct sched_domain *busy_sd = NULL;
 	int id = cpu;
 	int size = 1;
 
@@ -4909,9 +4913,9 @@ static void update_top_cache_domain(int cpu)
 	if (sd) {
 		id = cpumask_first(sched_domain_span(sd));
 		size = cpumask_weight(sched_domain_span(sd));
-		sd = sd->parent; /* sd_busy */
+		busy_sd = sd->parent; /* sd_busy */
 	}
-	rcu_assign_pointer(per_cpu(sd_busy, cpu), sd);
+	rcu_assign_pointer(per_cpu(sd_busy, cpu), busy_sd);
 
 	rcu_assign_pointer(per_cpu(sd_llc, cpu), sd);
 	per_cpu(sd_llc_size, cpu) = size;
