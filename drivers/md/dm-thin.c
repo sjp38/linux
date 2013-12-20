@@ -891,22 +891,43 @@ static void schedule_zero(struct thin_c *tc, dm_block_t virt_block,
 	}
 }
 
+static int __commit(struct pool *pool)
+{
+	int r = dm_pool_commit_metadata(pool->pmd);
+	if (r)
+		metadata_operation_failed(pool, "dm_pool_commit_metadata", r);
+
+	return r;
+}
+
+/*
+ * Commit that is confined to the metadata superblock due to pool
+ * being in PM_READ_ONLY mode (read-only process_* functions).
+ * A non-zero return indicates metadata is not writable.
+ */
+static int commit_metadata_superblock(struct pool *pool)
+{
+	WARN_ON_ONCE(get_pool_mode(pool) != PM_READ_ONLY);
+
+	if (dm_pool_metadata_is_read_only(pool->pmd)) {
+		DMERR_LIMIT("%s: commit failed: pool metadata is not writable",
+			    dm_device_name(pool->pool_md));
+		return -EINVAL;
+	}
+
+	return __commit(pool);
+}
+
 /*
  * A non-zero return indicates read_only or fail_io mode.
  * Many callers don't care about the return value.
  */
 static int commit(struct pool *pool)
 {
-	int r;
-
 	if (get_pool_mode(pool) != PM_WRITE)
 		return -EINVAL;
 
-	r = dm_pool_commit_metadata(pool->pmd);
-	if (r)
-		metadata_operation_failed(pool, "dm_pool_commit_metadata", r);
-
-	return r;
+	return __commit(pool);
 }
 
 static void check_low_water_mark(struct pool *pool, dm_block_t free_blocks)
@@ -1424,7 +1445,11 @@ static void set_pool_mode(struct pool *pool, enum pool_mode new_mode)
 			new_mode = PM_FAIL;
 			set_pool_mode(pool, new_mode);
 		} else {
-			dm_pool_metadata_read_only(pool->pmd);
+			bool out_of_space;
+			if (!dm_pool_is_out_of_space(pool->pmd, &out_of_space) && out_of_space)
+				dm_pool_metadata_read_write(pool->pmd);
+			else
+				dm_pool_metadata_read_only(pool->pmd);
 			pool->process_bio = process_bio_read_only;
 			pool->process_discard = process_discard;
 			pool->process_prepared_mapping = process_prepared_mapping_fail;
@@ -1701,12 +1726,17 @@ static int bind_control_target(struct pool *pool, struct dm_target *ti)
 	/*
 	 * If we were in PM_FAIL mode, rollback of metadata failed.  We're
 	 * not going to recover without a thin_repair.  So we never let the
-	 * pool move out of the old mode.  On the other hand a PM_READ_ONLY
-	 * may have been due to a lack of metadata or data space, and may
-	 * now work (ie. if the underlying devices have been resized).
+	 * pool move out of the old mode.  Similarly, if in PM_READ_ONLY mode
+	 * and the pool doesn't have free space we must not switch modes here;
+	 * pool_preresume() will transition to PM_WRITE mode if a resize succeeds.
 	 */
 	if (old_mode == PM_FAIL)
 		new_mode = old_mode;
+	else if (old_mode == PM_READ_ONLY) {
+		bool out_of_space;
+		if (!dm_pool_is_out_of_space(pool->pmd, &out_of_space) && out_of_space)
+			new_mode = old_mode;
+	}
 
 	set_pool_mode(pool, new_mode);
 
@@ -2317,6 +2347,7 @@ static int pool_preresume(struct dm_target *ti)
 	bool need_commit1, need_commit2;
 	struct pool_c *pt = ti->private;
 	struct pool *pool = pt->pool;
+	bool out_of_space = false;
 
 	/*
 	 * Take control of the pool object.
@@ -2324,6 +2355,12 @@ static int pool_preresume(struct dm_target *ti)
 	r = bind_control_target(pool, ti);
 	if (r)
 		return r;
+
+	if (get_pool_mode(pool) == PM_READ_ONLY) {
+		r = dm_pool_is_out_of_space(pool->pmd, &out_of_space);
+		if (r)
+			metadata_operation_failed(pool, "dm_pool_is_out_of_space", r);
+	}
 
 	r = maybe_resize_data_dev(ti, &need_commit1);
 	if (r)
@@ -2333,8 +2370,23 @@ static int pool_preresume(struct dm_target *ti)
 	if (r)
 		return r;
 
-	if (need_commit1 || need_commit2)
-		(void) commit(pool);
+	if (need_commit1 || need_commit2) {
+		if (out_of_space) {
+			/*
+			 * Must update metadata's superblock despite read-only mode.
+			 */
+			r = commit_metadata_superblock(pool);
+			if (r || pt->requested_pf.mode == PM_READ_ONLY)
+				dm_pool_metadata_read_only(pool->pmd);
+			else {
+				/*
+				 * If resize succeeded transition the pool to write mode.
+				 */
+				set_pool_mode(pool, PM_WRITE);
+			}
+		} else
+			(void) commit(pool);
+	}
 
 	return 0;
 }

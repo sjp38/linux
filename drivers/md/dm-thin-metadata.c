@@ -1586,6 +1586,30 @@ int dm_pool_get_free_metadata_block_count(struct dm_pool_metadata *pmd,
 	return r;
 }
 
+int dm_pool_is_out_of_space(struct dm_pool_metadata *pmd, bool *result)
+{
+	int r;
+	dm_block_t free_blocks;
+
+	*result = false;
+
+	r = dm_pool_get_free_block_count(pmd, &free_blocks);
+	if (r)
+		return r;
+	if (!free_blocks) {
+		*result = true;
+		return 0;
+	}
+
+	r = dm_pool_get_free_metadata_block_count(pmd, &free_blocks);
+	if (r)
+		return r;
+	if (!free_blocks)
+		*result = true;
+
+	return 0;
+}
+
 int dm_pool_get_metadata_dev_size(struct dm_pool_metadata *pmd,
 				  dm_block_t *result)
 {
@@ -1705,6 +1729,17 @@ int dm_pool_resize_metadata_dev(struct dm_pool_metadata *pmd, dm_block_t new_cou
 	if (!pmd->fail_io)
 		r = __resize_space_map(pmd->metadata_sm, new_count);
 	up_write(&pmd->root_lock);
+
+	return r;
+}
+
+bool dm_pool_metadata_is_read_only(struct dm_pool_metadata *pmd)
+{
+	bool r;
+
+	down_read(&pmd->root_lock);
+	r = pmd->read_only;
+	up_read(&pmd->root_lock);
 
 	return r;
 }
