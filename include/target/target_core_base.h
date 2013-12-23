@@ -166,6 +166,7 @@ enum se_cmd_flags_table {
 	SCF_COMPARE_AND_WRITE		= 0x00080000,
 	SCF_COMPARE_AND_WRITE_POST	= 0x00100000,
 	SCF_CMD_XCOPY_PASSTHROUGH	= 0x00200000,
+	SCF_PROT			= 0x00400000,
 };
 
 /* struct se_dev_entry->lun_flags and struct se_lun->lun_access */
@@ -435,6 +436,45 @@ struct se_tmr_req {
 	struct list_head	tmr_list;
 };
 
+enum target_prot_op {
+	TARGET_PROT_NORMAL = 0,
+	TARGET_PROT_DIN_INSERT,
+	TARGET_PROT_DOUT_INSERT,
+	TARGET_PROT_DIN_STRIP,
+	TARGET_PROT_DOUT_STRIP,
+	TARGET_PROT_DIN_PASS,
+	TARGET_PROT_DOUT_PASS,
+};
+
+enum target_prot_ho {
+	PROT_SEPERATED,
+	PROT_INTERLEAVED,
+};
+
+enum target_prot_type {
+	TARGET_DIF_TYPE0_PROT,
+	TARGET_DIF_TYPE1_PROT,
+	TARGET_DIF_TYPE2_PROT,
+	TARGET_DIF_TYPE3_PROT,
+};
+
+enum target_prot_version {
+	TARGET_DIF_V1 = 1,
+	TARGET_DIF_V2 = 2,
+};
+
+enum target_pi_error {
+	TARGET_GUARD_CHECK_FAILED = 0x1,
+	TARGET_APPTAG_CHECK_FAILED = 0x2,
+	TARGET_REFTAG_CHECK_FAILED = 0x3,
+};
+
+struct se_dif_v1_tuple {
+	__be16			guard_tag;
+	__be16			app_tag;
+	__be32			ref_tag;
+};
+
 struct se_cmd {
 	/* SAM response code being sent to initiator */
 	u8			scsi_status;
@@ -519,6 +559,19 @@ struct se_cmd {
 
 	/* Used for lun->lun_ref counting */
 	bool			lun_ref_active;
+
+	/* DIF related members */
+	enum target_prot_op	prot_op;
+	enum target_prot_type	prot_type;
+	u16			bg_seed;
+	u16			reftag_seed;
+	u32			apptag_seed;
+	u32			prot_length;
+	struct scatterlist	*t_prot_sg;
+	unsigned int		t_prot_nents;
+	enum target_prot_ho	prot_handover;
+	enum target_pi_error	pi_err;
+	u32			block_num;
 };
 
 struct se_ua {
@@ -629,6 +682,8 @@ struct se_dev_attrib {
 	int		emulate_tpws;
 	int		emulate_caw;
 	int		emulate_3pc;
+	enum target_prot_type pi_prot_type;
+	enum target_prot_version pi_prot_version;
 	int		enforce_pr_isids;
 	int		is_nonrot;
 	int		emulate_rest_reord;
@@ -759,6 +814,8 @@ struct se_device {
 	/* Linked list for struct se_hba struct se_device list */
 	struct list_head	dev_list;
 	struct se_lun		xcopy_lun;
+	/* Protection Information */
+	int			prot_length;
 };
 
 struct se_hba {
