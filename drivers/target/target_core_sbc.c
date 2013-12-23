@@ -563,6 +563,26 @@ sbc_compare_and_write(struct se_cmd *cmd)
 	return TCM_NO_SENSE;
 }
 
+static bool
+sbc_check_prot(struct se_device *dev, struct se_cmd *cmd, unsigned char *cdb)
+{
+	if (!dev->dev_attrib.pi_prot_type)
+		return true;
+
+	if (dev->dev_attrib.pi_prot_type == TARGET_DIF_TYPE2_PROT &&
+	   (cdb[1] & 0xe0))
+		return false;
+
+	if (!(cdb[1] & 0xe0))
+		return true;
+
+	if (!cmd->t_prot_sg || !cmd->t_prot_nents)
+		return true;
+
+	cmd->se_cmd_flags |= SCF_PROT;
+	return true;
+}
+
 sense_reason_t
 sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 {
@@ -581,6 +601,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_10:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_10(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -588,6 +611,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_12:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_12(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -595,6 +621,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_16:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_16(cdb);
 		cmd->t_task_lba = transport_lba_64(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -610,6 +639,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		break;
 	case WRITE_10:
 	case WRITE_VERIFY:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_10(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		if (cdb[1] & 0x8)
@@ -619,6 +651,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case WRITE_12:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_12(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		if (cdb[1] & 0x8)
@@ -628,6 +663,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case WRITE_16:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_16(cdb);
 		cmd->t_task_lba = transport_lba_64(cdb);
 		if (cdb[1] & 0x8)
