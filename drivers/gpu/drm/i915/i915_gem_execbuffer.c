@@ -215,7 +215,7 @@ relocate_entry_cpu(struct drm_i915_gem_object *obj,
 	struct drm_device *dev = obj->base.dev;
 	uint32_t page_offset = offset_in_page(reloc->offset);
 	char *vaddr;
-	int ret = -EINVAL;
+	int ret;
 
 	ret = i915_gem_object_set_to_cpu_domain(obj, true);
 	if (ret)
@@ -250,7 +250,7 @@ relocate_entry_gtt(struct drm_i915_gem_object *obj,
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	uint32_t __iomem *reloc_entry;
 	void __iomem *reloc_page;
-	int ret = -EINVAL;
+	int ret;
 
 	ret = i915_gem_object_set_to_gtt_domain(obj, true);
 	if (ret)
@@ -298,7 +298,7 @@ i915_gem_execbuffer_relocate_entry(struct drm_i915_gem_object *obj,
 	struct drm_i915_gem_object *target_i915_obj;
 	struct i915_vma *target_vma;
 	uint32_t target_offset;
-	int ret = -EINVAL;
+	int ret;
 
 	/* we've already hold a reference to all valid objects */
 	target_vma = eb_get_vma(eb, reloc->target_handle);
@@ -328,7 +328,7 @@ i915_gem_execbuffer_relocate_entry(struct drm_i915_gem_object *obj,
 			  (int) reloc->offset,
 			  reloc->read_domains,
 			  reloc->write_domain);
-		return ret;
+		return -EINVAL;
 	}
 	if (unlikely((reloc->write_domain | reloc->read_domains)
 		     & ~I915_GEM_GPU_DOMAINS)) {
@@ -339,7 +339,7 @@ i915_gem_execbuffer_relocate_entry(struct drm_i915_gem_object *obj,
 			  (int) reloc->offset,
 			  reloc->read_domains,
 			  reloc->write_domain);
-		return ret;
+		return -EINVAL;
 	}
 
 	target_obj->pending_read_domains |= reloc->read_domains;
@@ -359,14 +359,14 @@ i915_gem_execbuffer_relocate_entry(struct drm_i915_gem_object *obj,
 			  obj, reloc->target_handle,
 			  (int) reloc->offset,
 			  (int) obj->base.size);
-		return ret;
+		return -EINVAL;
 	}
 	if (unlikely(reloc->offset & 3)) {
 		DRM_DEBUG("Relocation not 4-byte aligned: "
 			  "obj %p target %d offset %d.\n",
 			  obj, reloc->target_handle,
 			  (int) reloc->offset);
-		return ret;
+		return -EINVAL;
 	}
 
 	/* We can't wait for rendering with pagefaults disabled */
