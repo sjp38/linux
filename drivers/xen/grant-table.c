@@ -1171,22 +1171,17 @@ static int gnttab_setup(void)
 	if (max_nr_gframes < nr_grant_frames)
 		return -ENOSYS;
 
-	if (xen_pv_domain())
-		return gnttab_map(0, nr_grant_frames - 1);
-
-	if (gnttab_shared.addr == NULL) {
+	if (xen_feature(XENFEAT_auto_translated_physmap) && gnttab_shared.addr == NULL)
+	{
 		gnttab_shared.addr = xen_remap(xen_hvm_resume_frames,
-						PAGE_SIZE * max_nr_gframes);
+					       PAGE_SIZE * max_nr_gframes);
 		if (gnttab_shared.addr == NULL) {
 			pr_warn("Failed to ioremap gnttab share frames (addr=0x%08lx)!\n",
 					xen_hvm_resume_frames);
 			return -ENOMEM;
 		}
 	}
-
-	gnttab_map(0, nr_grant_frames - 1);
-
-	return 0;
+	return gnttab_map(0, nr_grant_frames - 1);
 }
 
 int gnttab_resume(void)
