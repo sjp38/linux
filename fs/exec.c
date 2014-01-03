@@ -1108,8 +1108,6 @@ EXPORT_SYMBOL(would_dump);
 
 void setup_new_exec(struct linux_binprm * bprm)
 {
-	arch_pick_mmap_layout(current->mm);
-
 	/* This is the point of no return */
 	current->sas_ss_sp = current->sas_ss_size = 0;
 
