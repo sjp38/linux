@@ -2827,7 +2827,7 @@ sub process {
 			if (defined $pre_pointer_space &&
 			    $pre_pointer_space =~ /^\s/) {
 				WARN("SPACING",
-				     "Unnecessary space after function pointer open parenthesis\n" . $herecurr);
+				     "Unnecessary space between open parenthesis and '*' in function pointer declaration\n" . $herecurr);
 			}
 
 # unnecessary space "type (* funcptr)(args...)"
@@ -2848,7 +2848,7 @@ sub process {
 			if (defined $pre_args_space &&
 			    $pre_args_space =~ /^\s/) {
 				WARN("SPACING",
-				     "Unnecessary space before function pointer name\n" . $herecurr);
+				     "Unnecessary space before function pointer argument list\n" . $herecurr);
 			}
 
 			if (show_type("SPACING") && $fix) {
