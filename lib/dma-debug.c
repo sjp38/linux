@@ -737,7 +737,7 @@ static int device_dma_allocations(struct device *dev, struct dma_debug_entry **o
 	local_irq_restore(flags);
 
 	if (map_err_cnt)
-		dev_warn(entry->dev,
+		dev_warn(dev,
 			"DMA-API: device driver failed to check map errors: "
 			"[count] = %d\n", map_err_cnt);
 	return count;
