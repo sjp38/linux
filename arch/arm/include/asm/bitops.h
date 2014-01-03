@@ -270,10 +270,25 @@ static inline int fls(int x)
 	return ret;
 }
 
-#define __fls(x) (fls(x) - 1)
-#define ffs(x) ({ unsigned long __t = (x); fls(__t & -__t); })
-#define __ffs(x) (ffs(x) - 1)
-#define ffz(x) __ffs( ~(x) )
+static inline unsigned long __fls(unsigned long x)
+{
+	return fls(x) - 1;
+}
+
+static inline int ffs(int x)
+{
+	return fls(x & -x);
+}
+
+static inline unsigned long __ffs(unsigned long x)
+{
+	return ffs(x) - 1;
+}
+
+static inline unsigned long ffz(unsigned long x)
+{
+	return __ffs(~x);
+}
 
 #endif
 
