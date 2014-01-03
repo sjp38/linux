@@ -2106,7 +2106,7 @@ static int __init netif_init(void)
 	if (!xen_domain())
 		return -ENODEV;
 
-	if (!xen_has_pv_nic_devices())
+	if (xen_hvm_domain() && !xen_platform_pci_unplug)
 		return -ENODEV;
 
 	pr_info("Initialising Xen virtual ethernet driver\n");
