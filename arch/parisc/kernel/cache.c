@@ -298,7 +298,7 @@ void flush_dcache_page(struct page *page)
 
 	flush_kernel_dcache_page(page);
 
-	if (!mapping)
+	if (!mapping || mapping != page->mapping)
 		return;
 
 	pgoff = page->index << (PAGE_CACHE_SHIFT - PAGE_SHIFT);
@@ -308,7 +308,7 @@ void flush_dcache_page(struct page *page)
 	 * declared as MAP_PRIVATE or MAP_SHARED), so we only need
 	 * to flush one address here for them all to become coherent */
 
-	flush_dcache_mmap_lock(mapping);
+	/* flush_dcache_mmap_lock(mapping); */
 	vma_interval_tree_foreach(mpnt, &mapping->i_mmap, pgoff, pgoff) {
 		offset = (pgoff - mpnt->vm_pgoff) << PAGE_SHIFT;
 		addr = mpnt->vm_start + offset;
@@ -330,7 +330,7 @@ void flush_dcache_page(struct page *page)
 			old_addr = addr;
 		}
 	}
-	flush_dcache_mmap_unlock(mapping);
+	/* flush_dcache_mmap_unlock(mapping); */
 }
 EXPORT_SYMBOL(flush_dcache_page);
 
@@ -387,41 +387,6 @@ void flush_kernel_dcache_page_addr(void *addr)
 	purge_tlb_end(flags);
 }
 EXPORT_SYMBOL(flush_kernel_dcache_page_addr);
-
-void clear_user_page(void *vto, unsigned long vaddr, struct page *page)
-{
-	clear_page_asm(vto);
-	if (!parisc_requires_coherency())
-		flush_kernel_dcache_page_asm(vto);
-}
-EXPORT_SYMBOL(clear_user_page);
-
-void copy_user_page(void *vto, void *vfrom, unsigned long vaddr,
-	struct page *pg)
-{
-	/* Copy using kernel mapping.  No coherency is needed
-	   (all in kmap/kunmap) on machines that don't support
-	   non-equivalent aliasing.  However, the `from' page
-	   needs to be flushed before it can be accessed through
-	   the kernel mapping. */
-	preempt_disable();
-	flush_dcache_page_asm(__pa(vfrom), vaddr);
-	preempt_enable();
-	copy_page_asm(vto, vfrom);
-	if (!parisc_requires_coherency())
-		flush_kernel_dcache_page_asm(vto);
-}
-EXPORT_SYMBOL(copy_user_page);
-
-#ifdef CONFIG_PA8X00
-
-void kunmap_parisc(void *addr)
-{
-	if (parisc_requires_coherency())
-		flush_kernel_dcache_page_addr(addr);
-}
-EXPORT_SYMBOL(kunmap_parisc);
-#endif
 
 void purge_tlb_entries(struct mm_struct *mm, unsigned long addr)
 {
