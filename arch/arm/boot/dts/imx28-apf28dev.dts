@@ -143,7 +143,7 @@
 			phy-mode = "rmii";
 			pinctrl-names = "default";
 			pinctrl-0 = <&mac1_pins_a>;
-			phy-reset-gpios = <&gpio0 23 0>;
+			phy-reset-gpios = <&gpio0 23 GPIO_ACTIVE_LOW>;
 			status = "okay";
 		};
 	};
