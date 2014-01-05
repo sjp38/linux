@@ -36,7 +36,13 @@
 #include <asm/system_misc.h>
 #include <asm/opcodes.h>
 
-static const char *handler[]= { "prefetch abort", "data abort", "address exception", "interrupt" };
+static const char *handler[]= {
+	"prefetch abort",
+	"data abort",
+	"address exception",
+	"interrupt",
+	"undefined instruction",
+};
 
 void *vectors_page;
 
@@ -56,7 +62,7 @@ static void dump_mem(const char *, const char *, unsigned long, unsigned long);
 void dump_backtrace_entry(unsigned long where, unsigned long from, unsigned long frame)
 {
 #ifdef CONFIG_KALLSYMS
-	printk("[<%08lx>] (%pS) from [<%08lx>] (%pS)\n", where, (void *)where, from, (void *)from);
+	printk("[<%08lx>] (%ps) from [<%08lx>] (%pS)\n", where, (void *)where, from, (void *)from);
 #else
 	printk("Function entered at [<%08lx>] from [<%08lx>]\n", where, from);
 #endif
@@ -509,9 +515,10 @@ static inline int
 __do_cache_op(unsigned long start, unsigned long end)
 {
 	int ret;
-	unsigned long chunk = PAGE_SIZE;
 
 	do {
+		unsigned long chunk = min(PAGE_SIZE, end - start);
+
 		if (signal_pending(current)) {
 			struct thread_info *ti = current_thread_info();
 
