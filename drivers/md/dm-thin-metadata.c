@@ -1349,6 +1349,12 @@ dm_thin_id dm_thin_dev_id(struct dm_thin_device *td)
 	return td->id;
 }
 
+/*
+ * Check whether @time (of block creation) is older than @td's last snapshot.
+ * If so then the associated block is shared with the last snapshot device.
+ * Any block on a device created *after* the device last got snapshotted is
+ * necessarily not shared.
+ */
 static bool __snapshotted_since(struct dm_thin_device *td, uint32_t time)
 {
 	return td->snapshotted_time > time;
@@ -1454,6 +1460,20 @@ int dm_thin_remove_block(struct dm_thin_device *td, dm_block_t block)
 	if (!td->pmd->fail_io)
 		r = __remove(td, block);
 	up_write(&td->pmd->root_lock);
+
+	return r;
+}
+
+int dm_pool_block_is_used(struct dm_pool_metadata *pmd, dm_block_t b, bool *result)
+{
+	int r;
+	uint32_t ref_count;
+
+	down_read(&pmd->root_lock);
+	r = dm_sm_get_count(pmd->data_sm, b, &ref_count);
+	if (!r)
+		*result = (ref_count != 0);
+	up_read(&pmd->root_lock);
 
 	return r;
 }
@@ -1564,6 +1584,30 @@ int dm_pool_get_free_metadata_block_count(struct dm_pool_metadata *pmd,
 	up_read(&pmd->root_lock);
 
 	return r;
+}
+
+int dm_pool_is_out_of_space(struct dm_pool_metadata *pmd, bool *result)
+{
+	int r;
+	dm_block_t free_blocks;
+
+	*result = false;
+
+	r = dm_pool_get_free_block_count(pmd, &free_blocks);
+	if (r)
+		return r;
+	if (!free_blocks) {
+		*result = true;
+		return 0;
+	}
+
+	r = dm_pool_get_free_metadata_block_count(pmd, &free_blocks);
+	if (r)
+		return r;
+	if (!free_blocks)
+		*result = true;
+
+	return 0;
 }
 
 int dm_pool_get_metadata_dev_size(struct dm_pool_metadata *pmd,
@@ -1685,6 +1729,17 @@ int dm_pool_resize_metadata_dev(struct dm_pool_metadata *pmd, dm_block_t new_cou
 	if (!pmd->fail_io)
 		r = __resize_space_map(pmd->metadata_sm, new_count);
 	up_write(&pmd->root_lock);
+
+	return r;
+}
+
+bool dm_pool_metadata_is_read_only(struct dm_pool_metadata *pmd)
+{
+	bool r;
+
+	down_read(&pmd->root_lock);
+	r = pmd->read_only;
+	up_read(&pmd->root_lock);
 
 	return r;
 }

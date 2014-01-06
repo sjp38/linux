@@ -131,7 +131,7 @@ dm_thin_id dm_thin_dev_id(struct dm_thin_device *td);
 
 struct dm_thin_lookup_result {
 	dm_block_t block;
-	unsigned shared:1;
+	bool shared:1;
 };
 
 /*
@@ -177,9 +177,13 @@ int dm_pool_get_free_metadata_block_count(struct dm_pool_metadata *pmd,
 int dm_pool_get_metadata_dev_size(struct dm_pool_metadata *pmd,
 				  dm_block_t *result);
 
+int dm_pool_is_out_of_space(struct dm_pool_metadata *pmd, bool *result);
+
 int dm_pool_get_data_block_size(struct dm_pool_metadata *pmd, sector_t *result);
 
 int dm_pool_get_data_dev_size(struct dm_pool_metadata *pmd, dm_block_t *result);
+
+int dm_pool_block_is_used(struct dm_pool_metadata *pmd, dm_block_t b, bool *result);
 
 /*
  * Returns -ENOSPC if the new size is too small and already allocated
@@ -192,6 +196,7 @@ int dm_pool_resize_metadata_dev(struct dm_pool_metadata *pmd, dm_block_t new_siz
  * Flicks the underlying block manager into read only mode, so you know
  * that nothing is changing.
  */
+bool dm_pool_metadata_is_read_only(struct dm_pool_metadata *pmd);
 void dm_pool_metadata_read_only(struct dm_pool_metadata *pmd);
 void dm_pool_metadata_read_write(struct dm_pool_metadata *pmd);
 
