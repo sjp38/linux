@@ -48,8 +48,8 @@
   *         of register <x>.
   */
 
-#ifndef HOST1X_HW_HOST1X02_UCLASS_H
-#define HOST1X_HW_HOST1X02_UCLASS_H
+#ifndef HOST1X_HW_HOST1X04_UCLASS_H
+#define HOST1X_HW_HOST1X04_UCLASS_H
 
 static inline u32 host1x_uclass_incr_syncpt_r(void)
 {

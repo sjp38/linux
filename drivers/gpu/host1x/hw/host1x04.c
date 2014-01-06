@@ -1,5 +1,5 @@
 /*
- * Host1x init for Tegra114 SoCs
+ * Host1x init for Tegra124 SoCs
  *
  * Copyright (c) 2013 NVIDIA Corporation.
  *
@@ -17,8 +17,8 @@
  */
 
 /* include hw specification */
-#include "host1x02.h"
-#include "host1x02_hardware.h"
+#include "host1x04.h"
+#include "host1x04_hardware.h"
 
 /* include code */
 #include "cdma_hw.c"
@@ -29,7 +29,7 @@
 
 #include "../dev.h"
 
-int host1x02_init(struct host1x *host)
+int host1x04_init(struct host1x *host)
 {
 	host->channel_op = &host1x_channel_ops;
 	host->cdma_op = &host1x_cdma_ops;
