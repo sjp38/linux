@@ -25,21 +25,21 @@ void odm_ConfigRFReg_8188E(struct odm_dm_struct *pDM_Odm, u32 Addr,
 			   u32 RegAddr)
 {
     if (Addr == 0xffe) {
-		ODM_sleep_ms(50);
+		msleep(50);
 	} else if (Addr == 0xfd) {
-		ODM_delay_ms(5);
+		mdelay(5);
 	} else if (Addr == 0xfc) {
-		ODM_delay_ms(1);
+		mdelay(1);
 	} else if (Addr == 0xfb) {
-		ODM_delay_us(50);
+		udelay(50);
 	} else if (Addr == 0xfa) {
-		ODM_delay_us(5);
+		udelay(5);
 	} else if (Addr == 0xf9) {
-		ODM_delay_us(1);
+		udelay(1);
 	} else {
 		ODM_SetRFReg(pDM_Odm, RF_PATH, RegAddr, bRFRegOffsetMask, Data);
 		/*  Add 1us delay between BB/RF register setting. */
-		ODM_delay_us(1);
+		udelay(1);
 	}
 }
 
@@ -72,7 +72,7 @@ void odm_ConfigBB_AGC_8188E(struct odm_dm_struct *pDM_Odm, u32 Addr, u32 Bitmask
 {
 	ODM_SetBBReg(pDM_Odm, Addr, Bitmask, Data);
 	/*  Add 1us delay between BB/RF register setting. */
-	ODM_delay_us(1);
+	udelay(1);
 
 	ODM_RT_TRACE(pDM_Odm, ODM_COMP_INIT, ODM_DBG_TRACE,
 		     ("===> ODM_ConfigBBWithHeaderFile: [AGC_TAB] %08X %08X\n",
@@ -83,17 +83,17 @@ void odm_ConfigBB_PHY_REG_PG_8188E(struct odm_dm_struct *pDM_Odm, u32 Addr,
 				   u32 Bitmask, u32 Data)
 {
 	if (Addr == 0xfe) {
-		ODM_sleep_ms(50);
+		msleep(50);
 	} else if (Addr == 0xfd) {
-		ODM_delay_ms(5);
+		mdelay(5);
 	} else if (Addr == 0xfc) {
-		ODM_delay_ms(1);
+		mdelay(1);
 	} else if (Addr == 0xfb) {
-		ODM_delay_us(50);
+		udelay(50);
 	} else if (Addr == 0xfa) {
-		ODM_delay_us(5);
+		udelay(5);
 	} else if (Addr == 0xf9) {
-		ODM_delay_us(1);
+		udelay(1);
 	} else{
 		ODM_RT_TRACE(pDM_Odm, ODM_COMP_INIT, ODM_DBG_LOUD,
 			     ("===> @@@@@@@ ODM_ConfigBBWithHeaderFile: [PHY_REG] %08X %08X %08X\n",
@@ -105,24 +105,24 @@ void odm_ConfigBB_PHY_REG_PG_8188E(struct odm_dm_struct *pDM_Odm, u32 Addr,
 void odm_ConfigBB_PHY_8188E(struct odm_dm_struct *pDM_Odm, u32 Addr, u32 Bitmask, u32 Data)
 {
 	if (Addr == 0xfe) {
-		ODM_sleep_ms(50);
+		msleep(50);
 	} else if (Addr == 0xfd) {
-		ODM_delay_ms(5);
+		mdelay(5);
 	} else if (Addr == 0xfc) {
-		ODM_delay_ms(1);
+		mdelay(1);
 	} else if (Addr == 0xfb) {
-		ODM_delay_us(50);
+		udelay(50);
 	} else if (Addr == 0xfa) {
-		ODM_delay_us(5);
+		udelay(5);
 	} else if (Addr == 0xf9) {
-		ODM_delay_us(1);
+		udelay(1);
 	} else {
 		if (Addr == 0xa24)
 			pDM_Odm->RFCalibrateInfo.RegA24 = Data;
 		ODM_SetBBReg(pDM_Odm, Addr, Bitmask, Data);
 
 		/*  Add 1us delay between BB/RF register setting. */
-		ODM_delay_us(1);
+		udelay(1);
 		ODM_RT_TRACE(pDM_Odm, ODM_COMP_INIT, ODM_DBG_TRACE,
 			     ("===> ODM_ConfigBBWithHeaderFile: [PHY_REG] %08X %08X\n",
 			     Addr, Data));

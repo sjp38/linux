@@ -62,14 +62,14 @@
 static int          msglevel                =MSG_LEVEL_INFO;
 //static int          msglevel                =MSG_LEVEL_DEBUG;
 
-const u16             awHWRetry0[5][5] = {
+static const u16             awHWRetry0[5][5] = {
                                             {RATE_18M, RATE_18M, RATE_12M, RATE_12M, RATE_12M},
                                             {RATE_24M, RATE_24M, RATE_18M, RATE_12M, RATE_12M},
                                             {RATE_36M, RATE_36M, RATE_24M, RATE_18M, RATE_18M},
                                             {RATE_48M, RATE_48M, RATE_36M, RATE_24M, RATE_24M},
                                             {RATE_54M, RATE_54M, RATE_48M, RATE_36M, RATE_36M}
                                            };
-const u16             awHWRetry1[5][5] = {
+static const u16             awHWRetry1[5][5] = {
                                             {RATE_18M, RATE_18M, RATE_12M, RATE_6M, RATE_6M},
                                             {RATE_24M, RATE_24M, RATE_18M, RATE_6M, RATE_6M},
                                             {RATE_36M, RATE_36M, RATE_24M, RATE_12M, RATE_12M},
@@ -1160,10 +1160,10 @@ else {
  *
 -*/
 
-void BSSvUpdateNodeTxCounter(struct vnt_private *pDevice,
-	PSStatCounter pStatistic, u8 byTSR, u8 byPktNO)
+void BSSvUpdateNodeTxCounter(struct vnt_private *pDevice, u8 byTSR, u8 byPktNO)
 {
 	struct vnt_manager *pMgmt = &pDevice->vnt_mgmt;
+	struct vnt_tx_pkt_info *pkt_info = pDevice->pkt_info;
 	u32 uNodeIndex = 0;
 	u8 byTxRetry;
 	u16 wRate;
@@ -1177,8 +1177,8 @@ void BSSvUpdateNodeTxCounter(struct vnt_private *pDevice,
     byPktNum = (byPktNO & 0x0F) >> 4;
     byTxRetry = (byTSR & 0xF0) >> 4;
     wRate = (u16) (byPktNO & 0xF0) >> 4;
-    wFIFOCtl = pStatistic->abyTxPktInfo[byPktNum].wFIFOCtl;
-    pbyDestAddr = (u8 *) &( pStatistic->abyTxPktInfo[byPktNum].abyDestAddr[0]);
+    wFIFOCtl = pkt_info[byPktNum].fifo_ctl;
+    pbyDestAddr = pkt_info[byPktNum].dest_addr;
 
     if (wFIFOCtl & FIFOCTL_AUTO_FB_0) {
         byFallBack = AUTO_FB_0;
@@ -1384,44 +1384,40 @@ static void s_vCheckSensitivity(struct vnt_private *pDevice)
 
 static void s_uCalculateLinkQual(struct vnt_private *pDevice)
 {
+	struct net_device_stats *stats = &pDevice->stats;
 	unsigned long TxOkRatio, TxCnt;
 	unsigned long RxOkRatio, RxCnt;
 	unsigned long RssiRatio;
+	unsigned long qual;
 	long ldBm;
 
-TxCnt = pDevice->scStatistic.TxNoRetryOkCount +
-	      pDevice->scStatistic.TxRetryOkCount +
-	      pDevice->scStatistic.TxFailCount;
-RxCnt = pDevice->scStatistic.RxFcsErrCnt +
-	      pDevice->scStatistic.RxOkCnt;
-TxOkRatio = (TxCnt < 6) ? 4000:((pDevice->scStatistic.TxNoRetryOkCount * 4000) / TxCnt);
-RxOkRatio = (RxCnt < 6) ? 2000:((pDevice->scStatistic.RxOkCnt * 2000) / RxCnt);
-//decide link quality
-if(pDevice->bLinkPass !=true)
-{
-   pDevice->scStatistic.LinkQuality = 0;
-   pDevice->scStatistic.SignalStren = 0;
-}
-else
-{
-   RFvRSSITodBm(pDevice, (u8)(pDevice->uCurrRSSI), &ldBm);
-   if(-ldBm < 50)  {
-   	RssiRatio = 4000;
-     }
-   else if(-ldBm > 90) {
-   	RssiRatio = 0;
-     }
-   else {
-   	RssiRatio = (40-(-ldBm-50))*4000/40;
-     }
-   pDevice->scStatistic.SignalStren = RssiRatio/40;
-   pDevice->scStatistic.LinkQuality = (RssiRatio+TxOkRatio+RxOkRatio)/100;
-}
-   pDevice->scStatistic.RxFcsErrCnt = 0;
-   pDevice->scStatistic.RxOkCnt = 0;
-   pDevice->scStatistic.TxFailCount = 0;
-   pDevice->scStatistic.TxNoRetryOkCount = 0;
-   pDevice->scStatistic.TxRetryOkCount = 0;
+	TxCnt = stats->tx_packets + pDevice->wstats.discard.retries;
+
+	RxCnt = stats->rx_packets + stats->rx_frame_errors;
+
+	TxOkRatio = (TxCnt < 6) ? 4000:((stats->tx_packets * 4000) / TxCnt);
+
+	RxOkRatio = (RxCnt < 6) ? 2000 :
+				((stats->rx_packets * 2000) / RxCnt);
+
+	/* decide link quality */
+	if (pDevice->bLinkPass != true) {
+		pDevice->wstats.qual.qual = 0;
+	} else {
+		RFvRSSITodBm(pDevice, (u8)(pDevice->uCurrRSSI), &ldBm);
+		if (-ldBm < 50)
+			RssiRatio = 4000;
+		else if (-ldBm > 90)
+			RssiRatio = 0;
+		else
+			RssiRatio = (40-(-ldBm-50)) * 4000 / 40;
+
+		qual = (RssiRatio + TxOkRatio + RxOkRatio) / 100;
+		if (qual < 100)
+			pDevice->wstats.qual.qual = (u8)qual;
+		else
+			pDevice->wstats.qual.qual = 100;
+	}
 }
 
 void BSSvClearAnyBSSJoinRecord(struct vnt_private *pDevice)

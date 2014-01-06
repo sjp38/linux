@@ -52,7 +52,7 @@ u32 rtw_atoi(u8 *s)
 	}
 	if (flag == 1)
 		num = num * -1;
-	 return num;
+	return num;
 }
 
 inline u8 *_rtw_vmalloc(u32 sz)
@@ -193,19 +193,10 @@ void	_rtw_mutex_free(struct mutex *pmutex)
 	mutex_destroy(pmutex);
 }
 
-void	_rtw_spinlock_init(spinlock_t *plock)
-{
-	spin_lock_init(plock);
-}
-
-void	_rtw_spinlock_free(spinlock_t *plock)
-{
-}
-
 void	_rtw_init_queue(struct __queue *pqueue)
 {
 	_rtw_init_listhead(&(pqueue->queue));
-	_rtw_spinlock_init(&(pqueue->lock));
+	spin_lock_init(&(pqueue->lock));
 }
 
 u32	  _rtw_queue_empty(struct __queue *pqueue)
@@ -221,11 +212,6 @@ u32 rtw_end_of_queue_search(struct list_head *head, struct list_head *plist)
 		return false;
 }
 
-u32	rtw_get_current_time(void)
-{
-	return jiffies;
-}
-
 inline u32 rtw_systime_to_ms(u32 systime)
 {
 	return systime * 1000 / HZ;
@@ -236,8 +222,7 @@ inline u32 rtw_ms_to_systime(u32 ms)
 	return ms * HZ / 1000;
 }
 
-/*  the input parameter start use the same unit as returned by
- *  rtw_get_current_time */
+/*  the input parameter start must be in jiffies */
 inline s32 rtw_get_passing_time_ms(u32 start)
 {
 	return rtw_systime_to_ms(jiffies-start);
@@ -260,27 +245,12 @@ void rtw_sleep_schedulable(int ms)
 		return;
 }
 
-void rtw_msleep_os(int ms)
-{
-	msleep((unsigned int)ms);
-}
-
 void rtw_usleep_os(int us)
 {
 	if (1 < (us/1000))
 		msleep(1);
 	else
 		msleep((us/1000) + 1);
-}
-
-void rtw_mdelay_os(int ms)
-{
-	mdelay((unsigned long)ms);
-}
-
-void rtw_udelay_os(int us)
-{
-	udelay((unsigned long)us);
 }
 
 void rtw_yield_os(void)

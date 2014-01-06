@@ -52,20 +52,12 @@
 		fully tested as yet. Terry Barnaby, BEAM Ltd.
 */
 
-/* #define DEBUG_INTERRUPT */
-/* #define DEBUG_STATUS_A */
-/* #define DEBUG_STATUS_B */
-
 #include <linux/interrupt.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include "8255.h"
 #include "mite.h"
 #include "comedi_fc.h"
-
-#ifndef MDPRINTK
-#define MDPRINTK(format, args...)
-#endif
 
 /* A timeout count */
 #define NI_TIMEOUT 1000
@@ -86,111 +78,109 @@ static const short ni_gainlkup[][16] = {
 	[ai_gain_6143] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
 };
 
-static const struct comedi_lrange range_ni_E_ai = { 16, {
-							 RANGE(-10, 10),
-							 RANGE(-5, 5),
-							 RANGE(-2.5, 2.5),
-							 RANGE(-1, 1),
-							 RANGE(-0.5, 0.5),
-							 RANGE(-0.25, 0.25),
-							 RANGE(-0.1, 0.1),
-							 RANGE(-0.05, 0.05),
-							 RANGE(0, 20),
-							 RANGE(0, 10),
-							 RANGE(0, 5),
-							 RANGE(0, 2),
-							 RANGE(0, 1),
-							 RANGE(0, 0.5),
-							 RANGE(0, 0.2),
-							 RANGE(0, 0.1),
-							 }
+static const struct comedi_lrange range_ni_E_ai = {
+	16, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(2.5),
+		BIP_RANGE(1),
+		BIP_RANGE(0.5),
+		BIP_RANGE(0.25),
+		BIP_RANGE(0.1),
+		BIP_RANGE(0.05),
+		UNI_RANGE(20),
+		UNI_RANGE(10),
+		UNI_RANGE(5),
+		UNI_RANGE(2),
+		UNI_RANGE(1),
+		UNI_RANGE(0.5),
+		UNI_RANGE(0.2),
+		UNI_RANGE(0.1)
+	}
 };
 
-static const struct comedi_lrange range_ni_E_ai_limited = { 8, {
-								RANGE(-10, 10),
-								RANGE(-5, 5),
-								RANGE(-1, 1),
-								RANGE(-0.1,
-								      0.1),
-								RANGE(0, 10),
-								RANGE(0, 5),
-								RANGE(0, 1),
-								RANGE(0, 0.1),
-								}
+static const struct comedi_lrange range_ni_E_ai_limited = {
+	8, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(1),
+		BIP_RANGE(0.1),
+		UNI_RANGE(10),
+		UNI_RANGE(5),
+		UNI_RANGE(1),
+		UNI_RANGE(0.1)
+	}
 };
 
-static const struct comedi_lrange range_ni_E_ai_limited14 = { 14, {
-								   RANGE(-10,
-									 10),
-								   RANGE(-5, 5),
-								   RANGE(-2, 2),
-								   RANGE(-1, 1),
-								   RANGE(-0.5,
-									 0.5),
-								   RANGE(-0.2,
-									 0.2),
-								   RANGE(-0.1,
-									 0.1),
-								   RANGE(0, 10),
-								   RANGE(0, 5),
-								   RANGE(0, 2),
-								   RANGE(0, 1),
-								   RANGE(0,
-									 0.5),
-								   RANGE(0,
-									 0.2),
-								   RANGE(0,
-									 0.1),
-								   }
+static const struct comedi_lrange range_ni_E_ai_limited14 = {
+	14, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(2),
+		BIP_RANGE(1),
+		BIP_RANGE(0.5),
+		BIP_RANGE(0.2),
+		BIP_RANGE(0.1),
+		UNI_RANGE(10),
+		UNI_RANGE(5),
+		UNI_RANGE(2),
+		UNI_RANGE(1),
+		UNI_RANGE(0.5),
+		UNI_RANGE(0.2),
+		UNI_RANGE(0.1)
+	}
 };
 
-static const struct comedi_lrange range_ni_E_ai_bipolar4 = { 4, {
-								 RANGE(-10, 10),
-								 RANGE(-5, 5),
-								 RANGE(-0.5,
-								       0.5),
-								 RANGE(-0.05,
-								       0.05),
-								 }
+static const struct comedi_lrange range_ni_E_ai_bipolar4 = {
+	4, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(0.5),
+		BIP_RANGE(0.05)
+	}
 };
 
-static const struct comedi_lrange range_ni_E_ai_611x = { 8, {
-							     RANGE(-50, 50),
-							     RANGE(-20, 20),
-							     RANGE(-10, 10),
-							     RANGE(-5, 5),
-							     RANGE(-2, 2),
-							     RANGE(-1, 1),
-							     RANGE(-0.5, 0.5),
-							     RANGE(-0.2, 0.2),
-							     }
+static const struct comedi_lrange range_ni_E_ai_611x = {
+	8, {
+		BIP_RANGE(50),
+		BIP_RANGE(20),
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(2),
+		BIP_RANGE(1),
+		BIP_RANGE(0.5),
+		BIP_RANGE(0.2)
+	}
 };
 
-static const struct comedi_lrange range_ni_M_ai_622x = { 4, {
-							     RANGE(-10, 10),
-							     RANGE(-5, 5),
-							     RANGE(-1, 1),
-							     RANGE(-0.2, 0.2),
-							     }
+static const struct comedi_lrange range_ni_M_ai_622x = {
+	4, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(1),
+		BIP_RANGE(0.2)
+	}
 };
 
-static const struct comedi_lrange range_ni_M_ai_628x = { 7, {
-							     RANGE(-10, 10),
-							     RANGE(-5, 5),
-							     RANGE(-2, 2),
-							     RANGE(-1, 1),
-							     RANGE(-0.5, 0.5),
-							     RANGE(-0.2, 0.2),
-							     RANGE(-0.1, 0.1),
-							     }
+static const struct comedi_lrange range_ni_M_ai_628x = {
+	7, {
+		BIP_RANGE(10),
+		BIP_RANGE(5),
+		BIP_RANGE(2),
+		BIP_RANGE(1),
+		BIP_RANGE(0.5),
+		BIP_RANGE(0.2),
+		BIP_RANGE(0.1)
+	}
 };
 
-static const struct comedi_lrange range_ni_E_ao_ext = { 4, {
-							    RANGE(-10, 10),
-							    RANGE(0, 10),
-							    RANGE_ext(-1, 1),
-							    RANGE_ext(0, 1),
-							    }
+static const struct comedi_lrange range_ni_E_ao_ext = {
+	4, {
+		BIP_RANGE(10),
+		UNI_RANGE(10),
+		RANGE_ext(-1, 1),
+		RANGE_ext(0, 1)
+	}
 };
 
 static const struct comedi_lrange *const ni_range_lkup[] = {
@@ -266,17 +256,6 @@ static int ni_rtsi_insn_config(struct comedi_device *dev,
 static void caldac_setup(struct comedi_device *dev, struct comedi_subdevice *s);
 static int ni_read_eeprom(struct comedi_device *dev, int addr);
 
-#ifdef DEBUG_STATUS_A
-static void ni_mio_print_status_a(int status);
-#else
-#define ni_mio_print_status_a(a)
-#endif
-#ifdef DEBUG_STATUS_B
-static void ni_mio_print_status_b(int status);
-#else
-#define ni_mio_print_status_b(a)
-#endif
-
 static int ni_ai_reset(struct comedi_device *dev, struct comedi_subdevice *s);
 #ifndef PCIDMA
 static void ni_handle_fifo_half_full(struct comedi_device *dev);
@@ -297,19 +276,8 @@ static int ni_ao_reset(struct comedi_device *dev, struct comedi_subdevice *s);
 
 static int ni_8255_callback(int dir, int port, int data, unsigned long arg);
 
-static int ni_gpct_insn_write(struct comedi_device *dev,
-			      struct comedi_subdevice *s,
-			      struct comedi_insn *insn, unsigned int *data);
-static int ni_gpct_insn_read(struct comedi_device *dev,
-			     struct comedi_subdevice *s,
-			     struct comedi_insn *insn, unsigned int *data);
-static int ni_gpct_insn_config(struct comedi_device *dev,
-			       struct comedi_subdevice *s,
-			       struct comedi_insn *insn, unsigned int *data);
 #ifdef PCIDMA
 static int ni_gpct_cmd(struct comedi_device *dev, struct comedi_subdevice *s);
-static int ni_gpct_cmdtest(struct comedi_device *dev,
-			   struct comedi_subdevice *s, struct comedi_cmd *cmd);
 #endif
 static int ni_gpct_cancel(struct comedi_device *dev,
 			  struct comedi_subdevice *s);
@@ -322,10 +290,6 @@ static int cs5529_do_conversion(struct comedi_device *dev,
 static int cs5529_ai_insn_read(struct comedi_device *dev,
 			       struct comedi_subdevice *s,
 			       struct comedi_insn *insn, unsigned int *data);
-#ifdef NI_CS5529_DEBUG
-static unsigned int cs5529_config_read(struct comedi_device *dev,
-				       unsigned int reg_select_bits);
-#endif
 static void cs5529_config_write(struct comedi_device *dev, unsigned int value,
 				unsigned int reg_select_bits);
 
@@ -1050,12 +1014,6 @@ static void handle_a_interrupt(struct comedi_device *dev, unsigned short status,
 	if (s->type == COMEDI_SUBD_UNUSED)
 		return;
 
-#ifdef DEBUG_INTERRUPT
-	printk
-	    ("ni_mio_common: interrupt: a_status=%04x ai_mite_status=%08x\n",
-	     status, ai_mite_status);
-	ni_mio_print_status_a(status);
-#endif
 #ifdef PCIDMA
 	if (ai_mite_status & CHSR_LINKC) {
 		ni_sync_ai_dma(dev);
@@ -1067,7 +1025,6 @@ static void handle_a_interrupt(struct comedi_device *dev, unsigned short status,
 		printk
 		    ("unknown mite interrupt, ack! (ai_mite_status=%08x)\n",
 		     ai_mite_status);
-		/* mite_print_chsr(ai_mite_status); */
 		s->async->events |= COMEDI_CB_ERROR | COMEDI_CB_EOA;
 		/* disable_irq(dev->irq); */
 	}
@@ -1092,7 +1049,6 @@ static void handle_a_interrupt(struct comedi_device *dev, unsigned short status,
 			      AI_SC_TC_Error_St)) {
 			printk("ni_mio_common: ai error a_status=%04x\n",
 			       status);
-			ni_mio_print_status_a(status);
 
 			shutdown_ai_command(dev);
 
@@ -1105,9 +1061,6 @@ static void handle_a_interrupt(struct comedi_device *dev, unsigned short status,
 			return;
 		}
 		if (status & AI_SC_TC_St) {
-#ifdef DEBUG_INTERRUPT
-			printk("ni_mio_common: SC_TC interrupt\n");
-#endif
 			if (!devpriv->ai_continuous) {
 				shutdown_ai_command(dev);
 			}
@@ -1134,15 +1087,6 @@ static void handle_a_interrupt(struct comedi_device *dev, unsigned short status,
 	}
 
 	ni_event(dev, s);
-
-#ifdef DEBUG_INTERRUPT
-	status = devpriv->stc_readw(dev, AI_Status_1_Register);
-	if (status & Interrupt_A_St) {
-		printk
-		    ("handle_a_interrupt: didn't clear interrupt? status=0x%x\n",
-		     status);
-	}
-#endif
 }
 
 static void ack_b_interrupt(struct comedi_device *dev, unsigned short b_status)
@@ -1182,12 +1126,6 @@ static void handle_b_interrupt(struct comedi_device *dev,
 	struct comedi_subdevice *s = &dev->subdevices[NI_AO_SUBDEV];
 	/* unsigned short ack=0; */
 
-#ifdef DEBUG_INTERRUPT
-	printk("ni_mio_common: interrupt: b_status=%04x m1_status=%08x\n",
-	       b_status, ao_mite_status);
-	ni_mio_print_status_b(b_status);
-#endif
-
 #ifdef PCIDMA
 	/* Currently, mite.c requires us to handle LINKC */
 	if (ao_mite_status & CHSR_LINKC) {
@@ -1200,7 +1138,6 @@ static void handle_b_interrupt(struct comedi_device *dev,
 		printk
 		    ("unknown mite interrupt, ack! (ao_mite_status=%08x)\n",
 		     ao_mite_status);
-		/* mite_print_chsr(ao_mite_status); */
 		s->async->events |= COMEDI_CB_EOA | COMEDI_CB_ERROR;
 	}
 #endif
@@ -1214,12 +1151,9 @@ static void handle_b_interrupt(struct comedi_device *dev,
 		s->async->events |= COMEDI_CB_OVERFLOW;
 	}
 
-	if (b_status & AO_BC_TC_St) {
-		MDPRINTK
-		    ("ni_mio_common: AO BC_TC status=0x%04x status2=0x%04x\n",
-		     b_status, devpriv->stc_readw(dev, AO_Status_2_Register));
+	if (b_status & AO_BC_TC_St)
 		s->async->events |= COMEDI_CB_EOA;
-	}
+
 #ifndef PCIDMA
 	if (b_status & AO_FIFO_Request_St) {
 		int ret;
@@ -1237,50 +1171,6 @@ static void handle_b_interrupt(struct comedi_device *dev,
 
 	ni_event(dev, s);
 }
-
-#ifdef DEBUG_STATUS_A
-static const char *const status_a_strings[] = {
-	"passthru0", "fifo", "G0_gate", "G0_TC",
-	"stop", "start", "sc_tc", "start1",
-	"start2", "sc_tc_error", "overflow", "overrun",
-	"fifo_empty", "fifo_half_full", "fifo_full", "interrupt_a"
-};
-
-static void ni_mio_print_status_a(int status)
-{
-	int i;
-
-	printk("A status:");
-	for (i = 15; i >= 0; i--) {
-		if (status & (1 << i)) {
-			printk(" %s", status_a_strings[i]);
-		}
-	}
-	printk("\n");
-}
-#endif
-
-#ifdef DEBUG_STATUS_B
-static const char *const status_b_strings[] = {
-	"passthru1", "fifo", "G1_gate", "G1_TC",
-	"UI2_TC", "UPDATE", "UC_TC", "BC_TC",
-	"start1", "overrun", "start", "bc_tc_error",
-	"fifo_empty", "fifo_half_full", "fifo_full", "interrupt_b"
-};
-
-static void ni_mio_print_status_b(int status)
-{
-	int i;
-
-	printk("B status:");
-	for (i = 15; i >= 0; i--) {
-		if (status & (1 << i)) {
-			printk(" %s", status_b_strings[i]);
-		}
-	}
-	printk("\n");
-}
-#endif
 
 #ifndef PCIDMA
 
@@ -2392,7 +2282,6 @@ static int ni_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 	unsigned int stop_count;
 	int interrupt_a_enable = 0;
 
-	MDPRINTK("ni_ai_cmd\n");
 	if (dev->irq == 0) {
 		comedi_error(dev, "cannot run command without an irq");
 		return -EIO;
@@ -2630,15 +2519,11 @@ static int ni_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 
 		ni_set_bits(dev, Interrupt_A_Enable_Register,
 			    interrupt_a_enable, 1);
-
-		MDPRINTK("Interrupt_A_Enable_Register = 0x%04x\n",
-			 devpriv->int_a_enable_reg);
 	} else {
 		/* interrupt on nothing */
 		ni_set_bits(dev, Interrupt_A_Enable_Register, ~0, 0);
 
 		/* XXX start polling if necessary */
-		MDPRINTK("interrupting on nothing\n");
 	}
 
 	/* end configuration */
@@ -2664,7 +2549,6 @@ static int ni_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 		if (retval)
 			return retval;
 	}
-	/* mite_dump_regs(devpriv->mite); */
 #endif
 
 	switch (cmd->start_src) {
@@ -2681,8 +2565,6 @@ static int ni_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 		s->async->inttrig = &ni_ai_inttrig;
 		break;
 	}
-
-	MDPRINTK("exit ni_ai_cmd\n");
 
 	return 0;
 }
@@ -3819,10 +3701,6 @@ static int ni_serial_insn_config(struct comedi_device *dev,
 
 	switch (data[0]) {
 	case INSN_CONFIG_SERIAL_CLOCK:
-
-#ifdef DEBUG_DIO
-		printk("SPI serial clock Config cd\n", data[1]);
-#endif
 		devpriv->serial_hw_mode = 1;
 		devpriv->dio_control |= DIO_HW_Serial_Enable;
 
@@ -3911,10 +3789,6 @@ static int ni_serial_hw_readwrite8(struct comedi_device *dev,
 	unsigned int status1;
 	int err = 0, count = 20;
 
-#ifdef DEBUG_DIO
-	printk("ni_serial_hw_readwrite8: outputting 0x%x\n", data_out);
-#endif
-
 	devpriv->dio_output &= ~DIO_Serial_Data_Mask;
 	devpriv->dio_output |= DIO_Serial_Data_Out(data_out);
 	devpriv->stc_writew(dev, devpriv->dio_output, DIO_Output_Register);
@@ -3948,12 +3822,8 @@ static int ni_serial_hw_readwrite8(struct comedi_device *dev,
 	   DIO_Serial_IO_In_Progress_St goes high one bit too early. */
 	udelay((devpriv->serial_interval_ns + 999) / 1000);
 
-	if (data_in != NULL) {
+	if (data_in != NULL)
 		*data_in = devpriv->stc_readw(dev, DIO_Serial_Input_Register);
-#ifdef DEBUG_DIO
-		printk("ni_serial_hw_readwrite8: inputted 0x%x\n", *data_in);
-#endif
-	}
 
 Error:
 	devpriv->stc_writew(dev, devpriv->dio_control, DIO_Control_Register);
@@ -3968,10 +3838,6 @@ static int ni_serial_sw_readwrite8(struct comedi_device *dev,
 {
 	struct ni_private *devpriv = dev->private;
 	unsigned char mask, input = 0;
-
-#ifdef DEBUG_DIO
-	printk("ni_serial_sw_readwrite8: outputting 0x%x\n", data_out);
-#endif
 
 	/* Wait for one bit before transfer */
 	udelay((devpriv->serial_interval_ns + 999) / 1000);
@@ -4009,9 +3875,7 @@ static int ni_serial_sw_readwrite8(struct comedi_device *dev,
 			input |= mask;
 		}
 	}
-#ifdef DEBUG_DIO
-	printk("ni_serial_sw_readwrite8: inputted 0x%x\n", input);
-#endif
+
 	if (data_in)
 		*data_in = input;
 
@@ -4044,82 +3908,82 @@ static unsigned ni_gpct_to_stc_register(enum ni_gpct_register reg)
 {
 	unsigned stc_register;
 	switch (reg) {
-	case NITIO_G0_Autoincrement_Reg:
+	case NITIO_G0_AUTO_INC:
 		stc_register = G_Autoincrement_Register(0);
 		break;
-	case NITIO_G1_Autoincrement_Reg:
+	case NITIO_G1_AUTO_INC:
 		stc_register = G_Autoincrement_Register(1);
 		break;
-	case NITIO_G0_Command_Reg:
+	case NITIO_G0_CMD:
 		stc_register = G_Command_Register(0);
 		break;
-	case NITIO_G1_Command_Reg:
+	case NITIO_G1_CMD:
 		stc_register = G_Command_Register(1);
 		break;
-	case NITIO_G0_HW_Save_Reg:
+	case NITIO_G0_HW_SAVE:
 		stc_register = G_HW_Save_Register(0);
 		break;
-	case NITIO_G1_HW_Save_Reg:
+	case NITIO_G1_HW_SAVE:
 		stc_register = G_HW_Save_Register(1);
 		break;
-	case NITIO_G0_SW_Save_Reg:
+	case NITIO_G0_SW_SAVE:
 		stc_register = G_Save_Register(0);
 		break;
-	case NITIO_G1_SW_Save_Reg:
+	case NITIO_G1_SW_SAVE:
 		stc_register = G_Save_Register(1);
 		break;
-	case NITIO_G0_Mode_Reg:
+	case NITIO_G0_MODE:
 		stc_register = G_Mode_Register(0);
 		break;
-	case NITIO_G1_Mode_Reg:
+	case NITIO_G1_MODE:
 		stc_register = G_Mode_Register(1);
 		break;
-	case NITIO_G0_LoadA_Reg:
+	case NITIO_G0_LOADA:
 		stc_register = G_Load_A_Register(0);
 		break;
-	case NITIO_G1_LoadA_Reg:
+	case NITIO_G1_LOADA:
 		stc_register = G_Load_A_Register(1);
 		break;
-	case NITIO_G0_LoadB_Reg:
+	case NITIO_G0_LOADB:
 		stc_register = G_Load_B_Register(0);
 		break;
-	case NITIO_G1_LoadB_Reg:
+	case NITIO_G1_LOADB:
 		stc_register = G_Load_B_Register(1);
 		break;
-	case NITIO_G0_Input_Select_Reg:
+	case NITIO_G0_INPUT_SEL:
 		stc_register = G_Input_Select_Register(0);
 		break;
-	case NITIO_G1_Input_Select_Reg:
+	case NITIO_G1_INPUT_SEL:
 		stc_register = G_Input_Select_Register(1);
 		break;
-	case NITIO_G01_Status_Reg:
+	case NITIO_G01_STATUS:
 		stc_register = G_Status_Register;
 		break;
-	case NITIO_G01_Joint_Reset_Reg:
+	case NITIO_G01_RESET:
 		stc_register = Joint_Reset_Register;
 		break;
-	case NITIO_G01_Joint_Status1_Reg:
+	case NITIO_G01_STATUS1:
 		stc_register = Joint_Status_1_Register;
 		break;
-	case NITIO_G01_Joint_Status2_Reg:
+	case NITIO_G01_STATUS2:
 		stc_register = Joint_Status_2_Register;
 		break;
-	case NITIO_G0_Interrupt_Acknowledge_Reg:
+	case NITIO_G0_INT_ACK:
 		stc_register = Interrupt_A_Ack_Register;
 		break;
-	case NITIO_G1_Interrupt_Acknowledge_Reg:
+	case NITIO_G1_INT_ACK:
 		stc_register = Interrupt_B_Ack_Register;
 		break;
-	case NITIO_G0_Status_Reg:
+	case NITIO_G0_STATUS:
 		stc_register = AI_Status_1_Register;
 		break;
-	case NITIO_G1_Status_Reg:
+	case NITIO_G1_STATUS:
 		stc_register = AO_Status_1_Register;
 		break;
-	case NITIO_G0_Interrupt_Enable_Reg:
+	case NITIO_G0_INT_ENA:
 		stc_register = Interrupt_A_Enable_Register;
 		break;
-	case NITIO_G1_Interrupt_Enable_Reg:
+	case NITIO_G1_INT_ENA:
 		stc_register = Interrupt_B_Enable_Register;
 		break;
 	default:
@@ -4147,52 +4011,52 @@ static void ni_gpct_write_register(struct ni_gpct *counter, unsigned bits,
 
 	switch (reg) {
 		/* m-series-only registers */
-	case NITIO_G0_Counting_Mode_Reg:
+	case NITIO_G0_CNT_MODE:
 		ni_writew(bits, M_Offset_G0_Counting_Mode);
 		break;
-	case NITIO_G1_Counting_Mode_Reg:
+	case NITIO_G1_CNT_MODE:
 		ni_writew(bits, M_Offset_G1_Counting_Mode);
 		break;
-	case NITIO_G0_Second_Gate_Reg:
+	case NITIO_G0_GATE2:
 		ni_writew(bits, M_Offset_G0_Second_Gate);
 		break;
-	case NITIO_G1_Second_Gate_Reg:
+	case NITIO_G1_GATE2:
 		ni_writew(bits, M_Offset_G1_Second_Gate);
 		break;
-	case NITIO_G0_DMA_Config_Reg:
+	case NITIO_G0_DMA_CFG:
 		ni_writew(bits, M_Offset_G0_DMA_Config);
 		break;
-	case NITIO_G1_DMA_Config_Reg:
+	case NITIO_G1_DMA_CFG:
 		ni_writew(bits, M_Offset_G1_DMA_Config);
 		break;
-	case NITIO_G0_ABZ_Reg:
+	case NITIO_G0_ABZ:
 		ni_writew(bits, M_Offset_G0_MSeries_ABZ);
 		break;
-	case NITIO_G1_ABZ_Reg:
+	case NITIO_G1_ABZ:
 		ni_writew(bits, M_Offset_G1_MSeries_ABZ);
 		break;
 
 		/* 32 bit registers */
-	case NITIO_G0_LoadA_Reg:
-	case NITIO_G1_LoadA_Reg:
-	case NITIO_G0_LoadB_Reg:
-	case NITIO_G1_LoadB_Reg:
+	case NITIO_G0_LOADA:
+	case NITIO_G1_LOADA:
+	case NITIO_G0_LOADB:
+	case NITIO_G1_LOADB:
 		stc_register = ni_gpct_to_stc_register(reg);
 		devpriv->stc_writel(dev, bits, stc_register);
 		break;
 
 		/* 16 bit registers */
-	case NITIO_G0_Interrupt_Enable_Reg:
+	case NITIO_G0_INT_ENA:
 		BUG_ON(bits & ~gpct_interrupt_a_enable_mask);
 		ni_set_bitfield(dev, Interrupt_A_Enable_Register,
 				gpct_interrupt_a_enable_mask, bits);
 		break;
-	case NITIO_G1_Interrupt_Enable_Reg:
+	case NITIO_G1_INT_ENA:
 		BUG_ON(bits & ~gpct_interrupt_b_enable_mask);
 		ni_set_bitfield(dev, Interrupt_B_Enable_Register,
 				gpct_interrupt_b_enable_mask, bits);
 		break;
-	case NITIO_G01_Joint_Reset_Reg:
+	case NITIO_G01_RESET:
 		BUG_ON(bits & ~gpct_joint_reset_mask);
 		/* fall-through */
 	default:
@@ -4210,21 +4074,18 @@ static unsigned ni_gpct_read_register(struct ni_gpct *counter,
 
 	switch (reg) {
 		/* m-series only registers */
-	case NITIO_G0_DMA_Status_Reg:
+	case NITIO_G0_DMA_STATUS:
 		return ni_readw(M_Offset_G0_DMA_Status);
-		break;
-	case NITIO_G1_DMA_Status_Reg:
+	case NITIO_G1_DMA_STATUS:
 		return ni_readw(M_Offset_G1_DMA_Status);
-		break;
 
 		/* 32 bit registers */
-	case NITIO_G0_HW_Save_Reg:
-	case NITIO_G1_HW_Save_Reg:
-	case NITIO_G0_SW_Save_Reg:
-	case NITIO_G1_SW_Save_Reg:
+	case NITIO_G0_HW_SAVE:
+	case NITIO_G1_HW_SAVE:
+	case NITIO_G0_SW_SAVE:
+	case NITIO_G1_SW_SAVE:
 		stc_register = ni_gpct_to_stc_register(reg);
 		return devpriv->stc_readl(dev, stc_register);
-		break;
 
 		/* 16 bit registers */
 	default:
@@ -4573,14 +4434,14 @@ static int ni_E_init(struct comedi_device *dev)
 			s->maxdata = 0xffffffff;
 		else
 			s->maxdata = 0xffffff;
-		s->insn_read = &ni_gpct_insn_read;
-		s->insn_write = &ni_gpct_insn_write;
-		s->insn_config = &ni_gpct_insn_config;
+		s->insn_read = ni_tio_insn_read;
+		s->insn_write = ni_tio_insn_read;
+		s->insn_config = ni_tio_insn_config;
 #ifdef PCIDMA
 		s->subdev_flags |= SDF_CMD_READ /* | SDF_CMD_WRITE */;
 		s->do_cmd = &ni_gpct_cmd;
 		s->len_chanlist = 1;
-		s->do_cmdtest = &ni_gpct_cmdtest;
+		s->do_cmdtest = ni_tio_cmdtest;
 		s->cancel = &ni_gpct_cancel;
 		s->async_dma_dir = DMA_BIDIRECTIONAL;
 #endif
@@ -5143,36 +5004,11 @@ static void GPCT_Reset(struct comedi_device *dev, int chan)
 
 #endif
 
-static int ni_gpct_insn_config(struct comedi_device *dev,
-			       struct comedi_subdevice *s,
-			       struct comedi_insn *insn, unsigned int *data)
-{
-	struct ni_gpct *counter = s->private;
-	return ni_tio_insn_config(counter, insn, data);
-}
-
-static int ni_gpct_insn_read(struct comedi_device *dev,
-			     struct comedi_subdevice *s,
-			     struct comedi_insn *insn, unsigned int *data)
-{
-	struct ni_gpct *counter = s->private;
-	return ni_tio_rinsn(counter, insn, data);
-}
-
-static int ni_gpct_insn_write(struct comedi_device *dev,
-			      struct comedi_subdevice *s,
-			      struct comedi_insn *insn, unsigned int *data)
-{
-	struct ni_gpct *counter = s->private;
-	return ni_tio_winsn(counter, insn, data);
-}
-
 #ifdef PCIDMA
 static int ni_gpct_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 {
-	int retval;
 	struct ni_gpct *counter = s->private;
-/* const struct comedi_cmd *cmd = &s->async->cmd; */
+	int retval;
 
 	retval = ni_request_gpct_mite_channel(dev, counter->counter_index,
 					      COMEDI_INPUT);
@@ -5183,19 +5019,8 @@ static int ni_gpct_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 	}
 	ni_tio_acknowledge_and_confirm(counter, NULL, NULL, NULL, NULL);
 	ni_e_series_enable_second_irq(dev, counter->counter_index, 1);
-	retval = ni_tio_cmd(counter, s->async);
-	return retval;
-}
-#endif
 
-#ifdef PCIDMA
-static int ni_gpct_cmdtest(struct comedi_device *dev,
-			   struct comedi_subdevice *s, struct comedi_cmd *cmd)
-{
-	struct ni_gpct *counter = s->private;
-
-	return ni_tio_cmdtest(counter, cmd);
-	return -ENOTSUPP;
+	return ni_tio_cmd(dev, s);
 }
 #endif
 
@@ -5873,25 +5698,6 @@ static void cs5529_config_write(struct comedi_device *dev, unsigned int value,
 		comedi_error(dev, "time or signal in cs5529_config_write()");
 }
 
-#ifdef NI_CS5529_DEBUG
-/* read from cs5529 register */
-static unsigned int cs5529_config_read(struct comedi_device *dev,
-				       unsigned int reg_select_bits)
-{
-	unsigned int value;
-
-	reg_select_bits &= CSCMD_REGISTER_SELECT_MASK;
-	cs5529_command(dev, CSCMD_COMMAND | CSCMD_READ | reg_select_bits);
-	if (cs5529_wait_for_idle(dev))
-		comedi_error(dev, "timeout or signal in cs5529_config_read()");
-	value = (ni_ao_win_inw(dev,
-			       CAL_ADC_Config_Data_High_Word_67xx) << 16) &
-	    0xff0000;
-	value |= ni_ao_win_inw(dev, CAL_ADC_Config_Data_Low_Word_67xx) & 0xffff;
-	return value;
-}
-#endif
-
 static int cs5529_do_conversion(struct comedi_device *dev, unsigned short *data)
 {
 	int retval;
@@ -5967,13 +5773,6 @@ static int init_cs5529(struct comedi_device *dev)
 			    CSCMD_CONFIG_REGISTER);
 	if (cs5529_wait_for_idle(dev))
 		comedi_error(dev, "timeout or signal in init_cs5529()\n");
-#endif
-#ifdef NI_CS5529_DEBUG
-	printk("config: 0x%x\n", cs5529_config_read(dev,
-						    CSCMD_CONFIG_REGISTER));
-	printk("gain: 0x%x\n", cs5529_config_read(dev, CSCMD_GAIN_REGISTER));
-	printk("offset: 0x%x\n", cs5529_config_read(dev,
-						    CSCMD_OFFSET_REGISTER));
 #endif
 	return 0;
 }

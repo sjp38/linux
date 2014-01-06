@@ -54,6 +54,8 @@ source "drivers/staging/rtl8188eu/Kconfig"
 
 source "drivers/staging/rts5139/Kconfig"
 
+source "drivers/staging/rts5208/Kconfig"
+
 source "drivers/staging/frontier/Kconfig"
 
 source "drivers/staging/phison/Kconfig"
@@ -141,8 +143,6 @@ source "drivers/staging/mt29f_spinand/Kconfig"
 source "drivers/staging/dwc2/Kconfig"
 
 source "drivers/staging/lustre/Kconfig"
-
-source "drivers/staging/btmtk_usb/Kconfig"
 
 source "drivers/staging/xillybus/Kconfig"
 
