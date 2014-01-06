@@ -7,7 +7,7 @@
  * Released under the GPL v2. (and only v2, not any later version)
  */
 #include "util.h"
-#include <lk/debugfs.h>
+#include <api/fs/debugfs.h>
 #include <poll.h>
 #include "cpumap.h"
 #include "thread_map.h"
@@ -732,11 +732,13 @@ static long parse_pages_arg(const char *str, unsigned long min,
 			return -EINVAL;
 	}
 
-	if ((pages == 0) && (min == 0)) {
+	if (pages == 0 && min == 0) {
 		/* leave number of pages at 0 */
-	} else if (pages < (1UL << 31) && !is_power_of_2(pages)) {
+	} else if (!is_power_of_2(pages)) {
 		/* round pages up to next power of 2 */
-		pages = next_pow2(pages);
+		pages = next_pow2_l(pages);
+		if (!pages)
+			return -EINVAL;
 		pr_info("rounding mmap pages size to %lu bytes (%lu pages)\n",
 			pages * page_size, pages);
 	}
@@ -754,7 +756,7 @@ int perf_evlist__parse_mmap_pages(const struct option *opt, const char *str,
 	unsigned long max = UINT_MAX;
 	long pages;
 
-	if (max < SIZE_MAX / page_size)
+	if (max > SIZE_MAX / page_size)
 		max = SIZE_MAX / page_size;
 
 	pages = parse_pages_arg(str, 1, max);
@@ -819,11 +821,7 @@ int perf_evlist__create_maps(struct perf_evlist *evlist, struct target *target)
 	if (evlist->threads == NULL)
 		return -1;
 
-	if (target->force_per_cpu)
-		evlist->cpus = cpu_map__new(target->cpu_list);
-	else if (target__has_task(target))
-		evlist->cpus = cpu_map__dummy_new();
-	else if (!target__has_cpu(target) && !target->uses_mmap)
+	if (target__uses_dummy_map(target))
 		evlist->cpus = cpu_map__dummy_new();
 	else
 		evlist->cpus = cpu_map__new(target->cpu_list);
@@ -1193,8 +1191,7 @@ int perf_evlist__strerror_open(struct perf_evlist *evlist __maybe_unused,
 				    "Error:\t%s.\n"
 				    "Hint:\tCheck /proc/sys/kernel/perf_event_paranoid setting.", emsg);
 
-		if (filename__read_int("/proc/sys/kernel/perf_event_paranoid", &value))
-			break;
+		value = perf_event_paranoid();
 
 		printed += scnprintf(buf + printed, size - printed, "\nHint:\t");
 
@@ -1214,4 +1211,21 @@ int perf_evlist__strerror_open(struct perf_evlist *evlist __maybe_unused,
 	}
 
 	return 0;
+}
+
+void perf_evlist__to_front(struct perf_evlist *evlist,
+			   struct perf_evsel *move_evsel)
+{
+	struct perf_evsel *evsel, *n;
+	LIST_HEAD(move);
+
+	if (move_evsel == perf_evlist__first(evlist))
+		return;
+
+	list_for_each_entry_safe(evsel, n, &evlist->entries, node) {
+		if (evsel->leader == move_evsel->leader)
+			list_move_tail(&evsel->node, &move);
+	}
+
+	list_splice(&move, &evlist->entries);
 }

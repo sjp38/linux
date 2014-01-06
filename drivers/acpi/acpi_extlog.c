@@ -11,6 +11,7 @@
 #include <linux/acpi.h>
 #include <linux/cper.h>
 #include <linux/ratelimit.h>
+#include <linux/edac.h>
 #include <asm/cpu.h>
 #include <asm/mce.h>
 
@@ -39,6 +40,8 @@ struct extlog_l1_head {
 	u32 entries;	/* Valid L1 Directory entries per logical processor */
 	u8  rev1[12];
 };
+
+static int old_edac_report_status;
 
 static u8 extlog_dsm_uuid[] __initdata = "663E35AF-CC10-41A4-88EA-5470AF055295";
 
@@ -147,7 +150,7 @@ static int extlog_print(struct notifier_block *nb, unsigned long val,
 
 	rc = print_extlog_rcd(NULL, (struct acpi_generic_status *)elog_buf, cpu);
 
-	return NOTIFY_DONE;
+	return NOTIFY_STOP;
 }
 
 static bool __init extlog_get_l1addr(void)
@@ -193,8 +196,12 @@ static int __init extlog_init(void)
 	u64 cap;
 	int rc;
 
-	rc = -ENODEV;
+	if (get_edac_report_status() == EDAC_REPORTING_FORCE) {
+		pr_warn("Not loading eMCA, error reporting force-enabled through EDAC.\n");
+		return -EPERM;
+	}
 
+	rc = -ENODEV;
 	rdmsrl(MSR_IA32_MCG_CAP, cap);
 	if (!(cap & MCG_ELOG_P))
 		return rc;
@@ -249,6 +256,12 @@ static int __init extlog_init(void)
 	if (elog_buf == NULL)
 		goto err_release_elog;
 
+	/*
+	 * eMCA event report method has higher priority than EDAC method,
+	 * unless EDAC event report method is mandatory.
+	 */
+	old_edac_report_status = get_edac_report_status();
+	set_edac_report_status(EDAC_REPORTING_DISABLED);
 	mce_register_decode_chain(&extlog_mce_dec);
 	/* enable OS to be involved to take over management from BIOS */
 	((struct extlog_l1_head *)extlog_l1_addr)->flags |= FLAG_OS_OPTIN;
@@ -270,6 +283,7 @@ err:
 
 static void __exit extlog_exit(void)
 {
+	set_edac_report_status(old_edac_report_status);
 	mce_unregister_decode_chain(&extlog_mce_dec);
 	((struct extlog_l1_head *)extlog_l1_addr)->flags &= ~FLAG_OS_OPTIN;
 	if (extlog_l1_addr)

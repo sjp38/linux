@@ -888,6 +888,14 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 
 			The xen output can only be used by Xen PV guests.
 
+	edac_report=	[HW,EDAC] Control how to report EDAC event
+			Format: {"on" | "off" | "force"}
+			on: enable EDAC to report H/W event. May be overridden
+			by other higher priority error reporting module.
+			off: disable H/W event reporting through EDAC.
+			force: enforce the use of EDAC to report H/W event.
+			default: on.
+
 	ekgdboc=	[X86,KGDB] Allow early kernel console debugging
 			ekgdboc=kbd
 
@@ -896,6 +904,12 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 
 	edd=		[EDD]
 			Format: {"off" | "on" | "skip[mbr]"}
+
+	efi=		[EFI]
+			Format: { "old_map" }
+			old_map [X86-64]: switch to the old ioremap-based EFI
+			runtime services mapping. 32-bit still uses this one by
+			default.
 
 	efi_no_storage_paranoia [EFI; X86]
 			Using this parameter you can use more than 50% of
@@ -2001,6 +2015,10 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 	noapic		[SMP,APIC] Tells the kernel to not make use of any
 			IOAPICs that may be present in the system.
 
+	nokaslr		[X86]
+			Disable kernel base offset ASLR (Address Space
+			Layout Randomization) if built into the kernel.
+
 	noautogroup	Disable scheduler automatic task group creation.
 
 	nobats		[PPC] Do not use BATs for mapping kernel lowmem
@@ -2634,7 +2652,6 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			for RCU-preempt, and "s" for RCU-sched, and "N"
 			is the CPU number.  This reduces OS jitter on the
 			offloaded CPUs, which can be useful for HPC and
-
 			real-time workloads.  It can also improve energy
 			efficiency for asymmetric multiprocessors.
 
@@ -2650,8 +2667,8 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			periodically wake up to do the polling.
 
 	rcutree.blimit=	[KNL]
-			Set maximum number of finished RCU callbacks to process
-			in one batch.
+			Set maximum number of finished RCU callbacks to
+			process in one batch.
 
 	rcutree.rcu_fanout_leaf= [KNL]
 			Increase the number of CPUs assigned to each
@@ -2670,8 +2687,8 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			value is one, and maximum value is HZ.
 
 	rcutree.qhimark= [KNL]
-			Set threshold of queued
-			RCU callbacks over which batch limiting is disabled.
+			Set threshold of queued RCU callbacks beyond which
+			batch limiting is disabled.
 
 	rcutree.qlowmark= [KNL]
 			Set threshold of queued RCU callbacks below which

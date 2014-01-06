@@ -40,7 +40,7 @@
 #include "color.h"
 #include "symbol.h"
 #include "thread.h"
-#include <lk/debugfs.h>
+#include <api/fs/debugfs.h>
 #include "trace-event.h"	/* For __maybe_unused */
 #include "probe-event.h"
 #include "probe-finder.h"
@@ -154,7 +154,7 @@ static struct dso *kernel_get_module_dso(const char *module)
 
 	vmlinux_name = symbol_conf.vmlinux_name;
 	if (vmlinux_name) {
-		if (dso__load_vmlinux(dso, map, vmlinux_name, NULL) <= 0)
+		if (dso__load_vmlinux(dso, map, vmlinux_name, false, NULL) <= 0)
 			return NULL;
 	} else {
 		if (dso__load_vmlinux_path(dso, map, NULL) <= 0) {

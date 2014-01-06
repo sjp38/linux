@@ -2710,7 +2710,6 @@ process_func_handler(struct event_format *event, struct pevent_function_handler 
 	struct print_arg *farg;
 	enum event_type type;
 	char *token;
-	const char *test;
 	int i;
 
 	arg->type = PRINT_FUNC;
@@ -2727,15 +2726,19 @@ process_func_handler(struct event_format *event, struct pevent_function_handler 
 		}
 
 		type = process_arg(event, farg, &token);
-		if (i < (func->nr_args - 1))
-			test = ",";
-		else
-			test = ")";
-
-		if (test_type_token(type, token, EVENT_DELIM, test)) {
-			free_arg(farg);
-			free_token(token);
-			return EVENT_ERROR;
+		if (i < (func->nr_args - 1)) {
+			if (type != EVENT_DELIM || strcmp(token, ",") != 0) {
+				warning("Error: function '%s()' expects %d arguments but event %s only uses %d",
+					func->name, func->nr_args,
+					event->name, i + 1);
+				goto err;
+			}
+		} else {
+			if (type != EVENT_DELIM || strcmp(token, ")") != 0) {
+				warning("Error: function '%s()' only expects %d arguments but event %s has more",
+					func->name, func->nr_args, event->name);
+				goto err;
+			}
 		}
 
 		*next_arg = farg;
@@ -2747,6 +2750,11 @@ process_func_handler(struct event_format *event, struct pevent_function_handler 
 	*tok = token;
 
 	return type;
+
+err:
+	free_arg(farg);
+	free_token(token);
+	return EVENT_ERROR;
 }
 
 static enum event_type
@@ -4099,6 +4107,7 @@ static void pretty_print(struct trace_seq *s, void *data, int size, struct event
 	unsigned long long val;
 	struct func_map *func;
 	const char *saveptr;
+	struct trace_seq p;
 	char *bprint_fmt = NULL;
 	char format[32];
 	int show_func;
@@ -4306,8 +4315,12 @@ static void pretty_print(struct trace_seq *s, void *data, int size, struct event
 				format[len] = 0;
 				if (!len_as_arg)
 					len_arg = -1;
-				print_str_arg(s, data, size, event,
+				/* Use helper trace_seq */
+				trace_seq_init(&p);
+				print_str_arg(&p, data, size, event,
 					      format, len_arg, arg);
+				trace_seq_terminate(&p);
+				trace_seq_puts(s, p.buffer);
 				arg = arg->next;
 				break;
 			default:
@@ -5116,8 +5129,38 @@ enum pevent_errno __pevent_parse_format(struct event_format **eventp,
 	return ret;
 }
 
+static enum pevent_errno
+__pevent_parse_event(struct pevent *pevent,
+		     struct event_format **eventp,
+		     const char *buf, unsigned long size,
+		     const char *sys)
+{
+	int ret = __pevent_parse_format(eventp, pevent, buf, size, sys);
+	struct event_format *event = *eventp;
+
+	if (event == NULL)
+		return ret;
+
+	if (pevent && add_event(pevent, event)) {
+		ret = PEVENT_ERRNO__MEM_ALLOC_FAILED;
+		goto event_add_failed;
+	}
+
+#define PRINT_ARGS 0
+	if (PRINT_ARGS && event->print_fmt.args)
+		print_args(event->print_fmt.args);
+
+	return 0;
+
+event_add_failed:
+	pevent_free_format(event);
+	return ret;
+}
+
 /**
  * pevent_parse_format - parse the event format
+ * @pevent: the handle to the pevent
+ * @eventp: returned format
  * @buf: the buffer storing the event format string
  * @size: the size of @buf
  * @sys: the system the event belongs to
@@ -5129,10 +5172,12 @@ enum pevent_errno __pevent_parse_format(struct event_format **eventp,
  *
  * /sys/kernel/debug/tracing/events/.../.../format
  */
-enum pevent_errno pevent_parse_format(struct event_format **eventp, const char *buf,
+enum pevent_errno pevent_parse_format(struct pevent *pevent,
+				      struct event_format **eventp,
+				      const char *buf,
 				      unsigned long size, const char *sys)
 {
-	return __pevent_parse_format(eventp, NULL, buf, size, sys);
+	return __pevent_parse_event(pevent, eventp, buf, size, sys);
 }
 
 /**
@@ -5153,25 +5198,7 @@ enum pevent_errno pevent_parse_event(struct pevent *pevent, const char *buf,
 				     unsigned long size, const char *sys)
 {
 	struct event_format *event = NULL;
-	int ret = __pevent_parse_format(&event, pevent, buf, size, sys);
-
-	if (event == NULL)
-		return ret;
-
-	if (add_event(pevent, event)) {
-		ret = PEVENT_ERRNO__MEM_ALLOC_FAILED;
-		goto event_add_failed;
-	}
-
-#define PRINT_ARGS 0
-	if (PRINT_ARGS && event->print_fmt.args)
-		print_args(event->print_fmt.args);
-
-	return 0;
-
-event_add_failed:
-	pevent_free_format(event);
-	return ret;
+	return __pevent_parse_event(pevent, &event, buf, size, sys);
 }
 
 #undef _PE
