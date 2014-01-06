@@ -24,7 +24,7 @@
 #include "gc.h"
 
 static LIST_HEAD(f2fs_stat_list);
-static struct dentry *debugfs_root;
+static struct dentry *f2fs_debugfs_root;
 static DEFINE_MUTEX(f2fs_stat_mutex);
 
 static void update_general_status(struct f2fs_sb_info *sbi)
@@ -45,6 +45,7 @@ static void update_general_status(struct f2fs_sb_info *sbi)
 	si->valid_count = valid_user_blocks(sbi);
 	si->valid_node_count = valid_node_count(sbi);
 	si->valid_inode_count = valid_inode_count(sbi);
+	si->inline_inode = sbi->inline_inode;
 	si->utilization = utilization(sbi);
 
 	si->free_segs = free_segments(sbi);
@@ -200,6 +201,8 @@ static int stat_show(struct seq_file *s, void *v)
 		seq_printf(s, "Other: %u)\n  - Data: %u\n",
 			   si->valid_node_count - si->valid_inode_count,
 			   si->valid_count - si->valid_node_count);
+		seq_printf(s, "  - Inline_data Inode: %u\n",
+			   si->inline_inode);
 		seq_printf(s, "\nMain area: %d segs, %d secs %d zones\n",
 			   si->main_area_segs, si->main_area_sections,
 			   si->main_area_zones);
@@ -340,14 +343,32 @@ void f2fs_destroy_stats(struct f2fs_sb_info *sbi)
 
 void __init f2fs_create_root_stats(void)
 {
-	debugfs_root = debugfs_create_dir("f2fs", NULL);
-	if (debugfs_root)
-		debugfs_create_file("status", S_IRUGO, debugfs_root,
-					 NULL, &stat_fops);
+	struct dentry *file;
+
+	f2fs_debugfs_root = debugfs_create_dir("f2fs", NULL);
+	if (!f2fs_debugfs_root)
+		goto bail;
+
+	file = debugfs_create_file("status", S_IRUGO, f2fs_debugfs_root,
+			NULL, &stat_fops);
+	if (!file)
+		goto free_debugfs_dir;
+
+	return;
+
+free_debugfs_dir:
+	debugfs_remove(f2fs_debugfs_root);
+
+bail:
+	f2fs_debugfs_root = NULL;
+	return;
 }
 
 void f2fs_destroy_root_stats(void)
 {
-	debugfs_remove_recursive(debugfs_root);
-	debugfs_root = NULL;
+	if (!f2fs_debugfs_root)
+		return;
+
+	debugfs_remove_recursive(f2fs_debugfs_root);
+	f2fs_debugfs_root = NULL;
 }

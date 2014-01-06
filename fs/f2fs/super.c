@@ -50,6 +50,7 @@ enum {
 	Opt_active_logs,
 	Opt_disable_ext_identify,
 	Opt_inline_xattr,
+	Opt_inline_data,
 	Opt_err,
 };
 
@@ -65,6 +66,7 @@ static match_table_t f2fs_tokens = {
 	{Opt_active_logs, "active_logs=%u"},
 	{Opt_disable_ext_identify, "disable_ext_identify"},
 	{Opt_inline_xattr, "inline_xattr"},
+	{Opt_inline_data, "inline_data"},
 	{Opt_err, NULL},
 };
 
@@ -175,6 +177,9 @@ F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_max_sleep_time, max_sleep_time);
 F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_no_gc_sleep_time, no_gc_sleep_time);
 F2FS_RW_ATTR(GC_THREAD, f2fs_gc_kthread, gc_idle, gc_idle);
 F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, reclaim_segments, rec_prefree_segments);
+F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, max_small_discards, max_discards);
+F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, ipu_policy, ipu_policy);
+F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, min_ipu_util, min_ipu_util);
 
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
@@ -183,6 +188,9 @@ static struct attribute *f2fs_attrs[] = {
 	ATTR_LIST(gc_no_gc_sleep_time),
 	ATTR_LIST(gc_idle),
 	ATTR_LIST(reclaim_segments),
+	ATTR_LIST(max_small_discards),
+	ATTR_LIST(ipu_policy),
+	ATTR_LIST(min_ipu_util),
 	NULL,
 };
 
@@ -311,6 +319,9 @@ static int parse_options(struct super_block *sb, char *options)
 		case Opt_disable_ext_identify:
 			set_opt(sbi, DISABLE_EXT_IDENTIFY);
 			break;
+		case Opt_inline_data:
+			set_opt(sbi, INLINE_DATA);
+			break;
 		default:
 			f2fs_msg(sb, KERN_ERR,
 				"Unrecognized mount option \"%s\" or missing value",
@@ -325,7 +336,7 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 {
 	struct f2fs_inode_info *fi;
 
-	fi = kmem_cache_alloc(f2fs_inode_cachep, GFP_NOFS | __GFP_ZERO);
+	fi = kmem_cache_alloc(f2fs_inode_cachep, GFP_F2FS_ZERO);
 	if (!fi)
 		return NULL;
 
@@ -508,7 +519,8 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 #endif
 	if (test_opt(sbi, DISABLE_EXT_IDENTIFY))
 		seq_puts(seq, ",disable_ext_identify");
-
+	if (test_opt(sbi, INLINE_DATA))
+		seq_puts(seq, ",inline_data");
 	seq_printf(seq, ",active_logs=%u", sbi->active_logs);
 
 	return 0;
@@ -618,7 +630,7 @@ static struct inode *f2fs_nfs_get_inode(struct super_block *sb,
 	struct f2fs_sb_info *sbi = F2FS_SB(sb);
 	struct inode *inode;
 
-	if (ino < F2FS_ROOT_INO(sbi))
+	if (unlikely(ino < F2FS_ROOT_INO(sbi)))
 		return ERR_PTR(-ESTALE);
 
 	/*
@@ -629,7 +641,7 @@ static struct inode *f2fs_nfs_get_inode(struct super_block *sb,
 	inode = f2fs_iget(sb, ino);
 	if (IS_ERR(inode))
 		return ERR_CAST(inode);
-	if (generation && inode->i_generation != generation) {
+	if (unlikely(generation && inode->i_generation != generation)) {
 		/* we didn't find the right inode.. */
 		iput(inode);
 		return ERR_PTR(-ESTALE);
@@ -732,10 +744,10 @@ static int sanity_check_ckpt(struct f2fs_sb_info *sbi)
 	fsmeta += le32_to_cpu(ckpt->rsvd_segment_count);
 	fsmeta += le32_to_cpu(raw_super->segment_count_ssa);
 
-	if (fsmeta >= total)
+	if (unlikely(fsmeta >= total))
 		return 1;
 
-	if (is_set_ckpt_flags(ckpt, CP_ERROR_FLAG)) {
+	if (unlikely(is_set_ckpt_flags(ckpt, CP_ERROR_FLAG))) {
 		f2fs_msg(sbi->sb, KERN_ERR, "A bug case: need to run fsck");
 		return 1;
 	}
@@ -800,7 +812,7 @@ retry:
 		brelse(*raw_super_buf);
 		f2fs_msg(sb, KERN_ERR, "Can't find a valid F2FS filesystem "
 				"in %dth superblock", block + 1);
-		if(block == 0) {
+		if (block == 0) {
 			block++;
 			goto retry;
 		} else {
@@ -818,6 +830,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	struct buffer_head *raw_super_buf;
 	struct inode *root;
 	long err = -EINVAL;
+	int i;
 
 	/* allocate memory for f2fs-specific super block info */
 	sbi = kzalloc(sizeof(struct f2fs_sb_info), GFP_KERNEL);
@@ -825,7 +838,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 		return -ENOMEM;
 
 	/* set a block size */
-	if (!sb_set_blocksize(sb, F2FS_BLKSIZE)) {
+	if (unlikely(!sb_set_blocksize(sb, F2FS_BLKSIZE))) {
 		f2fs_msg(sb, KERN_ERR, "unable to set blocksize");
 		goto free_sbi;
 	}
@@ -874,7 +887,16 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&sbi->node_write);
 	sbi->por_doing = false;
 	spin_lock_init(&sbi->stat_lock);
-	init_rwsem(&sbi->bio_sem);
+
+	mutex_init(&sbi->read_io.io_mutex);
+	sbi->read_io.sbi = sbi;
+	sbi->read_io.bio = NULL;
+	for (i = 0; i < NR_PAGE_TYPE; i++) {
+		mutex_init(&sbi->write_io[i].io_mutex);
+		sbi->write_io[i].sbi = sbi;
+		sbi->write_io[i].bio = NULL;
+	}
+
 	init_rwsem(&sbi->cp_rwsem);
 	init_waitqueue_head(&sbi->cp_wait);
 	init_sb_info(sbi);
@@ -939,9 +961,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	/* if there are nt orphan nodes free them */
-	err = -EINVAL;
-	if (recover_orphan_inodes(sbi))
-		goto free_node_inode;
+	recover_orphan_inodes(sbi);
 
 	/* read root inode and dentry */
 	root = f2fs_iget(sb, F2FS_ROOT_INO(sbi));
@@ -950,8 +970,10 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 		err = PTR_ERR(root);
 		goto free_node_inode;
 	}
-	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size)
+	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size) {
+		err = -EINVAL;
 		goto free_root_inode;
+	}
 
 	sb->s_root = d_make_root(root); /* allocate root dentry */
 	if (!sb->s_root) {
@@ -1053,7 +1075,7 @@ static int __init init_inodecache(void)
 {
 	f2fs_inode_cachep = f2fs_kmem_cache_create("f2fs_inode_cache",
 			sizeof(struct f2fs_inode_info), NULL);
-	if (f2fs_inode_cachep == NULL)
+	if (!f2fs_inode_cachep)
 		return -ENOMEM;
 	return 0;
 }
@@ -1078,9 +1100,12 @@ static int __init init_f2fs_fs(void)
 	err = create_node_manager_caches();
 	if (err)
 		goto free_inodecache;
-	err = create_gc_caches();
+	err = create_segment_manager_caches();
 	if (err)
 		goto free_node_manager_caches;
+	err = create_gc_caches();
+	if (err)
+		goto free_segment_manager_caches;
 	err = create_checkpoint_caches();
 	if (err)
 		goto free_gc_caches;
@@ -1102,6 +1127,8 @@ free_checkpoint_caches:
 	destroy_checkpoint_caches();
 free_gc_caches:
 	destroy_gc_caches();
+free_segment_manager_caches:
+	destroy_segment_manager_caches();
 free_node_manager_caches:
 	destroy_node_manager_caches();
 free_inodecache:
@@ -1117,6 +1144,7 @@ static void __exit exit_f2fs_fs(void)
 	unregister_filesystem(&f2fs_fs_type);
 	destroy_checkpoint_caches();
 	destroy_gc_caches();
+	destroy_segment_manager_caches();
 	destroy_node_manager_caches();
 	destroy_inodecache();
 	kset_unregister(f2fs_kset);

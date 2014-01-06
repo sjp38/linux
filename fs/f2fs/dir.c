@@ -190,9 +190,6 @@ struct f2fs_dir_entry *f2fs_find_entry(struct inode *dir,
 	unsigned int max_depth;
 	unsigned int level;
 
-	if (namelen > F2FS_NAME_LEN)
-		return NULL;
-
 	if (npages == 0)
 		return NULL;
 
@@ -259,20 +256,17 @@ void f2fs_set_link(struct inode *dir, struct f2fs_dir_entry *de,
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 	mark_inode_dirty(dir);
 
-	/* update parent inode number before releasing dentry page */
-	F2FS_I(inode)->i_pino = dir->i_ino;
-
 	f2fs_put_page(page, 1);
 }
 
 static void init_dent_inode(const struct qstr *name, struct page *ipage)
 {
-	struct f2fs_node *rn;
+	struct f2fs_inode *ri;
 
 	/* copy name info. to this inode page */
-	rn = F2FS_NODE(ipage);
-	rn->i.i_namelen = cpu_to_le32(name->len);
-	memcpy(rn->i.i_name, name->name, name->len);
+	ri = F2FS_INODE(ipage);
+	ri->i_namelen = cpu_to_le32(name->len);
+	memcpy(ri->i_name, name->name, name->len);
 	set_page_dirty(ipage);
 }
 
@@ -348,11 +342,11 @@ static struct page *init_inode_metadata(struct inode *inode,
 
 		err = f2fs_init_acl(inode, dir, page);
 		if (err)
-			goto error;
+			goto put_error;
 
 		err = f2fs_init_security(inode, dir, name, page);
 		if (err)
-			goto error;
+			goto put_error;
 
 		wait_on_page_writeback(page);
 	} else {
@@ -376,8 +370,9 @@ static struct page *init_inode_metadata(struct inode *inode,
 	}
 	return page;
 
-error:
+put_error:
 	f2fs_put_page(page, 1);
+error:
 	remove_inode_page(inode);
 	return ERR_PTR(err);
 }
@@ -432,8 +427,8 @@ next:
 }
 
 /*
- * Caller should grab and release a mutex by calling mutex_lock_op() and
- * mutex_unlock_op().
+ * Caller should grab and release a rwsem by calling f2fs_lock_op() and
+ * f2fs_unlock_op().
  */
 int __f2fs_add_link(struct inode *dir, const struct qstr *name, struct inode *inode)
 {
@@ -461,7 +456,7 @@ int __f2fs_add_link(struct inode *dir, const struct qstr *name, struct inode *in
 	}
 
 start:
-	if (current_depth == MAX_DIR_HASH_DEPTH)
+	if (unlikely(current_depth == MAX_DIR_HASH_DEPTH))
 		return -ENOSPC;
 
 	/* Increase the depth, if required */
