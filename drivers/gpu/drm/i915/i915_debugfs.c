@@ -40,8 +40,6 @@
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
 
-#if defined(CONFIG_DEBUG_FS)
-
 enum {
 	ACTIVE_LIST,
 	INACTIVE_LIST,
@@ -564,10 +562,12 @@ static int i915_gem_seqno_info(struct seq_file *m, void *data)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	for_each_ring(ring, dev_priv, i)
 		i915_ring_seqno_info(m, ring);
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
@@ -585,6 +585,7 @@ static int i915_interrupt_info(struct seq_file *m, void *data)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	if (INTEL_INFO(dev)->gen >= 8) {
 		int i;
@@ -711,6 +712,7 @@ static int i915_interrupt_info(struct seq_file *m, void *data)
 		}
 		i915_ring_seqno_info(m, ring);
 	}
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
@@ -904,9 +906,11 @@ static int i915_rstdby_delays(struct seq_file *m, void *unused)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	crstanddelay = I915_READ16(CRSTANDVID);
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	seq_printf(m, "w/ctx: %d, w/o ctx: %d\n", (crstanddelay >> 8) & 0x3f, (crstanddelay & 0x3f));
@@ -919,7 +923,9 @@ static int i915_cur_delayinfo(struct seq_file *m, void *unused)
 	struct drm_info_node *node = (struct drm_info_node *) m->private;
 	struct drm_device *dev = node->minor->dev;
 	drm_i915_private_t *dev_priv = dev->dev_private;
-	int ret;
+	int ret = 0;
+
+	intel_runtime_pm_get(dev_priv);
 
 	flush_delayed_work(&dev_priv->rps.delayed_resume_work);
 
@@ -945,7 +951,7 @@ static int i915_cur_delayinfo(struct seq_file *m, void *unused)
 		/* RPSTAT1 is in the GT power well */
 		ret = mutex_lock_interruptible(&dev->struct_mutex);
 		if (ret)
-			return ret;
+			goto out;
 
 		gen6_gt_force_wake_get(dev_priv, FORCEWAKE_ALL);
 
@@ -1033,7 +1039,9 @@ static int i915_cur_delayinfo(struct seq_file *m, void *unused)
 		seq_puts(m, "no P-state info available\n");
 	}
 
-	return 0;
+out:
+	intel_runtime_pm_put(dev_priv);
+	return ret;
 }
 
 static int i915_delayfreq_table(struct seq_file *m, void *unused)
@@ -1047,12 +1055,15 @@ static int i915_delayfreq_table(struct seq_file *m, void *unused)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	for (i = 0; i < 16; i++) {
 		delayfreq = I915_READ(PXVFREQ_BASE + i * 4);
 		seq_printf(m, "P%02dVIDFREQ: 0x%08x (VID: %d)\n", i, delayfreq,
 			   (delayfreq & PXVFREQ_PX_MASK) >> PXVFREQ_PX_SHIFT);
 	}
+
+	intel_runtime_pm_put(dev_priv);
 
 	mutex_unlock(&dev->struct_mutex);
 
@@ -1075,12 +1086,14 @@ static int i915_inttoext_table(struct seq_file *m, void *unused)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	for (i = 1; i <= 32; i++) {
 		inttoext = I915_READ(INTTOEXT_BASE_ILK + i * 4);
 		seq_printf(m, "INTTOEXT%02d: 0x%08x\n", i, inttoext);
 	}
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
@@ -1098,11 +1111,13 @@ static int ironlake_drpc_info(struct seq_file *m)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	rgvmodectl = I915_READ(MEMMODECTL);
 	rstdbyctl = I915_READ(RSTDBYCTL);
 	crstandvid = I915_READ16(CRSTANDVID);
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	seq_printf(m, "HD boost: %s\n", (rgvmodectl & MEMMODE_BOOST_EN) ?
@@ -1166,6 +1181,7 @@ static int gen6_drpc_info(struct seq_file *m)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	spin_lock_irq(&dev_priv->uncore.lock);
 	forcewake_count = dev_priv->uncore.forcewake_count;
@@ -1190,6 +1206,8 @@ static int gen6_drpc_info(struct seq_file *m)
 	mutex_lock(&dev_priv->rps.hw_lock);
 	sandybridge_pcode_read(dev_priv, GEN6_PCODE_READ_RC6VIDS, &rc6vids);
 	mutex_unlock(&dev_priv->rps.hw_lock);
+
+	intel_runtime_pm_put(dev_priv);
 
 	seq_printf(m, "Video Turbo Mode: %s\n",
 		   yesno(rpmodectl1 & GEN6_RP_MEDIA_TURBO));
@@ -1405,6 +1423,7 @@ static int i915_ring_freq_table(struct seq_file *m, void *unused)
 	ret = mutex_lock_interruptible(&dev_priv->rps.hw_lock);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	seq_puts(m, "GPU freq (MHz)\tEffective CPU freq (MHz)\tEffective Ring freq (MHz)\n");
 
@@ -1421,6 +1440,7 @@ static int i915_ring_freq_table(struct seq_file *m, void *unused)
 			   ((ia_freq >> 8) & 0xff) * 100);
 	}
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev_priv->rps.hw_lock);
 
 	return 0;
@@ -1436,8 +1456,10 @@ static int i915_gfxec(struct seq_file *m, void *unused)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	seq_printf(m, "GFXEC: %ld\n", (unsigned long)I915_READ(0x112f4));
+	intel_runtime_pm_put(dev_priv);
 
 	mutex_unlock(&dev->struct_mutex);
 
@@ -1617,6 +1639,7 @@ static int i915_swizzle_info(struct seq_file *m, void *data)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	seq_printf(m, "bit6 swizzle for X-tiling = %s\n",
 		   swizzle_string(dev_priv->mm.bit_6_swizzle_x));
@@ -1648,6 +1671,7 @@ static int i915_swizzle_info(struct seq_file *m, void *data)
 		seq_printf(m, "DISP_ARB_CTL = 0x%08x\n",
 			   I915_READ(DISP_ARB_CTL));
 	}
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
@@ -1708,16 +1732,19 @@ static int i915_ppgtt_info(struct seq_file *m, void *data)
 {
 	struct drm_info_node *node = (struct drm_info_node *) m->private;
 	struct drm_device *dev = node->minor->dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
 
 	int ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	if (INTEL_INFO(dev)->gen >= 8)
 		gen8_ppgtt_info(m, dev);
 	else if (INTEL_INFO(dev)->gen >= 6)
 		gen6_ppgtt_info(m, dev);
 
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
@@ -1791,6 +1818,8 @@ static int i915_edp_psr_status(struct seq_file *m, void *data)
 	u32 psrperf = 0;
 	bool enabled = false;
 
+	intel_runtime_pm_get(dev_priv);
+
 	seq_printf(m, "Sink_Support: %s\n", yesno(dev_priv->psr.sink_support));
 	seq_printf(m, "Source_OK: %s\n", yesno(dev_priv->psr.source_ok));
 
@@ -1803,6 +1832,7 @@ static int i915_edp_psr_status(struct seq_file *m, void *data)
 			EDP_PSR_PERF_CNT_MASK;
 	seq_printf(m, "Performance_Counter: %u\n", psrperf);
 
+	intel_runtime_pm_put(dev_priv);
 	return 0;
 }
 
@@ -2085,8 +2115,8 @@ static int i915_pipe_crc_create(struct dentry *root, struct drm_minor *minor,
 	info->dev = dev;
 	ent = debugfs_create_file(info->name, S_IRUGO, root, info,
 				  &i915_pipe_crc_fops);
-	if (IS_ERR(ent))
-		return PTR_ERR(ent);
+	if (!ent)
+		return -ENOMEM;
 
 	return drm_add_fake_info_node(minor, ent, info);
 }
@@ -3016,8 +3046,11 @@ i915_cache_sharing_get(void *data, u64 *val)
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
+	intel_runtime_pm_get(dev_priv);
 
 	snpcr = I915_READ(GEN6_MBCUNIT_SNPCR);
+
+	intel_runtime_pm_put(dev_priv);
 	mutex_unlock(&dev_priv->dev->struct_mutex);
 
 	*val = (snpcr & GEN6_MBC_SNPCR_MASK) >> GEN6_MBC_SNPCR_SHIFT;
@@ -3038,6 +3071,7 @@ i915_cache_sharing_set(void *data, u64 val)
 	if (val > 3)
 		return -EINVAL;
 
+	intel_runtime_pm_get(dev_priv);
 	DRM_DEBUG_DRIVER("Manually setting uncore sharing to %llu\n", val);
 
 	/* Update the cache sharing policy here as well */
@@ -3046,6 +3080,7 @@ i915_cache_sharing_set(void *data, u64 val)
 	snpcr |= (val << GEN6_MBC_SNPCR_SHIFT);
 	I915_WRITE(GEN6_MBCUNIT_SNPCR, snpcr);
 
+	intel_runtime_pm_put(dev_priv);
 	return 0;
 }
 
@@ -3061,6 +3096,7 @@ static int i915_forcewake_open(struct inode *inode, struct file *file)
 	if (INTEL_INFO(dev)->gen < 6)
 		return 0;
 
+	intel_runtime_pm_get(dev_priv);
 	gen6_gt_force_wake_get(dev_priv, FORCEWAKE_ALL);
 
 	return 0;
@@ -3075,6 +3111,7 @@ static int i915_forcewake_release(struct inode *inode, struct file *file)
 		return 0;
 
 	gen6_gt_force_wake_put(dev_priv, FORCEWAKE_ALL);
+	intel_runtime_pm_put(dev_priv);
 
 	return 0;
 }
@@ -3094,8 +3131,8 @@ static int i915_forcewake_create(struct dentry *root, struct drm_minor *minor)
 				  S_IRUSR,
 				  root, dev,
 				  &i915_forcewake_fops);
-	if (IS_ERR(ent))
-		return PTR_ERR(ent);
+	if (!ent)
+		return -ENOMEM;
 
 	return drm_add_fake_info_node(minor, ent, &i915_forcewake_fops);
 }
@@ -3112,8 +3149,8 @@ static int i915_debugfs_create(struct dentry *root,
 				  S_IRUGO | S_IWUSR,
 				  root, dev,
 				  fops);
-	if (IS_ERR(ent))
-		return PTR_ERR(ent);
+	if (!ent)
+		return -ENOMEM;
 
 	return drm_add_fake_info_node(minor, ent, fops);
 }
@@ -3243,5 +3280,3 @@ void i915_debugfs_cleanup(struct drm_minor *minor)
 		drm_debugfs_remove_files(info_list, 1, minor);
 	}
 }
-
-#endif /* CONFIG_DEBUG_FS */
