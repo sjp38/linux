@@ -1,3 +1,4 @@
+
 #ifndef _LINUX_FTRACE_EVENT_H
 #define _LINUX_FTRACE_EVENT_H
 
@@ -264,6 +265,8 @@ enum {
 	FTRACE_EVENT_FL_NO_SET_FILTER_BIT,
 	FTRACE_EVENT_FL_SOFT_MODE_BIT,
 	FTRACE_EVENT_FL_SOFT_DISABLED_BIT,
+	FTRACE_EVENT_FL_TRIGGER_MODE_BIT,
+	FTRACE_EVENT_FL_TRIGGER_COND_BIT,
 };
 
 /*
@@ -275,6 +278,8 @@ enum {
  *  SOFT_MODE     - The event is enabled/disabled by SOFT_DISABLED
  *  SOFT_DISABLED - When set, do not trace the event (even though its
  *                   tracepoint may be enabled)
+ *  TRIGGER_MODE  - When set, invoke the triggers associated with the event
+ *  TRIGGER_COND  - When set, one or more triggers has an associated filter
  */
 enum {
 	FTRACE_EVENT_FL_ENABLED		= (1 << FTRACE_EVENT_FL_ENABLED_BIT),
@@ -283,6 +288,8 @@ enum {
 	FTRACE_EVENT_FL_NO_SET_FILTER	= (1 << FTRACE_EVENT_FL_NO_SET_FILTER_BIT),
 	FTRACE_EVENT_FL_SOFT_MODE	= (1 << FTRACE_EVENT_FL_SOFT_MODE_BIT),
 	FTRACE_EVENT_FL_SOFT_DISABLED	= (1 << FTRACE_EVENT_FL_SOFT_DISABLED_BIT),
+	FTRACE_EVENT_FL_TRIGGER_MODE	= (1 << FTRACE_EVENT_FL_TRIGGER_MODE_BIT),
+	FTRACE_EVENT_FL_TRIGGER_COND	= (1 << FTRACE_EVENT_FL_TRIGGER_COND_BIT),
 };
 
 struct ftrace_event_file {
@@ -292,6 +299,7 @@ struct ftrace_event_file {
 	struct dentry			*dir;
 	struct trace_array		*tr;
 	struct ftrace_subsystem_dir	*system;
+	struct list_head		triggers;
 
 	/*
 	 * 32 bit flags:
@@ -299,6 +307,7 @@ struct ftrace_event_file {
 	 *   bit 1:		enabled cmd record
 	 *   bit 2:		enable/disable with the soft disable bit
 	 *   bit 3:		soft disabled
+	 *   bit 4:		trigger enabled
 	 *
 	 * Note: The bits must be set atomically to prevent races
 	 * from other writers. Reads of flags do not need to be in
@@ -310,6 +319,7 @@ struct ftrace_event_file {
 	 */
 	unsigned long		flags;
 	atomic_t		sm_ref;	/* soft-mode reference counter */
+	atomic_t		tm_ref;	/* trigger-mode reference counter */
 };
 
 #define __TRACE_EVENT_FLAGS(name, value)				\
@@ -337,6 +347,14 @@ struct ftrace_event_file {
 
 #define MAX_FILTER_STR_VAL	256	/* Should handle KSYM_SYMBOL_LEN */
 
+enum event_trigger_type {
+	ETT_NONE		= (0),
+	ETT_TRACE_ONOFF		= (1 << 0),
+	ETT_SNAPSHOT		= (1 << 1),
+	ETT_STACKTRACE		= (1 << 2),
+	ETT_EVENT_ENABLE	= (1 << 3),
+};
+
 extern void destroy_preds(struct ftrace_event_file *file);
 extern void destroy_call_preds(struct ftrace_event_call *call);
 extern int filter_match_preds(struct event_filter *filter, void *rec);
@@ -347,6 +365,10 @@ extern int filter_check_discard(struct ftrace_event_file *file, void *rec,
 extern int call_filter_check_discard(struct ftrace_event_call *call, void *rec,
 				     struct ring_buffer *buffer,
 				     struct ring_buffer_event *event);
+extern enum event_trigger_type event_triggers_call(struct ftrace_event_file *file,
+						   void *rec);
+extern void event_triggers_post_call(struct ftrace_event_file *file,
+				     enum event_trigger_type tt);
 
 enum {
 	FILTER_OTHER = 0,
