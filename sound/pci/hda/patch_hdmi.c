@@ -1496,10 +1496,13 @@ static bool hdmi_present_sense(struct hdmi_spec_per_pin *per_pin, int repoll)
 	 * specification worked this way. Hence, we just ignore the data in
 	 * the unsolicited response to avoid custom WARs.
 	 */
-	int present = snd_hda_pin_sense(codec, pin_nid);
+	int present;
 	bool update_eld = false;
 	bool eld_changed = false;
 	bool ret;
+
+	snd_hda_power_up(codec);
+	present = snd_hda_pin_sense(codec, pin_nid);
 
 	mutex_lock(&per_pin->lock);
 	pin_eld->monitor_present = !!(present & AC_PINSENSE_PRESENCE);
@@ -1573,6 +1576,7 @@ static bool hdmi_present_sense(struct hdmi_spec_per_pin *per_pin, int repoll)
 		jack->block_report = !ret;
 
 	mutex_unlock(&per_pin->lock);
+	snd_hda_power_down(codec);
 	return ret;
 }
 
@@ -1693,21 +1697,6 @@ static int hdmi_parse_codec(struct hda_codec *codec)
 			break;
 		}
 	}
-
-#ifdef CONFIG_PM
-	/* We're seeing some problems with unsolicited hot plug events on
-	 * PantherPoint after S3, if this is not enabled */
-	if (codec->vendor_id == 0x80862806)
-		codec->bus->power_keep_link_on = 1;
-	/*
-	 * G45/IbexPeak don't support EPSS: the unsolicited pin hot plug event
-	 * can be lost and presence sense verb will become inaccurate if the
-	 * HDA link is powered off at hot plug or hw initialization time.
-	 */
-	else if (!(snd_hda_param_read(codec, codec->afg, AC_PAR_POWER_STATE) &
-	      AC_PWRST_EPSS))
-		codec->bus->power_keep_link_on = 1;
-#endif
 
 	return 0;
 }
@@ -2263,6 +2252,10 @@ static int patch_generic_hdmi(struct hda_codec *codec)
 	if (is_haswell(codec)) {
 		intel_haswell_enable_all_pins(codec, true);
 		intel_haswell_fixup_enable_dp12(codec);
+	}
+
+	if (is_haswell(codec) || is_valleyview(codec)) {
+		codec->depop_delay = 0;
 	}
 
 	if (hdmi_parse_codec(codec) < 0) {
@@ -3216,6 +3209,15 @@ static int patch_via_hdmi(struct hda_codec *codec)
 {
 	return patch_simple_hdmi(codec, VIAHDMI_CVT_NID, VIAHDMI_PIN_NID);
 }
+
+/*
+ * called from hda_codec.c for generic HDMI support
+ */
+int snd_hda_parse_hdmi_codec(struct hda_codec *codec)
+{
+	return patch_generic_hdmi(codec);
+}
+EXPORT_SYMBOL_GPL(snd_hda_parse_hdmi_codec);
 
 /*
  * patch entries
