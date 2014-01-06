@@ -51,26 +51,6 @@ static inline unsigned int rt6_flags2srcprefs(int flags)
 	return (flags >> 3) & 7;
 }
 
-void rt6_bind_peer(struct rt6_info *rt, int create);
-
-static inline struct inet_peer *__rt6_get_peer(struct rt6_info *rt, int create)
-{
-	if (rt6_has_peer(rt))
-		return rt6_peer_ptr(rt);
-
-	rt6_bind_peer(rt, create);
-	return (rt6_has_peer(rt) ? rt6_peer_ptr(rt) : NULL);
-}
-
-static inline struct inet_peer *rt6_get_peer(struct rt6_info *rt)
-{
-	return __rt6_get_peer(rt, 0);
-}
-
-static inline struct inet_peer *rt6_get_peer_create(struct rt6_info *rt)
-{
-	return __rt6_get_peer(rt, 1);
-}
 
 void ip6_route_input(struct sk_buff *skb);
 
@@ -178,8 +158,13 @@ static inline int ip6_skb_dst_mtu(struct sk_buff *skb)
 {
 	struct ipv6_pinfo *np = skb->sk ? inet6_sk(skb->sk) : NULL;
 
-	return (np && np->pmtudisc == IPV6_PMTUDISC_PROBE) ?
+	return (np && np->pmtudisc >= IPV6_PMTUDISC_PROBE) ?
 	       skb_dst(skb)->dev->mtu : dst_mtu(skb_dst(skb));
+}
+
+static inline bool ip6_sk_accept_pmtu(const struct sock *sk)
+{
+	return inet6_sk(sk)->pmtudisc != IPV6_PMTUDISC_INTERFACE;
 }
 
 static inline struct in6_addr *rt6_nexthop(struct rt6_info *rt)

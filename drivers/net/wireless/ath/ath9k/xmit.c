@@ -174,14 +174,7 @@ static void ath_txq_skb_done(struct ath_softc *sc, struct ath_txq *txq,
 static struct ath_atx_tid *
 ath_get_skb_tid(struct ath_softc *sc, struct ath_node *an, struct sk_buff *skb)
 {
-	struct ieee80211_hdr *hdr;
-	u8 tidno = 0;
-
-	hdr = (struct ieee80211_hdr *) skb->data;
-	if (ieee80211_is_data_qos(hdr->frame_control))
-		tidno = ieee80211_get_qos_ctl(hdr)[0];
-
-	tidno &= IEEE80211_QOS_CTL_TID_MASK;
+	u8 tidno = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 	return ATH_AN_2_TID(an, tidno);
 }
 
@@ -1790,6 +1783,9 @@ bool ath_drain_all_txq(struct ath_softc *sc)
 		if (!ATH_TXQ_SETUP(sc, i))
 			continue;
 
+		if (!sc->tx.txq[i].axq_depth)
+			continue;
+
 		if (ath9k_hw_numtxpending(ah, sc->tx.txq[i].axq_qnum))
 			npend |= BIT(i);
 	}
@@ -2753,6 +2749,8 @@ void ath_tx_node_cleanup(struct ath_softc *sc, struct ath_node *an)
 	}
 }
 
+#ifdef CONFIG_ATH9K_TX99
+
 int ath9k_tx99_send(struct ath_softc *sc, struct sk_buff *skb,
 		    struct ath_tx_control *txctl)
 {
@@ -2795,3 +2793,5 @@ int ath9k_tx99_send(struct ath_softc *sc, struct sk_buff *skb,
 
 	return 0;
 }
+
+#endif /* CONFIG_ATH9K_TX99 */

@@ -235,11 +235,6 @@ int tipc_node_active_links(struct tipc_node *n_ptr)
 	return n_ptr->active_links[0] != NULL;
 }
 
-int tipc_node_redundant_links(struct tipc_node *n_ptr)
-{
-	return n_ptr->working_links > 1;
-}
-
 int tipc_node_is_up(struct tipc_node *n_ptr)
 {
 	return tipc_node_active_links(n_ptr);
@@ -291,11 +286,7 @@ static void node_lost_contact(struct tipc_node *n_ptr)
 
 	/* Flush broadcast link info associated with lost node */
 	if (n_ptr->bclink.recv_permitted) {
-		while (n_ptr->bclink.deferred_head) {
-			struct sk_buff *buf = n_ptr->bclink.deferred_head;
-			n_ptr->bclink.deferred_head = buf->next;
-			kfree_skb(buf);
-		}
+		kfree_skb_list(n_ptr->bclink.deferred_head);
 		n_ptr->bclink.deferred_size = 0;
 
 		if (n_ptr->bclink.reasm_head) {

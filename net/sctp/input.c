@@ -23,9 +23,8 @@
  * See the GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GNU CC; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with GNU CC; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
  *
  * Please send any bug reports or fixes you make to the
  * email address(es):
@@ -120,7 +119,7 @@ int sctp_rcv(struct sk_buff *skb)
 	struct sctp_af *af;
 	struct net *net = dev_net(skb->dev);
 
-	if (skb->pkt_type!=PACKET_HOST)
+	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
 
 	SCTP_INC_STATS_BH(net, SCTP_MIB_INSCTPPACKS);
@@ -181,8 +180,7 @@ int sctp_rcv(struct sk_buff *skb)
 	 * If a frame arrives on an interface and the receiving socket is
 	 * bound to another interface, via SO_BINDTODEVICE, treat it as OOTB
 	 */
-	if (sk->sk_bound_dev_if && (sk->sk_bound_dev_if != af->skb_iif(skb)))
-	{
+	if (sk->sk_bound_dev_if && (sk->sk_bound_dev_if != af->skb_iif(skb))) {
 		if (asoc) {
 			sctp_association_put(asoc);
 			asoc = NULL;
@@ -537,8 +535,7 @@ struct sock *sctp_err_lookup(struct net *net, int family, struct sk_buff *skb,
 	return sk;
 
 out:
-	if (asoc)
-		sctp_association_put(asoc);
+	sctp_association_put(asoc);
 	return NULL;
 }
 
@@ -546,8 +543,7 @@ out:
 void sctp_err_finish(struct sock *sk, struct sctp_association *asoc)
 {
 	sctp_bh_unlock_sock(sk);
-	if (asoc)
-		sctp_association_put(asoc);
+	sctp_association_put(asoc);
 }
 
 /*
@@ -613,8 +609,7 @@ void sctp_v4_err(struct sk_buff *skb, __u32 info)
 		if (ICMP_FRAG_NEEDED == code) {
 			sctp_icmp_frag_needed(sk, asoc, transport, info);
 			goto out_unlock;
-		}
-		else {
+		} else {
 			if (ICMP_PROT_UNREACH == code) {
 				sctp_icmp_proto_unreachable(sk, asoc,
 							    transport);
@@ -1058,31 +1053,31 @@ static struct sctp_association *__sctp_rcv_walk_lookup(struct net *net,
 		if (ch_end > skb_tail_pointer(skb))
 			break;
 
-		switch(ch->type) {
-		    case SCTP_CID_AUTH:
-			    have_auth = chunk_num;
-			    break;
+		switch (ch->type) {
+		case SCTP_CID_AUTH:
+			have_auth = chunk_num;
+			break;
 
-		    case SCTP_CID_COOKIE_ECHO:
-			    /* If a packet arrives containing an AUTH chunk as
-			     * a first chunk, a COOKIE-ECHO chunk as the second
-			     * chunk, and possibly more chunks after them, and
-			     * the receiver does not have an STCB for that
-			     * packet, then authentication is based on
-			     * the contents of the COOKIE- ECHO chunk.
-			     */
-			    if (have_auth == 1 && chunk_num == 2)
-				    return NULL;
-			    break;
+		case SCTP_CID_COOKIE_ECHO:
+			/* If a packet arrives containing an AUTH chunk as
+			 * a first chunk, a COOKIE-ECHO chunk as the second
+			 * chunk, and possibly more chunks after them, and
+			 * the receiver does not have an STCB for that
+			 * packet, then authentication is based on
+			 * the contents of the COOKIE- ECHO chunk.
+			 */
+			if (have_auth == 1 && chunk_num == 2)
+				return NULL;
+			break;
 
-		    case SCTP_CID_ASCONF:
-			    if (have_auth || net->sctp.addip_noauth)
-				    asoc = __sctp_rcv_asconf_lookup(
-							net, ch, laddr,
-							sctp_hdr(skb)->source,
-							transportp);
-		    default:
-			    break;
+		case SCTP_CID_ASCONF:
+			if (have_auth || net->sctp.addip_noauth)
+				asoc = __sctp_rcv_asconf_lookup(
+						net, ch, laddr,
+						sctp_hdr(skb)->source,
+						transportp);
+		default:
+			break;
 		}
 
 		if (asoc)
@@ -1119,19 +1114,10 @@ static struct sctp_association *__sctp_rcv_lookup_harder(struct net *net,
 		return NULL;
 
 	/* If this is INIT/INIT-ACK look inside the chunk too. */
-	switch (ch->type) {
-	case SCTP_CID_INIT:
-	case SCTP_CID_INIT_ACK:
+	if (ch->type == SCTP_CID_INIT || ch->type == SCTP_CID_INIT_ACK)
 		return __sctp_rcv_init_lookup(net, skb, laddr, transportp);
-		break;
 
-	default:
-		return __sctp_rcv_walk_lookup(net, skb, laddr, transportp);
-		break;
-	}
-
-
-	return NULL;
+	return __sctp_rcv_walk_lookup(net, skb, laddr, transportp);
 }
 
 /* Lookup an association for an inbound skb. */

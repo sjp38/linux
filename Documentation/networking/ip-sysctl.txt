@@ -15,12 +15,18 @@ ip_default_ttl - INTEGER
 	forwarded) IP packets. Should be between 1 and 255 inclusive.
 	Default: 64 (as recommended by RFC1700)
 
-ip_no_pmtu_disc - BOOLEAN
-	Disable Path MTU Discovery. If enabled and a
+ip_no_pmtu_disc - INTEGER
+	Disable Path MTU Discovery. If enabled in mode 1 and a
 	fragmentation-required ICMP is received, the PMTU to this
 	destination will be set to min_pmtu (see below). You will need
 	to raise min_pmtu to the smallest interface MTU on your system
 	manually if you want to avoid locally generated fragments.
+
+	In mode 2 incoming Path MTU Discovery messages will be
+	discarded. Outgoing frames are handled the same as in mode 1,
+	implicitly setting IP_PMTUDISC_DONT on every created socket.
+
+	Possible values: 0-2
 	Default: FALSE
 
 min_pmtu - INTEGER
@@ -159,6 +165,16 @@ tcp_app_win - INTEGER
 	Reserve max(window/2^tcp_app_win, mss) of window for application
 	buffer. Value 0 is special, it means that nothing is reserved.
 	Default: 31
+
+tcp_autocorking - BOOLEAN
+	Enable TCP auto corking :
+	When applications do consecutive small write()/sendmsg() system calls,
+	we try to coalesce these small writes as much as possible, to lower
+	total amount of sent packets. This is done if at least one prior
+	packet for the flow is waiting in Qdisc queues or device transmit
+	queue. Applications can still use TCP_CORK for optimal behavior
+	when they know how/when to uncork their sockets.
+	Default : 1
 
 tcp_available_congestion_control - STRING
 	Shows the available congestion control choices that are registered.
