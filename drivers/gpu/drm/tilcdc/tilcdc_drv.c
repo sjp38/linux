@@ -311,7 +311,7 @@ static void tilcdc_lastclose(struct drm_device *dev)
 	drm_fbdev_cma_restore_mode(priv->fbdev);
 }
 
-static irqreturn_t tilcdc_irq(DRM_IRQ_ARGS)
+static irqreturn_t tilcdc_irq(int irq, void *arg)
 {
 	struct drm_device *dev = arg;
 	struct tilcdc_drm_private *priv = dev->dev_private;
@@ -594,7 +594,7 @@ static int tilcdc_pdev_probe(struct platform_device *pdev)
 
 static int tilcdc_pdev_remove(struct platform_device *pdev)
 {
-	drm_platform_exit(&tilcdc_driver, pdev);
+	drm_put_dev(platform_get_drvdata(pdev));
 
 	return 0;
 }
