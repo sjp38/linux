@@ -677,7 +677,6 @@ static int mxc_nand_correct_data_v2_v3(struct mtd_info *mtd, u_char *dat,
 		ecc_stat >>= 4;
 	} while (--no_subpages);
 
-	mtd->ecc_stats.corrected += ret;
 	pr_debug("%d Symbol Correctable RS-ECC Error\n", ret);
 
 	return ret;
@@ -1512,7 +1511,9 @@ static int mxcnd_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	clk_prepare_enable(host->clk);
+	err = clk_prepare_enable(host->clk);
+	if (err)
+		return err;
 	host->clk_act = 1;
 
 	/*
@@ -1576,6 +1577,8 @@ static int mxcnd_remove(struct platform_device *pdev)
 	struct mxc_nand_host *host = platform_get_drvdata(pdev);
 
 	nand_release(&host->mtd);
+	if (host->clk_act)
+		clk_disable_unprepare(host->clk);
 
 	return 0;
 }
