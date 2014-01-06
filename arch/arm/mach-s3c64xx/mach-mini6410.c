@@ -40,6 +40,7 @@
 #include <plat/regs-serial.h>
 #include <plat/sdhci.h>
 #include <linux/platform_data/touchscreen-s3c2410.h>
+#include <linux/platform_data/gpio-samsung-s3c64xx.h>
 
 #include <video/platform_lcd.h>
 #include <video/samsung_fimd.h>

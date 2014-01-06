@@ -27,6 +27,12 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/of_address.h>
+#ifdef CONFIG_ARCH_S3C24XX
+#include <linux/platform_data/gpio-samsung-s3c24xx.h>
+#endif
+#ifdef CONFIG_ARCH_S3C64XX
+#include <linux/platform_data/gpio-samsung-s3c64xx.h>
+#endif
 
 #include <asm/irq.h>
 
@@ -1053,7 +1059,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base			= S3C2410_GPA(0),
 			.owner			= THIS_MODULE,
 			.label			= "GPIOA",
-			.ngpio			= 24,
+			.ngpio			= 27,
 			.direction_input	= s3c24xx_gpiolib_banka_input,
 			.direction_output	= s3c24xx_gpiolib_banka_output,
 		},
@@ -1062,7 +1068,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base	= S3C2410_GPB(0),
 			.owner	= THIS_MODULE,
 			.label	= "GPIOB",
-			.ngpio	= 16,
+			.ngpio	= 11,
 		},
 	}, {
 		.chip	= {
@@ -1107,7 +1113,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base	= S3C2410_GPH(0),
 			.owner	= THIS_MODULE,
 			.label	= "GPIOH",
-			.ngpio	= 11,
+			.ngpio	= 15,
 		},
 	},
 		/* GPIOS for the S3C2443 and later devices. */
