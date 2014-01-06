@@ -103,11 +103,6 @@ xdr_error:					\
 	(x) = (u64)ntohl(*p++) << 32;		\
 	(x) |= ntohl(*p++);			\
 } while (0)
-#define READTIME(x)       do {			\
-	p++;					\
-	(x) = ntohl(*p++);			\
-	p++;					\
-} while (0)
 #define READMEM(x,nbytes) do {			\
 	x = (char *)p;				\
 	p += XDR_QUADLEN(nbytes);		\
@@ -190,6 +185,15 @@ static int zero_clientid(clientid_t *clid)
 	return (clid->cl_boot == 0) && (clid->cl_id == 0);
 }
 
+/**
+ * defer_free - mark an allocation as deferred freed
+ * @argp: NFSv4 compound argument structure to be freed with
+ * @release: release callback to free @p, typically kfree()
+ * @p: pointer to be freed
+ *
+ * Marks @p to be freed when processing the compound operation
+ * described in @argp finishes.
+ */
 static int
 defer_free(struct nfsd4_compoundargs *argp,
 		void (*release)(const void *), void *p)
@@ -206,6 +210,16 @@ defer_free(struct nfsd4_compoundargs *argp,
 	return 0;
 }
 
+/**
+ * savemem - duplicate a chunk of memory for later processing
+ * @argp: NFSv4 compound argument structure to be freed with
+ * @p: pointer to be duplicated
+ * @nbytes: length to be duplicated
+ *
+ * Returns a pointer to a copy of @nbytes bytes of memory at @p
+ * that are preserved until processing of the NFSv4 compound
+ * operation described by @argp finishes.
+ */
 static char *savemem(struct nfsd4_compoundargs *argp, __be32 *p, int nbytes)
 {
 	if (p == argp->tmp) {
@@ -257,7 +271,6 @@ nfsd4_decode_fattr(struct nfsd4_compoundargs *argp, u32 *bmval,
 	int expected_len, len = 0;
 	u32 dummy32;
 	char *buf;
-	int host_err;
 
 	DECODE_HEAD;
 	iattr->ia_valid = 0;
@@ -284,10 +297,9 @@ nfsd4_decode_fattr(struct nfsd4_compoundargs *argp, u32 *bmval,
 			return nfserr_resource;
 
 		*acl = nfs4_acl_new(nace);
-		if (*acl == NULL) {
-			host_err = -ENOMEM;
-			goto out_nfserr;
-		}
+		if (*acl == NULL)
+			return nfserr_jukebox;
+
 		defer_free(argp, kfree, *acl);
 
 		(*acl)->naces = nace;
@@ -425,10 +437,6 @@ nfsd4_decode_fattr(struct nfsd4_compoundargs *argp, u32 *bmval,
 		goto xdr_error;
 
 	DECODE_TAIL;
-
-out_nfserr:
-	status = nfserrno(host_err);
-	goto out;
 }
 
 static __be32
@@ -3244,7 +3252,7 @@ nfsd4_do_encode_secinfo(struct nfsd4_compoundres *resp,
 
 		if (rpcauth_get_gssinfo(pf, &info) == 0) {
 			supported++;
-			RESERVE_SPACE(4 + 4 + info.oid.len + 4 + 4);
+			RESERVE_SPACE(4 + 4 + XDR_LEN(info.oid.len) + 4 + 4);
 			WRITE32(RPC_AUTH_GSS);
 			WRITE32(info.oid.len);
 			WRITEMEM(info.oid.data, info.oid.len);
@@ -3379,34 +3387,42 @@ nfsd4_encode_exchange_id(struct nfsd4_compoundres *resp, __be32 nfserr,
 		8 /* eir_clientid */ +
 		4 /* eir_sequenceid */ +
 		4 /* eir_flags */ +
-		4 /* spr_how */ +
-		8 /* spo_must_enforce, spo_must_allow */ +
-		8 /* so_minor_id */ +
-		4 /* so_major_id.len */ +
-		(XDR_QUADLEN(major_id_sz) * 4) +
-		4 /* eir_server_scope.len */ +
-		(XDR_QUADLEN(server_scope_sz) * 4) +
-		4 /* eir_server_impl_id.count (0) */);
+		4 /* spr_how */);
 
 	WRITEMEM(&exid->clientid, 8);
 	WRITE32(exid->seqid);
 	WRITE32(exid->flags);
 
 	WRITE32(exid->spa_how);
+	ADJUST_ARGS();
+
 	switch (exid->spa_how) {
 	case SP4_NONE:
 		break;
 	case SP4_MACH_CRED:
+		/* spo_must_enforce, spo_must_allow */
+		RESERVE_SPACE(16);
+
 		/* spo_must_enforce bitmap: */
 		WRITE32(2);
 		WRITE32(nfs4_minimal_spo_must_enforce[0]);
 		WRITE32(nfs4_minimal_spo_must_enforce[1]);
 		/* empty spo_must_allow bitmap: */
 		WRITE32(0);
+
+		ADJUST_ARGS();
 		break;
 	default:
 		WARN_ON_ONCE(1);
 	}
+
+	RESERVE_SPACE(
+		8 /* so_minor_id */ +
+		4 /* so_major_id.len */ +
+		(XDR_QUADLEN(major_id_sz) * 4) +
+		4 /* eir_server_scope.len */ +
+		(XDR_QUADLEN(server_scope_sz) * 4) +
+		4 /* eir_server_impl_id.count (0) */);
 
 	/* The server_owner struct */
 	WRITE64(minor_id);      /* Minor id */
@@ -3471,28 +3487,6 @@ nfsd4_encode_create_session(struct nfsd4_compoundres *resp, __be32 nfserr,
 		ADJUST_ARGS();
 	}
 	return 0;
-}
-
-static __be32
-nfsd4_encode_destroy_session(struct nfsd4_compoundres *resp, __be32 nfserr,
-			     struct nfsd4_destroy_session *destroy_session)
-{
-	return nfserr;
-}
-
-static __be32
-nfsd4_encode_free_stateid(struct nfsd4_compoundres *resp, __be32 nfserr,
-			  struct nfsd4_free_stateid *free_stateid)
-{
-	__be32 *p;
-
-	if (nfserr)
-		return nfserr;
-
-	RESERVE_SPACE(4);
-	*p++ = nfserr;
-	ADJUST_ARGS();
-	return nfserr;
 }
 
 static __be32
@@ -3593,8 +3587,8 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 	[OP_BIND_CONN_TO_SESSION] = (nfsd4_enc)nfsd4_encode_bind_conn_to_session,
 	[OP_EXCHANGE_ID]	= (nfsd4_enc)nfsd4_encode_exchange_id,
 	[OP_CREATE_SESSION]	= (nfsd4_enc)nfsd4_encode_create_session,
-	[OP_DESTROY_SESSION]	= (nfsd4_enc)nfsd4_encode_destroy_session,
-	[OP_FREE_STATEID]	= (nfsd4_enc)nfsd4_encode_free_stateid,
+	[OP_DESTROY_SESSION]	= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_FREE_STATEID]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_GET_DIR_DELEGATION]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_noop,

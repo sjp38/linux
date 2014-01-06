@@ -999,6 +999,8 @@ static void init_session(struct svc_rqst *rqstp, struct nfsd4_session *new, stru
 	spin_unlock(&nn->client_lock);
 	memcpy(&new->se_fchannel, &cses->fore_channel,
 			sizeof(struct nfsd4_channel_attrs));
+	memcpy(&new->se_bchannel, &cses->back_channel,
+			sizeof(struct nfsd4_channel_attrs));
 	if (cses->flags & SESSION4_BACK_CHAN) {
 		struct sockaddr *sa = svc_addr(rqstp);
 		/*
@@ -1851,6 +1853,11 @@ static __be32 check_forechannel_attrs(struct nfsd4_channel_attrs *ca, struct nfs
 	return nfs_ok;
 }
 
+#define NFSD_CB_MAX_REQ_SZ	((NFS4_enc_cb_recall_sz + \
+				 RPC_MAX_HEADER_WITH_AUTH) * sizeof(__be32))
+#define NFSD_CB_MAX_RESP_SZ	((NFS4_dec_cb_recall_sz + \
+				 RPC_MAX_REPHEADER_WITH_AUTH) * sizeof(__be32))
+
 static __be32 check_backchannel_attrs(struct nfsd4_channel_attrs *ca)
 {
 	ca->headerpadsz = 0;
@@ -1861,9 +1868,9 @@ static __be32 check_backchannel_attrs(struct nfsd4_channel_attrs *ca)
 	 * less than 1k.  Tighten up this estimate in the unlikely event
 	 * it turns out to be a problem for some client:
 	 */
-	if (ca->maxreq_sz < NFS4_enc_cb_recall_sz + RPC_MAX_HEADER_WITH_AUTH)
+	if (ca->maxreq_sz < NFSD_CB_MAX_REQ_SZ)
 		return nfserr_toosmall;
-	if (ca->maxresp_sz < NFS4_dec_cb_recall_sz + RPC_MAX_REPHEADER_WITH_AUTH)
+	if (ca->maxresp_sz < NFSD_CB_MAX_RESP_SZ)
 		return nfserr_toosmall;
 	ca->maxresp_cached = 0;
 	if (ca->maxops < 2)
@@ -1913,7 +1920,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		return status;
 	status = check_backchannel_attrs(&cr_ses->back_channel);
 	if (status)
-		return status;
+		goto out_release_drc_mem;
 	status = nfserr_jukebox;
 	new = alloc_session(&cr_ses->fore_channel);
 	if (!new)
