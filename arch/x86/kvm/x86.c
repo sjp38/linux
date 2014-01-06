@@ -5834,6 +5834,11 @@ static void vcpu_scan_ioapic(struct kvm_vcpu *vcpu)
 	kvm_apic_update_tmr(vcpu, tmr);
 }
 
+/*
+ * Returns 1 to let __vcpu_run() continue the guest execution loop without
+ * exiting to the userspace.  Otherwise, the value will be returned to the
+ * userspace.
+ */
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
 	int r;
@@ -6089,7 +6094,7 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 		}
 		if (need_resched()) {
 			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-			kvm_resched(vcpu);
+			cond_resched();
 			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 		}
 	}
