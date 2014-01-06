@@ -62,7 +62,6 @@
 
 static grant_ref_t **gnttab_list;
 static unsigned int nr_grant_frames;
-static unsigned int boot_max_nr_grant_frames;
 static int gnttab_free_count;
 static grant_ref_t gnttab_free_head;
 static DEFINE_SPINLOCK(gnttab_list_lock);
@@ -827,6 +826,11 @@ static unsigned int __max_nr_grant_frames(void)
 unsigned int gnttab_max_grant_frames(void)
 {
 	unsigned int xen_max = __max_nr_grant_frames();
+	static unsigned int boot_max_nr_grant_frames;
+
+	/* First time, initialize it properly. */
+	if (!boot_max_nr_grant_frames)
+		boot_max_nr_grant_frames = __max_nr_grant_frames();
 
 	if (xen_max > boot_max_nr_grant_frames)
 		return boot_max_nr_grant_frames;
@@ -1135,10 +1139,8 @@ static void gnttab_request_version(void)
 	int rc;
 	struct gnttab_set_version gsv;
 
-	if (xen_hvm_domain())
-		gsv.version = 1;
-	else
-		gsv.version = 2;
+	gsv.version = 1;
+
 	rc = HYPERVISOR_grant_table_op(GNTTABOP_set_version, &gsv, 1);
 	if (rc == 0 && gsv.version == 2) {
 		grant_table_version = 2;
@@ -1169,22 +1171,17 @@ static int gnttab_setup(void)
 	if (max_nr_gframes < nr_grant_frames)
 		return -ENOSYS;
 
-	if (xen_pv_domain())
-		return gnttab_map(0, nr_grant_frames - 1);
-
-	if (gnttab_shared.addr == NULL) {
+	if (xen_feature(XENFEAT_auto_translated_physmap) && gnttab_shared.addr == NULL)
+	{
 		gnttab_shared.addr = xen_remap(xen_hvm_resume_frames,
-						PAGE_SIZE * max_nr_gframes);
+					       PAGE_SIZE * max_nr_gframes);
 		if (gnttab_shared.addr == NULL) {
 			pr_warn("Failed to ioremap gnttab share frames (addr=0x%08lx)!\n",
 					xen_hvm_resume_frames);
 			return -ENOMEM;
 		}
 	}
-
-	gnttab_map(0, nr_grant_frames - 1);
-
-	return 0;
+	return gnttab_map(0, nr_grant_frames - 1);
 }
 
 int gnttab_resume(void)
@@ -1227,13 +1224,12 @@ int gnttab_init(void)
 
 	gnttab_request_version();
 	nr_grant_frames = 1;
-	boot_max_nr_grant_frames = __max_nr_grant_frames();
 
 	/* Determine the maximum number of frames required for the
 	 * grant reference free list on the current hypervisor.
 	 */
 	BUG_ON(grefs_per_grant_frame == 0);
-	max_nr_glist_frames = (boot_max_nr_grant_frames *
+	max_nr_glist_frames = (gnttab_max_grant_frames() *
 			       grefs_per_grant_frame / RPP);
 
 	gnttab_list = kmalloc(max_nr_glist_frames * sizeof(grant_ref_t *),
