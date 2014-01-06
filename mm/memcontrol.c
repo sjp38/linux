@@ -49,7 +49,6 @@
 #include <linux/sort.h>
 #include <linux/fs.h>
 #include <linux/seq_file.h>
-#include <linux/vmalloc.h>
 #include <linux/vmpressure.h>
 #include <linux/mm_inline.h>
 #include <linux/page_cgroup.h>
@@ -380,12 +379,6 @@ struct mem_cgroup {
 	struct mem_cgroup_per_node *nodeinfo[0];
 	/* WARNING: nodeinfo must be the last member here */
 };
-
-static size_t memcg_size(void)
-{
-	return sizeof(struct mem_cgroup) +
-		nr_node_ids * sizeof(struct mem_cgroup_per_node *);
-}
 
 /* internal only representation about the status of kmem accounting. */
 enum {
@@ -1688,13 +1681,13 @@ static void move_unlock_mem_cgroup(struct mem_cgroup *memcg,
  */
 void mem_cgroup_print_oom_info(struct mem_cgroup *memcg, struct task_struct *p)
 {
+	/*
+	 * protects memcg_name and makes sure that parallel ooms do not
+	 * interleave
+	 */
+	static DEFINE_SPINLOCK(oom_info_lock);
 	struct cgroup *task_cgrp;
 	struct cgroup *mem_cgrp;
-	/*
-	 * Need a buffer in BSS, can't rely on allocations. The code relies
-	 * on the assumption that OOM is serialized for memory controller.
-	 * If this assumption is broken, revisit this code.
-	 */
 	static char memcg_name[PATH_MAX];
 	int ret;
 	struct mem_cgroup *iter;
@@ -1703,6 +1696,7 @@ void mem_cgroup_print_oom_info(struct mem_cgroup *memcg, struct task_struct *p)
 	if (!p)
 		return;
 
+	spin_lock(&oom_info_lock);
 	rcu_read_lock();
 
 	mem_cgrp = memcg->css.cgroup;
@@ -1771,6 +1765,7 @@ done:
 
 		pr_cont("\n");
 	}
+	spin_unlock(&oom_info_lock);
 }
 
 /*
@@ -1823,16 +1818,6 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	unsigned long totalpages;
 	unsigned int points = 0;
 	struct task_struct *chosen = NULL;
-
-	/*
-	 * If current has a pending SIGKILL or is exiting, then automatically
-	 * select it.  The goal is to allow it to allocate so that it may
-	 * quickly exit and free its memory.
-	 */
-	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
-		set_thread_flag(TIF_MEMDIE);
-		return;
-	}
 
 	check_panic_on_oom(CONSTRAINT_MEMCG, gfp_mask, order, NULL);
 	totalpages = mem_cgroup_get_limit(memcg) >> PAGE_SHIFT ? : 1;
@@ -2283,6 +2268,16 @@ bool mem_cgroup_oom_synchronize(bool handle)
 
 	if (!handle)
 		goto cleanup;
+
+	/*
+	 * If current has a pending SIGKILL or is exiting, then automatically
+	 * select it.  The goal is to allow it to allocate so that it may
+	 * quickly exit and free its memory.
+	 */
+	if (fatal_signal_pending(current) || current->flags & PF_EXITING) {
+		set_thread_flag(TIF_MEMDIE);
+		goto cleanup;
+	}
 
 	owait.memcg = memcg;
 	owait.wait.flags = 0;
@@ -2902,7 +2897,7 @@ struct mem_cgroup *try_get_mem_cgroup_from_page(struct page *page)
 	unsigned short id;
 	swp_entry_t ent;
 
-	VM_BUG_ON(!PageLocked(page));
+	VM_BUG_ON_PAGE(!PageLocked(page), page);
 
 	pc = lookup_page_cgroup(page);
 	lock_page_cgroup(pc);
@@ -2936,7 +2931,7 @@ static void __mem_cgroup_commit_charge(struct mem_cgroup *memcg,
 	bool anon;
 
 	lock_page_cgroup(pc);
-	VM_BUG_ON(PageCgroupUsed(pc));
+	VM_BUG_ON_PAGE(PageCgroupUsed(pc), page);
 	/*
 	 * we don't need page_cgroup_lock about tail pages, becase they are not
 	 * accessed by any other context at this point.
@@ -2971,7 +2966,7 @@ static void __mem_cgroup_commit_charge(struct mem_cgroup *memcg,
 	if (lrucare) {
 		if (was_on_lru) {
 			lruvec = mem_cgroup_zone_lruvec(zone, pc->mem_cgroup);
-			VM_BUG_ON(PageLRU(page));
+			VM_BUG_ON_PAGE(PageLRU(page), page);
 			SetPageLRU(page);
 			add_page_to_lru_list(page, lruvec, page_lru(page));
 		}
@@ -3000,7 +2995,8 @@ static DEFINE_MUTEX(set_limit_mutex);
 static inline bool memcg_can_account_kmem(struct mem_cgroup *memcg)
 {
 	return !mem_cgroup_disabled() && !mem_cgroup_is_root(memcg) &&
-		(memcg->kmem_account_flags & KMEM_ACCOUNTED_MASK);
+		(memcg->kmem_account_flags & KMEM_ACCOUNTED_MASK) ==
+							KMEM_ACCOUNTED_MASK;
 }
 
 /*
@@ -3126,7 +3122,7 @@ int memcg_cache_id(struct mem_cgroup *memcg)
  * But when we create a new cache, we can call this as well if its parent
  * is kmem-limited. That will have to hold set_limit_mutex as well.
  */
-int memcg_update_cache_sizes(struct mem_cgroup *memcg)
+static int memcg_update_cache_sizes(struct mem_cgroup *memcg)
 {
 	int num, ret;
 
@@ -3784,7 +3780,7 @@ void __memcg_kmem_uncharge_pages(struct page *page, int order)
 	if (!memcg)
 		return;
 
-	VM_BUG_ON(mem_cgroup_is_root(memcg));
+	VM_BUG_ON_PAGE(mem_cgroup_is_root(memcg), page);
 	memcg_uncharge_kmem(memcg, PAGE_SIZE << order);
 }
 #else
@@ -3863,7 +3859,7 @@ static int mem_cgroup_move_account(struct page *page,
 	bool anon = PageAnon(page);
 
 	VM_BUG_ON(from == to);
-	VM_BUG_ON(PageLRU(page));
+	VM_BUG_ON_PAGE(PageLRU(page), page);
 	/*
 	 * The page is isolated from LRU. So, collapse function
 	 * will not handle this page. But page splitting can happen.
@@ -3956,7 +3952,7 @@ static int mem_cgroup_move_parent(struct page *page,
 		parent = root_mem_cgroup;
 
 	if (nr_pages > 1) {
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 		flags = compound_lock_irqsave(page);
 	}
 
@@ -3990,7 +3986,7 @@ static int mem_cgroup_charge_common(struct page *page, struct mm_struct *mm,
 
 	if (PageTransHuge(page)) {
 		nr_pages <<= compound_order(page);
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 		/*
 		 * Never OOM-kill a process for a huge page.  The
 		 * fault handler will fall back to regular pages.
@@ -4010,8 +4006,8 @@ int mem_cgroup_newpage_charge(struct page *page,
 {
 	if (mem_cgroup_disabled())
 		return 0;
-	VM_BUG_ON(page_mapped(page));
-	VM_BUG_ON(page->mapping && !PageAnon(page));
+	VM_BUG_ON_PAGE(page_mapped(page), page);
+	VM_BUG_ON_PAGE(page->mapping && !PageAnon(page), page);
 	VM_BUG_ON(!mm);
 	return mem_cgroup_charge_common(page, mm, gfp_mask,
 					MEM_CGROUP_CHARGE_TYPE_ANON);
@@ -4215,7 +4211,7 @@ __mem_cgroup_uncharge_common(struct page *page, enum charge_type ctype,
 
 	if (PageTransHuge(page)) {
 		nr_pages <<= compound_order(page);
-		VM_BUG_ON(!PageTransHuge(page));
+		VM_BUG_ON_PAGE(!PageTransHuge(page), page);
 	}
 	/*
 	 * Check if our page_cgroup is valid
@@ -4307,7 +4303,7 @@ void mem_cgroup_uncharge_page(struct page *page)
 	/* early check. */
 	if (page_mapped(page))
 		return;
-	VM_BUG_ON(page->mapping && !PageAnon(page));
+	VM_BUG_ON_PAGE(page->mapping && !PageAnon(page), page);
 	/*
 	 * If the page is in swap cache, uncharge should be deferred
 	 * to the swap path, which also properly accounts swap usage
@@ -4327,8 +4323,8 @@ void mem_cgroup_uncharge_page(struct page *page)
 
 void mem_cgroup_uncharge_cache_page(struct page *page)
 {
-	VM_BUG_ON(page_mapped(page));
-	VM_BUG_ON(page->mapping);
+	VM_BUG_ON_PAGE(page_mapped(page), page);
+	VM_BUG_ON_PAGE(page->mapping, page);
 	__mem_cgroup_uncharge_common(page, MEM_CGROUP_CHARGE_TYPE_CACHE, false);
 }
 
@@ -6402,14 +6398,12 @@ static void free_mem_cgroup_per_zone_info(struct mem_cgroup *memcg, int node)
 static struct mem_cgroup *mem_cgroup_alloc(void)
 {
 	struct mem_cgroup *memcg;
-	size_t size = memcg_size();
+	size_t size;
 
-	/* Can be very big if nr_node_ids is very big */
-	if (size < PAGE_SIZE)
-		memcg = kzalloc(size, GFP_KERNEL);
-	else
-		memcg = vzalloc(size);
+	size = sizeof(struct mem_cgroup);
+	size += nr_node_ids * sizeof(struct mem_cgroup_per_node *);
 
+	memcg = kzalloc(size, GFP_KERNEL);
 	if (!memcg)
 		return NULL;
 
@@ -6420,10 +6414,7 @@ static struct mem_cgroup *mem_cgroup_alloc(void)
 	return memcg;
 
 out_free:
-	if (size < PAGE_SIZE)
-		kfree(memcg);
-	else
-		vfree(memcg);
+	kfree(memcg);
 	return NULL;
 }
 
@@ -6441,7 +6432,6 @@ out_free:
 static void __mem_cgroup_free(struct mem_cgroup *memcg)
 {
 	int node;
-	size_t size = memcg_size();
 
 	mem_cgroup_remove_from_trees(memcg);
 
@@ -6462,10 +6452,7 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 	 * the cgroup_lock.
 	 */
 	disarm_static_keys(memcg);
-	if (size < PAGE_SIZE)
-		kfree(memcg);
-	else
-		vfree(memcg);
+	kfree(memcg);
 }
 
 /*
@@ -6893,7 +6880,7 @@ static enum mc_target_type get_mctgt_type_thp(struct vm_area_struct *vma,
 	enum mc_target_type ret = MC_TARGET_NONE;
 
 	page = pmd_page(pmd);
-	VM_BUG_ON(!page || !PageHead(page));
+	VM_BUG_ON_PAGE(!page || !PageHead(page), page);
 	if (!move_anon())
 		return ret;
 	pc = lookup_page_cgroup(page);

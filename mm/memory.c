@@ -288,7 +288,7 @@ int __tlb_remove_page(struct mmu_gather *tlb, struct page *page)
 			return 0;
 		batch = tlb->active;
 	}
-	VM_BUG_ON(batch->nr > batch->max);
+	VM_BUG_ON_PAGE(batch->nr > batch->max, page);
 
 	return batch->max - batch->nr;
 }
@@ -670,7 +670,7 @@ static void print_bad_pte(struct vm_area_struct *vma, unsigned long addr,
 		current->comm,
 		(long long)pte_val(pte), (long long)pmd_val(*pmd));
 	if (page)
-		dump_page(page);
+		dump_page(page, "bad pte");
 	printk(KERN_ALERT
 		"addr:%p vm_flags:%08lx anon_vma:%p mapping:%p index:%lx\n",
 		(void *)addr, vma->vm_flags, vma->anon_vma, mapping, index);
@@ -2699,7 +2699,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 					goto unwritable_page;
 				}
 			} else
-				VM_BUG_ON(!PageLocked(old_page));
+				VM_BUG_ON_PAGE(!PageLocked(old_page), old_page);
 
 			/*
 			 * Since we dropped the lock we need to revalidate
@@ -3355,7 +3355,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (unlikely(!(ret & VM_FAULT_LOCKED)))
 		lock_page(vmf.page);
 	else
-		VM_BUG_ON(!PageLocked(vmf.page));
+		VM_BUG_ON_PAGE(!PageLocked(vmf.page), vmf.page);
 
 	/*
 	 * Should we do an early C-O-W break?
@@ -3392,7 +3392,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 						goto unwritable_page;
 					}
 				} else
-					VM_BUG_ON(!PageLocked(page));
+					VM_BUG_ON_PAGE(!PageLocked(page), page);
 				page_mkwrite = 1;
 			}
 		}
@@ -4272,11 +4272,20 @@ void copy_user_huge_page(struct page *dst, struct page *src,
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE || CONFIG_HUGETLBFS */
 
 #if USE_SPLIT_PTE_PTLOCKS && ALLOC_SPLIT_PTLOCKS
+
+static struct kmem_cache *page_ptl_cachep;
+
+void __init ptlock_cache_init(void)
+{
+	page_ptl_cachep = kmem_cache_create("page->ptl", sizeof(spinlock_t), 0,
+			SLAB_PANIC, NULL);
+}
+
 bool ptlock_alloc(struct page *page)
 {
 	spinlock_t *ptl;
 
-	ptl = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
+	ptl = kmem_cache_alloc(page_ptl_cachep, GFP_KERNEL);
 	if (!ptl)
 		return false;
 	page->ptl = ptl;
@@ -4285,6 +4294,6 @@ bool ptlock_alloc(struct page *page)
 
 void ptlock_free(struct page *page)
 {
-	kfree(page->ptl);
+	kmem_cache_free(page_ptl_cachep, page->ptl);
 }
 #endif

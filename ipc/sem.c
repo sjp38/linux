@@ -394,7 +394,7 @@ static inline struct sem_array *sem_obtain_lock(struct ipc_namespace *ns,
 	/* ipc_rmid() may have already freed the ID while sem_lock
 	 * was spinning: verify that the structure is still valid
 	 */
-	if (!ipcp->deleted)
+	if (ipc_valid_object(ipcp))
 		return container_of(ipcp, struct sem_array, sem_perm);
 
 	sem_unlock(sma, *locknum);
@@ -584,10 +584,11 @@ SYSCALL_DEFINE3(semget, key_t, key, int, nsems, int, semflg)
 	return ipcget(ns, &sem_ids(ns), &sem_ops, &sem_params);
 }
 
-/** perform_atomic_semop - Perform (if possible) a semaphore operation
+/**
+ * perform_atomic_semop - Perform (if possible) a semaphore operation
  * @sma: semaphore array
  * @sops: array with operations that should be checked
- * @nsems: number of sops
+ * @nsops: number of operations
  * @un: undo array
  * @pid: pid that did the change
  *
@@ -595,7 +596,6 @@ SYSCALL_DEFINE3(semget, key_t, key, int, nsems, int, semflg)
  * Returns 1 if the operation is impossible, the caller must sleep.
  * Negative values are error codes.
  */
-
 static int perform_atomic_semop(struct sem_array *sma, struct sembuf *sops,
 			     int nsops, struct sem_undo *un, int pid)
 {
@@ -607,7 +607,7 @@ static int perform_atomic_semop(struct sem_array *sma, struct sembuf *sops,
 		curr = sma->sem_base + sop->sem_num;
 		sem_op = sop->sem_op;
 		result = curr->semval;
-  
+
 		if (!sem_op && result)
 			goto would_block;
 
@@ -616,25 +616,24 @@ static int perform_atomic_semop(struct sem_array *sma, struct sembuf *sops,
 			goto would_block;
 		if (result > SEMVMX)
 			goto out_of_range;
+
 		if (sop->sem_flg & SEM_UNDO) {
 			int undo = un->semadj[sop->sem_num] - sem_op;
-			/*
-	 		 *	Exceeding the undo range is an error.
-			 */
+			/* Exceeding the undo range is an error. */
 			if (undo < (-SEMAEM - 1) || undo > SEMAEM)
 				goto out_of_range;
+			un->semadj[sop->sem_num] = undo;
 		}
+
 		curr->semval = result;
 	}
 
 	sop--;
 	while (sop >= sops) {
 		sma->sem_base[sop->sem_num].sempid = pid;
-		if (sop->sem_flg & SEM_UNDO)
-			un->semadj[sop->sem_num] -= sop->sem_op;
 		sop--;
 	}
-	
+
 	return 0;
 
 out_of_range:
@@ -650,7 +649,10 @@ would_block:
 undo:
 	sop--;
 	while (sop >= sops) {
-		sma->sem_base[sop->sem_num].semval -= sop->sem_op;
+		sem_op = sop->sem_op;
+		sma->sem_base[sop->sem_num].semval -= sem_op;
+		if (sop->sem_flg & SEM_UNDO)
+			un->semadj[sop->sem_num] += sem_op;
 		sop--;
 	}
 
@@ -1282,7 +1284,7 @@ static int semctl_setval(struct ipc_namespace *ns, int semid, int semnum,
 
 	sem_lock(sma, NULL, -1);
 
-	if (sma->sem_perm.deleted) {
+	if (!ipc_valid_object(&sma->sem_perm)) {
 		sem_unlock(sma, -1);
 		rcu_read_unlock();
 		return -EIDRM;
@@ -1342,7 +1344,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		int i;
 
 		sem_lock(sma, NULL, -1);
-		if (sma->sem_perm.deleted) {
+		if (!ipc_valid_object(&sma->sem_perm)) {
 			err = -EIDRM;
 			goto out_unlock;
 		}
@@ -1361,7 +1363,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 
 			rcu_read_lock();
 			sem_lock_and_putref(sma);
-			if (sma->sem_perm.deleted) {
+			if (!ipc_valid_object(&sma->sem_perm)) {
 				err = -EIDRM;
 				goto out_unlock;
 			}
@@ -1409,7 +1411,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		}
 		rcu_read_lock();
 		sem_lock_and_putref(sma);
-		if (sma->sem_perm.deleted) {
+		if (!ipc_valid_object(&sma->sem_perm)) {
 			err = -EIDRM;
 			goto out_unlock;
 		}
@@ -1435,7 +1437,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		goto out_rcu_wakeup;
 
 	sem_lock(sma, NULL, -1);
-	if (sma->sem_perm.deleted) {
+	if (!ipc_valid_object(&sma->sem_perm)) {
 		err = -EIDRM;
 		goto out_unlock;
 	}
@@ -1699,7 +1701,7 @@ static struct sem_undo *find_alloc_undo(struct ipc_namespace *ns, int semid)
 	/* step 3: Acquire the lock on semaphore array */
 	rcu_read_lock();
 	sem_lock_and_putref(sma);
-	if (sma->sem_perm.deleted) {
+	if (!ipc_valid_object(&sma->sem_perm)) {
 		sem_unlock(sma, -1);
 		rcu_read_unlock();
 		kfree(new);
@@ -1846,7 +1848,15 @@ SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsops,
 
 	error = -EIDRM;
 	locknum = sem_lock(sma, sops, nsops);
-	if (sma->sem_perm.deleted)
+	/*
+	 * We eventually might perform the following check in a lockless
+	 * fashion, considering ipc_valid_object() locking constraints.
+	 * If nsops == 1 and there is no contention for sem_perm.lock, then
+	 * only a per-semaphore lock is held and it's OK to proceed with the
+	 * check below. More details on the fine grained locking scheme
+	 * entangled here and why it's RMID race safe on comments at sem_lock()
+	 */
+	if (!ipc_valid_object(&sma->sem_perm))
 		goto out_unlock_free;
 	/*
 	 * semid identifiers are not unique - find_alloc_undo may have
@@ -2068,7 +2078,7 @@ void exit_sem(struct task_struct *tsk)
 
 		sem_lock(sma, NULL, -1);
 		/* exit_sem raced with IPC_RMID, nothing to do */
-		if (sma->sem_perm.deleted) {
+		if (!ipc_valid_object(&sma->sem_perm)) {
 			sem_unlock(sma, -1);
 			rcu_read_unlock();
 			continue;

@@ -92,9 +92,6 @@ void show_mem(unsigned int filter)
 	printk("Mem-info:\n");
 	show_free_areas(filter);
 
-	if (filter & SHOW_MEM_FILTER_PAGE_COUNT)
-		return;
-
 	for_each_bank (i, mi) {
 		struct membank *bank = &mi->bank[i];
 		unsigned int pfn1, pfn2;
@@ -208,7 +205,6 @@ EXPORT_SYMBOL(arm_dma_zone_size);
  * allocations.  This must be the smallest DMA mask in the system,
  * so a successful GFP_DMA allocation will always satisfy this.
  */
-phys_addr_t arm_dma_limit;
 unsigned long arm_dma_pfn_limit;
 
 static void __init arm_adjust_dma_zone(unsigned long *size, unsigned long *hole,
@@ -227,6 +223,8 @@ static void __init arm_adjust_dma_zone(unsigned long *size, unsigned long *hole,
 void __init setup_dma_zone(const struct machine_desc *mdesc)
 {
 #ifdef CONFIG_ZONE_DMA
+	phys_addr_t arm_dma_limit;
+
 	if (mdesc->dma_zone_size) {
 		arm_dma_zone_size = mdesc->dma_zone_size;
 		arm_dma_limit = __pv_phys_offset + arm_dma_zone_size - 1;
@@ -381,7 +379,8 @@ void __init arm_memblock_init(struct meminfo *mi,
 	 * reserve memory for DMA contigouos allocations,
 	 * must come from DMA area inside low memory
 	 */
-	dma_contiguous_reserve(min(arm_dma_limit, arm_lowmem_limit));
+	dma_contiguous_reserve(min((phys_addr_t)arm_dma_pfn_limit << PAGE_SHIFT,
+				   arm_lowmem_limit));
 
 	arm_memblock_steal_permitted = false;
 	memblock_allow_resize();
@@ -461,7 +460,7 @@ free_memmap(unsigned long start_pfn, unsigned long end_pfn)
 	 * free the section of the memmap array.
 	 */
 	if (pg < pgend)
-		free_bootmem(pg, pgend - pg);
+		memblock_free_early(pg, pgend - pg);
 }
 
 /*
@@ -632,7 +631,7 @@ void __init mem_init(void)
 			MLK(DTCM_OFFSET, (unsigned long) dtcm_end),
 			MLK(ITCM_OFFSET, (unsigned long) itcm_end),
 #endif
-			MLK(FIXADDR_START, FIXADDR_TOP),
+			MLK(FIXADDR_START, FIXADDR_END),
 			MLM(VMALLOC_START, VMALLOC_END),
 			MLM(PAGE_OFFSET, (unsigned long)high_memory),
 #ifdef CONFIG_HIGHMEM

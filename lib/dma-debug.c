@@ -717,6 +717,7 @@ static int device_dma_allocations(struct device *dev, struct dma_debug_entry **o
 	struct dma_debug_entry *entry;
 	unsigned long flags;
 	int count = 0, i;
+	int map_err_cnt = 0;
 
 	local_irq_save(flags);
 
@@ -724,6 +725,8 @@ static int device_dma_allocations(struct device *dev, struct dma_debug_entry **o
 		spin_lock(&dma_entry_hash[i].lock);
 		list_for_each_entry(entry, &dma_entry_hash[i].list, list) {
 			if (entry->dev == dev) {
+				if (entry->map_err_type == MAP_ERR_NOT_CHECKED)
+					map_err_cnt += 1;
 				count += 1;
 				*out_entry = entry;
 			}
@@ -733,6 +736,10 @@ static int device_dma_allocations(struct device *dev, struct dma_debug_entry **o
 
 	local_irq_restore(flags);
 
+	if (map_err_cnt)
+		dev_warn(dev,
+			"DMA-API: device driver failed to check map errors: "
+			"[count] = %d\n", map_err_cnt);
 	return count;
 }
 
