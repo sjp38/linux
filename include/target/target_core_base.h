@@ -112,7 +112,7 @@
 /* Queue Algorithm Modifier default for restricted reordering in control mode page */
 #define DA_EMULATE_REST_REORD			0
 
-#define SE_INQUIRY_BUF				512
+#define SE_INQUIRY_BUF				1024
 #define SE_MODE_PAGE_BUF			512
 #define SE_SENSE_BUF				96
 
@@ -247,10 +247,28 @@ typedef enum {
 
 struct se_cmd;
 
+struct t10_alua_lba_map_member {
+	struct list_head lba_map_mem_list;
+	int lba_map_mem_alua_state;
+	int lba_map_mem_alua_pg_id;
+};
+
+struct t10_alua_lba_map {
+	u64 lba_map_first_lba;
+	u64 lba_map_last_lba;
+	struct list_head lba_map_list;
+	struct list_head lba_map_mem_list;
+};
+
 struct t10_alua {
 	/* ALUA Target Port Group ID */
 	u16	alua_tg_pt_gps_counter;
 	u32	alua_tg_pt_gps_count;
+	/* Referrals support */
+	spinlock_t lba_map_lock;
+	u32     lba_map_segment_size;
+	u32     lba_map_segment_multiplier;
+	struct list_head lba_map_list;
 	spinlock_t tg_pt_gps_lock;
 	struct se_device *t10_dev;
 	/* Used for default ALUA Target Port Group */
@@ -284,6 +302,8 @@ struct t10_alua_tg_pt_gp {
 	u16	tg_pt_gp_id;
 	int	tg_pt_gp_valid_id;
 	int	tg_pt_gp_alua_supported_states;
+	int	tg_pt_gp_alua_pending_state;
+	int	tg_pt_gp_alua_previous_state;
 	int	tg_pt_gp_alua_access_status;
 	int	tg_pt_gp_alua_access_type;
 	int	tg_pt_gp_nonop_delay_msecs;
@@ -291,9 +311,6 @@ struct t10_alua_tg_pt_gp {
 	int	tg_pt_gp_implicit_trans_secs;
 	int	tg_pt_gp_pref;
 	int	tg_pt_gp_write_metadata;
-	/* Used by struct t10_alua_tg_pt_gp->tg_pt_gp_md_buf_len */
-#define ALUA_MD_BUF_LEN				1024
-	u32	tg_pt_gp_md_buf_len;
 	u32	tg_pt_gp_members;
 	atomic_t tg_pt_gp_alua_access_state;
 	atomic_t tg_pt_gp_ref_cnt;
@@ -303,6 +320,10 @@ struct t10_alua_tg_pt_gp {
 	struct config_group tg_pt_gp_group;
 	struct list_head tg_pt_gp_list;
 	struct list_head tg_pt_gp_mem_list;
+	struct se_port *tg_pt_gp_alua_port;
+	struct se_node_acl *tg_pt_gp_alua_nacl;
+	struct delayed_work tg_pt_gp_transition_work;
+	struct completion *tg_pt_gp_transition_complete;
 };
 
 struct t10_alua_tg_pt_gp_member {
@@ -504,7 +525,6 @@ struct se_ua {
 	u8			ua_asc;
 	u8			ua_ascq;
 	struct se_node_acl	*ua_nacl;
-	struct list_head	ua_dev_list;
 	struct list_head	ua_nacl_list;
 };
 

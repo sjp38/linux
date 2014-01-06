@@ -1117,23 +1117,23 @@ int se_dev_set_block_size(struct se_device *dev, u32 block_size)
 struct se_lun *core_dev_add_lun(
 	struct se_portal_group *tpg,
 	struct se_device *dev,
-	u32 lun)
+	u32 unpacked_lun)
 {
-	struct se_lun *lun_p;
+	struct se_lun *lun;
 	int rc;
 
-	lun_p = core_tpg_pre_addlun(tpg, lun);
-	if (IS_ERR(lun_p))
-		return lun_p;
+	lun = core_tpg_alloc_lun(tpg, unpacked_lun);
+	if (IS_ERR(lun))
+		return lun;
 
-	rc = core_tpg_post_addlun(tpg, lun_p,
+	rc = core_tpg_add_lun(tpg, lun,
 				TRANSPORT_LUNFLAGS_READ_WRITE, dev);
 	if (rc < 0)
 		return ERR_PTR(rc);
 
 	pr_debug("%s_TPG[%u]_LUN[%u] - Activated %s Logical Unit from"
 		" CORE HBA: %u\n", tpg->se_tpg_tfo->get_fabric_name(),
-		tpg->se_tpg_tfo->tpg_get_tag(tpg), lun_p->unpacked_lun,
+		tpg->se_tpg_tfo->tpg_get_tag(tpg), lun->unpacked_lun,
 		tpg->se_tpg_tfo->get_fabric_name(), dev->se_hba->hba_id);
 	/*
 	 * Update LUN maps for dynamically added initiators when
@@ -1154,7 +1154,7 @@ struct se_lun *core_dev_add_lun(
 		spin_unlock_irq(&tpg->acl_node_lock);
 	}
 
-	return lun_p;
+	return lun;
 }
 
 /*      core_dev_del_lun():
@@ -1444,6 +1444,8 @@ struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 	spin_lock_init(&dev->t10_pr.aptpl_reg_lock);
 	INIT_LIST_HEAD(&dev->t10_alua.tg_pt_gps_list);
 	spin_lock_init(&dev->t10_alua.tg_pt_gps_lock);
+	INIT_LIST_HEAD(&dev->t10_alua.lba_map_list);
+	spin_lock_init(&dev->t10_alua.lba_map_lock);
 
 	dev->t10_wwn.t10_dev = dev;
 	dev->t10_alua.t10_dev = dev;
@@ -1588,6 +1590,7 @@ void target_free_device(struct se_device *dev)
 	}
 
 	core_alua_free_lu_gp_mem(dev);
+	core_alua_set_lba_map(dev, NULL, 0, 0);
 	core_scsi3_free_all_registrations(dev);
 	se_release_vpd_for_dev(dev);
 
