@@ -106,10 +106,13 @@ static int blk_mq_queue_enter(struct request_queue *q)
 
 	spin_lock_irq(q->queue_lock);
 	ret = wait_event_interruptible_lock_irq(q->mq_freeze_wq,
-		!blk_queue_bypass(q), *q->queue_lock);
+		!blk_queue_bypass(q) || blk_queue_dying(q),
+		*q->queue_lock);
 	/* inc usage with lock hold to avoid freeze_queue runs here */
-	if (!ret)
+	if (!ret && !blk_queue_dying(q))
 		__percpu_counter_add(&q->mq_usage_counter, 1, 1000000);
+	else if (blk_queue_dying(q))
+		ret = -ENODEV;
 	spin_unlock_irq(q->queue_lock);
 
 	return ret;
@@ -118,6 +121,22 @@ static int blk_mq_queue_enter(struct request_queue *q)
 static void blk_mq_queue_exit(struct request_queue *q)
 {
 	__percpu_counter_add(&q->mq_usage_counter, -1, 1000000);
+}
+
+static void __blk_mq_drain_queue(struct request_queue *q)
+{
+	while (true) {
+		s64 count;
+
+		spin_lock_irq(q->queue_lock);
+		count = percpu_counter_sum(&q->mq_usage_counter);
+		spin_unlock_irq(q->queue_lock);
+
+		if (count == 0)
+			break;
+		blk_mq_run_queues(q, false);
+		msleep(10);
+	}
 }
 
 /*
@@ -133,21 +152,13 @@ static void blk_mq_freeze_queue(struct request_queue *q)
 	queue_flag_set(QUEUE_FLAG_BYPASS, q);
 	spin_unlock_irq(q->queue_lock);
 
-	if (!drain)
-		return;
+	if (drain)
+		__blk_mq_drain_queue(q);
+}
 
-	while (true) {
-		s64 count;
-
-		spin_lock_irq(q->queue_lock);
-		count = percpu_counter_sum(&q->mq_usage_counter);
-		spin_unlock_irq(q->queue_lock);
-
-		if (count == 0)
-			break;
-		blk_mq_run_queues(q, false);
-		msleep(10);
-	}
+void blk_mq_drain_queue(struct request_queue *q)
+{
+	__blk_mq_drain_queue(q);
 }
 
 static void blk_mq_unfreeze_queue(struct request_queue *q)
@@ -179,13 +190,33 @@ static void blk_mq_rq_ctx_init(struct request_queue *q, struct blk_mq_ctx *ctx,
 
 	rq->mq_ctx = ctx;
 	rq->cmd_flags = rw_flags;
+	rq->start_time = jiffies;
+	set_start_time_ns(rq);
 	ctx->rq_dispatched[rw_is_sync(rw_flags)]++;
 }
 
 static struct request *__blk_mq_alloc_request(struct blk_mq_hw_ctx *hctx,
-					      gfp_t gfp, bool reserved)
+					      gfp_t gfp, bool reserved,
+					      int rw)
 {
-	return blk_mq_alloc_rq(hctx, gfp, reserved);
+	struct request *req;
+	bool is_flush = false;
+	/*
+	 * flush need allocate a request, leave at least one request for
+	 * non-flush IO to avoid deadlock
+	 */
+	if ((rw & REQ_FLUSH) && !(rw & REQ_FLUSH_SEQ)) {
+		if (atomic_inc_return(&hctx->pending_flush) >=
+		    hctx->queue_depth - hctx->reserved_tags - 1) {
+			atomic_dec(&hctx->pending_flush);
+			return NULL;
+		}
+		is_flush = true;
+	}
+	req = blk_mq_alloc_rq(hctx, gfp, reserved);
+	if (!req && is_flush)
+		atomic_dec(&hctx->pending_flush);
+	return req;
 }
 
 static struct request *blk_mq_alloc_request_pinned(struct request_queue *q,
@@ -198,7 +229,7 @@ static struct request *blk_mq_alloc_request_pinned(struct request_queue *q,
 		struct blk_mq_ctx *ctx = blk_mq_get_ctx(q);
 		struct blk_mq_hw_ctx *hctx = q->mq_ops->map_queue(q, ctx->cpu);
 
-		rq = __blk_mq_alloc_request(hctx, gfp & ~__GFP_WAIT, reserved);
+		rq = __blk_mq_alloc_request(hctx, gfp & ~__GFP_WAIT, reserved, rw);
 		if (rq) {
 			blk_mq_rq_ctx_init(q, ctx, rq, rw);
 			break;
@@ -261,6 +292,9 @@ static void __blk_mq_free_request(struct blk_mq_hw_ctx *hctx,
 	const int tag = rq->tag;
 	struct request_queue *q = rq->q;
 
+	if ((rq->cmd_flags & REQ_FLUSH) && !(rq->cmd_flags & REQ_FLUSH_SEQ))
+		atomic_dec(&hctx->pending_flush);
+
 	blk_mq_rq_init(hctx, rq);
 	blk_mq_put_tag(hctx->tags, tag);
 
@@ -305,7 +339,7 @@ void blk_mq_complete_request(struct request *rq, int error)
 		struct bio *next = bio->bi_next;
 
 		bio->bi_next = NULL;
-		bytes += bio->bi_size;
+		bytes += bio->bi_iter.bi_size;
 		blk_mq_bio_endio(rq, bio, error);
 		bio = next;
 	}
@@ -928,14 +962,14 @@ static void blk_mq_make_request(struct request_queue *q, struct bio *bio)
 	hctx = q->mq_ops->map_queue(q, ctx->cpu);
 
 	trace_block_getrq(q, bio, rw);
-	rq = __blk_mq_alloc_request(hctx, GFP_ATOMIC, false);
+	rq = __blk_mq_alloc_request(hctx, GFP_ATOMIC, false, bio->bi_rw);
 	if (likely(rq))
-		blk_mq_rq_ctx_init(q, ctx, rq, rw);
+		blk_mq_rq_ctx_init(q, ctx, rq, bio->bi_rw);
 	else {
 		blk_mq_put_ctx(ctx);
 		trace_block_sleeprq(q, bio, rw);
-		rq = blk_mq_alloc_request_pinned(q, rw, __GFP_WAIT|GFP_ATOMIC,
-							false);
+		rq = blk_mq_alloc_request_pinned(q, bio->bi_rw,
+				__GFP_WAIT|GFP_ATOMIC, false);
 		ctx = rq->mq_ctx;
 		hctx = q->mq_ops->map_queue(q, ctx->cpu);
 	}
@@ -1212,7 +1246,9 @@ static int blk_mq_init_hw_queues(struct request_queue *q,
 		hctx->queue_num = i;
 		hctx->flags = reg->flags;
 		hctx->queue_depth = reg->queue_depth;
+		hctx->reserved_tags = reg->reserved_tags;
 		hctx->cmd_size = reg->cmd_size;
+		atomic_set(&hctx->pending_flush, 0);
 
 		blk_mq_init_cpu_notifier(&hctx->cpu_notifier,
 						blk_mq_hctx_notify, hctx);
@@ -1337,15 +1373,6 @@ struct request_queue *blk_mq_init_queue(struct blk_mq_reg *reg,
 		reg->queue_depth = BLK_MQ_MAX_DEPTH;
 	}
 
-	/*
-	 * Set aside a tag for flush requests.  It will only be used while
-	 * another flush request is in progress but outside the driver.
-	 *
-	 * TODO: only allocate if flushes are supported
-	 */
-	reg->queue_depth++;
-	reg->reserved_tags++;
-
 	if (reg->queue_depth < (reg->reserved_tags + BLK_MQ_TAG_MIN))
 		return ERR_PTR(-EINVAL);
 
@@ -1429,7 +1456,6 @@ void blk_mq_free_queue(struct request_queue *q)
 	int i;
 
 	queue_for_each_hw_ctx(q, hctx, i) {
-		cancel_delayed_work_sync(&hctx->delayed_work);
 		kfree(hctx->ctx_map);
 		kfree(hctx->ctxs);
 		blk_mq_free_rq_map(hctx);
@@ -1451,7 +1477,6 @@ void blk_mq_free_queue(struct request_queue *q)
 	list_del_init(&q->all_q_node);
 	mutex_unlock(&all_q_mutex);
 }
-EXPORT_SYMBOL(blk_mq_free_queue);
 
 /* Basically redo blk_mq_init_queue with queue frozen */
 static void blk_mq_queue_reinit(struct request_queue *q)
