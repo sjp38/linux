@@ -224,7 +224,8 @@ enum pci_bus_speed {
 };
 
 struct pci_cap_saved_data {
-	char cap_nr;
+	u16 cap_nr;
+	bool cap_extended;
 	unsigned int size;
 	u32 data[0];
 };
@@ -351,7 +352,7 @@ struct pci_dev {
 	struct bin_attribute *res_attr_wc[DEVICE_COUNT_RESOURCE]; /* sysfs file for WC mapping of resources */
 #ifdef CONFIG_PCI_MSI
 	struct list_head msi_list;
-	struct kset *msi_kset;
+	const struct attribute_group **msi_irq_groups;
 #endif
 	struct pci_vpd *vpd;
 #ifdef CONFIG_PCI_ATS
@@ -634,8 +635,7 @@ struct pci_driver {
  * DEFINE_PCI_DEVICE_TABLE - macro used to describe a pci device table
  * @_table: device table name
  *
- * This macro is used to create a struct pci_device_id array (a device table)
- * in a generic manner.
+ * This macro is deprecated and should not be used in new code.
  */
 #define DEFINE_PCI_DEVICE_TABLE(_table) \
 	const struct pci_device_id _table[]
@@ -938,6 +938,7 @@ bool pci_check_and_unmask_intx(struct pci_dev *dev);
 void pci_msi_off(struct pci_dev *dev);
 int pci_set_dma_max_seg_size(struct pci_dev *dev, unsigned int size);
 int pci_set_dma_seg_boundary(struct pci_dev *dev, unsigned long mask);
+int pci_wait_for_pending(struct pci_dev *dev, int pos, u16 mask);
 int pci_wait_for_pending_transaction(struct pci_dev *dev);
 int pcix_get_max_mmrbc(struct pci_dev *dev);
 int pcix_get_mmrbc(struct pci_dev *dev);
@@ -977,6 +978,12 @@ struct pci_saved_state *pci_store_saved_state(struct pci_dev *dev);
 int pci_load_saved_state(struct pci_dev *dev, struct pci_saved_state *state);
 int pci_load_and_free_saved_state(struct pci_dev *dev,
 				  struct pci_saved_state **state);
+struct pci_cap_saved_state *pci_find_saved_cap(struct pci_dev *dev, char cap);
+struct pci_cap_saved_state *pci_find_saved_ext_cap(struct pci_dev *dev,
+						   u16 cap);
+int pci_add_cap_save_buffer(struct pci_dev *dev, char cap, unsigned int size);
+int pci_add_ext_cap_save_buffer(struct pci_dev *dev,
+				u16 cap, unsigned int size);
 int __pci_complete_power_transition(struct pci_dev *dev, pci_power_t state);
 int pci_set_power_state(struct pci_dev *dev, pci_power_t state);
 pci_power_t pci_choose_state(struct pci_dev *dev, pm_message_t state);
@@ -997,6 +1004,11 @@ static inline int pci_enable_wake(struct pci_dev *dev, pci_power_t state,
 {
 	return __pci_enable_wake(dev, state, false, enable);
 }
+
+/* PCI Virtual Channel */
+int pci_save_vc_state(struct pci_dev *dev);
+void pci_restore_vc_state(struct pci_dev *dev);
+void pci_allocate_vc_save_buffers(struct pci_dev *dev);
 
 #define PCI_EXP_IDO_REQUEST	(1<<0)
 #define PCI_EXP_IDO_COMPLETION	(1<<1)
@@ -1155,15 +1167,15 @@ struct msix_entry {
 
 
 #ifndef CONFIG_PCI_MSI
-static inline int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec)
+static inline int pci_enable_msi_block(struct pci_dev *dev, int nvec)
 {
-	return -1;
+	return -ENOSYS;
 }
 
 static inline int
-pci_enable_msi_block_auto(struct pci_dev *dev, unsigned int *maxvec)
+pci_enable_msi_block_auto(struct pci_dev *dev, int *maxvec)
 {
-	return -1;
+	return -ENOSYS;
 }
 
 static inline void pci_msi_shutdown(struct pci_dev *dev)
@@ -1178,7 +1190,7 @@ static inline int pci_msix_table_size(struct pci_dev *dev)
 static inline int pci_enable_msix(struct pci_dev *dev,
 				  struct msix_entry *entries, int nvec)
 {
-	return -1;
+	return -ENOSYS;
 }
 
 static inline void pci_msix_shutdown(struct pci_dev *dev)
@@ -1196,8 +1208,8 @@ static inline int pci_msi_enabled(void)
 	return 0;
 }
 #else
-int pci_enable_msi_block(struct pci_dev *dev, unsigned int nvec);
-int pci_enable_msi_block_auto(struct pci_dev *dev, unsigned int *maxvec);
+int pci_enable_msi_block(struct pci_dev *dev, int nvec);
+int pci_enable_msi_block_auto(struct pci_dev *dev, int *maxvec);
 void pci_msi_shutdown(struct pci_dev *dev);
 void pci_disable_msi(struct pci_dev *dev);
 int pci_msix_table_size(struct pci_dev *dev);
