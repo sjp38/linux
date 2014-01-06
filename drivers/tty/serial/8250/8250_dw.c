@@ -274,7 +274,6 @@ static int dw8250_probe_of(struct uart_port *p,
 	return 0;
 }
 
-#ifdef CONFIG_ACPI
 static int dw8250_probe_acpi(struct uart_8250_port *up,
 			     struct dw8250_data *data)
 {
@@ -302,13 +301,6 @@ static int dw8250_probe_acpi(struct uart_8250_port *up,
 
 	return 0;
 }
-#else
-static inline int dw8250_probe_acpi(struct uart_8250_port *up,
-				    struct dw8250_data *data)
-{
-	return -ENODEV;
-}
-#endif /* CONFIG_ACPI */
 
 static int dw8250_probe(struct platform_device *pdev)
 {
