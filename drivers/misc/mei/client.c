@@ -344,8 +344,6 @@ int mei_cl_unlink(struct mei_cl *cl)
 
 	cl->state = MEI_FILE_INITIALIZING;
 
-	list_del_init(&cl->link);
-
 	return 0;
 }
 
@@ -729,6 +727,7 @@ int mei_cl_irq_write_complete(struct mei_cl *cl, struct mei_cl_cb *cb,
 	mei_hdr.host_addr = cl->host_client_id;
 	mei_hdr.me_addr = cl->me_client_id;
 	mei_hdr.reserved = 0;
+	mei_hdr.internal = cb->internal;
 
 	if (*slots >= msg_slots) {
 		mei_hdr.length = len;
@@ -828,6 +827,7 @@ int mei_cl_write(struct mei_cl *cl, struct mei_cl_cb *cb, bool blocking)
 	mei_hdr.host_addr = cl->host_client_id;
 	mei_hdr.me_addr = cl->me_client_id;
 	mei_hdr.reserved = 0;
+	mei_hdr.internal = cb->internal;
 
 
 	rets = mei_write_message(dev, &mei_hdr, buf->data);
