@@ -918,6 +918,49 @@ int se_dev_set_emulate_3pc(struct se_device *dev, int flag)
 	return 0;
 }
 
+int se_dev_set_pi_prot_type(struct se_device *dev, int flag)
+{
+	int rc, old_prot = dev->dev_attrib.pi_prot_type;
+
+	if (flag != 0 && flag != 1 && flag != 2 && flag != 3) {
+		pr_err("Illegal value %d for pi_prot_type\n", flag);
+		return -EINVAL;
+	}
+	if (flag == 2) {
+		pr_err("DIF TYPE2 protection currently not supported\n");
+		return -ENOSYS;
+	}
+	if (!dev->transport->init_prot || !dev->transport->free_prot) {
+		pr_err("DIF protection not supported by backend: %s\n",
+		       dev->transport->name);
+		return -ENOSYS;
+	}
+	if (!(dev->dev_flags & DF_CONFIGURED)) {
+		pr_err("DIF protection requires device to be configured\n");
+		return -ENODEV;
+	}
+	if (dev->export_count) {
+		pr_err("dev[%p]: Unable to change SE Device PROT type while"
+		       " export_count is %d\n", dev, dev->export_count);
+		return -EINVAL;
+	}
+
+	dev->dev_attrib.pi_prot_type = flag;
+
+	if (flag && !old_prot) {
+		rc = dev->transport->init_prot(dev);
+		if (rc) {
+			dev->dev_attrib.pi_prot_type = old_prot;
+			return rc;
+		}
+	} else if (!flag && old_prot) {
+		dev->transport->free_prot(dev);
+	}
+	pr_debug("dev[%p]: SE Device Protection Type: %d\n", dev, flag);
+
+	return 0;
+}
+
 int se_dev_set_enforce_pr_isids(struct se_device *dev, int flag)
 {
 	if ((flag != 0) && (flag != 1)) {
@@ -1415,6 +1458,7 @@ struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 	dev->dev_link_magic = SE_DEV_LINK_MAGIC;
 	dev->se_hba = hba;
 	dev->transport = hba->transport;
+	dev->prot_length = sizeof(struct se_dif_v1_tuple);
 
 	INIT_LIST_HEAD(&dev->dev_list);
 	INIT_LIST_HEAD(&dev->dev_sep_list);
@@ -1457,6 +1501,8 @@ struct se_device *target_alloc_device(struct se_hba *hba, const char *name)
 	dev->dev_attrib.emulate_tpws = DA_EMULATE_TPWS;
 	dev->dev_attrib.emulate_caw = DA_EMULATE_CAW;
 	dev->dev_attrib.emulate_3pc = DA_EMULATE_3PC;
+	dev->dev_attrib.pi_prot_type = TARGET_DIF_TYPE0_PROT;
+	dev->dev_attrib.pi_prot_version = TARGET_DIF_V1;
 	dev->dev_attrib.enforce_pr_isids = DA_ENFORCE_PR_ISIDS;
 	dev->dev_attrib.is_nonrot = DA_IS_NONROT;
 	dev->dev_attrib.emulate_rest_reord = DA_EMULATE_REST_REORD;
