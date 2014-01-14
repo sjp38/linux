@@ -128,9 +128,20 @@ extern void efi_call_phys_epilog(void);
 extern void efi_unmap_memmap(void);
 extern void efi_memory_uc(u64 addr, unsigned long size);
 extern void __init efi_map_region(efi_memory_desc_t *md);
+extern void __init efi_map_region_fixed(efi_memory_desc_t *md);
 extern void efi_sync_low_kernel_mappings(void);
 extern void efi_setup_page_tables(void);
 extern void __init old_map_region(efi_memory_desc_t *md);
+
+struct efi_setup_data {
+	u64 fw_vendor;
+	u64 runtime;
+	u64 tables;
+	u64 smbios;
+	u64 reserved[8];
+};
+
+extern u64 efi_setup;
 
 #ifdef CONFIG_EFI
 
@@ -140,7 +151,7 @@ static inline bool efi_is_native(void)
 }
 
 extern struct console early_efi_console;
-
+extern void parse_efi_setup(u64 phys_addr, u32 data_len);
 #else
 /*
  * IF EFI is not configured, have the EFI calls return -ENOSYS.
@@ -152,6 +163,7 @@ extern struct console early_efi_console;
 #define efi_call4(_f, _a1, _a2, _a3, _a4)		(-ENOSYS)
 #define efi_call5(_f, _a1, _a2, _a3, _a4, _a5)		(-ENOSYS)
 #define efi_call6(_f, _a1, _a2, _a3, _a4, _a5, _a6)	(-ENOSYS)
+static inline void parse_efi_setup(u64 phys_addr, u32 data_len) {}
 #endif /* CONFIG_EFI */
 
 #endif /* _ASM_X86_EFI_H */

@@ -148,14 +148,10 @@ void efi_setup_page_tables(void)
 static void __init __map_region(efi_memory_desc_t *md, u64 va)
 {
 	pgd_t *pgd = (pgd_t *)__va(real_mode_header->trampoline_pgd);
-	unsigned long pf = 0, size;
-	u64 end;
+	unsigned long pf = 0;
 
 	if (!(md->attribute & EFI_MEMORY_WB))
 		pf |= _PAGE_PCD;
-
-	size = md->num_pages << PAGE_SHIFT;
-	end  = va + size;
 
 	if (kernel_map_pages_in_pgd(pgd, md->phys_addr, va, md->num_pages, pf))
 		pr_warn("Error mapping PA 0x%llx -> VA 0x%llx!\n",
@@ -203,6 +199,16 @@ void __init efi_map_region(efi_memory_desc_t *md)
 	md->virt_addr = efi_va;
 }
 
+/*
+ * kexec kernel will use efi_map_region_fixed to map efi runtime memory ranges.
+ * md->virt_addr is the original virtual address which had been mapped in kexec
+ * 1st kernel.
+ */
+void __init efi_map_region_fixed(efi_memory_desc_t *md)
+{
+	__map_region(md, md->virt_addr);
+}
+
 void __iomem *__init efi_ioremap(unsigned long phys_addr, unsigned long size,
 				 u32 type, u64 attribute)
 {
@@ -221,4 +227,9 @@ void __iomem *__init efi_ioremap(unsigned long phys_addr, unsigned long size,
 		efi_memory_uc((u64)(unsigned long)__va(phys_addr), size);
 
 	return (void __iomem *)__va(phys_addr);
+}
+
+void __init parse_efi_setup(u64 phys_addr, u32 data_len)
+{
+	efi_setup = phys_addr + sizeof(struct setup_data);
 }
