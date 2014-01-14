@@ -62,9 +62,9 @@ static void __handle_on_exit_funcs(void)
 }
 #endif
 
-struct perf_record {
+struct record {
 	struct perf_tool	tool;
-	struct perf_record_opts	opts;
+	struct record_opts	opts;
 	u64			bytes_written;
 	struct perf_data_file	file;
 	struct perf_evlist	*evlist;
@@ -76,30 +76,15 @@ struct perf_record {
 	long			samples;
 };
 
-static int do_write_output(struct perf_record *rec, void *buf, size_t size)
+static int record__write(struct record *rec, void *bf, size_t size)
 {
-	struct perf_data_file *file = &rec->file;
-
-	while (size) {
-		ssize_t ret = write(file->fd, buf, size);
-
-		if (ret < 0) {
-			pr_err("failed to write perf data, error: %m\n");
-			return -1;
-		}
-
-		size -= ret;
-		buf += ret;
-
-		rec->bytes_written += ret;
+	if (perf_data_file__write(rec->session->file, bf, size) < 0) {
+		pr_err("failed to write perf data, error: %m\n");
+		return -1;
 	}
 
+	rec->bytes_written += size;
 	return 0;
-}
-
-static int write_output(struct perf_record *rec, void *buf, size_t size)
-{
-	return do_write_output(rec, buf, size);
 }
 
 static int process_synthesized_event(struct perf_tool *tool,
@@ -107,15 +92,11 @@ static int process_synthesized_event(struct perf_tool *tool,
 				     struct perf_sample *sample __maybe_unused,
 				     struct machine *machine __maybe_unused)
 {
-	struct perf_record *rec = container_of(tool, struct perf_record, tool);
-	if (write_output(rec, event, event->header.size) < 0)
-		return -1;
-
-	return 0;
+	struct record *rec = container_of(tool, struct record, tool);
+	return record__write(rec, event, event->header.size);
 }
 
-static int perf_record__mmap_read(struct perf_record *rec,
-				   struct perf_mmap *md)
+static int record__mmap_read(struct record *rec, struct perf_mmap *md)
 {
 	unsigned int head = perf_mmap__read_head(md);
 	unsigned int old = md->prev;
@@ -136,7 +117,7 @@ static int perf_record__mmap_read(struct perf_record *rec,
 		size = md->mask + 1 - (old & md->mask);
 		old += size;
 
-		if (write_output(rec, buf, size) < 0) {
+		if (record__write(rec, buf, size) < 0) {
 			rc = -1;
 			goto out;
 		}
@@ -146,7 +127,7 @@ static int perf_record__mmap_read(struct perf_record *rec,
 	size = head - old;
 	old += size;
 
-	if (write_output(rec, buf, size) < 0) {
+	if (record__write(rec, buf, size) < 0) {
 		rc = -1;
 		goto out;
 	}
@@ -171,9 +152,9 @@ static void sig_handler(int sig)
 	signr = sig;
 }
 
-static void perf_record__sig_exit(int exit_status __maybe_unused, void *arg)
+static void record__sig_exit(int exit_status __maybe_unused, void *arg)
 {
-	struct perf_record *rec = arg;
+	struct record *rec = arg;
 	int status;
 
 	if (rec->evlist->workload.pid > 0) {
@@ -191,13 +172,13 @@ static void perf_record__sig_exit(int exit_status __maybe_unused, void *arg)
 	signal(signr, SIG_DFL);
 }
 
-static int perf_record__open(struct perf_record *rec)
+static int record__open(struct record *rec)
 {
 	char msg[512];
 	struct perf_evsel *pos;
 	struct perf_evlist *evlist = rec->evlist;
 	struct perf_session *session = rec->session;
-	struct perf_record_opts *opts = &rec->opts;
+	struct record_opts *opts = &rec->opts;
 	int rc = 0;
 
 	perf_evlist__config(evlist, opts);
@@ -232,7 +213,7 @@ try_again:
 			       "Consider increasing "
 			       "/proc/sys/kernel/perf_event_mlock_kb,\n"
 			       "or try again with a smaller value of -m/--mmap_pages.\n"
-			       "(current value: %d)\n", opts->mmap_pages);
+			       "(current value: %u)\n", opts->mmap_pages);
 			rc = -errno;
 		} else {
 			pr_err("failed to mmap with %d (%s)\n", errno, strerror(errno));
@@ -247,7 +228,7 @@ out:
 	return rc;
 }
 
-static int process_buildids(struct perf_record *rec)
+static int process_buildids(struct record *rec)
 {
 	struct perf_data_file *file  = &rec->file;
 	struct perf_session *session = rec->session;
@@ -262,9 +243,9 @@ static int process_buildids(struct perf_record *rec)
 					      size, &build_id__mark_dso_hit_ops);
 }
 
-static void perf_record__exit(int status, void *arg)
+static void record__exit(int status, void *arg)
 {
-	struct perf_record *rec = arg;
+	struct record *rec = arg;
 	struct perf_data_file *file = &rec->file;
 
 	if (status != 0)
@@ -320,14 +301,14 @@ static struct perf_event_header finished_round_event = {
 	.type = PERF_RECORD_FINISHED_ROUND,
 };
 
-static int perf_record__mmap_read_all(struct perf_record *rec)
+static int record__mmap_read_all(struct record *rec)
 {
 	int i;
 	int rc = 0;
 
 	for (i = 0; i < rec->evlist->nr_mmaps; i++) {
 		if (rec->evlist->mmap[i].base) {
-			if (perf_record__mmap_read(rec, &rec->evlist->mmap[i]) != 0) {
+			if (record__mmap_read(rec, &rec->evlist->mmap[i]) != 0) {
 				rc = -1;
 				goto out;
 			}
@@ -335,14 +316,13 @@ static int perf_record__mmap_read_all(struct perf_record *rec)
 	}
 
 	if (perf_header__has_feat(&rec->session->header, HEADER_TRACING_DATA))
-		rc = write_output(rec, &finished_round_event,
-				  sizeof(finished_round_event));
+		rc = record__write(rec, &finished_round_event, sizeof(finished_round_event));
 
 out:
 	return rc;
 }
 
-static void perf_record__init_features(struct perf_record *rec)
+static void record__init_features(struct record *rec)
 {
 	struct perf_evlist *evsel_list = rec->evlist;
 	struct perf_session *session = rec->session;
@@ -361,14 +341,14 @@ static void perf_record__init_features(struct perf_record *rec)
 		perf_header__clear_feat(&session->header, HEADER_BRANCH_STACK);
 }
 
-static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
+static int __cmd_record(struct record *rec, int argc, const char **argv)
 {
 	int err;
 	unsigned long waking = 0;
 	const bool forks = argc > 0;
 	struct machine *machine;
 	struct perf_tool *tool = &rec->tool;
-	struct perf_record_opts *opts = &rec->opts;
+	struct record_opts *opts = &rec->opts;
 	struct perf_evlist *evsel_list = rec->evlist;
 	struct perf_data_file *file = &rec->file;
 	struct perf_session *session;
@@ -376,7 +356,7 @@ static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
 
 	rec->progname = argv[0];
 
-	on_exit(perf_record__sig_exit, rec);
+	on_exit(record__sig_exit, rec);
 	signal(SIGCHLD, sig_handler);
 	signal(SIGINT, sig_handler);
 	signal(SIGUSR1, sig_handler);
@@ -390,7 +370,7 @@ static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
 
 	rec->session = session;
 
-	perf_record__init_features(rec);
+	record__init_features(rec);
 
 	if (forks) {
 		err = perf_evlist__prepare_workload(evsel_list, &opts->target,
@@ -402,7 +382,7 @@ static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
 		}
 	}
 
-	if (perf_record__open(rec) != 0) {
+	if (record__open(rec) != 0) {
 		err = -1;
 		goto out_delete_session;
 	}
@@ -411,9 +391,9 @@ static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
 		perf_header__clear_feat(&session->header, HEADER_GROUP_DESC);
 
 	/*
-	 * perf_session__delete(session) will be called at perf_record__exit()
+	 * perf_session__delete(session) will be called at record__exit()
 	 */
-	on_exit(perf_record__exit, rec);
+	on_exit(record__exit, rec);
 
 	if (file->is_pipe) {
 		err = perf_header__write_pipe(file->fd);
@@ -518,7 +498,7 @@ static int __cmd_record(struct perf_record *rec, int argc, const char **argv)
 	for (;;) {
 		int hits = rec->samples;
 
-		if (perf_record__mmap_read_all(rec) < 0) {
+		if (record__mmap_read_all(rec) < 0) {
 			err = -1;
 			goto out_delete_session;
 		}
@@ -677,7 +657,7 @@ static int get_stack_size(char *str, unsigned long *_size)
 }
 #endif /* HAVE_LIBUNWIND_SUPPORT */
 
-int record_parse_callchain(const char *arg, struct perf_record_opts *opts)
+int record_parse_callchain(const char *arg, struct record_opts *opts)
 {
 	char *tok, *name, *saveptr = NULL;
 	char *buf;
@@ -733,7 +713,7 @@ int record_parse_callchain(const char *arg, struct perf_record_opts *opts)
 	return ret;
 }
 
-static void callchain_debug(struct perf_record_opts *opts)
+static void callchain_debug(struct record_opts *opts)
 {
 	pr_debug("callchain: type %d\n", opts->call_graph);
 
@@ -746,7 +726,7 @@ int record_parse_callchain_opt(const struct option *opt,
 			       const char *arg,
 			       int unset)
 {
-	struct perf_record_opts *opts = opt->value;
+	struct record_opts *opts = opt->value;
 	int ret;
 
 	/* --no-call-graph */
@@ -767,7 +747,7 @@ int record_callchain_opt(const struct option *opt,
 			 const char *arg __maybe_unused,
 			 int unset __maybe_unused)
 {
-	struct perf_record_opts *opts = opt->value;
+	struct record_opts *opts = opt->value;
 
 	if (opts->call_graph == CALLCHAIN_NONE)
 		opts->call_graph = CALLCHAIN_FP;
@@ -783,8 +763,8 @@ static const char * const record_usage[] = {
 };
 
 /*
- * XXX Ideally would be local to cmd_record() and passed to a perf_record__new
- * because we need to have access to it in perf_record__exit, that is called
+ * XXX Ideally would be local to cmd_record() and passed to a record__new
+ * because we need to have access to it in record__exit, that is called
  * after cmd_record() exits, but since record_options need to be accessible to
  * builtin-script, leave it here.
  *
@@ -792,7 +772,7 @@ static const char * const record_usage[] = {
  *
  * Just say no to tons of global variables, sigh.
  */
-static struct perf_record record = {
+static struct record record = {
 	.opts = {
 		.mmap_pages	     = UINT_MAX,
 		.user_freq	     = UINT_MAX,
@@ -800,6 +780,7 @@ static struct perf_record record = {
 		.freq		     = 4000,
 		.target		     = {
 			.uses_mmap   = true,
+			.default_per_cpu = true,
 		},
 	},
 };
@@ -815,7 +796,7 @@ const char record_callchain_help[] = CALLCHAIN_HELP "fp";
 /*
  * XXX Will stay a global variable till we fix builtin-script.c to stop messing
  * with it and switch to use the library functions in perf_evlist that came
- * from builtin-record.c, i.e. use perf_record_opts,
+ * from builtin-record.c, i.e. use record_opts,
  * perf_evlist__prepare_workload, etc instead of fork+exec'in 'perf record',
  * using pipes, etc.
  */
@@ -842,8 +823,9 @@ const struct option record_options[] = {
 	OPT_U64('c', "count", &record.opts.user_interval, "event period to sample"),
 	OPT_STRING('o', "output", &record.file.path, "file",
 		    "output file name"),
-	OPT_BOOLEAN('i', "no-inherit", &record.opts.no_inherit,
-		    "child tasks do not inherit counters"),
+	OPT_BOOLEAN_SET('i', "no-inherit", &record.opts.no_inherit,
+			&record.opts.no_inherit_set,
+			"child tasks do not inherit counters"),
 	OPT_UINTEGER('F', "freq", &record.opts.user_freq, "profile at this frequency"),
 	OPT_CALLBACK('m', "mmap-pages", &record.opts.mmap_pages, "pages",
 		     "number of mmap data pages",
@@ -888,8 +870,8 @@ const struct option record_options[] = {
 		    "sample by weight (on special events only)"),
 	OPT_BOOLEAN(0, "transaction", &record.opts.sample_transaction,
 		    "sample transaction flags (special events only)"),
-	OPT_BOOLEAN(0, "force-per-cpu", &record.opts.target.force_per_cpu,
-		    "force the use of per-cpu mmaps"),
+	OPT_BOOLEAN(0, "per-thread", &record.opts.target.per_thread,
+		    "use per-thread mmaps"),
 	OPT_END()
 };
 
@@ -897,7 +879,7 @@ int cmd_record(int argc, const char **argv, const char *prefix __maybe_unused)
 {
 	int err = -ENOMEM;
 	struct perf_evlist *evsel_list;
-	struct perf_record *rec = &record;
+	struct record *rec = &record;
 	char errbuf[BUFSIZ];
 
 	evsel_list = perf_evlist__new();
@@ -938,6 +920,9 @@ int cmd_record(int argc, const char **argv, const char *prefix __maybe_unused)
 		goto out_symbol_exit;
 	}
 
+	if (rec->opts.target.tid && !rec->opts.no_inherit_set)
+		rec->opts.no_inherit = true;
+
 	err = target__validate(&rec->opts.target);
 	if (err) {
 		target__strerror(&rec->opts.target, err, errbuf, BUFSIZ);
@@ -959,7 +944,7 @@ int cmd_record(int argc, const char **argv, const char *prefix __maybe_unused)
 	if (perf_evlist__create_maps(evsel_list, &rec->opts.target) < 0)
 		usage_with_options(record_usage, record_options);
 
-	if (perf_record_opts__config(&rec->opts)) {
+	if (record_opts__config(&rec->opts)) {
 		err = -EINVAL;
 		goto out_free_fd;
 	}
