@@ -196,6 +196,13 @@ enum lx_func {
 };
 
 /*
+ * hint/re field for jr instructions.
+ */
+enum jr_hint {
+	jr_hb_hint = 0x10,
+};
+
+/*
  * (microMIPS) Major opcodes.
  */
 enum mm_major_op {
