@@ -98,6 +98,12 @@
 		interrupt-parent = <&intc>;
 		ranges;
 
+		ocram: sram@00900000 {
+			compatible = "mmio-sram";
+			reg = <0x00900000 0x20000>;
+			clocks = <&clks IMX6SL_CLK_OCRAM>;
+		};
+
 		L2: l2-cache@00a02000 {
 			compatible = "arm,pl310-cache";
 			reg = <0x00a02000 0x1000>;
@@ -387,8 +393,10 @@
 			};
 
 			kpp: kpp@020b8000 {
+				compatible = "fsl,imx6sl-kpp", "fsl,imx21-kpp";
 				reg = <0x020b8000 0x4000>;
 				interrupts = <0 82 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clks IMX6SL_CLK_DUMMY>;
 			};
 
 			wdog1: wdog@020bc000 {
