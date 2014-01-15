@@ -11,6 +11,7 @@
  * as published by the Free Software Foundation; either version
  * 2 of the License, or (at your option) any later version.
  */
+#include <linux/cpuidle.h>
 #include <linux/export.h>
 #include <linux/init.h>
 #include <linux/irqflags.h>
@@ -240,7 +241,7 @@ static void smtc_idle_hook(void)
 #endif
 }
 
-void arch_cpu_idle(void)
+static void mips_cpu_idle(void)
 {
 	smtc_idle_hook();
 	if (cpu_wait)
@@ -248,3 +249,20 @@ void arch_cpu_idle(void)
 	else
 		local_irq_enable();
 }
+
+void arch_cpu_idle(void)
+{
+	if (cpuidle_idle_call())
+		mips_cpu_idle();
+}
+
+#ifdef CONFIG_CPU_IDLE
+
+int mips_cpuidle_wait_enter(struct cpuidle_device *dev,
+			    struct cpuidle_driver *drv, int index)
+{
+	mips_cpu_idle();
+	return index;
+}
+
+#endif
