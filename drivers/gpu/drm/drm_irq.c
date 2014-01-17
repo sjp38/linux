@@ -368,7 +368,7 @@ int drm_irq_uninstall(struct drm_device *dev)
 	if (dev->num_crtcs) {
 		spin_lock_irqsave(&dev->vbl_lock, irqflags);
 		for (i = 0; i < dev->num_crtcs; i++) {
-			DRM_WAKEUP(&dev->vblank[i].queue);
+			wake_up(&dev->vblank[i].queue);
 			dev->vblank[i].enabled = false;
 			dev->vblank[i].last =
 				dev->driver->get_vblank_counter(dev, i);
@@ -960,7 +960,7 @@ void drm_vblank_put(struct drm_device *dev, int crtc)
 	if (atomic_dec_and_test(&dev->vblank[crtc].refcount) &&
 	    (drm_vblank_offdelay > 0))
 		mod_timer(&dev->vblank_disable_timer,
-			  jiffies + ((drm_vblank_offdelay * DRM_HZ)/1000));
+			  jiffies + ((drm_vblank_offdelay * HZ)/1000));
 }
 EXPORT_SYMBOL(drm_vblank_put);
 
@@ -980,7 +980,7 @@ void drm_vblank_off(struct drm_device *dev, int crtc)
 
 	spin_lock_irqsave(&dev->vbl_lock, irqflags);
 	vblank_disable_and_save(dev, crtc);
-	DRM_WAKEUP(&dev->vblank[crtc].queue);
+	wake_up(&dev->vblank[crtc].queue);
 
 	/* Send any queued vblank events, lest the natives grow disquiet */
 	seq = drm_vblank_count_and_time(dev, crtc, &now);
@@ -1244,7 +1244,7 @@ int drm_wait_vblank(struct drm_device *dev, void *data,
 	DRM_DEBUG("waiting on vblank count %d, crtc %d\n",
 		  vblwait->request.sequence, crtc);
 	dev->vblank[crtc].last_wait = vblwait->request.sequence;
-	DRM_WAIT_ON(ret, dev->vblank[crtc].queue, 3 * DRM_HZ,
+	DRM_WAIT_ON(ret, dev->vblank[crtc].queue, 3 * HZ,
 		    (((drm_vblank_count(dev, crtc) -
 		       vblwait->request.sequence) <= (1 << 23)) ||
 		     !dev->irq_enabled));
@@ -1363,7 +1363,7 @@ bool drm_handle_vblank(struct drm_device *dev, int crtc)
 			  crtc, (int) diff_ns);
 	}
 
-	DRM_WAKEUP(&dev->vblank[crtc].queue);
+	wake_up(&dev->vblank[crtc].queue);
 	drm_handle_vblank_events(dev, crtc);
 
 	spin_unlock_irqrestore(&dev->vblank_time_lock, irqflags);

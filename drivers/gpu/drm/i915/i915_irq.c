@@ -600,7 +600,7 @@ static u32 i915_get_vblank_counter(struct drm_device *dev, int pipe)
 	 * Cook up a vblank counter by also checking the pixel
 	 * counter against vblank start.
 	 */
-	return ((high1 << 8) | low) + (pixel >= vbl_start);
+	return (((high1 << 8) | low) + (pixel >= vbl_start)) & 0xffffff;
 }
 
 static u32 gm45_get_vblank_counter(struct drm_device *dev, int pipe)
@@ -1015,10 +1015,8 @@ static void gen6_pm_rps_work(struct work_struct *work)
 	/* sysfs frequency interfaces may have snuck in while servicing the
 	 * interrupt
 	 */
-	if (new_delay < (int)dev_priv->rps.min_delay)
-		new_delay = dev_priv->rps.min_delay;
-	if (new_delay > (int)dev_priv->rps.max_delay)
-		new_delay = dev_priv->rps.max_delay;
+	new_delay = clamp_t(int, new_delay,
+			    dev_priv->rps.min_delay, dev_priv->rps.max_delay);
 	dev_priv->rps.last_adj = new_delay - dev_priv->rps.cur_delay;
 
 	if (IS_VALLEYVIEW(dev_priv->dev))
@@ -1473,6 +1471,9 @@ static irqreturn_t valleyview_irq_handler(int irq, void *arg)
 					 hotplug_status);
 
 			intel_hpd_irq_handler(dev, hotplug_trigger, hpd_status_i915);
+
+			if (hotplug_status & DP_AUX_CHANNEL_MASK_INT_STATUS_G4X)
+				dp_aux_irq_handler(dev);
 
 			I915_WRITE(PORT_HOTPLUG_STAT, hotplug_status);
 			I915_READ(PORT_HOTPLUG_STAT);
@@ -1993,7 +1994,7 @@ static void i915_error_work_func(struct work_struct *work)
 			kobject_uevent_env(&dev->primary->kdev->kobj,
 					   KOBJ_CHANGE, reset_done_event);
 		} else {
-			atomic_set(&error->reset_counter, I915_WEDGED);
+			atomic_set_mask(I915_WEDGED, &error->reset_counter);
 		}
 
 		/*
@@ -3140,10 +3141,10 @@ static int i8xx_irq_postinstall(struct drm_device *dev)
  * Returns true when a page flip has completed.
  */
 static bool i8xx_handle_vblank(struct drm_device *dev,
-			       int pipe, u16 iir)
+			       int plane, int pipe, u32 iir)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
-	u16 flip_pending = DISPLAY_PLANE_FLIP_PENDING(pipe);
+	u16 flip_pending = DISPLAY_PLANE_FLIP_PENDING(plane);
 
 	if (!drm_handle_vblank(dev, pipe))
 		return false;
@@ -3151,7 +3152,7 @@ static bool i8xx_handle_vblank(struct drm_device *dev,
 	if ((iir & flip_pending) == 0)
 		return false;
 
-	intel_prepare_page_flip(dev, pipe);
+	intel_prepare_page_flip(dev, plane);
 
 	/* We detect FlipDone by looking for the change in PendingFlip from '1'
 	 * to '0' on the following vblank, i.e. IIR has the Pendingflip
@@ -3220,9 +3221,13 @@ static irqreturn_t i8xx_irq_handler(int irq, void *arg)
 			notify_ring(dev, &dev_priv->ring[RCS]);
 
 		for_each_pipe(pipe) {
+			int plane = pipe;
+			if (IS_MOBILE(dev))
+				plane = !plane;
+
 			if (pipe_stats[pipe] & PIPE_VBLANK_INTERRUPT_STATUS &&
-			    i8xx_handle_vblank(dev, pipe, iir))
-				flip_mask &= ~DISPLAY_PLANE_FLIP_PENDING(pipe);
+			    i8xx_handle_vblank(dev, plane, pipe, iir))
+				flip_mask &= ~DISPLAY_PLANE_FLIP_PENDING(plane);
 
 			if (pipe_stats[pipe] & PIPE_CRC_DONE_INTERRUPT_STATUS)
 				i9xx_pipe_crc_irq_handler(dev, pipe);
@@ -3657,6 +3662,10 @@ static irqreturn_t i965_irq_handler(int irq, void *arg)
 			intel_hpd_irq_handler(dev, hotplug_trigger,
 					      IS_G4X(dev) ? hpd_status_gen4 : hpd_status_i915);
 
+			if (IS_G4X(dev) &&
+			    (hotplug_status & DP_AUX_CHANNEL_MASK_INT_STATUS_G4X))
+				dp_aux_irq_handler(dev);
+
 			I915_WRITE(PORT_HOTPLUG_STAT, hotplug_status);
 			I915_READ(PORT_HOTPLUG_STAT);
 		}
@@ -3893,8 +3902,8 @@ void hsw_pc8_disable_interrupts(struct drm_device *dev)
 	dev_priv->pc8.regsave.gtier = I915_READ(GTIER);
 	dev_priv->pc8.regsave.gen6_pmimr = I915_READ(GEN6_PMIMR);
 
-	ironlake_disable_display_irq(dev_priv, ~DE_PCH_EVENT_IVB);
-	ibx_disable_display_interrupt(dev_priv, ~SDE_HOTPLUG_MASK_CPT);
+	ironlake_disable_display_irq(dev_priv, 0xffffffff);
+	ibx_disable_display_interrupt(dev_priv, 0xffffffff);
 	ilk_disable_gt_irq(dev_priv, 0xffffffff);
 	snb_disable_pm_irq(dev_priv, 0xffffffff);
 
@@ -3908,34 +3917,26 @@ void hsw_pc8_restore_interrupts(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	unsigned long irqflags;
-	uint32_t val, expected;
+	uint32_t val;
 
 	spin_lock_irqsave(&dev_priv->irq_lock, irqflags);
 
 	val = I915_READ(DEIMR);
-	expected = ~DE_PCH_EVENT_IVB;
-	WARN(val != expected, "DEIMR is 0x%08x, not 0x%08x\n", val, expected);
+	WARN(val != 0xffffffff, "DEIMR is 0x%08x\n", val);
 
-	val = I915_READ(SDEIMR) & ~SDE_HOTPLUG_MASK_CPT;
-	expected = ~SDE_HOTPLUG_MASK_CPT;
-	WARN(val != expected, "SDEIMR non-HPD bits are 0x%08x, not 0x%08x\n",
-	     val, expected);
+	val = I915_READ(SDEIMR);
+	WARN(val != 0xffffffff, "SDEIMR is 0x%08x\n", val);
 
 	val = I915_READ(GTIMR);
-	expected = 0xffffffff;
-	WARN(val != expected, "GTIMR is 0x%08x, not 0x%08x\n", val, expected);
+	WARN(val != 0xffffffff, "GTIMR is 0x%08x\n", val);
 
 	val = I915_READ(GEN6_PMIMR);
-	expected = 0xffffffff;
-	WARN(val != expected, "GEN6_PMIMR is 0x%08x, not 0x%08x\n", val,
-	     expected);
+	WARN(val != 0xffffffff, "GEN6_PMIMR is 0x%08x\n", val);
 
 	dev_priv->pc8.irqs_disabled = false;
 
 	ironlake_enable_display_irq(dev_priv, ~dev_priv->pc8.regsave.deimr);
-	ibx_enable_display_interrupt(dev_priv,
-				     ~dev_priv->pc8.regsave.sdeimr &
-				     ~SDE_HOTPLUG_MASK_CPT);
+	ibx_enable_display_interrupt(dev_priv, ~dev_priv->pc8.regsave.sdeimr);
 	ilk_enable_gt_irq(dev_priv, ~dev_priv->pc8.regsave.gtimr);
 	snb_enable_pm_irq(dev_priv, ~dev_priv->pc8.regsave.gen6_pmimr);
 	I915_WRITE(GTIER, dev_priv->pc8.regsave.gtier);
