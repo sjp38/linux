@@ -418,6 +418,8 @@ struct vcpu_vmx {
 	u64 		      msr_host_kernel_gs_base;
 	u64 		      msr_guest_kernel_gs_base;
 #endif
+	u32 vm_entry_controls_shadow;
+	u32 vm_exit_controls_shadow;
 	/*
 	 * loaded_vmcs points to the VMCS currently used in this vcpu. For a
 	 * non-nested (L1) guest, it always points to vmcs01. For a nested
@@ -1326,6 +1328,62 @@ static void vmcs_set_bits(unsigned long field, u32 mask)
 	vmcs_writel(field, vmcs_readl(field) | mask);
 }
 
+static inline void vm_entry_controls_init(struct vcpu_vmx *vmx, u32 val)
+{
+	vmcs_write32(VM_ENTRY_CONTROLS, val);
+	vmx->vm_entry_controls_shadow = val;
+}
+
+static inline void vm_entry_controls_set(struct vcpu_vmx *vmx, u32 val)
+{
+	if (vmx->vm_entry_controls_shadow != val)
+		vm_entry_controls_init(vmx, val);
+}
+
+static inline u32 vm_entry_controls_get(struct vcpu_vmx *vmx)
+{
+	return vmx->vm_entry_controls_shadow;
+}
+
+
+static inline void vm_entry_controls_setbit(struct vcpu_vmx *vmx, u32 val)
+{
+	vm_entry_controls_set(vmx, vm_entry_controls_get(vmx) | val);
+}
+
+static inline void vm_entry_controls_clearbit(struct vcpu_vmx *vmx, u32 val)
+{
+	vm_entry_controls_set(vmx, vm_entry_controls_get(vmx) & ~val);
+}
+
+static inline void vm_exit_controls_init(struct vcpu_vmx *vmx, u32 val)
+{
+	vmcs_write32(VM_EXIT_CONTROLS, val);
+	vmx->vm_exit_controls_shadow = val;
+}
+
+static inline void vm_exit_controls_set(struct vcpu_vmx *vmx, u32 val)
+{
+	if (vmx->vm_exit_controls_shadow != val)
+		vm_exit_controls_init(vmx, val);
+}
+
+static inline u32 vm_exit_controls_get(struct vcpu_vmx *vmx)
+{
+	return vmx->vm_exit_controls_shadow;
+}
+
+
+static inline void vm_exit_controls_setbit(struct vcpu_vmx *vmx, u32 val)
+{
+	vm_exit_controls_set(vmx, vm_exit_controls_get(vmx) | val);
+}
+
+static inline void vm_exit_controls_clearbit(struct vcpu_vmx *vmx, u32 val)
+{
+	vm_exit_controls_set(vmx, vm_exit_controls_get(vmx) & ~val);
+}
+
 static void vmx_segment_cache_clear(struct vcpu_vmx *vmx)
 {
 	vmx->segment_cache.bitmask = 0;
@@ -1410,11 +1468,11 @@ static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 	vmcs_write32(EXCEPTION_BITMAP, eb);
 }
 
-static void clear_atomic_switch_msr_special(unsigned long entry,
-		unsigned long exit)
+static void clear_atomic_switch_msr_special(struct vcpu_vmx *vmx,
+		unsigned long entry, unsigned long exit)
 {
-	vmcs_clear_bits(VM_ENTRY_CONTROLS, entry);
-	vmcs_clear_bits(VM_EXIT_CONTROLS, exit);
+	vm_entry_controls_clearbit(vmx, entry);
+	vm_exit_controls_clearbit(vmx, exit);
 }
 
 static void clear_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr)
@@ -1425,14 +1483,15 @@ static void clear_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr)
 	switch (msr) {
 	case MSR_EFER:
 		if (cpu_has_load_ia32_efer) {
-			clear_atomic_switch_msr_special(VM_ENTRY_LOAD_IA32_EFER,
+			clear_atomic_switch_msr_special(vmx,
+					VM_ENTRY_LOAD_IA32_EFER,
 					VM_EXIT_LOAD_IA32_EFER);
 			return;
 		}
 		break;
 	case MSR_CORE_PERF_GLOBAL_CTRL:
 		if (cpu_has_load_perf_global_ctrl) {
-			clear_atomic_switch_msr_special(
+			clear_atomic_switch_msr_special(vmx,
 					VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL,
 					VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL);
 			return;
@@ -1453,14 +1512,15 @@ static void clear_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr)
 	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, m->nr);
 }
 
-static void add_atomic_switch_msr_special(unsigned long entry,
-		unsigned long exit, unsigned long guest_val_vmcs,
-		unsigned long host_val_vmcs, u64 guest_val, u64 host_val)
+static void add_atomic_switch_msr_special(struct vcpu_vmx *vmx,
+		unsigned long entry, unsigned long exit,
+		unsigned long guest_val_vmcs, unsigned long host_val_vmcs,
+		u64 guest_val, u64 host_val)
 {
 	vmcs_write64(guest_val_vmcs, guest_val);
 	vmcs_write64(host_val_vmcs, host_val);
-	vmcs_set_bits(VM_ENTRY_CONTROLS, entry);
-	vmcs_set_bits(VM_EXIT_CONTROLS, exit);
+	vm_entry_controls_setbit(vmx, entry);
+	vm_exit_controls_setbit(vmx, exit);
 }
 
 static void add_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr,
@@ -1472,7 +1532,8 @@ static void add_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr,
 	switch (msr) {
 	case MSR_EFER:
 		if (cpu_has_load_ia32_efer) {
-			add_atomic_switch_msr_special(VM_ENTRY_LOAD_IA32_EFER,
+			add_atomic_switch_msr_special(vmx,
+					VM_ENTRY_LOAD_IA32_EFER,
 					VM_EXIT_LOAD_IA32_EFER,
 					GUEST_IA32_EFER,
 					HOST_IA32_EFER,
@@ -1482,7 +1543,7 @@ static void add_atomic_switch_msr(struct vcpu_vmx *vmx, unsigned msr,
 		break;
 	case MSR_CORE_PERF_GLOBAL_CTRL:
 		if (cpu_has_load_perf_global_ctrl) {
-			add_atomic_switch_msr_special(
+			add_atomic_switch_msr_special(vmx,
 					VM_ENTRY_LOAD_IA32_PERF_GLOBAL_CTRL,
 					VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL,
 					GUEST_IA32_PERF_GLOBAL_CTRL,
@@ -2279,6 +2340,7 @@ static __init void nested_vmx_setup_ctls_msrs(void)
 	rdmsr(MSR_IA32_VMX_MISC, nested_vmx_misc_low, nested_vmx_misc_high);
 	nested_vmx_misc_low &= VMX_MISC_PREEMPTION_TIMER_RATE_MASK |
 		VMX_MISC_SAVE_EFER_LMA;
+	nested_vmx_misc_low |= VMX_MISC_ACTIVITY_HLT;
 	nested_vmx_misc_high = 0;
 }
 
@@ -3182,14 +3244,10 @@ static void vmx_set_efer(struct kvm_vcpu *vcpu, u64 efer)
 	vmx_load_host_state(to_vmx(vcpu));
 	vcpu->arch.efer = efer;
 	if (efer & EFER_LMA) {
-		vmcs_write32(VM_ENTRY_CONTROLS,
-			     vmcs_read32(VM_ENTRY_CONTROLS) |
-			     VM_ENTRY_IA32E_MODE);
+		vm_entry_controls_setbit(to_vmx(vcpu), VM_ENTRY_IA32E_MODE);
 		msr->data = efer;
 	} else {
-		vmcs_write32(VM_ENTRY_CONTROLS,
-			     vmcs_read32(VM_ENTRY_CONTROLS) &
-			     ~VM_ENTRY_IA32E_MODE);
+		vm_entry_controls_clearbit(to_vmx(vcpu), VM_ENTRY_IA32E_MODE);
 
 		msr->data = efer & ~EFER_LME;
 	}
@@ -3217,9 +3275,7 @@ static void enter_lmode(struct kvm_vcpu *vcpu)
 
 static void exit_lmode(struct kvm_vcpu *vcpu)
 {
-	vmcs_write32(VM_ENTRY_CONTROLS,
-		     vmcs_read32(VM_ENTRY_CONTROLS)
-		     & ~VM_ENTRY_IA32E_MODE);
+	vm_entry_controls_clearbit(to_vmx(vcpu), VM_ENTRY_IA32E_MODE);
 	vmx_set_efer(vcpu, vcpu->arch.efer & ~EFER_LMA);
 }
 
@@ -4346,10 +4402,11 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		++vmx->nmsrs;
 	}
 
-	vmcs_write32(VM_EXIT_CONTROLS, vmcs_config.vmexit_ctrl);
+
+	vm_exit_controls_init(vmx, vmcs_config.vmexit_ctrl);
 
 	/* 22.2.1, 20.8.1 */
-	vmcs_write32(VM_ENTRY_CONTROLS, vmcs_config.vmentry_ctrl);
+	vm_entry_controls_init(vmx, vmcs_config.vmentry_ctrl);
 
 	vmcs_writel(CR0_GUEST_HOST_MASK, ~0UL);
 	set_cr4_guest_host_mask(vmx);
@@ -5080,10 +5137,14 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 	reg = DEBUG_REG_ACCESS_REG(exit_qualification);
 	if (exit_qualification & TYPE_MOV_FROM_DR) {
 		unsigned long val;
-		if (!kvm_get_dr(vcpu, dr, &val))
-			kvm_register_write(vcpu, reg, val);
+
+		if (kvm_get_dr(vcpu, dr, &val))
+			return 1;
+		kvm_register_write(vcpu, reg, val);
 	} else
-		kvm_set_dr(vcpu, dr, vcpu->arch.regs[reg]);
+		if (kvm_set_dr(vcpu, dr, vcpu->arch.regs[reg]))
+			return 1;
+
 	skip_emulated_instruction(vcpu);
 	return 1;
 }
@@ -7706,6 +7767,11 @@ static void prepare_vmcs02(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12)
 			else
 				vmcs_write64(APIC_ACCESS_ADDR,
 				  page_to_phys(vmx->nested.apic_access_page));
+		} else if (vm_need_virtualize_apic_accesses(vmx->vcpu.kvm)) {
+			exec_control |=
+				SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES;
+			vmcs_write64(APIC_ACCESS_ADDR,
+				page_to_phys(vcpu->kvm->arch.apic_access_page));
 		}
 
 		vmcs_write32(SECONDARY_VM_EXEC_CONTROL, exec_control);
@@ -7759,12 +7825,12 @@ static void prepare_vmcs02(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12)
 	exit_control = vmcs_config.vmexit_ctrl;
 	if (vmcs12->pin_based_vm_exec_control & PIN_BASED_VMX_PREEMPTION_TIMER)
 		exit_control |= VM_EXIT_SAVE_VMX_PREEMPTION_TIMER;
-	vmcs_write32(VM_EXIT_CONTROLS, exit_control);
+	vm_exit_controls_init(vmx, exit_control);
 
 	/* vmcs12's VM_ENTRY_LOAD_IA32_EFER and VM_ENTRY_IA32E_MODE are
 	 * emulated by vmx_set_efer(), below.
 	 */
-	vmcs_write32(VM_ENTRY_CONTROLS,
+	vm_entry_controls_init(vmx, 
 		(vmcs12->vm_entry_controls & ~VM_ENTRY_LOAD_IA32_EFER &
 			~VM_ENTRY_IA32E_MODE) |
 		(vmcs_config.vmentry_ctrl & ~VM_ENTRY_IA32E_MODE));
@@ -7882,7 +7948,8 @@ static int nested_vmx_run(struct kvm_vcpu *vcpu, bool launch)
 		return 1;
 	}
 
-	if (vmcs12->guest_activity_state != GUEST_ACTIVITY_ACTIVE) {
+	if (vmcs12->guest_activity_state != GUEST_ACTIVITY_ACTIVE &&
+	    vmcs12->guest_activity_state != GUEST_ACTIVITY_HLT) {
 		nested_vmx_failValid(vcpu, VMXERR_ENTRY_INVALID_CONTROL_FIELD);
 		return 1;
 	}
@@ -8010,6 +8077,9 @@ static int nested_vmx_run(struct kvm_vcpu *vcpu, bool launch)
 	vmcs12->launch_state = 1;
 
 	prepare_vmcs02(vcpu, vmcs12);
+
+	if (vmcs12->guest_activity_state == GUEST_ACTIVITY_HLT)
+		return kvm_emulate_halt(vcpu);
 
 	/*
 	 * Note no nested_vmx_succeed or nested_vmx_fail here. At this point
@@ -8186,7 +8256,7 @@ static void prepare_vmcs12(struct kvm_vcpu *vcpu, struct vmcs12 *vmcs12)
 
 	vmcs12->vm_entry_controls =
 		(vmcs12->vm_entry_controls & ~VM_ENTRY_IA32E_MODE) |
-		(vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_IA32E_MODE);
+		(vm_entry_controls_get(to_vmx(vcpu)) & VM_ENTRY_IA32E_MODE);
 
 	/* TODO: These cannot have changed unless we have MSR bitmaps and
 	 * the relevant bit asks not to trap the change */
@@ -8389,6 +8459,8 @@ static void nested_vmx_vmexit(struct kvm_vcpu *vcpu)
 	vcpu->cpu = cpu;
 	put_cpu();
 
+	vm_entry_controls_init(vmx, vmcs_read32(VM_ENTRY_CONTROLS));
+	vm_exit_controls_init(vmx, vmcs_read32(VM_EXIT_CONTROLS));
 	vmx_segment_cache_clear(vmx);
 
 	/* if no vmcs02 cache requested, remove the one we used */
