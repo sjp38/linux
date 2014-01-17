@@ -1465,6 +1465,22 @@ out:
 	return ret;
 }
 
+void i915_gem_release_all_mmaps(struct drm_i915_private *dev_priv)
+{
+	struct i915_vma *vma;
+
+	/*
+	 * Only the global gtt is relevant for gtt memory mappings, so restrict
+	 * list traversal to objects bound into the global address space. Note
+	 * that the active list should be empty, but better safe than sorry.
+	 */
+	WARN_ON(!list_empty(&dev_priv->gtt.base.active_list));
+	list_for_each_entry(vma, &dev_priv->gtt.base.active_list, mm_list)
+		i915_gem_release_mmap(vma->obj);
+	list_for_each_entry(vma, &dev_priv->gtt.base.inactive_list, mm_list)
+		i915_gem_release_mmap(vma->obj);
+}
+
 /**
  * i915_gem_release_mmap - remove physical page mappings
  * @obj: obj in question
@@ -2314,7 +2330,7 @@ static void i915_set_reset_status(struct intel_ring_buffer *ring,
 
 	if (ring->hangcheck.action != HANGCHECK_WAIT &&
 	    i915_request_guilty(request, acthd, &inside)) {
-		DRM_ERROR("%s hung %s bo (0x%lx ctx %d) at 0x%x\n",
+		DRM_DEBUG("%s hung %s bo (0x%lx ctx %d) at 0x%x\n",
 			  ring->name,
 			  inside ? "inside" : "flushing",
 			  offset,

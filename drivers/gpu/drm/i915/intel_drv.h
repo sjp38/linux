@@ -65,8 +65,8 @@
 #define wait_for_atomic_us(COND, US) _wait_for((COND), \
 					       DIV_ROUND_UP((US), 1000), 0)
 
-#define KHz(x) (1000*x)
-#define MHz(x) KHz(1000*x)
+#define KHz(x) (1000 * (x))
+#define MHz(x) KHz(1000 * (x))
 
 /*
  * Display related stuff
@@ -359,6 +359,8 @@ struct intel_crtc {
 	bool cursor_visible;
 
 	struct intel_crtc_config config;
+	struct intel_crtc_config *new_config;
+	bool new_enabled;
 
 	uint32_t ddi_pll_sel;
 
@@ -540,6 +542,7 @@ struct intel_unpin_work {
 struct intel_set_config {
 	struct drm_encoder **save_connector_encoders;
 	struct drm_crtc **save_encoder_crtcs;
+	bool *save_crtc_enabled;
 
 	bool fb_changed;
 	bool mode_changed;
@@ -625,6 +628,7 @@ void intel_ddi_get_config(struct intel_encoder *encoder,
 
 
 /* intel_display.c */
+const char *intel_output_name(int output);
 int intel_pch_rawclk(struct drm_device *dev);
 void intel_mark_busy(struct drm_device *dev);
 void intel_mark_fb_busy(struct drm_i915_gem_object *obj,

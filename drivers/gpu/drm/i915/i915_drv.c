@@ -59,7 +59,7 @@ MODULE_PARM_DESC(powersave,
 		"Enable powersavings, fbc, downclocking, etc. (default: true)");
 
 int i915_semaphores __read_mostly = -1;
-module_param_named(semaphores, i915_semaphores, int, 0600);
+module_param_named(semaphores, i915_semaphores, int, 0400);
 MODULE_PARM_DESC(semaphores,
 		"Use semaphores for inter-ring sync (default: -1 (use per-chip defaults))");
 
@@ -341,7 +341,6 @@ static const struct intel_device_info intel_haswell_m_info = {
 };
 
 static const struct intel_device_info intel_broadwell_d_info = {
-	.is_preliminary = 1,
 	.gen = 8, .num_pipes = 3,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.ring_mask = RENDER_RING | BSD_RING | BLT_RING | VEBOX_RING,
@@ -350,7 +349,6 @@ static const struct intel_device_info intel_broadwell_d_info = {
 };
 
 static const struct intel_device_info intel_broadwell_m_info = {
-	.is_preliminary = 1,
 	.gen = 8, .is_mobile = 1, .num_pipes = 3,
 	.need_gfx_hws = 1, .has_hotplug = 1,
 	.ring_mask = RENDER_RING | BSD_RING | BLT_RING | VEBOX_RING,
@@ -480,12 +478,12 @@ check_next:
 bool i915_semaphore_is_enabled(struct drm_device *dev)
 {
 	if (INTEL_INFO(dev)->gen < 6)
-		return 0;
+		return false;
 
 	/* Until we get further testing... */
 	if (IS_GEN8(dev)) {
 		WARN_ON(!i915_preliminary_hw_support);
-		return 0;
+		return false;
 	}
 
 	if (i915_semaphores >= 0)
@@ -497,7 +495,7 @@ bool i915_semaphore_is_enabled(struct drm_device *dev)
 		return false;
 #endif
 
-	return 1;
+	return true;
 }
 
 static int i915_drm_freeze(struct drm_device *dev)
@@ -920,8 +918,19 @@ static int i915_runtime_suspend(struct device *device)
 
 	DRM_DEBUG_KMS("Suspending device\n");
 
+	i915_gem_release_all_mmaps(dev_priv);
+
+	del_timer_sync(&dev_priv->gpu_error.hangcheck_timer);
 	dev_priv->pm.suspended = true;
-	intel_opregion_notify_adapter(dev, PCI_D3cold);
+
+	/*
+	 * current versions of firmware which depend on this opregion
+	 * notification have repurposed the D1 definition to mean
+	 * "runtime suspended" vs. what you would normally expect (D3)
+	 * to distinguish it from notifications that might be sent
+	 * via the suspend path.
+	 */
+	intel_opregion_notify_adapter(dev, PCI_D1);
 
 	return 0;
 }

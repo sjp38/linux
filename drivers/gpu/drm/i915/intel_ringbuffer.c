@@ -663,19 +663,22 @@ gen6_add_request(struct intel_ring_buffer *ring)
 	struct drm_device *dev = ring->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct intel_ring_buffer *useless;
-	int i, ret;
+	int i, ret, num_dwords = 4;
 
-	ret = intel_ring_begin(ring, ((I915_NUM_RINGS-1) *
-				      MBOX_UPDATE_DWORDS) +
-				      4);
-	if (ret)
-		return ret;
+	if (i915_semaphore_is_enabled(dev))
+		num_dwords += ((I915_NUM_RINGS-1) * MBOX_UPDATE_DWORDS);
 #undef MBOX_UPDATE_DWORDS
 
-	for_each_ring(useless, dev_priv, i) {
-		u32 mbox_reg = ring->signal_mbox[i];
-		if (mbox_reg != GEN6_NOSYNC)
-			update_mboxes(ring, mbox_reg);
+	ret = intel_ring_begin(ring, num_dwords);
+	if (ret)
+		return ret;
+
+	if (i915_semaphore_is_enabled(dev)) {
+		for_each_ring(useless, dev_priv, i) {
+			u32 mbox_reg = ring->signal_mbox[i];
+			if (mbox_reg != GEN6_NOSYNC)
+				update_mboxes(ring, mbox_reg);
+		}
 	}
 
 	intel_ring_emit(ring, MI_STORE_DWORD_INDEX);
@@ -1606,8 +1609,8 @@ intel_ring_alloc_seqno(struct intel_ring_buffer *ring)
 	return i915_gem_get_seqno(ring->dev, &ring->outstanding_lazy_seqno);
 }
 
-static int __intel_ring_begin(struct intel_ring_buffer *ring,
-			      int bytes)
+static int __intel_ring_prepare(struct intel_ring_buffer *ring,
+				int bytes)
 {
 	int ret;
 
@@ -1623,7 +1626,6 @@ static int __intel_ring_begin(struct intel_ring_buffer *ring,
 			return ret;
 	}
 
-	ring->space -= bytes;
 	return 0;
 }
 
@@ -1638,12 +1640,17 @@ int intel_ring_begin(struct intel_ring_buffer *ring,
 	if (ret)
 		return ret;
 
+	ret = __intel_ring_prepare(ring, num_dwords * sizeof(uint32_t));
+	if (ret)
+		return ret;
+
 	/* Preallocate the olr before touching the ring */
 	ret = intel_ring_alloc_seqno(ring);
 	if (ret)
 		return ret;
 
-	return __intel_ring_begin(ring, num_dwords * sizeof(uint32_t));
+	ring->space -= num_dwords * sizeof(uint32_t);
+	return 0;
 }
 
 void intel_ring_init_seqno(struct intel_ring_buffer *ring, u32 seqno)
