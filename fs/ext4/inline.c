@@ -849,15 +849,16 @@ int ext4_da_write_inline_data_begin(struct address_space *mapping,
 	handle_t *handle;
 	struct page *page;
 	struct ext4_iloc iloc;
+	int retries;
 
 	ret = ext4_get_inode_loc(inode, &iloc);
 	if (ret)
 		return ret;
 
+retry_journal:
 	handle = ext4_journal_start(inode, EXT4_HT_INODE, 1);
 	if (IS_ERR(handle)) {
 		ret = PTR_ERR(handle);
-		handle = NULL;
 		goto out;
 	}
 
@@ -867,7 +868,7 @@ int ext4_da_write_inline_data_begin(struct address_space *mapping,
 	if (inline_size >= pos + len) {
 		ret = ext4_prepare_inline_data(handle, inode, pos + len);
 		if (ret && ret != -ENOSPC)
-			goto out;
+			goto out_journal;
 	}
 
 	if (ret == -ENOSPC) {
@@ -875,6 +876,10 @@ int ext4_da_write_inline_data_begin(struct address_space *mapping,
 							    inode,
 							    flags,
 							    fsdata);
+		ext4_journal_stop(handle);
+		if (ret == -ENOSPC &&
+		    ext4_should_retry_alloc(inode->i_sb, &retries))
+			goto retry_journal;
 		goto out;
 	}
 
@@ -887,7 +892,7 @@ int ext4_da_write_inline_data_begin(struct address_space *mapping,
 	page = grab_cache_page_write_begin(mapping, 0, flags);
 	if (!page) {
 		ret = -ENOMEM;
-		goto out;
+		goto out_journal;
 	}
 
 	down_read(&EXT4_I(inode)->xattr_sem);
@@ -904,16 +909,15 @@ int ext4_da_write_inline_data_begin(struct address_space *mapping,
 
 	up_read(&EXT4_I(inode)->xattr_sem);
 	*pagep = page;
-	handle = NULL;
 	brelse(iloc.bh);
 	return 1;
 out_release_page:
 	up_read(&EXT4_I(inode)->xattr_sem);
 	unlock_page(page);
 	page_cache_release(page);
+out_journal:
+	ext4_journal_stop(handle);
 out:
-	if (handle)
-		ext4_journal_stop(handle);
 	brelse(iloc.bh);
 	return ret;
 }
