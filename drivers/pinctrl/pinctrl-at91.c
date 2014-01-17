@@ -784,10 +784,35 @@ static int at91_pinconf_set(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+#define DBG_SHOW_FLAG(flag) do {		\
+	if (config & flag) {			\
+		if (num_conf)			\
+			seq_puts(s, "|");	\
+		seq_puts(s, #flag);		\
+		num_conf++;			\
+	}					\
+} while (0)
+
 static void at91_pinconf_dbg_show(struct pinctrl_dev *pctldev,
 				   struct seq_file *s, unsigned pin_id)
 {
+	unsigned long config;
+	int ret, val, num_conf = 0;
 
+	ret = at91_pinconf_get(pctldev, pin_id, &config);
+
+	DBG_SHOW_FLAG(MULTI_DRIVE);
+	DBG_SHOW_FLAG(PULL_UP);
+	DBG_SHOW_FLAG(PULL_DOWN);
+	DBG_SHOW_FLAG(DIS_SCHMIT);
+	DBG_SHOW_FLAG(DEGLITCH);
+	DBG_SHOW_FLAG(DEBOUNCE);
+	if (config & DEBOUNCE) {
+		val = config >> DEBOUNCE_VAL_SHIFT;
+		seq_printf(s, "(%d)", val);
+	}
+
+	return;
 }
 
 static void at91_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
@@ -1340,13 +1365,11 @@ void at91_pinctrl_gpio_suspend(void)
 		__raw_writel(backups[i], pio + PIO_IDR);
 		__raw_writel(wakeups[i], pio + PIO_IER);
 
-		if (!wakeups[i]) {
-			clk_unprepare(gpio_chips[i]->clock);
-			clk_disable(gpio_chips[i]->clock);
-		} else {
+		if (!wakeups[i])
+			clk_disable_unprepare(gpio_chips[i]->clock);
+		else
 			printk(KERN_DEBUG "GPIO-%c may wake for %08x\n",
 			       'A'+i, wakeups[i]);
-		}
 	}
 }
 
@@ -1362,10 +1385,8 @@ void at91_pinctrl_gpio_resume(void)
 
 		pio = gpio_chips[i]->regbase;
 
-		if (!wakeups[i]) {
-			if (clk_prepare(gpio_chips[i]->clock) == 0)
-				clk_enable(gpio_chips[i]->clock);
-		}
+		if (!wakeups[i])
+			clk_prepare_enable(gpio_chips[i]->clock);
 
 		__raw_writel(wakeups[i], pio + PIO_IDR);
 		__raw_writel(backups[i], pio + PIO_IER);
