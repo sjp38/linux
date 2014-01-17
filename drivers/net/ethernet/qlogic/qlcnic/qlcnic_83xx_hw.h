@@ -324,6 +324,11 @@ struct qlc_83xx_idc {
 	char		**name;
 };
 
+enum qlcnic_vlan_operations {
+	QLC_VLAN_ADD = 0,
+	QLC_VLAN_DELETE
+};
+
 /* Device States */
 enum qlcnic_83xx_states {
 	QLC_83XX_IDC_DEV_UNKNOWN,
@@ -376,6 +381,8 @@ enum qlcnic_83xx_states {
 
 /* LED configuration settings */
 #define QLC_83XX_ENABLE_BEACON		0xe
+#define QLC_83XX_BEACON_ON		1
+#define QLC_83XX_BEACON_OFF		0
 #define QLC_83XX_LED_RATE		0xff
 #define QLC_83XX_LED_ACT		(1 << 10)
 #define QLC_83XX_LED_MOD		(0 << 13)
@@ -518,6 +525,11 @@ enum qlc_83xx_ext_regs {
 	QLC_83XX_ASIC_TEMP,
 };
 
+/* Initialize/Stop NIC command bit definitions */
+#define QLC_REGISTER_DCB_AEN		BIT_1
+#define QLC_REGISTER_LB_IDC		BIT_0
+#define QLC_INIT_FW_RESOURCES		BIT_31
+
 /* 83xx funcitons */
 int qlcnic_83xx_get_fw_version(struct qlcnic_adapter *);
 int qlcnic_83xx_issue_cmd(struct qlcnic_adapter *, struct qlcnic_cmd_args *);
@@ -542,13 +554,14 @@ int qlcnic_83xx_config_intr_coalesce(struct qlcnic_adapter *);
 void qlcnic_83xx_change_l2_filter(struct qlcnic_adapter *, u64 *, u16);
 int qlcnic_83xx_get_pci_info(struct qlcnic_adapter *, struct qlcnic_pci_info *);
 int qlcnic_83xx_set_nic_info(struct qlcnic_adapter *, struct qlcnic_info *);
-void qlcnic_83xx_register_nic_idc_func(struct qlcnic_adapter *, int);
+void qlcnic_83xx_initialize_nic(struct qlcnic_adapter *, int);
 
 int qlcnic_83xx_napi_add(struct qlcnic_adapter *, struct net_device *);
 void qlcnic_83xx_napi_del(struct qlcnic_adapter *);
 void qlcnic_83xx_napi_enable(struct qlcnic_adapter *);
 void qlcnic_83xx_napi_disable(struct qlcnic_adapter *);
 int qlcnic_83xx_config_led(struct qlcnic_adapter *, u32, u32);
+void qlcnic_83xx_get_beacon_state(struct qlcnic_adapter *);
 void qlcnic_ind_wr(struct qlcnic_adapter *, u32, u32);
 int qlcnic_ind_rd(struct qlcnic_adapter *, u32);
 int qlcnic_83xx_create_rx_ctx(struct qlcnic_adapter *);

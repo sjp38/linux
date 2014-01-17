@@ -191,7 +191,7 @@ struct ipv6_pinfo {
 	/* sockopt flags */
 	__u16			recverr:1,
 	                        sndflow:1,
-				pmtudisc:2,
+				pmtudisc:3,
 				ipv6only:1,
 				srcprefs:3,	/* 001: prefer temporary address
 						 * 010: prefer public address
@@ -200,7 +200,7 @@ struct ipv6_pinfo {
 				dontfrag:1;
 	__u8			min_hopcount;
 	__u8			tclass;
-	__u8			rcv_tclass;
+	__be32			rcv_flowinfo;
 
 	__u32			dst_cookie;
 	__u32			rx_dst_cookie;

@@ -676,8 +676,8 @@ static ssize_t store_rps_dev_flow_table_cnt(struct netdev_rx_queue *queue,
 		while ((mask | (mask >> 1)) != mask)
 			mask |= (mask >> 1);
 		/* On 64 bit arches, must check mask fits in table->mask (u32),
-		 * and on 32bit arches, must check RPS_DEV_FLOW_TABLE_SIZE(mask + 1)
-		 * doesnt overflow.
+		 * and on 32bit arches, must check
+		 * RPS_DEV_FLOW_TABLE_SIZE(mask + 1) doesn't overflow.
 		 */
 #if BITS_PER_LONG > 32
 		if (mask > (unsigned long)(u32)mask)
@@ -1358,7 +1358,7 @@ void netdev_class_remove_file_ns(struct class_attribute *class_attr,
 }
 EXPORT_SYMBOL(netdev_class_remove_file_ns);
 
-int netdev_kobject_init(void)
+int __init netdev_kobject_init(void)
 {
 	kobj_ns_type_register(&net_ns_type_operations);
 	return class_register(&net_class);

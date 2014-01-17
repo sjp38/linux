@@ -86,9 +86,7 @@ struct ixgbevf_ring {
 	u64 bp_misses;
 	u64 bp_cleaned;
 #endif
-
-	u16 head;
-	u16 tail;
+	u8 __iomem *tail;
 
 	u16 reg_idx; /* holds the special value that gets the hardware register
 		      * offset associated with this ring, which is different
@@ -356,6 +354,7 @@ struct ixgbevf_adapter {
 	u32 flags;
 #define IXGBE_FLAG_IN_WATCHDOG_TASK             (u32)(1)
 #define IXGBE_FLAG_IN_NETPOLL                   (u32)(1 << 1)
+#define IXGBEVF_FLAG_QUEUE_RESET_REQUESTED	(u32)(1 << 2)
 
 	/* OS defined structs */
 	struct net_device *netdev;

@@ -5,7 +5,7 @@
  *
  * GPL LICENSE SUMMARY
  *
- * Copyright(c) 2012 - 2013 Intel Corporation. All rights reserved.
+ * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of version 2 of the GNU General Public License as
@@ -30,7 +30,7 @@
  *
  * BSD LICENSE
  *
- * Copyright(c) 2012 - 2013 Intel Corporation. All rights reserved.
+ * Copyright(c) 2012 - 2014 Intel Corporation. All rights reserved.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -367,14 +367,15 @@ static int iwl_mvm_read_external_nvm(struct iwl_mvm *mvm)
 			break;
 		}
 
+		if (WARN(section_id >= NVM_NUM_OF_SECTIONS,
+			 "Invalid NVM section ID %d\n", section_id)) {
+			ret = -EINVAL;
+			break;
+		}
+
 		temp = kmemdup(file_sec->data, section_size, GFP_KERNEL);
 		if (!temp) {
 			ret = -ENOMEM;
-			break;
-		}
-		if (WARN_ON(section_id >= NVM_NUM_OF_SECTIONS)) {
-			IWL_ERR(mvm, "Invalid NVM section ID\n");
-			ret = -EINVAL;
 			break;
 		}
 		mvm->nvm_sections[section_id].data = temp;
@@ -443,6 +444,29 @@ int iwl_nvm_init(struct iwl_mvm *mvm)
 			}
 			mvm->nvm_sections[section].data = temp;
 			mvm->nvm_sections[section].length = ret;
+
+#ifdef CONFIG_IWLWIFI_DEBUGFS
+			switch (section) {
+			case NVM_SECTION_TYPE_HW:
+				mvm->nvm_hw_blob.data = temp;
+				mvm->nvm_hw_blob.size = ret;
+				break;
+			case NVM_SECTION_TYPE_SW:
+				mvm->nvm_sw_blob.data = temp;
+				mvm->nvm_sw_blob.size  = ret;
+				break;
+			case NVM_SECTION_TYPE_CALIBRATION:
+				mvm->nvm_calib_blob.data = temp;
+				mvm->nvm_calib_blob.size  = ret;
+				break;
+			case NVM_SECTION_TYPE_PRODUCTION:
+				mvm->nvm_prod_blob.data = temp;
+				mvm->nvm_prod_blob.size  = ret;
+				break;
+			default:
+				WARN(1, "section: %d", section);
+			}
+#endif
 		}
 		kfree(nvm_buffer);
 		if (ret < 0)

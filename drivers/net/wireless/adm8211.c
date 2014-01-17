@@ -15,7 +15,6 @@
  * more details.
  */
 
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/if.h>
 #include <linux/skbuff.h>
@@ -1314,7 +1313,7 @@ static void adm8211_bss_info_changed(struct ieee80211_hw *dev,
 	if (!(changes & BSS_CHANGED_BSSID))
 		return;
 
-	if (memcmp(conf->bssid, priv->bssid, ETH_ALEN)) {
+	if (!ether_addr_equal(conf->bssid, priv->bssid)) {
 		adm8211_set_bssid(dev, conf->bssid);
 		memcpy(priv->bssid, conf->bssid, ETH_ALEN);
 	}

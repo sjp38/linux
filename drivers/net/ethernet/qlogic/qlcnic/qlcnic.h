@@ -38,8 +38,8 @@
 
 #define _QLCNIC_LINUX_MAJOR 5
 #define _QLCNIC_LINUX_MINOR 3
-#define _QLCNIC_LINUX_SUBVERSION 52
-#define QLCNIC_LINUX_VERSIONID  "5.3.52"
+#define _QLCNIC_LINUX_SUBVERSION 54
+#define QLCNIC_LINUX_VERSIONID  "5.3.54"
 #define QLCNIC_DRV_IDC_VER  0x01
 #define QLCNIC_DRIVER_VERSION  ((_QLCNIC_LINUX_MAJOR << 16) |\
 		 (_QLCNIC_LINUX_MINOR << 8) | (_QLCNIC_LINUX_SUBVERSION))
@@ -114,6 +114,10 @@ enum qlcnic_queue_type {
 /* Operational mode for driver */
 #define QLCNIC_VNIC_MODE	0xFF
 #define QLCNIC_DEFAULT_MODE	0x0
+
+/* Virtual NIC function count */
+#define QLC_DEFAULT_VNIC_COUNT	8
+#define QLC_84XX_VNIC_COUNT	16
 
 /*
  * Following are the states of the Phantom. Phantom will set them and
@@ -374,7 +378,7 @@ struct qlcnic_rx_buffer {
 
 #define QLCNIC_INTR_DEFAULT			0x04
 #define QLCNIC_CONFIG_INTR_COALESCE		3
-#define QLCNIC_DEV_INFO_SIZE			1
+#define QLCNIC_DEV_INFO_SIZE			2
 
 struct qlcnic_nic_intr_coalesce {
 	u8	type;
@@ -462,8 +466,10 @@ struct qlcnic_hardware_context {
 	u16 max_rx_ques;
 	u16 max_mtu;
 	u32 msg_enable;
-	u16 act_pci_func;
+	u16 total_nic_func;
 	u16 max_pci_func;
+	u32 max_vnic_func;
+	u32 total_pci_func;
 
 	u32 capabilities;
 	u32 extra_capability[3];
@@ -791,9 +797,10 @@ struct qlcnic_cardrsp_tx_ctx {
 #define QLCNIC_MAC_VLAN_ADD	3
 #define QLCNIC_MAC_VLAN_DEL	4
 
-struct qlcnic_mac_list_s {
+struct qlcnic_mac_vlan_list {
 	struct list_head list;
 	uint8_t mac_addr[ETH_ALEN+2];
+	u16 vlan_id;
 };
 
 /* MAC Learn */
@@ -860,7 +867,7 @@ struct qlcnic_mac_list_s {
 #define QLCNIC_FW_CAP2_HW_LRO_IPV6		BIT_3
 #define QLCNIC_FW_CAPABILITY_SET_DRV_VER	BIT_5
 #define QLCNIC_FW_CAPABILITY_2_BEACON		BIT_7
-#define QLCNIC_FW_CAPABILITY_2_PER_PORT_ESWITCH_CFG	BIT_8
+#define QLCNIC_FW_CAPABILITY_2_PER_PORT_ESWITCH_CFG	BIT_9
 
 /* module types */
 #define LINKEVENT_MODULE_NOT_PRESENT			1
@@ -962,6 +969,9 @@ struct qlcnic_ipaddr {
 
 #define QLCNIC_BEACON_EANBLE		0xC
 #define QLCNIC_BEACON_DISABLE		0xD
+
+#define QLCNIC_BEACON_ON		2
+#define QLCNIC_BEACON_OFF		0
 
 #define QLCNIC_MSIX_TBL_SPACE		8192
 #define QLCNIC_PCI_REG_MSIX_TBL 	0x44
@@ -1072,6 +1082,7 @@ struct qlcnic_adapter {
 	u64 dev_rst_time;
 	bool drv_mac_learn;
 	bool fdb_mac_learn;
+	u8 rx_mac_learn;
 	unsigned long vlans[BITS_TO_LONGS(VLAN_N_VID)];
 	u8 flash_mfg_id;
 	struct qlcnic_npar_info *npars;
@@ -1260,7 +1271,7 @@ struct qlcnic_pci_func_cfg {
 	u16	port_num;
 	u8	pci_func;
 	u8	func_state;
-	u8	def_mac_addr[6];
+	u8	def_mac_addr[ETH_ALEN];
 };
 
 struct qlcnic_npar_func_cfg {
@@ -1633,14 +1644,15 @@ int qlcnic_set_default_offload_settings(struct qlcnic_adapter *);
 int qlcnic_reset_npar_config(struct qlcnic_adapter *);
 int qlcnic_set_eswitch_port_config(struct qlcnic_adapter *);
 void qlcnic_add_lb_filter(struct qlcnic_adapter *, struct sk_buff *, int, u16);
-int qlcnic_get_beacon_state(struct qlcnic_adapter *, u8 *);
 int qlcnic_83xx_configure_opmode(struct qlcnic_adapter *adapter);
 int qlcnic_read_mac_addr(struct qlcnic_adapter *);
 int qlcnic_setup_netdev(struct qlcnic_adapter *, struct net_device *, int);
 void qlcnic_set_netdev_features(struct qlcnic_adapter *,
 				struct qlcnic_esw_func_cfg *);
 void qlcnic_sriov_vf_schedule_multi(struct net_device *);
-void qlcnic_vf_add_mc_list(struct net_device *, u16);
+int qlcnic_is_valid_nic_func(struct qlcnic_adapter *, u8);
+int qlcnic_get_pci_func_type(struct qlcnic_adapter *, u16, u16 *, u16 *,
+			     u16 *);
 
 /*
  * QLOGIC Board information
@@ -1759,6 +1771,7 @@ struct qlcnic_hardware_ops {
 					       pci_channel_state_t);
 	pci_ers_result_t (*io_slot_reset) (struct pci_dev *);
 	void (*io_resume) (struct pci_dev *);
+	void (*get_beacon_state)(struct qlcnic_adapter *);
 };
 
 extern struct qlcnic_nic_template qlcnic_vf_ops;
@@ -1985,6 +1998,11 @@ static inline void qlcnic_set_mac_filter_count(struct qlcnic_adapter *adapter)
 		adapter->ahw->hw_ops->set_mac_filter_count(adapter);
 }
 
+static inline void qlcnic_get_beacon_state(struct qlcnic_adapter *adapter)
+{
+	adapter->ahw->hw_ops->get_beacon_state(adapter);
+}
+
 static inline void qlcnic_read_phys_port_id(struct qlcnic_adapter *adapter)
 {
 	if (adapter->ahw->hw_ops->read_phys_port_id)
@@ -2139,5 +2157,27 @@ static inline bool qlcnic_sriov_vf_check(struct qlcnic_adapter *adapter)
 		  (device == PCI_DEVICE_ID_QLOGIC_VF_QLE844X)) ? true : false;
 
 	return status;
+}
+
+static inline bool qlcnic_83xx_pf_check(struct qlcnic_adapter *adapter)
+{
+	unsigned short device = adapter->pdev->device;
+
+	return (device == PCI_DEVICE_ID_QLOGIC_QLE834X) ? true : false;
+}
+
+static inline bool qlcnic_83xx_vf_check(struct qlcnic_adapter *adapter)
+{
+	unsigned short device = adapter->pdev->device;
+
+	return (device == PCI_DEVICE_ID_QLOGIC_VF_QLE834X) ? true : false;
+}
+
+static inline u32 qlcnic_get_vnic_func_count(struct qlcnic_adapter *adapter)
+{
+	if (qlcnic_84xx_check(adapter))
+		return QLC_84XX_VNIC_COUNT;
+	else
+		return QLC_DEFAULT_VNIC_COUNT;
 }
 #endif				/* __QLCNIC_H_ */

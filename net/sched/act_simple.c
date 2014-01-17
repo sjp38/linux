@@ -25,15 +25,7 @@
 #include <net/tc_act/tc_defact.h>
 
 #define SIMP_TAB_MASK     7
-static struct tcf_common *tcf_simp_ht[SIMP_TAB_MASK + 1];
-static u32 simp_idx_gen;
-static DEFINE_RWLOCK(simp_lock);
-
-static struct tcf_hashinfo simp_hash_info = {
-	.htab	=	tcf_simp_ht,
-	.hmask	=	SIMP_TAB_MASK,
-	.lock	=	&simp_lock,
-};
+static struct tcf_hashinfo simp_hash_info;
 
 #define SIMP_MAX_DATA	32
 static int tcf_simp(struct sk_buff *skb, const struct tc_action *a,
@@ -125,7 +117,7 @@ static int tcf_simp_init(struct net *net, struct nlattr *nla,
 	pc = tcf_hash_check(parm->index, a, bind, &simp_hash_info);
 	if (!pc) {
 		pc = tcf_hash_create(parm->index, est, a, sizeof(*d), bind,
-				     &simp_idx_gen, &simp_hash_info);
+				     &simp_hash_info);
 		if (IS_ERR(pc))
 			return PTR_ERR(pc);
 
@@ -212,14 +204,23 @@ MODULE_LICENSE("GPL");
 
 static int __init simp_init_module(void)
 {
-	int ret = tcf_register_action(&act_simp_ops);
+	int err, ret;
+	err = tcf_hashinfo_init(&simp_hash_info, SIMP_TAB_MASK);
+	if (err)
+		return err;
+
+	ret = tcf_register_action(&act_simp_ops);
 	if (!ret)
 		pr_info("Simple TC action Loaded\n");
+	else
+		tcf_hashinfo_destroy(&simp_hash_info);
+
 	return ret;
 }
 
 static void __exit simp_cleanup_module(void)
 {
+	tcf_hashinfo_destroy(&simp_hash_info);
 	tcf_unregister_action(&act_simp_ops);
 }
 

@@ -16,9 +16,8 @@
  * See the GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GNU CC; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with GNU CC; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
  *
  * Please send any bug reports or fixes you make to the
  * email address(es):
@@ -178,7 +177,7 @@ static void sctp_seq_dump_remote_addrs(struct seq_file *seq, struct sctp_associa
 	rcu_read_unlock();
 }
 
-static void * sctp_eps_seq_start(struct seq_file *seq, loff_t *pos)
+static void *sctp_eps_seq_start(struct seq_file *seq, loff_t *pos)
 {
 	if (*pos >= sctp_ep_hashsize)
 		return NULL;
@@ -197,7 +196,7 @@ static void sctp_eps_seq_stop(struct seq_file *seq, void *v)
 }
 
 
-static void * sctp_eps_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+static void *sctp_eps_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 {
 	if (++*pos >= sctp_ep_hashsize)
 		return NULL;
@@ -283,7 +282,7 @@ void sctp_eps_proc_exit(struct net *net)
 }
 
 
-static void * sctp_assocs_seq_start(struct seq_file *seq, loff_t *pos)
+static void *sctp_assocs_seq_start(struct seq_file *seq, loff_t *pos)
 {
 	if (*pos >= sctp_assoc_hashsize)
 		return NULL;
@@ -306,7 +305,7 @@ static void sctp_assocs_seq_stop(struct seq_file *seq, void *v)
 }
 
 
-static void * sctp_assocs_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+static void *sctp_assocs_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 {
 	if (++*pos >= sctp_assoc_hashsize)
 		return NULL;

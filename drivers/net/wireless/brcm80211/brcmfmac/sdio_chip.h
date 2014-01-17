@@ -54,14 +54,6 @@
 
 #define BRCMF_MAX_CORENUM	6
 
-/* SDIO device ID */
-#define SDIO_DEVICE_ID_BROADCOM_43143		43143
-#define SDIO_DEVICE_ID_BROADCOM_43241		0x4324
-#define SDIO_DEVICE_ID_BROADCOM_4329		0x4329
-#define SDIO_DEVICE_ID_BROADCOM_4330		0x4330
-#define SDIO_DEVICE_ID_BROADCOM_4334		0x4334
-#define SDIO_DEVICE_ID_BROADCOM_4335_4339	0x4335
-
 struct chip_core_info {
 	u16 id;
 	u16 rev;
@@ -224,7 +216,7 @@ struct sdpcmd_regs {
 };
 
 int brcmf_sdio_chip_attach(struct brcmf_sdio_dev *sdiodev,
-			   struct chip_info **ci_ptr, u32 regs);
+			   struct chip_info **ci_ptr);
 void brcmf_sdio_chip_detach(struct chip_info **ci_ptr);
 void brcmf_sdio_chip_drivestrengthinit(struct brcmf_sdio_dev *sdiodev,
 				       struct chip_info *ci, u32 drivestrength);

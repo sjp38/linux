@@ -95,13 +95,15 @@ module_param(debug, int, 0);
 MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
 /* forward decls */
+static void ixgbevf_queue_reset_subtask(struct ixgbevf_adapter *adapter);
 static void ixgbevf_set_itr(struct ixgbevf_q_vector *q_vector);
 static void ixgbevf_free_all_rx_resources(struct ixgbevf_adapter *adapter);
 
-static inline void ixgbevf_release_rx_desc(struct ixgbe_hw *hw,
-					   struct ixgbevf_ring *rx_ring,
+static inline void ixgbevf_release_rx_desc(struct ixgbevf_ring *rx_ring,
 					   u32 val)
 {
+	rx_ring->next_to_use = val;
+
 	/*
 	 * Force memory writes to complete before letting h/w
 	 * know there are new descriptors to fetch.  (Only
@@ -109,7 +111,7 @@ static inline void ixgbevf_release_rx_desc(struct ixgbe_hw *hw,
 	 * such as IA-64).
 	 */
 	wmb();
-	IXGBE_WRITE_REG(hw, IXGBE_VFRDT(rx_ring->reg_idx), val);
+	writel(val, rx_ring->tail);
 }
 
 /**
@@ -406,10 +408,8 @@ static void ixgbevf_alloc_rx_buffers(struct ixgbevf_adapter *adapter,
 	}
 
 no_buffers:
-	if (rx_ring->next_to_use != i) {
-		rx_ring->next_to_use = i;
-		ixgbevf_release_rx_desc(&adapter->hw, rx_ring, i);
-	}
+	if (rx_ring->next_to_use != i)
+		ixgbevf_release_rx_desc(rx_ring, i);
 }
 
 static inline void ixgbevf_irq_enable_queues(struct ixgbevf_adapter *adapter,
@@ -1110,8 +1110,9 @@ static void ixgbevf_configure_tx(struct ixgbevf_adapter *adapter)
 		IXGBE_WRITE_REG(hw, IXGBE_VFTDLEN(j), tdlen);
 		IXGBE_WRITE_REG(hw, IXGBE_VFTDH(j), 0);
 		IXGBE_WRITE_REG(hw, IXGBE_VFTDT(j), 0);
-		adapter->tx_ring[i].head = IXGBE_VFTDH(j);
-		adapter->tx_ring[i].tail = IXGBE_VFTDT(j);
+		ring->tail = hw->hw_addr + IXGBE_VFTDT(j);
+		ring->next_to_clean = 0;
+		ring->next_to_use = 0;
 		/* Disable Tx Head Writeback RO bit, since this hoses
 		 * bookkeeping if things aren't delivered in order.
 		 */
@@ -1208,20 +1209,22 @@ static void ixgbevf_configure_rx(struct ixgbevf_adapter *adapter)
 	/* set_rx_buffer_len must be called before ring initialization */
 	ixgbevf_set_rx_buffer_len(adapter);
 
-	rdlen = adapter->rx_ring[0].count * sizeof(union ixgbe_adv_rx_desc);
 	/* Setup the HW Rx Head and Tail Descriptor Pointers and
 	 * the Base and Length of the Rx Descriptor Ring */
 	for (i = 0; i < adapter->num_rx_queues; i++) {
-		rdba = adapter->rx_ring[i].dma;
-		j = adapter->rx_ring[i].reg_idx;
+		struct ixgbevf_ring *ring = &adapter->rx_ring[i];
+		rdba = ring->dma;
+		j = ring->reg_idx;
+		rdlen = ring->count * sizeof(union ixgbe_adv_rx_desc);
 		IXGBE_WRITE_REG(hw, IXGBE_VFRDBAL(j),
 				(rdba & DMA_BIT_MASK(32)));
 		IXGBE_WRITE_REG(hw, IXGBE_VFRDBAH(j), (rdba >> 32));
 		IXGBE_WRITE_REG(hw, IXGBE_VFRDLEN(j), rdlen);
 		IXGBE_WRITE_REG(hw, IXGBE_VFRDH(j), 0);
 		IXGBE_WRITE_REG(hw, IXGBE_VFRDT(j), 0);
-		adapter->rx_ring[i].head = IXGBE_VFRDH(j);
-		adapter->rx_ring[i].tail = IXGBE_VFRDT(j);
+		ring->tail = hw->hw_addr + IXGBE_VFRDT(j);
+		ring->next_to_clean = 0;
+		ring->next_to_use = 0;
 
 		ixgbevf_configure_srrctl(adapter, j);
 	}
@@ -1366,10 +1369,50 @@ static void ixgbevf_napi_disable_all(struct ixgbevf_adapter *adapter)
 	}
 }
 
+static int ixgbevf_configure_dcb(struct ixgbevf_adapter *adapter)
+{
+	struct ixgbe_hw *hw = &adapter->hw;
+	unsigned int def_q = 0;
+	unsigned int num_tcs = 0;
+	unsigned int num_rx_queues = 1;
+	int err;
+
+	spin_lock_bh(&adapter->mbx_lock);
+
+	/* fetch queue configuration from the PF */
+	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
+
+	spin_unlock_bh(&adapter->mbx_lock);
+
+	if (err)
+		return err;
+
+	if (num_tcs > 1) {
+		/* update default Tx ring register index */
+		adapter->tx_ring[0].reg_idx = def_q;
+
+		/* we need as many queues as traffic classes */
+		num_rx_queues = num_tcs;
+	}
+
+	/* if we have a bad config abort request queue reset */
+	if (adapter->num_rx_queues != num_rx_queues) {
+		/* force mailbox timeout to prevent further messages */
+		hw->mbx.timeout = 0;
+
+		/* wait for watchdog to come around and bail us out */
+		adapter->flags |= IXGBEVF_FLAG_QUEUE_RESET_REQUESTED;
+	}
+
+	return 0;
+}
+
 static void ixgbevf_configure(struct ixgbevf_adapter *adapter)
 {
 	struct net_device *netdev = adapter->netdev;
 	int i;
+
+	ixgbevf_configure_dcb(adapter);
 
 	ixgbevf_set_rx_mode(netdev);
 
@@ -1402,7 +1445,7 @@ static void ixgbevf_rx_desc_queue_enable(struct ixgbevf_adapter *adapter,
 		hw_dbg(hw, "RXDCTL.ENABLE queue %d not set while polling\n",
 		       rxr);
 
-	ixgbevf_release_rx_desc(&adapter->hw, &adapter->rx_ring[rxr],
+	ixgbevf_release_rx_desc(&adapter->rx_ring[rxr],
 				(adapter->rx_ring[rxr].count - 1));
 }
 
@@ -1549,84 +1592,9 @@ static void ixgbevf_up_complete(struct ixgbevf_adapter *adapter)
 	mod_timer(&adapter->watchdog_timer, jiffies);
 }
 
-static int ixgbevf_reset_queues(struct ixgbevf_adapter *adapter)
-{
-	struct ixgbe_hw *hw = &adapter->hw;
-	struct ixgbevf_ring *rx_ring;
-	unsigned int def_q = 0;
-	unsigned int num_tcs = 0;
-	unsigned int num_rx_queues = 1;
-	int err, i;
-
-	spin_lock_bh(&adapter->mbx_lock);
-
-	/* fetch queue configuration from the PF */
-	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
-
-	spin_unlock_bh(&adapter->mbx_lock);
-
-	if (err)
-		return err;
-
-	if (num_tcs > 1) {
-		/* update default Tx ring register index */
-		adapter->tx_ring[0].reg_idx = def_q;
-
-		/* we need as many queues as traffic classes */
-		num_rx_queues = num_tcs;
-	}
-
-	/* nothing to do if we have the correct number of queues */
-	if (adapter->num_rx_queues == num_rx_queues)
-		return 0;
-
-	/* allocate new rings */
-	rx_ring = kcalloc(num_rx_queues,
-			  sizeof(struct ixgbevf_ring), GFP_KERNEL);
-	if (!rx_ring)
-		return -ENOMEM;
-
-	/* setup ring fields */
-	for (i = 0; i < num_rx_queues; i++) {
-		rx_ring[i].count = adapter->rx_ring_count;
-		rx_ring[i].queue_index = i;
-		rx_ring[i].reg_idx = i;
-		rx_ring[i].dev = &adapter->pdev->dev;
-		rx_ring[i].netdev = adapter->netdev;
-
-		/* allocate resources on the ring */
-		err = ixgbevf_setup_rx_resources(adapter, &rx_ring[i]);
-		if (err) {
-			while (i) {
-				i--;
-				ixgbevf_free_rx_resources(adapter, &rx_ring[i]);
-			}
-			kfree(rx_ring);
-			return err;
-		}
-	}
-
-	/* free the existing rings and queues */
-	ixgbevf_free_all_rx_resources(adapter);
-	adapter->num_rx_queues = 0;
-	kfree(adapter->rx_ring);
-
-	/* move new rings into position on the adapter struct */
-	adapter->rx_ring = rx_ring;
-	adapter->num_rx_queues = num_rx_queues;
-
-	/* reset ring to vector mapping */
-	ixgbevf_reset_q_vectors(adapter);
-	ixgbevf_map_rings_to_vectors(adapter);
-
-	return 0;
-}
-
 void ixgbevf_up(struct ixgbevf_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-
-	ixgbevf_reset_queues(adapter);
 
 	ixgbevf_configure(adapter);
 
@@ -1680,14 +1648,6 @@ static void ixgbevf_clean_rx_ring(struct ixgbevf_adapter *adapter,
 
 	/* Zero out the descriptor ring */
 	memset(rx_ring->desc, 0, rx_ring->size);
-
-	rx_ring->next_to_clean = 0;
-	rx_ring->next_to_use = 0;
-
-	if (rx_ring->head)
-		writel(0, adapter->hw.hw_addr + rx_ring->head);
-	if (rx_ring->tail)
-		writel(0, adapter->hw.hw_addr + rx_ring->tail);
 }
 
 /**
@@ -1715,14 +1675,6 @@ static void ixgbevf_clean_tx_ring(struct ixgbevf_adapter *adapter,
 	memset(tx_ring->tx_buffer_info, 0, size);
 
 	memset(tx_ring->desc, 0, tx_ring->size);
-
-	tx_ring->next_to_use = 0;
-	tx_ring->next_to_clean = 0;
-
-	if (tx_ring->head)
-		writel(0, adapter->hw.hw_addr + tx_ring->head);
-	if (tx_ring->tail)
-		writel(0, adapter->hw.hw_addr + tx_ring->tail);
 }
 
 /**
@@ -1889,9 +1841,28 @@ static int ixgbevf_acquire_msix_vectors(struct ixgbevf_adapter *adapter,
  **/
 static void ixgbevf_set_num_queues(struct ixgbevf_adapter *adapter)
 {
+	struct ixgbe_hw *hw = &adapter->hw;
+	unsigned int def_q = 0;
+	unsigned int num_tcs = 0;
+	int err;
+
 	/* Start with base case */
 	adapter->num_rx_queues = 1;
 	adapter->num_tx_queues = 1;
+
+	spin_lock_bh(&adapter->mbx_lock);
+
+	/* fetch queue configuration from the PF */
+	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
+
+	spin_unlock_bh(&adapter->mbx_lock);
+
+	if (err)
+		return;
+
+	/* we need as many queues as traffic classes */
+	if (num_tcs > 1)
+		adapter->num_rx_queues = num_tcs;
 }
 
 /**
@@ -2340,6 +2311,8 @@ static void ixgbevf_watchdog_task(struct work_struct *work)
 	bool link_up = adapter->link_up;
 	s32 need_reset;
 
+	ixgbevf_queue_reset_subtask(adapter);
+
 	adapter->flags |= IXGBE_FLAG_IN_WATCHDOG_TASK;
 
 	/*
@@ -2473,8 +2446,6 @@ int ixgbevf_setup_tx_resources(struct ixgbevf_adapter *adapter,
 	if (!tx_ring->desc)
 		goto err;
 
-	tx_ring->next_to_use = 0;
-	tx_ring->next_to_clean = 0;
 	return 0;
 
 err:
@@ -2541,9 +2512,6 @@ int ixgbevf_setup_rx_resources(struct ixgbevf_adapter *adapter,
 		rx_ring->rx_buffer_info = NULL;
 		goto alloc_failed;
 	}
-
-	rx_ring->next_to_clean = 0;
-	rx_ring->next_to_use = 0;
 
 	return 0;
 alloc_failed:
@@ -2614,63 +2582,6 @@ static void ixgbevf_free_all_rx_resources(struct ixgbevf_adapter *adapter)
 						  &adapter->rx_ring[i]);
 }
 
-static int ixgbevf_setup_queues(struct ixgbevf_adapter *adapter)
-{
-	struct ixgbe_hw *hw = &adapter->hw;
-	struct ixgbevf_ring *rx_ring;
-	unsigned int def_q = 0;
-	unsigned int num_tcs = 0;
-	unsigned int num_rx_queues = 1;
-	int err, i;
-
-	spin_lock_bh(&adapter->mbx_lock);
-
-	/* fetch queue configuration from the PF */
-	err = ixgbevf_get_queues(hw, &num_tcs, &def_q);
-
-	spin_unlock_bh(&adapter->mbx_lock);
-
-	if (err)
-		return err;
-
-	if (num_tcs > 1) {
-		/* update default Tx ring register index */
-		adapter->tx_ring[0].reg_idx = def_q;
-
-		/* we need as many queues as traffic classes */
-		num_rx_queues = num_tcs;
-	}
-
-	/* nothing to do if we have the correct number of queues */
-	if (adapter->num_rx_queues == num_rx_queues)
-		return 0;
-
-	/* allocate new rings */
-	rx_ring = kcalloc(num_rx_queues,
-			  sizeof(struct ixgbevf_ring), GFP_KERNEL);
-	if (!rx_ring)
-		return -ENOMEM;
-
-	/* setup ring fields */
-	for (i = 0; i < num_rx_queues; i++) {
-		rx_ring[i].count = adapter->rx_ring_count;
-		rx_ring[i].queue_index = i;
-		rx_ring[i].reg_idx = i;
-		rx_ring[i].dev = &adapter->pdev->dev;
-		rx_ring[i].netdev = adapter->netdev;
-	}
-
-	/* free the existing ring and queues */
-	adapter->num_rx_queues = 0;
-	kfree(adapter->rx_ring);
-
-	/* move new rings into position on the adapter struct */
-	adapter->rx_ring = rx_ring;
-	adapter->num_rx_queues = num_rx_queues;
-
-	return 0;
-}
-
 /**
  * ixgbevf_open - Called when a network interface is made active
  * @netdev: network interface device structure
@@ -2714,11 +2625,6 @@ static int ixgbevf_open(struct net_device *netdev)
 		}
 	}
 
-	/* setup queue reg_idx and Rx queue count */
-	err = ixgbevf_setup_queues(adapter);
-	if (err)
-		goto err_setup_queues;
-
 	/* allocate transmit descriptors */
 	err = ixgbevf_setup_all_tx_resources(adapter);
 	if (err)
@@ -2756,7 +2662,6 @@ err_setup_rx:
 	ixgbevf_free_all_rx_resources(adapter);
 err_setup_tx:
 	ixgbevf_free_all_tx_resources(adapter);
-err_setup_queues:
 	ixgbevf_reset(adapter);
 
 err_setup_reset:
@@ -2786,6 +2691,34 @@ static int ixgbevf_close(struct net_device *netdev)
 	ixgbevf_free_all_rx_resources(adapter);
 
 	return 0;
+}
+
+static void ixgbevf_queue_reset_subtask(struct ixgbevf_adapter *adapter)
+{
+	struct net_device *dev = adapter->netdev;
+
+	if (!(adapter->flags & IXGBEVF_FLAG_QUEUE_RESET_REQUESTED))
+		return;
+
+	adapter->flags &= ~IXGBEVF_FLAG_QUEUE_RESET_REQUESTED;
+
+	/* if interface is down do nothing */
+	if (test_bit(__IXGBEVF_DOWN, &adapter->state) ||
+	    test_bit(__IXGBEVF_RESETTING, &adapter->state))
+		return;
+
+	/* Hardware has to reinitialize queues and interrupts to
+	 * match packet buffer alignment. Unfortunately, the
+	 * hardware is not flexible enough to do this dynamically.
+	 */
+	if (netif_running(dev))
+		ixgbevf_close(dev);
+
+	ixgbevf_clear_interrupt_scheme(adapter);
+	ixgbevf_init_interrupt_scheme(adapter);
+
+	if (netif_running(dev))
+		ixgbevf_open(dev);
 }
 
 static void ixgbevf_tx_ctxtdesc(struct ixgbevf_ring *tx_ring,
@@ -3181,7 +3114,7 @@ static int ixgbevf_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 			 ixgbevf_tx_map(tx_ring, skb, tx_flags),
 			 first, skb->len, hdr_len);
 
-	writel(tx_ring->next_to_use, adapter->hw.hw_addr + tx_ring->tail);
+	writel(tx_ring->next_to_use, tx_ring->tail);
 
 	ixgbevf_maybe_stop_tx(tx_ring, DESC_NEEDED);
 
