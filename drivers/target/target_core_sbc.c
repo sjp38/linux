@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/ratelimit.h>
+#include <linux/crc-t10dif.h>
 #include <asm/unaligned.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_tcq.h>
@@ -33,7 +34,7 @@
 
 #include "target_core_internal.h"
 #include "target_core_ua.h"
-
+#include "target_core_alua.h"
 
 static sense_reason_t
 sbc_emulate_readcapacity(struct se_cmd *cmd)
@@ -105,6 +106,11 @@ sbc_emulate_readcapacity_16(struct se_cmd *cmd)
 	buf[9] = (dev->dev_attrib.block_size >> 16) & 0xff;
 	buf[10] = (dev->dev_attrib.block_size >> 8) & 0xff;
 	buf[11] = dev->dev_attrib.block_size & 0xff;
+	/*
+	 * Set P_TYPE and PROT_EN bits for DIF support
+	 */
+	if (dev->dev_attrib.pi_prot_type)
+		buf[12] = (dev->dev_attrib.pi_prot_type - 1) << 1 | 0x1;
 
 	if (dev->transport->get_lbppbe)
 		buf[13] = dev->transport->get_lbppbe(dev) & 0x0f;
@@ -563,6 +569,26 @@ sbc_compare_and_write(struct se_cmd *cmd)
 	return TCM_NO_SENSE;
 }
 
+static bool
+sbc_check_prot(struct se_device *dev, struct se_cmd *cmd, unsigned char *cdb)
+{
+	if (!dev->dev_attrib.pi_prot_type)
+		return true;
+
+	if (dev->dev_attrib.pi_prot_type == TARGET_DIF_TYPE2_PROT &&
+	   (cdb[1] & 0xe0))
+		return false;
+
+	if (!(cdb[1] & 0xe0))
+		return true;
+
+	if (!cmd->t_prot_sg || !cmd->t_prot_nents)
+		return true;
+
+	cmd->se_cmd_flags |= SCF_PROT;
+	return true;
+}
+
 sense_reason_t
 sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 {
@@ -581,6 +607,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_10:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_10(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -588,6 +617,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_12:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_12(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -595,6 +627,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case READ_16:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_16(cdb);
 		cmd->t_task_lba = transport_lba_64(cdb);
 		cmd->se_cmd_flags |= SCF_SCSI_DATA_CDB;
@@ -610,6 +645,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		break;
 	case WRITE_10:
 	case WRITE_VERIFY:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_10(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		if (cdb[1] & 0x8)
@@ -619,6 +657,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case WRITE_12:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_12(cdb);
 		cmd->t_task_lba = transport_lba_32(cdb);
 		if (cdb[1] & 0x8)
@@ -628,6 +669,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		cmd->execute_cmd = sbc_execute_rw;
 		break;
 	case WRITE_16:
+		if (!sbc_check_prot(dev, cmd, cdb))
+			return TCM_UNSUPPORTED_SCSI_OPCODE;
+
 		sectors = transport_get_sectors_16(cdb);
 		cmd->t_task_lba = transport_lba_64(cdb);
 		if (cdb[1] & 0x8)
@@ -730,6 +774,9 @@ sbc_parse_cdb(struct se_cmd *cmd, struct sbc_ops *ops)
 		switch (cmd->t_task_cdb[1] & 0x1f) {
 		case SAI_READ_CAPACITY_16:
 			cmd->execute_cmd = sbc_emulate_readcapacity_16;
+			break;
+		case SAI_REPORT_REFERRALS:
+			cmd->execute_cmd = target_emulate_report_referrals;
 			break;
 		default:
 			pr_err("Unsupported SA: 0x%02x\n",
@@ -959,3 +1006,179 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL(sbc_execute_unmap);
+
+static sense_reason_t
+sbc_dif_v1_verify(struct se_device *dev, struct se_dif_v1_tuple *sdt,
+		  const void *p, sector_t sector, unsigned int ei_lba)
+{
+	int block_size = dev->dev_attrib.block_size;
+	__be16 csum;
+
+	csum = cpu_to_be16(crc_t10dif(p, block_size));
+
+	if (sdt->guard_tag != csum) {
+		pr_err("DIFv1 checksum failed on sector %llu guard tag 0x%04x"
+			" csum 0x%04x\n", (unsigned long long)sector,
+			be16_to_cpu(sdt->guard_tag), be16_to_cpu(csum));
+		return TCM_LOGICAL_BLOCK_GUARD_CHECK_FAILED;
+	}
+
+	if (dev->dev_attrib.pi_prot_type == TARGET_DIF_TYPE1_PROT &&
+	    be32_to_cpu(sdt->ref_tag) != (sector & 0xffffffff)) {
+		pr_err("DIFv1 Type 1 reference failed on sector: %llu tag: 0x%08x"
+		       " sector MSB: 0x%08x\n", (unsigned long long)sector,
+		       be32_to_cpu(sdt->ref_tag), (u32)(sector & 0xffffffff));
+		return TCM_LOGICAL_BLOCK_REF_TAG_CHECK_FAILED;
+	}
+
+	if (dev->dev_attrib.pi_prot_type == TARGET_DIF_TYPE2_PROT &&
+	    be32_to_cpu(sdt->ref_tag) != ei_lba) {
+		pr_err("DIFv1 Type 2 reference failed on sector: %llu tag: 0x%08x"
+		       " ei_lba: 0x%08x\n", (unsigned long long)sector,
+			be32_to_cpu(sdt->ref_tag), ei_lba);
+		return TCM_LOGICAL_BLOCK_REF_TAG_CHECK_FAILED;
+	}
+
+	return 0;
+}
+
+static void
+sbc_dif_copy_prot(struct se_cmd *cmd, unsigned int sectors, bool read,
+		  struct scatterlist *sg, int sg_off)
+{
+	struct se_device *dev = cmd->se_dev;
+	struct scatterlist *psg;
+	void *paddr, *addr;
+	unsigned int i, len, left;
+
+	left = sectors * dev->prot_length;
+
+	for_each_sg(cmd->t_prot_sg, psg, cmd->t_prot_nents, i) {
+
+		len = min(psg->length, left);
+		paddr = kmap_atomic(sg_page(psg)) + psg->offset;
+		addr = kmap_atomic(sg_page(sg)) + sg_off;
+
+		if (read)
+			memcpy(paddr, addr, len);
+		else
+			memcpy(addr, paddr, len);
+
+		left -= len;
+		kunmap_atomic(paddr);
+		kunmap_atomic(addr);
+	}
+}
+
+sense_reason_t
+sbc_dif_verify_write(struct se_cmd *cmd, sector_t start, unsigned int sectors,
+		     unsigned int ei_lba, struct scatterlist *sg, int sg_off)
+{
+	struct se_device *dev = cmd->se_dev;
+	struct se_dif_v1_tuple *sdt;
+	struct scatterlist *dsg, *psg = cmd->t_prot_sg;
+	sector_t sector = start;
+	void *daddr, *paddr;
+	int i, j, offset = 0;
+	sense_reason_t rc;
+
+	for_each_sg(cmd->t_data_sg, dsg, cmd->t_data_nents, i) {
+		daddr = kmap_atomic(sg_page(dsg)) + dsg->offset;
+		paddr = kmap_atomic(sg_page(psg)) + psg->offset;
+
+		for (j = 0; j < dsg->length; j += dev->dev_attrib.block_size) {
+
+			if (offset >= psg->length) {
+				kunmap_atomic(paddr);
+				psg = sg_next(psg);
+				paddr = kmap_atomic(sg_page(psg)) + psg->offset;
+				offset = 0;
+			}
+
+			sdt = paddr + offset;
+
+			pr_debug("DIF WRITE sector: %llu guard_tag: 0x%04x"
+				 " app_tag: 0x%04x ref_tag: %u\n",
+				 (unsigned long long)sector, sdt->guard_tag,
+				 sdt->app_tag, be32_to_cpu(sdt->ref_tag));
+
+			rc = sbc_dif_v1_verify(dev, sdt, daddr + j, sector,
+					       ei_lba);
+			if (rc) {
+				kunmap_atomic(paddr);
+				kunmap_atomic(daddr);
+				return rc;
+			}
+
+			sector++;
+			ei_lba++;
+			offset += sizeof(struct se_dif_v1_tuple);
+		}
+
+		kunmap_atomic(paddr);
+		kunmap_atomic(daddr);
+	}
+	sbc_dif_copy_prot(cmd, sectors, false, sg, sg_off);
+
+	return 0;
+}
+EXPORT_SYMBOL(sbc_dif_verify_write);
+
+sense_reason_t
+sbc_dif_verify_read(struct se_cmd *cmd, sector_t start, unsigned int sectors,
+		    unsigned int ei_lba, struct scatterlist *sg, int sg_off)
+{
+	struct se_device *dev = cmd->se_dev;
+	struct se_dif_v1_tuple *sdt;
+	struct scatterlist *dsg;
+	sector_t sector = start;
+	void *daddr, *paddr;
+	int i, j, offset = sg_off;
+	sense_reason_t rc;
+
+	for_each_sg(cmd->t_data_sg, dsg, cmd->t_data_nents, i) {
+		daddr = kmap_atomic(sg_page(dsg)) + dsg->offset;
+		paddr = kmap_atomic(sg_page(sg)) + sg->offset;
+
+		for (j = 0; j < dsg->length; j += dev->dev_attrib.block_size) {
+
+			if (offset >= sg->length) {
+				kunmap_atomic(paddr);
+				sg = sg_next(sg);
+				paddr = kmap_atomic(sg_page(sg)) + sg->offset;
+				offset = 0;
+			}
+
+			sdt = paddr + offset;
+
+			pr_debug("DIF READ sector: %llu guard_tag: 0x%04x"
+				 " app_tag: 0x%04x ref_tag: %u\n",
+				 (unsigned long long)sector, sdt->guard_tag,
+				 sdt->app_tag, be32_to_cpu(sdt->ref_tag));
+
+			if (sdt->app_tag == cpu_to_be16(0xffff)) {
+				sector++;
+				continue;
+			}
+
+			rc = sbc_dif_v1_verify(dev, sdt, daddr + j, sector,
+					       ei_lba);
+			if (rc) {
+				kunmap_atomic(paddr);
+				kunmap_atomic(daddr);
+				return rc;
+			}
+
+			sector++;
+			ei_lba++;
+			offset += sizeof(struct se_dif_v1_tuple);
+		}
+
+		kunmap_atomic(paddr);
+		kunmap_atomic(daddr);
+	}
+	sbc_dif_copy_prot(cmd, sectors, true, sg, sg_off);
+
+	return 0;
+}
+EXPORT_SYMBOL(sbc_dif_verify_read);
