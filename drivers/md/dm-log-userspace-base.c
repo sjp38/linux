@@ -11,9 +11,10 @@
 #include <linux/dm-log-userspace.h>
 #include <linux/module.h>
 
+#include <linux/workqueue.h>
 #include "dm-log-userspace-transfer.h"
 
-#define DM_LOG_USERSPACE_VSN "1.1.0"
+#define DM_LOG_USERSPACE_VSN "1.3.0"
 
 struct flush_entry {
 	int type;
@@ -58,6 +59,12 @@ struct log_c {
 	spinlock_t flush_lock;
 	struct list_head mark_list;
 	struct list_head clear_list;
+
+	/* workqueue for flush of clear region requests */
+	struct workqueue_struct *dmlog_wq;
+	struct delayed_work flush_log_work;
+	atomic_t sched_flush;
+	uint32_t integrated_flush;
 };
 
 static mempool_t *flush_entry_pool;
@@ -113,17 +120,23 @@ retry:
 	return -ESRCH;
 }
 
-static int build_constructor_string(struct dm_target *ti,
-				    unsigned argc, char **argv,
-				    char **ctr_str)
+static int process_and_build_ctr_string(struct dm_target *ti,
+					struct log_c *lc,
+					unsigned argc, char **argv,
+					char **ctr_str)
 {
 	int i, str_size;
 	char *str = NULL;
 
 	*ctr_str = NULL;
 
-	for (i = 0, str_size = 0; i < argc; i++)
+	/* Process arguments while determining the overall size of the string */
+	for (i = 0, str_size = 0; i < argc; i++) {
+		if (!strcasecmp(argv[i], "integrated_flush"))
+			lc->integrated_flush = 1;
+
 		str_size += strlen(argv[i]) + 1; /* +1 for space between args */
+	}
 
 	str_size += 20; /* Max number of chars in a printed u64 number */
 
@@ -139,6 +152,17 @@ static int build_constructor_string(struct dm_target *ti,
 
 	*ctr_str = str;
 	return str_size;
+}
+
+static void do_flush(struct work_struct *work)
+{
+	int r;
+	struct log_c *lc = container_of(work, struct log_c, flush_log_work.work);
+	r = userspace_do_request(lc, lc->uuid, DM_ULOG_FLUSH,
+				 NULL, 0, NULL, NULL);
+	atomic_set(&lc->sched_flush, 0);
+	if (r)
+		dm_table_event(lc->ti->table);
 }
 
 /*
@@ -193,7 +217,9 @@ static int userspace_ctr(struct dm_dirty_log *log, struct dm_target *ti,
 	INIT_LIST_HEAD(&lc->mark_list);
 	INIT_LIST_HEAD(&lc->clear_list);
 
-	str_size = build_constructor_string(ti, argc - 1, argv + 1, &ctr_str);
+	lc->integrated_flush = 0;
+
+	str_size = process_and_build_ctr_string(ti, lc, argc - 1, argv + 1, &ctr_str);
 	if (str_size < 0) {
 		kfree(lc);
 		return str_size;
@@ -246,6 +272,19 @@ static int userspace_ctr(struct dm_dirty_log *log, struct dm_target *ti,
 			DMERR("Failed to register %s with device-mapper",
 			      devices_rdata);
 	}
+
+	if (lc->integrated_flush) {
+		lc->dmlog_wq = alloc_workqueue("dmlogd", WQ_MEM_RECLAIM, 0);
+		if (!lc->dmlog_wq) {
+			DMERR("couldn't start dmlogd");
+			r = -ENOMEM;
+			goto out;
+		}
+
+		INIT_DELAYED_WORK(&lc->flush_log_work, do_flush);
+		atomic_set(&lc->sched_flush, 0);
+	}
+
 out:
 	kfree(devices_rdata);
 	if (r) {
@@ -263,6 +302,14 @@ out:
 static void userspace_dtr(struct dm_dirty_log *log)
 {
 	struct log_c *lc = log->context;
+
+	if (lc->integrated_flush) {
+		/* flush workqueue */
+		if (atomic_read(&lc->sched_flush))
+			flush_delayed_work(&lc->flush_log_work);
+
+		destroy_workqueue(lc->dmlog_wq);
+	}
 
 	(void) dm_consult_userspace(lc->uuid, lc->luid, DM_ULOG_DTR,
 				 NULL, 0,
@@ -293,6 +340,10 @@ static int userspace_postsuspend(struct dm_dirty_log *log)
 {
 	int r;
 	struct log_c *lc = log->context;
+
+	/* run planned flush earlier */
+	if (lc->integrated_flush && atomic_read(&lc->sched_flush))
+		flush_delayed_work(&lc->flush_log_work);
 
 	r = dm_consult_userspace(lc->uuid, lc->luid, DM_ULOG_POSTSUSPEND,
 				 NULL, 0,
@@ -405,7 +456,8 @@ static int flush_one_by_one(struct log_c *lc, struct list_head *flush_list)
 	return r;
 }
 
-static int flush_by_group(struct log_c *lc, struct list_head *flush_list)
+static int flush_by_group(struct log_c *lc, struct list_head *flush_list,
+			  int flush_with_payload)
 {
 	int r = 0;
 	int count;
@@ -431,15 +483,25 @@ static int flush_by_group(struct log_c *lc, struct list_head *flush_list)
 				break;
 		}
 
-		r = userspace_do_request(lc, lc->uuid, type,
-					 (char *)(group),
-					 count * sizeof(uint64_t),
-					 NULL, NULL);
-		if (r) {
-			/* Group send failed.  Attempt one-by-one. */
-			list_splice_init(&tmp_list, flush_list);
-			r = flush_one_by_one(lc, flush_list);
-			break;
+		if (flush_with_payload) {
+			r = userspace_do_request(lc, lc->uuid, DM_ULOG_FLUSH,
+						 (char *)(group),
+						 count * sizeof(uint64_t),
+						 NULL, NULL);
+			/* integrated flush failed */
+			if (r)
+				break;
+		} else {
+			r = userspace_do_request(lc, lc->uuid, type,
+						 (char *)(group),
+						 count * sizeof(uint64_t),
+						 NULL, NULL);
+			if (r) {
+				/* Group send failed.  Attempt one-by-one. */
+				list_splice_init(&tmp_list, flush_list);
+				r = flush_one_by_one(lc, flush_list);
+				break;
+			}
 		}
 	}
 
@@ -474,6 +536,8 @@ static int userspace_flush(struct dm_dirty_log *log)
 	int r = 0;
 	unsigned long flags;
 	struct log_c *lc = log->context;
+	int is_mark_list_empty;
+	int is_clear_list_empty;
 	LIST_HEAD(mark_list);
 	LIST_HEAD(clear_list);
 	struct flush_entry *fe, *tmp_fe;
@@ -483,19 +547,46 @@ static int userspace_flush(struct dm_dirty_log *log)
 	list_splice_init(&lc->clear_list, &clear_list);
 	spin_unlock_irqrestore(&lc->flush_lock, flags);
 
-	if (list_empty(&mark_list) && list_empty(&clear_list))
+	is_mark_list_empty = list_empty(&mark_list);
+	is_clear_list_empty = list_empty(&clear_list);
+
+	if (is_mark_list_empty && is_clear_list_empty)
 		return 0;
 
-	r = flush_by_group(lc, &mark_list);
+	r = flush_by_group(lc, &clear_list, 0);
+
 	if (r)
 		goto fail;
 
-	r = flush_by_group(lc, &clear_list);
-	if (r)
-		goto fail;
+	if (lc->integrated_flush) {
+		/* send flush request with mark_list as payload*/
+		r = flush_by_group(lc, &mark_list, 1);
+		if (r)
+			goto fail;
 
-	r = userspace_do_request(lc, lc->uuid, DM_ULOG_FLUSH,
-				 NULL, 0, NULL, NULL);
+		if (is_mark_list_empty && !atomic_read(&lc->sched_flush)) {
+			/*
+			 * When there is only clear region requests,
+			 * we plan a flush in the future.
+			 */
+			queue_delayed_work(lc->dmlog_wq,
+					   &lc->flush_log_work, 3 * HZ);
+			atomic_set(&lc->sched_flush, 1);
+		} else {
+			/*
+			 * Cancel pending flush because we
+			 * have already flushed in mark_region
+			 */
+			cancel_delayed_work(&lc->flush_log_work);
+			atomic_set(&lc->sched_flush, 0);
+		}
+	} else {
+		r = flush_by_group(lc, &mark_list, 0);
+		if (r)
+			goto fail;
+		r = userspace_do_request(lc, lc->uuid, DM_ULOG_FLUSH,
+					 NULL, 0, NULL, NULL);
+	}
 
 fail:
 	/*
