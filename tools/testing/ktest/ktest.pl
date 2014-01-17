@@ -18,6 +18,7 @@ $| = 1;
 my %opt;
 my %repeat_tests;
 my %repeats;
+my %evals;
 
 #default opts
 my %default = (
@@ -25,6 +26,7 @@ my %default = (
     "TEST_TYPE"			=> "build",
     "BUILD_TYPE"		=> "randconfig",
     "MAKE_CMD"			=> "make",
+    "CLOSE_CONSOLE_SIGNAL"	=> "INT",
     "TIMEOUT"			=> 120,
     "TMP_DIR"			=> "/tmp/ktest/\${MACHINE}",
     "SLEEP_TIME"		=> 60,	# sleep time between tests
@@ -163,6 +165,7 @@ my $timeout;
 my $booted_timeout;
 my $detect_triplefault;
 my $console;
+my $close_console_signal;
 my $reboot_success_line;
 my $success_line;
 my $stop_after_success;
@@ -285,6 +288,7 @@ my %option_map = (
     "TIMEOUT"			=> \$timeout,
     "BOOTED_TIMEOUT"		=> \$booted_timeout,
     "CONSOLE"			=> \$console,
+    "CLOSE_CONSOLE_SIGNAL"	=> \$close_console_signal,
     "DETECT_TRIPLE_FAULT"	=> \$detect_triplefault,
     "SUCCESS_LINE"		=> \$success_line,
     "REBOOT_SUCCESS_LINE"	=> \$reboot_success_line,
@@ -444,6 +448,27 @@ $config_help{"REBOOT_SCRIPT"} = << "EOF"
  (Only mandatory if REBOOT_TYPE = script)
 EOF
     ;
+
+sub _logit {
+    if (defined($opt{"LOG_FILE"})) {
+	open(OUT, ">> $opt{LOG_FILE}") or die "Can't write to $opt{LOG_FILE}";
+	print OUT @_;
+	close(OUT);
+    }
+}
+
+sub logit {
+    if (defined($opt{"LOG_FILE"})) {
+	_logit @_;
+    } else {
+	print @_;
+    }
+}
+
+sub doprint {
+    print @_;
+    _logit @_;
+}
 
 sub read_prompt {
     my ($cancel, $prompt) = @_;
@@ -660,6 +685,22 @@ sub set_value {
     } else {
 	$opt{$lvalue} = $prvalue;
     }
+}
+
+sub set_eval {
+    my ($lvalue, $rvalue, $name) = @_;
+
+    my $prvalue = process_variables($rvalue);
+    my $arr;
+
+    if (defined($evals{$lvalue})) {
+	$arr = $evals{$lvalue};
+    } else {
+	$arr = [];
+	$evals{$lvalue} = $arr;
+    }
+
+    push @{$arr}, $rvalue;
 }
 
 sub set_variable {
@@ -947,6 +988,20 @@ sub __read_config {
 		$test_case = 1;
 	    }
 
+	} elsif (/^\s*([A-Z_\[\]\d]+)\s*=~\s*(.*?)\s*$/) {
+
+	    next if ($skip);
+
+	    my $lvalue = $1;
+	    my $rvalue = $2;
+
+	    if ($default || $lvalue =~ /\[\d+\]$/) {
+		set_eval($lvalue, $rvalue, $name);
+	    } else {
+		my $val = "$lvalue\[$test_num\]";
+		set_eval($val, $rvalue, $name);
+	    }
+
 	} elsif (/^\s*([A-Z_\[\]\d]+)\s*=\s*(.*?)\s*$/) {
 
 	    next if ($skip);
@@ -1126,6 +1181,10 @@ sub __eval_option {
 	} elsif (defined($opt{$var})) {
 	    $o = $opt{$var};
 	    $retval = "$retval$o";
+	} elsif ($var eq "KERNEL_VERSION" && defined($make)) {
+	    # special option KERNEL_VERSION uses kernel version
+	    get_version();
+	    $retval = "$retval$version";
 	} else {
 	    $retval = "$retval\$\{$var\}";
 	}
@@ -1138,6 +1197,33 @@ sub __eval_option {
     $retval =~ s/^ //;
 
     return $retval;
+}
+
+sub process_evals {
+    my ($name, $option, $i) = @_;
+
+    my $option_name = "$name\[$i\]";
+    my $ev;
+
+    my $old_option = $option;
+
+    if (defined($evals{$option_name})) {
+	$ev = $evals{$option_name};
+    } elsif (defined($evals{$name})) {
+	$ev = $evals{$name};
+    } else {
+	return $option;
+    }
+
+    for my $e (@{$ev}) {
+	eval "\$option =~ $e";
+    }
+
+    if ($option ne $old_option) {
+	doprint("$name changed from '$old_option' to '$option'\n");
+    }
+
+    return $option;
 }
 
 sub eval_option {
@@ -1160,28 +1246,9 @@ sub eval_option {
 	$option = __eval_option($name, $option, $i);
     }
 
+    $option = process_evals($name, $option, $i);
+
     return $option;
-}
-
-sub _logit {
-    if (defined($opt{"LOG_FILE"})) {
-	open(OUT, ">> $opt{LOG_FILE}") or die "Can't write to $opt{LOG_FILE}";
-	print OUT @_;
-	close(OUT);
-    }
-}
-
-sub logit {
-    if (defined($opt{"LOG_FILE"})) {
-	_logit @_;
-    } else {
-	print @_;
-    }
-}
-
-sub doprint {
-    print @_;
-    _logit @_;
 }
 
 sub run_command;
@@ -1296,7 +1363,7 @@ sub close_console {
     my ($fp, $pid) = @_;
 
     doprint "kill child process $pid\n";
-    kill 2, $pid;
+    kill $close_console_signal, $pid;
 
     print "closing!\n";
     close($fp);
@@ -3916,6 +3983,18 @@ for (my $i = 1; $i <= $opt{"NUM_TESTS"}; $i++) {
 
     my $makecmd = set_test_option("MAKE_CMD", $i);
 
+    $outputdir = set_test_option("OUTPUT_DIR", $i);
+    $builddir = set_test_option("BUILD_DIR", $i);
+
+    chdir $builddir || die "can't change directory to $builddir";
+
+    if (!-d $outputdir) {
+	mkpath($outputdir) or
+	    die "can't create $outputdir";
+    }
+
+    $make = "$makecmd O=$outputdir";
+
     # Load all the options into their mapped variable names
     foreach my $opt (keys %option_map) {
 	${$option_map{$opt}} = set_test_option($opt, $i);
@@ -3940,13 +4019,9 @@ for (my $i = 1; $i <= $opt{"NUM_TESTS"}; $i++) {
 	$start_minconfig = $minconfig;
     }
 
-    chdir $builddir || die "can't change directory to $builddir";
-
-    foreach my $dir ($tmpdir, $outputdir) {
-	if (!-d $dir) {
-	    mkpath($dir) or
-		die "can't create $dir";
-	}
+    if (!-d $tmpdir) {
+	mkpath($tmpdir) or
+	    die "can't create $tmpdir";
     }
 
     $ENV{"SSH_USER"} = $ssh_user;
@@ -3955,7 +4030,6 @@ for (my $i = 1; $i <= $opt{"NUM_TESTS"}; $i++) {
     $buildlog = "$tmpdir/buildlog-$machine";
     $testlog = "$tmpdir/testlog-$machine";
     $dmesg = "$tmpdir/dmesg-$machine";
-    $make = "$makecmd O=$outputdir";
     $output_config = "$outputdir/.config";
 
     if (!$buildonly) {
