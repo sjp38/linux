@@ -15,3 +15,4 @@ config ARCH_SUNXI
 	select RESET_CONTROLLER
 	select SPARSE_IRQ
 	select SUN4I_TIMER
+	select SUN5I_HSTIMER

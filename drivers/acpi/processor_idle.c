@@ -725,11 +725,6 @@ static int acpi_idle_enter_c1(struct cpuidle_device *dev,
 	if (unlikely(!pr))
 		return -EINVAL;
 
-	if (cx->entry_method == ACPI_CSTATE_FFH) {
-		if (current_set_polling_and_test())
-			return -EINVAL;
-	}
-
 	lapic_timer_state_broadcast(pr, cx, 1);
 	acpi_idle_do_entry(cx);
 
@@ -790,11 +785,6 @@ static int acpi_idle_enter_simple(struct cpuidle_device *dev,
 		return acpi_idle_enter_c1(dev, drv, CPUIDLE_DRIVER_STATE_START);
 #endif
 
-	if (cx->entry_method == ACPI_CSTATE_FFH) {
-		if (current_set_polling_and_test())
-			return -EINVAL;
-	}
-
 	/*
 	 * Must be done before busmaster disable as we might need to
 	 * access HPET !
@@ -851,11 +841,6 @@ static int acpi_idle_enter_bm(struct cpuidle_device *dev,
 			acpi_safe_halt();
 			return -EBUSY;
 		}
-	}
-
-	if (cx->entry_method == ACPI_CSTATE_FFH) {
-		if (current_set_polling_and_test())
-			return -EINVAL;
 	}
 
 	acpi_unlazy_tlb(smp_processor_id());

@@ -104,7 +104,6 @@ void __init plat_mem_setup(void)
 
 	register_smp_ops(&nlm_smp_ops);
 #endif
-	panic_timeout	= 5;
 	_machine_restart = (void (*)(char *))nlm_linux_exit;
 	_machine_halt	= nlm_linux_exit;
 	pm_power_off	= nlm_linux_exit;

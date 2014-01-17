@@ -12,7 +12,7 @@
 struct pollfd;
 struct thread_map;
 struct cpu_map;
-struct perf_record_opts;
+struct record_opts;
 
 #define PERF_EVLIST__HLIST_BITS 8
 #define PERF_EVLIST__HLIST_SIZE (1 << PERF_EVLIST__HLIST_BITS)
@@ -97,9 +97,8 @@ void perf_evlist__close(struct perf_evlist *evlist);
 
 void perf_evlist__set_id_pos(struct perf_evlist *evlist);
 bool perf_can_sample_identifier(void);
-void perf_evlist__config(struct perf_evlist *evlist,
-			 struct perf_record_opts *opts);
-int perf_record_opts__config(struct perf_record_opts *opts);
+void perf_evlist__config(struct perf_evlist *evlist, struct record_opts *opts);
+int record_opts__config(struct record_opts *opts);
 
 int perf_evlist__prepare_workload(struct perf_evlist *evlist,
 				  struct target *target,
@@ -192,5 +191,10 @@ static inline void perf_mmap__write_tail(struct perf_mmap *md,
 	mb();
 	pc->data_tail = tail;
 }
+
+bool perf_evlist__can_select_event(struct perf_evlist *evlist, const char *str);
+void perf_evlist__to_front(struct perf_evlist *evlist,
+			   struct perf_evsel *move_evsel);
+
 
 #endif /* __PERF_EVLIST_H */

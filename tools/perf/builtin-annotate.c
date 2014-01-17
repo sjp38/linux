@@ -69,15 +69,7 @@ static int perf_evsel__add_sample(struct perf_evsel *evsel,
 	if (he == NULL)
 		return -ENOMEM;
 
-	ret = 0;
-	if (he->ms.sym != NULL) {
-		struct annotation *notes = symbol__annotation(he->ms.sym);
-		if (notes->src == NULL && symbol__alloc_hist(he->ms.sym) < 0)
-			return -ENOMEM;
-
-		ret = hist_entry__inc_addr_samples(he, evsel->idx, al->addr);
-	}
-
+	ret = hist_entry__inc_addr_samples(he, evsel->idx, al->addr);
 	evsel->hists.stats.total_period += sample->period;
 	hists__inc_nr_events(&evsel->hists, PERF_RECORD_SAMPLE);
 	return ret;
@@ -188,8 +180,7 @@ find_next:
 			 * symbol, free he->ms.sym->src to signal we already
 			 * processed this symbol.
 			 */
-			free(notes->src);
-			notes->src = NULL;
+			zfree(&notes->src);
 		}
 	}
 }
@@ -373,7 +364,7 @@ int cmd_annotate(int argc, const char **argv, const char *prefix __maybe_unused)
 
 	if (argc) {
 		/*
-		 * Special case: if there's an argument left then assume tha
+		 * Special case: if there's an argument left then assume that
 		 * it's a symbol filter:
 		 */
 		if (argc > 1)

@@ -6,6 +6,7 @@
 #include <inttypes.h>
 
 #include "symbol.h"
+#include <symbol/kallsyms.h>
 #include "debug.h"
 
 #ifndef HAVE_ELF_GETPHDRNUM_SUPPORT
@@ -553,7 +554,7 @@ bool symsrc__has_symtab(struct symsrc *ss)
 
 void symsrc__destroy(struct symsrc *ss)
 {
-	free(ss->name);
+	zfree(&ss->name);
 	elf_end(ss->elf);
 	close(ss->fd);
 }

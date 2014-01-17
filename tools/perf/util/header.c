@@ -177,7 +177,7 @@ perf_header__set_cmdline(int argc, const char **argv)
 			continue;		\
 		else
 
-static int write_buildid(char *name, size_t name_len, u8 *build_id,
+static int write_buildid(const char *name, size_t name_len, u8 *build_id,
 			 pid_t pid, u16 misc, int fd)
 {
 	int err;
@@ -209,7 +209,7 @@ static int __dsos__write_buildid_table(struct list_head *head,
 
 	dsos__for_each_with_build_id(pos, head) {
 		int err;
-		char  *name;
+		const char *name;
 		size_t name_len;
 
 		if (!pos->hit)
@@ -387,7 +387,7 @@ static int dso__cache_build_id(struct dso *dso, struct machine *machine,
 {
 	bool is_kallsyms = dso->kernel && dso->long_name[0] != '/';
 	bool is_vdso = is_vdso_map(dso->short_name);
-	char *name = dso->long_name;
+	const char *name = dso->long_name;
 	char nm[PATH_MAX];
 
 	if (dso__is_kcore(dso)) {
@@ -800,10 +800,10 @@ static void free_cpu_topo(struct cpu_topo *tp)
 		return;
 
 	for (i = 0 ; i < tp->core_sib; i++)
-		free(tp->core_siblings[i]);
+		zfree(&tp->core_siblings[i]);
 
 	for (i = 0 ; i < tp->thread_sib; i++)
-		free(tp->thread_siblings[i]);
+		zfree(&tp->thread_siblings[i]);
 
 	free(tp);
 }
@@ -1232,10 +1232,8 @@ static void free_event_desc(struct perf_evsel *events)
 		return;
 
 	for (evsel = events; evsel->attr.size; evsel++) {
-		if (evsel->name)
-			free(evsel->name);
-		if (evsel->id)
-			free(evsel->id);
+		zfree(&evsel->name);
+		zfree(&evsel->id);
 	}
 
 	free(events);
@@ -1326,8 +1324,7 @@ read_event_desc(struct perf_header *ph, int fd)
 		}
 	}
 out:
-	if (buf)
-		free(buf);
+	free(buf);
 	return events;
 error:
 	if (events)
@@ -1709,7 +1706,7 @@ static int process_nrcpus(struct perf_file_section *section __maybe_unused,
 			  struct perf_header *ph, int fd,
 			  void *data __maybe_unused)
 {
-	size_t ret;
+	ssize_t ret;
 	u32 nr;
 
 	ret = readn(fd, &nr, sizeof(nr));
@@ -1753,7 +1750,7 @@ static int process_total_mem(struct perf_file_section *section __maybe_unused,
 			     void *data __maybe_unused)
 {
 	uint64_t mem;
-	size_t ret;
+	ssize_t ret;
 
 	ret = readn(fd, &mem, sizeof(mem));
 	if (ret != sizeof(mem))
@@ -1822,7 +1819,7 @@ static int process_cmdline(struct perf_file_section *section __maybe_unused,
 			   struct perf_header *ph, int fd,
 			   void *data __maybe_unused)
 {
-	size_t ret;
+	ssize_t ret;
 	char *str;
 	u32 nr, i;
 	struct strbuf sb;
@@ -1858,7 +1855,7 @@ static int process_cpu_topology(struct perf_file_section *section __maybe_unused
 				struct perf_header *ph, int fd,
 				void *data __maybe_unused)
 {
-	size_t ret;
+	ssize_t ret;
 	u32 nr, i;
 	char *str;
 	struct strbuf sb;
@@ -1914,7 +1911,7 @@ static int process_numa_topology(struct perf_file_section *section __maybe_unuse
 				 struct perf_header *ph, int fd,
 				 void *data __maybe_unused)
 {
-	size_t ret;
+	ssize_t ret;
 	u32 nr, node, i;
 	char *str;
 	uint64_t mem_total, mem_free;
@@ -1974,7 +1971,7 @@ static int process_pmu_mappings(struct perf_file_section *section __maybe_unused
 				struct perf_header *ph, int fd,
 				void *data __maybe_unused)
 {
-	size_t ret;
+	ssize_t ret;
 	char *name;
 	u32 pmu_num;
 	u32 type;
@@ -2108,7 +2105,7 @@ static int process_group_desc(struct perf_file_section *section __maybe_unused,
 	ret = 0;
 out_free:
 	for (i = 0; i < nr_groups; i++)
-		free(desc[i].name);
+		zfree(&desc[i].name);
 	free(desc);
 
 	return ret;
@@ -2327,7 +2324,8 @@ int perf_session__write_header(struct perf_session *session,
 		}
 	}
 
-	header->data_offset = lseek(fd, 0, SEEK_CUR);
+	if (!header->data_offset)
+		header->data_offset = lseek(fd, 0, SEEK_CUR);
 	header->feat_offset = header->data_offset + header->data_size;
 
 	if (at_exit) {
@@ -2534,7 +2532,7 @@ static int check_magic_endian(u64 magic, uint64_t hdr_sz,
 int perf_file_header__read(struct perf_file_header *header,
 			   struct perf_header *ph, int fd)
 {
-	int ret;
+	ssize_t ret;
 
 	lseek(fd, 0, SEEK_SET);
 
@@ -2628,7 +2626,7 @@ static int perf_file_header__read_pipe(struct perf_pipe_file_header *header,
 				       struct perf_header *ph, int fd,
 				       bool repipe)
 {
-	int ret;
+	ssize_t ret;
 
 	ret = readn(fd, header, sizeof(*header));
 	if (ret <= 0)
@@ -2669,7 +2667,7 @@ static int read_attr(int fd, struct perf_header *ph,
 	struct perf_event_attr *attr = &f_attr->attr;
 	size_t sz, left;
 	size_t our_sz = sizeof(f_attr->attr);
-	int ret;
+	ssize_t ret;
 
 	memset(f_attr, 0, sizeof(*f_attr));
 
@@ -2834,11 +2832,11 @@ int perf_session__read_header(struct perf_session *session)
 
 	symbol_conf.nr_events = nr_attrs;
 
-	perf_header__process_sections(header, fd, &session->pevent,
+	perf_header__process_sections(header, fd, &session->tevent,
 				      perf_file_section__process);
 
 	if (perf_evlist__prepare_tracepoint_events(session->evlist,
-						   session->pevent))
+						   session->tevent.pevent))
 		goto out_delete_evlist;
 
 	return 0;
@@ -3003,7 +3001,7 @@ int perf_event__process_tracing_data(struct perf_tool *tool __maybe_unused,
 	lseek(fd, offset + sizeof(struct tracing_data_event),
 	      SEEK_SET);
 
-	size_read = trace_report(fd, &session->pevent,
+	size_read = trace_report(fd, &session->tevent,
 				 session->repipe);
 	padding = PERF_ALIGN(size_read, sizeof(u64)) - size_read;
 
@@ -3025,7 +3023,7 @@ int perf_event__process_tracing_data(struct perf_tool *tool __maybe_unused,
 	}
 
 	perf_evlist__prepare_tracepoint_events(session->evlist,
-					       session->pevent);
+					       session->tevent.pevent);
 
 	return size_read + padding;
 }

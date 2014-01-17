@@ -189,21 +189,18 @@ static void perf_top__record_precise_ip(struct perf_top *top,
 	if (pthread_mutex_trylock(&notes->lock))
 		return;
 
-	if (notes->src == NULL && symbol__alloc_hist(sym) < 0) {
-		pthread_mutex_unlock(&notes->lock);
-		pr_err("Not enough memory for annotating '%s' symbol!\n",
-		       sym->name);
-		sleep(1);
-		return;
-	}
-
 	ip = he->ms.map->map_ip(he->ms.map, ip);
-	err = symbol__inc_addr_samples(sym, he->ms.map, counter, ip);
+	err = hist_entry__inc_addr_samples(he, counter, ip);
 
 	pthread_mutex_unlock(&notes->lock);
 
 	if (err == -ERANGE && !he->ms.map->erange_warned)
 		ui__warn_map_erange(he->ms.map, sym, ip);
+	else if (err == -ENOMEM) {
+		pr_err("Not enough memory for annotating '%s' symbol!\n",
+		       sym->name);
+		sleep(1);
+	}
 }
 
 static void perf_top__show_details(struct perf_top *top)
@@ -634,26 +631,9 @@ repeat:
 	return NULL;
 }
 
-/* Tag samples to be skipped. */
-static const char *skip_symbols[] = {
-	"intel_idle",
-	"default_idle",
-	"native_safe_halt",
-	"cpu_idle",
-	"enter_idle",
-	"exit_idle",
-	"mwait_idle",
-	"mwait_idle_with_hints",
-	"poll_idle",
-	"ppc64_runlatch_off",
-	"pseries_dedicated_idle_sleep",
-	NULL
-};
-
 static int symbol_filter(struct map *map __maybe_unused, struct symbol *sym)
 {
 	const char *name = sym->name;
-	int i;
 
 	/*
 	 * ppc64 uses function descriptors and appends a '.' to the
@@ -671,12 +651,8 @@ static int symbol_filter(struct map *map __maybe_unused, struct symbol *sym)
 	    strstr(name, "_text_end"))
 		return 1;
 
-	for (i = 0; skip_symbols[i]; i++) {
-		if (!strcmp(skip_symbols[i], name)) {
-			sym->ignore = true;
-			break;
-		}
-	}
+	if (symbol__is_idle(sym))
+		sym->ignore = true;
 
 	return 0;
 }
@@ -878,7 +854,7 @@ static int perf_top__start_counters(struct perf_top *top)
 	char msg[512];
 	struct perf_evsel *counter;
 	struct perf_evlist *evlist = top->evlist;
-	struct perf_record_opts *opts = &top->record_opts;
+	struct record_opts *opts = &top->record_opts;
 
 	perf_evlist__config(evlist, opts);
 
@@ -930,7 +906,7 @@ static int perf_top__setup_sample_type(struct perf_top *top __maybe_unused)
 
 static int __cmd_top(struct perf_top *top)
 {
-	struct perf_record_opts *opts = &top->record_opts;
+	struct record_opts *opts = &top->record_opts;
 	pthread_t thread;
 	int ret;
 
@@ -1052,7 +1028,7 @@ int cmd_top(int argc, const char **argv, const char *prefix __maybe_unused)
 		.max_stack	     = PERF_MAX_STACK_DEPTH,
 		.sym_pcnt_filter     = 5,
 	};
-	struct perf_record_opts *opts = &top.record_opts;
+	struct record_opts *opts = &top.record_opts;
 	struct target *target = &opts->target;
 	const struct option options[] = {
 	OPT_CALLBACK('e', "event", &top.evlist, "event",
@@ -1084,7 +1060,7 @@ int cmd_top(int argc, const char **argv, const char *prefix __maybe_unused)
 			    "dump the symbol table used for profiling"),
 	OPT_INTEGER('f', "count-filter", &top.count_filter,
 		    "only display functions with more events than this"),
-	OPT_BOOLEAN('g', "group", &opts->group,
+	OPT_BOOLEAN(0, "group", &opts->group,
 			    "put the counters into a counter group"),
 	OPT_BOOLEAN('i', "no-inherit", &opts->no_inherit,
 		    "child tasks do not inherit counters"),
@@ -1105,7 +1081,7 @@ int cmd_top(int argc, const char **argv, const char *prefix __maybe_unused)
 		   " abort, in_tx, transaction"),
 	OPT_BOOLEAN('n', "show-nr-samples", &symbol_conf.show_nr_samples,
 		    "Show a column with the number of samples"),
-	OPT_CALLBACK_NOOPT('G', NULL, &top.record_opts,
+	OPT_CALLBACK_NOOPT('g', NULL, &top.record_opts,
 			   NULL, "enables call-graph recording",
 			   &callchain_opt),
 	OPT_CALLBACK(0, "call-graph", &top.record_opts,
@@ -1203,7 +1179,7 @@ int cmd_top(int argc, const char **argv, const char *prefix __maybe_unused)
 	if (top.delay_secs < 1)
 		top.delay_secs = 1;
 
-	if (perf_record_opts__config(opts)) {
+	if (record_opts__config(opts)) {
 		status = -EINVAL;
 		goto out_delete_maps;
 	}
