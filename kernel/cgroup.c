@@ -2127,7 +2127,7 @@ retry_find_task:
 		tsk = find_task_by_vpid(pid);
 		if (!tsk) {
 			rcu_read_unlock();
-			ret= -ESRCH;
+			ret = -ESRCH;
 			goto out_unlock_cgroup;
 		}
 		/*
