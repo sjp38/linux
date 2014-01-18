@@ -1679,7 +1679,8 @@ static struct dentry *cgroup_mount(struct file_system_type *fs_type,
 	return ERR_PTR(ret);
 }
 
-static void cgroup_kill_sb(struct super_block *sb) {
+static void cgroup_kill_sb(struct super_block *sb)
+{
 	struct cgroupfs_root *root = sb->s_fs_info;
 	struct cgroup *cgrp = &root->top_cgroup;
 	struct cgrp_cset_link *link, *tmp_link;
