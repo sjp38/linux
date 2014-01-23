@@ -26,7 +26,6 @@
 #include <linux/ptrace.h>
 #include <linux/user.h>
 #include <linux/security.h>
-#include <linux/init.h>
 #include <linux/signal.h>
 #include <linux/uaccess.h>
 #include <linux/perf_event.h>
