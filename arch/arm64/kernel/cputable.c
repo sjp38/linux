@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <linux/init.h>
-
 #include <asm/cputable.h>
 
 extern unsigned long __cpu_setup(void);
