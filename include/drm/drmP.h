@@ -45,7 +45,6 @@
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
-#include <linux/init.h>
 #include <linux/file.h>
 #include <linux/platform_device.h>
 #include <linux/pci.h>

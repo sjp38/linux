@@ -17,7 +17,6 @@
  */
 
 #include <linux/delay.h>
-#include <linux/init.h>
 #include <linux/of.h>
 #include <linux/smp.h>
 
