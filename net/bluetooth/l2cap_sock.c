@@ -101,6 +101,15 @@ static int l2cap_sock_bind(struct socket *sock, struct sockaddr *addr, int alen)
 	if (!bdaddr_type_is_valid(la.l2_bdaddr_type))
 		return -EINVAL;
 
+	if (la.l2_cid) {
+		/* When the socket gets created it defaults to
+		 * CHAN_CONN_ORIENTED, so we need to overwrite the
+		 * default here.
+		 */
+		chan->chan_type = L2CAP_CHAN_FIXED;
+		chan->omtu = L2CAP_DEFAULT_MTU;
+	}
+
 	if (bdaddr_type_is_le(la.l2_bdaddr_type)) {
 		if (!enable_lecoc && la.l2_psm)
 			return -EINVAL;
@@ -432,6 +441,10 @@ static int l2cap_sock_getsockopt_old(struct socket *sock, int optname,
 			opt = L2CAP_LM_AUTH | L2CAP_LM_ENCRYPT |
 			      L2CAP_LM_SECURE;
 			break;
+		case BT_SECURITY_FIPS:
+			opt = L2CAP_LM_AUTH | L2CAP_LM_ENCRYPT |
+			      L2CAP_LM_SECURE | L2CAP_LM_FIPS;
+			break;
 		default:
 			opt = 0;
 			break;
@@ -445,6 +458,7 @@ static int l2cap_sock_getsockopt_old(struct socket *sock, int optname,
 
 		if (put_user(opt, (u32 __user *) optval))
 			err = -EFAULT;
+
 		break;
 
 	case L2CAP_CONNINFO:
@@ -499,6 +513,7 @@ static int l2cap_sock_getsockopt(struct socket *sock, int level, int optname,
 	switch (optname) {
 	case BT_SECURITY:
 		if (chan->chan_type != L2CAP_CHAN_CONN_ORIENTED &&
+		    chan->chan_type != L2CAP_CHAN_FIXED &&
 		    chan->chan_type != L2CAP_CHAN_RAW) {
 			err = -EINVAL;
 			break;
@@ -699,6 +714,11 @@ static int l2cap_sock_setsockopt_old(struct socket *sock, int optname,
 			break;
 		}
 
+		if (opt & L2CAP_LM_FIPS) {
+			err = -EINVAL;
+			break;
+		}
+
 		if (opt & L2CAP_LM_AUTH)
 			chan->sec_level = BT_SECURITY_LOW;
 		if (opt & L2CAP_LM_ENCRYPT)
@@ -750,6 +770,7 @@ static int l2cap_sock_setsockopt(struct socket *sock, int level, int optname,
 	switch (optname) {
 	case BT_SECURITY:
 		if (chan->chan_type != L2CAP_CHAN_CONN_ORIENTED &&
+		    chan->chan_type != L2CAP_CHAN_FIXED &&
 		    chan->chan_type != L2CAP_CHAN_RAW) {
 			err = -EINVAL;
 			break;
@@ -1448,6 +1469,11 @@ static void l2cap_sock_init(struct sock *sk, struct sock *parent)
 		chan->flags = pchan->flags;
 		chan->tx_credits = pchan->tx_credits;
 		chan->rx_credits = pchan->rx_credits;
+
+		if (chan->chan_type == L2CAP_CHAN_FIXED) {
+			chan->scid = pchan->scid;
+			chan->dcid = pchan->scid;
+		}
 
 		security_sk_clone(parent, sk);
 	} else {
