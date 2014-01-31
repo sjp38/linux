@@ -659,6 +659,9 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	if (stack_base > (1 << 30))
 		stack_base = 1 << 30;
 
+	/* add some more stack size for stack randomization */
+	stack_base += STACK_RND_MASK + 1;
+
 	/* Make sure we didn't let the argument array grow too large. */
 	if (vma->vm_end - vma->vm_start > stack_base)
 		return -ENOMEM;

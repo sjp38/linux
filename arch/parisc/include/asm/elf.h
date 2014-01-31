@@ -348,4 +348,11 @@ struct pt_regs;	/* forward declaration... */
 
 #define ELF_HWCAP	0
 
+/* Stack randomization: 1GB for 64bit, 8MB for 32bit */
+#define STACK_RND_MASK (is_32bit_task() ? 0x7ff : 0x3fffff)
+
+struct mm_struct;
+extern unsigned long arch_randomize_brk(struct mm_struct *);
+#define arch_randomize_brk arch_randomize_brk
+
 #endif
