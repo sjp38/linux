@@ -1,0 +1,13 @@
+Importing jdelvare-hwmon based on 5cb480f6b488128140c940abff3c36f524a334a8
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 5cb480f6b488128140c940abff3c36f524a334a8
+HEAD is now at 5cb480f6b488 Merge branch 'misc' of git://git.kernel.org/pub/scm/linux/kernel/git/mmarek/kbuild
+$ git am ../quilt/jdelvare-hwmon/hwmon-sensors-fix-sensors_lm75-dependencies.patch
+Applying: hwmon: Fix SENSORS_LM75 dependencies to eliminate build errors
+$ git am ../quilt/jdelvare-hwmon/hwmon-sensors-fix-sensors_tmp102-dependencies.patch
+Applying: hwmon: Fix SENSORS_TMP102 dependencies to eliminate build errors
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:jdelvare-hwmon/master
+From ../quilt-tmp
+   9b0cd304f26b..ac6e3e783d3e  master     -> jdelvare-hwmon/master
