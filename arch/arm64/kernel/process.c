@@ -31,7 +31,6 @@
 #include <linux/reboot.h>
 #include <linux/interrupt.h>
 #include <linux/kallsyms.h>
-#include <linux/init.h>
 #include <linux/cpu.h>
 #include <linux/cpuidle.h>
 #include <linux/elfcore.h>
