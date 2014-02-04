@@ -265,7 +265,7 @@ extern ci_t *CI;                /* dummy pointer to board ZERO's data */
 void
 VMETRO_TRACE (void *x)
 {
-    u_int32_t   y = (u_int32_t) x;
+    u_int32_t   y = (u_int32_t)(uintptr_t) x;
 
     pci_write_32 ((u_int32_t *) &CI->cpldbase->leds, y);
 }
