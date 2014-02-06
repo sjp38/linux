@@ -924,6 +924,22 @@ static unsigned long mfn_hash(unsigned long mfn)
 	return hash_long(mfn, M2P_OVERRIDE_HASH_SHIFT);
 }
 
+int set_foreign_p2m_mapping(struct page *page, unsigned long mfn)
+{
+	unsigned long pfn = page_to_pfn(page);
+
+	WARN_ON(PagePrivate(page));
+	SetPagePrivate(page);
+	set_page_private(page, mfn);
+
+	page->index = pfn_to_mfn(pfn);
+	if (unlikely(!set_phys_to_machine(pfn, FOREIGN_FRAME(mfn))))
+		return -ENOMEM;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(set_foreign_p2m_mapping);
+
 /* Add an MFN override for a particular page */
 int m2p_add_override(unsigned long mfn, struct page *page,
 		struct gnttab_map_grant_ref *kmap_op)
@@ -942,13 +958,6 @@ int m2p_add_override(unsigned long mfn, struct page *page,
 					"m2p_add_override: pfn %lx not mapped", pfn))
 			return -EINVAL;
 	}
-	WARN_ON(PagePrivate(page));
-	SetPagePrivate(page);
-	set_page_private(page, mfn);
-	page->index = pfn_to_mfn(pfn);
-
-	if (unlikely(!set_phys_to_machine(pfn, FOREIGN_FRAME(mfn))))
-		return -ENOMEM;
 
 	if (kmap_op != NULL) {
 		if (!PageHighMem(page)) {
@@ -986,20 +995,33 @@ int m2p_add_override(unsigned long mfn, struct page *page,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(m2p_add_override);
+
+int restore_foreign_p2m_mapping(struct page *page, unsigned long mfn)
+{
+	unsigned long pfn = page_to_pfn(page);
+
+	if (mfn == INVALID_P2M_ENTRY || !(mfn & FOREIGN_FRAME_BIT))
+		return -EINVAL;
+
+	set_page_private(page, INVALID_P2M_ENTRY);
+	WARN_ON(!PagePrivate(page));
+	ClearPagePrivate(page);
+	set_phys_to_machine(pfn, page->index);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(restore_foreign_p2m_mapping);
+
 int m2p_remove_override(struct page *page,
-		struct gnttab_map_grant_ref *kmap_op)
+			struct gnttab_map_grant_ref *kmap_op,
+			unsigned long mfn)
 {
 	unsigned long flags;
-	unsigned long mfn;
 	unsigned long pfn;
 	unsigned long uninitialized_var(address);
 	unsigned level;
 	pte_t *ptep = NULL;
 
 	pfn = page_to_pfn(page);
-	mfn = get_phys_to_machine(pfn);
-	if (mfn == INVALID_P2M_ENTRY || !(mfn & FOREIGN_FRAME_BIT))
-		return -EINVAL;
 
 	if (!PageHighMem(page)) {
 		address = (unsigned long)__va(pfn << PAGE_SHIFT);
@@ -1013,10 +1035,7 @@ int m2p_remove_override(struct page *page,
 	spin_lock_irqsave(&m2p_override_lock, flags);
 	list_del(&page->lru);
 	spin_unlock_irqrestore(&m2p_override_lock, flags);
-	WARN_ON(!PagePrivate(page));
-	ClearPagePrivate(page);
 
-	set_phys_to_machine(pfn, page->index);
 	if (kmap_op != NULL) {
 		if (!PageHighMem(page)) {
 			struct multicall_space mcs;
