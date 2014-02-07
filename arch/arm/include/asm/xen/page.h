@@ -97,13 +97,31 @@ static inline pte_t *lookup_address(unsigned long address, unsigned int *level)
 	return NULL;
 }
 
+static inline unsigned long get_phys_to_machine(unsigned long pfn)
+{
+	return 0;
+}
+
+static inline int set_foreign_p2m_mapping(struct page *page, unsigned long mfn)
+{
+	return 0;
+}
+
 static inline int m2p_add_override(unsigned long mfn, struct page *page,
 		struct gnttab_map_grant_ref *kmap_op)
 {
 	return 0;
 }
 
-static inline int m2p_remove_override(struct page *page, bool clear_pte)
+static inline int restore_foreign_p2m_mapping(struct page *page,
+					      unsigned long mfn)
+{
+	return 0;
+}
+
+static inline int m2p_remove_override(struct page *page,
+				      struct gnttab_map_grant_ref *kmap_op,
+				      unsigned long mfn)
 {
 	return 0;
 }
