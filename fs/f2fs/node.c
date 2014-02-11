@@ -82,42 +82,6 @@ static struct page *get_next_nat_page(struct f2fs_sb_info *sbi, nid_t nid)
 	return dst_page;
 }
 
-/*
- * Readahead NAT pages
- */
-static void ra_nat_pages(struct f2fs_sb_info *sbi, int nid)
-{
-	struct address_space *mapping = META_MAPPING(sbi);
-	struct f2fs_nm_info *nm_i = NM_I(sbi);
-	struct page *page;
-	pgoff_t index;
-	int i;
-	struct f2fs_io_info fio = {
-		.type = META,
-		.rw = READ_SYNC | REQ_META | REQ_PRIO
-	};
-
-
-	for (i = 0; i < FREE_NID_PAGES; i++, nid += NAT_ENTRY_PER_BLOCK) {
-		if (unlikely(nid >= nm_i->max_nid))
-			nid = 0;
-		index = current_nat_addr(sbi, nid);
-
-		page = grab_cache_page(mapping, index);
-		if (!page)
-			continue;
-		if (PageUptodate(page)) {
-			mark_page_accessed(page);
-			f2fs_put_page(page, 1);
-			continue;
-		}
-		f2fs_submit_page_mbio(sbi, page, index, &fio);
-		mark_page_accessed(page);
-		f2fs_put_page(page, 0);
-	}
-	f2fs_submit_merged_bio(sbi, META, READ);
-}
-
 static struct nat_entry *__lookup_nat_cache(struct f2fs_nm_info *nm_i, nid_t n)
 {
 	return radix_tree_lookup(&nm_i->nat_root, n);
@@ -1413,7 +1377,7 @@ static void build_free_nids(struct f2fs_sb_info *sbi)
 		return;
 
 	/* readahead nat pages to be scanned */
-	ra_nat_pages(sbi, nid);
+	ra_meta_pages(sbi, NAT_BLOCK_OFFSET(nid), FREE_NID_PAGES, META_NAT);
 
 	while (1) {
 		struct page *page = get_current_nat_page(sbi, nid);
@@ -1533,6 +1497,46 @@ void recover_node_page(struct f2fs_sb_info *sbi, struct page *page,
 	rewrite_node_page(sbi, page, sum, ni->blk_addr, new_blkaddr);
 	set_node_addr(sbi, ni, new_blkaddr);
 	clear_node_page_dirty(page);
+}
+
+bool recover_xattr_data(struct inode *inode, struct page *page, block_t blkaddr)
+{
+	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
+	nid_t prev_xnid = F2FS_I(inode)->i_xattr_nid;
+	nid_t new_xnid = nid_of_node(page);
+	struct node_info ni;
+
+	if (ofs_of_node(page) != XATTR_NODE_OFFSET)
+		return false;
+
+	/* 1: invalidate the previous xattr nid */
+	if (!prev_xnid)
+		goto recover_xnid;
+
+	/* Deallocate node address */
+	get_node_info(sbi, prev_xnid, &ni);
+	f2fs_bug_on(ni.blk_addr == NULL_ADDR);
+	invalidate_blocks(sbi, ni.blk_addr);
+	dec_valid_node_count(sbi, inode);
+	set_node_addr(sbi, &ni, NULL_ADDR);
+
+recover_xnid:
+	/* 2: allocate new xattr nid */
+	if (unlikely(!inc_valid_node_count(sbi, inode)))
+		f2fs_bug_on(1);
+
+	remove_free_nid(NM_I(sbi), new_xnid);
+	get_node_info(sbi, new_xnid, &ni);
+	ni.ino = inode->i_ino;
+	set_node_addr(sbi, &ni, NEW_ADDR);
+	F2FS_I(inode)->i_xattr_nid = new_xnid;
+
+	/* 3: update xattr blkaddr */
+	refresh_sit_entry(sbi, NEW_ADDR, blkaddr);
+	set_node_addr(sbi, &ni, blkaddr);
+
+	update_inode_page(inode);
+	return true;
 }
 
 int recover_inode_page(struct f2fs_sb_info *sbi, struct page *page)
