@@ -990,7 +990,7 @@ static int i915_getparam(struct drm_device *dev, void *data,
 		value = HAS_WT(dev);
 		break;
 	case I915_PARAM_HAS_ALIASING_PPGTT:
-		value = dev_priv->mm.aliasing_ppgtt ? 1 : 0;
+		value = dev_priv->mm.aliasing_ppgtt || USES_FULL_PPGTT(dev);
 		break;
 	case I915_PARAM_HAS_WAIT_TIMEOUT:
 		value = 1;
@@ -1374,7 +1374,7 @@ cleanup_gem:
 	i915_gem_cleanup_ringbuffer(dev);
 	i915_gem_context_fini(dev);
 	mutex_unlock(&dev->struct_mutex);
-	i915_gem_cleanup_aliasing_ppgtt(dev);
+	WARN_ON(dev_priv->mm.aliasing_ppgtt);
 	drm_mm_takedown(&dev_priv->gtt.base.mm);
 cleanup_power:
 	intel_display_power_put(dev, POWER_DOMAIN_VGA);
@@ -1442,7 +1442,7 @@ static void i915_kick_out_firmware_fb(struct drm_i915_private *dev_priv)
 
 static void i915_dump_device_info(struct drm_i915_private *dev_priv)
 {
-	const struct intel_device_info *info = dev_priv->info;
+	const struct intel_device_info *info = &dev_priv->info;
 
 #define PRINT_S(name) "%s"
 #define SEP_EMPTY
@@ -1459,6 +1459,58 @@ static void i915_dump_device_info(struct drm_i915_private *dev_priv)
 #undef SEP_COMMA
 }
 
+/*
+ * Determine various intel_device_info fields at runtime.
+ *
+ * Use it when either:
+ *   - it's judged too laborious to fill n static structures with the limit
+ *     when a simple if statement does the job,
+ *   - run-time checks (eg read fuse/strap registers) are needed.
+ *
+ * This function needs to be called:
+ *   - after the MMIO has been setup as we are reading registers,
+ *   - after the PCH has been detected,
+ *   - before the first usage of the fields it can tweak.
+ */
+static void intel_device_info_runtime_init(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	struct intel_device_info *info;
+
+	info = (struct intel_device_info *)&dev_priv->info;
+
+	info->num_sprites = 1;
+	if (IS_VALLEYVIEW(dev))
+		info->num_sprites = 2;
+
+	if (i915.disable_display) {
+		DRM_INFO("Display disabled (module parameter)\n");
+		info->num_pipes = 0;
+	} else if (info->num_pipes > 0 &&
+		   (INTEL_INFO(dev)->gen == 7 || INTEL_INFO(dev)->gen == 8) &&
+		   !IS_VALLEYVIEW(dev)) {
+		u32 fuse_strap = I915_READ(FUSE_STRAP);
+		u32 sfuse_strap = I915_READ(SFUSE_STRAP);
+
+		/*
+		 * SFUSE_STRAP is supposed to have a bit signalling the display
+		 * is fused off. Unfortunately it seems that, at least in
+		 * certain cases, fused off display means that PCH display
+		 * reads don't land anywhere. In that case, we read 0s.
+		 *
+		 * On CPT/PPT, we can detect this case as SFUSE_STRAP_FUSE_LOCK
+		 * should be set when taking over after the firmware.
+		 */
+		if (fuse_strap & ILK_INTERNAL_DISPLAY_DISABLE ||
+		    sfuse_strap & SFUSE_STRAP_DISPLAY_DISABLED ||
+		    (dev_priv->pch_type == PCH_CPT &&
+		     !(sfuse_strap & SFUSE_STRAP_FUSE_LOCK))) {
+			DRM_INFO("Display fused off, disabling\n");
+			info->num_pipes = 0;
+		}
+	}
+}
+
 /**
  * i915_driver_load - setup chip and create an initial config
  * @dev: DRM device
@@ -1473,7 +1525,7 @@ static void i915_dump_device_info(struct drm_i915_private *dev_priv)
 int i915_driver_load(struct drm_device *dev, unsigned long flags)
 {
 	struct drm_i915_private *dev_priv;
-	struct intel_device_info *info;
+	struct intel_device_info *info, *device_info;
 	int ret = 0, mmio_bar, mmio_size;
 	uint32_t aperture_size;
 
@@ -1496,7 +1548,10 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 
 	dev->dev_private = (void *)dev_priv;
 	dev_priv->dev = dev;
-	dev_priv->info = info;
+
+	/* copy initial configuration to dev_priv->info */
+	device_info = (struct intel_device_info *)&dev_priv->info;
+	*device_info = *info;
 
 	spin_lock_init(&dev_priv->irq_lock);
 	spin_lock_init(&dev_priv->gpu_error.lock);
@@ -1635,9 +1690,7 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	if (!IS_I945G(dev) && !IS_I945GM(dev))
 		pci_enable_msi(dev->pdev);
 
-	dev_priv->num_plane = 1;
-	if (IS_VALLEYVIEW(dev))
-		dev_priv->num_plane = 2;
+	intel_device_info_runtime_init(dev);
 
 	if (INTEL_INFO(dev)->num_pipes) {
 		ret = drm_vblank_init(dev, INTEL_INFO(dev)->num_pipes);
@@ -1776,8 +1829,8 @@ int i915_driver_unload(struct drm_device *dev)
 		i915_gem_free_all_phys_object(dev);
 		i915_gem_cleanup_ringbuffer(dev);
 		i915_gem_context_fini(dev);
+		WARN_ON(dev_priv->mm.aliasing_ppgtt);
 		mutex_unlock(&dev->struct_mutex);
-		i915_gem_cleanup_aliasing_ppgtt(dev);
 		i915_gem_cleanup_stolen(dev);
 
 		if (!I915_NEED_GFX_HWS(dev))

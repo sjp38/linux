@@ -110,7 +110,7 @@ struct intel_framebuffer {
 
 struct intel_fbdev {
 	struct drm_fb_helper helper;
-	struct intel_framebuffer ifb;
+	struct intel_framebuffer *fb;
 	struct list_head fbdev_list;
 	struct drm_display_mode *our_mode;
 };
@@ -359,6 +359,8 @@ struct intel_crtc {
 	bool cursor_visible;
 
 	struct intel_crtc_config config;
+	struct intel_crtc_config *new_config;
+	bool new_enabled;
 
 	uint32_t ddi_pll_sel;
 
@@ -485,8 +487,22 @@ struct intel_dp {
 	int backlight_off_delay;
 	struct delayed_work panel_vdd_work;
 	bool want_panel_vdd;
+	unsigned long last_power_cycle;
+	unsigned long last_power_on;
+	unsigned long last_backlight_off;
 	bool psr_setup_done;
+	bool use_tps3;
 	struct intel_connector *attached_connector;
+
+	uint32_t (*get_aux_clock_divider)(struct intel_dp *dp, int index);
+	/*
+	 * This function returns the value we have to program the AUX_CTL
+	 * register with to kick off an AUX transaction.
+	 */
+	uint32_t (*get_aux_send_ctl)(struct intel_dp *dp,
+				     bool has_aux_irq,
+				     int send_bytes,
+				     uint32_t aux_clock_divider);
 };
 
 struct intel_digital_port {
@@ -540,6 +556,7 @@ struct intel_unpin_work {
 struct intel_set_config {
 	struct drm_encoder **save_connector_encoders;
 	struct drm_crtc **save_encoder_crtcs;
+	bool *save_crtc_enabled;
 
 	bool fb_changed;
 	bool mode_changed;
@@ -664,11 +681,10 @@ int intel_pin_and_fence_fb_obj(struct drm_device *dev,
 			       struct drm_i915_gem_object *obj,
 			       struct intel_ring_buffer *pipelined);
 void intel_unpin_fb_obj(struct drm_i915_gem_object *obj);
-int intel_framebuffer_init(struct drm_device *dev,
-			   struct intel_framebuffer *ifb,
+struct drm_framebuffer *
+__intel_framebuffer_create(struct drm_device *dev,
 			   struct drm_mode_fb_cmd2 *mode_cmd,
 			   struct drm_i915_gem_object *obj);
-void intel_framebuffer_fini(struct intel_framebuffer *fb);
 void intel_prepare_page_flip(struct drm_device *dev, int plane);
 void intel_finish_page_flip(struct drm_device *dev, int pipe);
 void intel_finish_page_flip_plane(struct drm_device *dev, int plane);
@@ -721,15 +737,14 @@ void intel_dp_stop_link_train(struct intel_dp *intel_dp);
 void intel_dp_sink_dpms(struct intel_dp *intel_dp, int mode);
 void intel_dp_encoder_destroy(struct drm_encoder *encoder);
 void intel_dp_check_link_status(struct intel_dp *intel_dp);
+int intel_dp_sink_crc(struct intel_dp *intel_dp, u8 *crc);
 bool intel_dp_compute_config(struct intel_encoder *encoder,
 			     struct intel_crtc_config *pipe_config);
 bool intel_dp_is_edp(struct drm_device *dev, enum port port);
-void ironlake_edp_backlight_on(struct intel_dp *intel_dp);
-void ironlake_edp_backlight_off(struct intel_dp *intel_dp);
-void ironlake_edp_panel_on(struct intel_dp *intel_dp);
-void ironlake_edp_panel_off(struct intel_dp *intel_dp);
-void ironlake_edp_panel_vdd_on(struct intel_dp *intel_dp);
-void ironlake_edp_panel_vdd_off(struct intel_dp *intel_dp, bool sync);
+void intel_edp_backlight_on(struct intel_dp *intel_dp);
+void intel_edp_backlight_off(struct intel_dp *intel_dp);
+void intel_edp_panel_on(struct intel_dp *intel_dp);
+void intel_edp_panel_off(struct intel_dp *intel_dp);
 void intel_edp_psr_enable(struct intel_dp *intel_dp);
 void intel_edp_psr_disable(struct intel_dp *intel_dp);
 void intel_edp_psr_update(struct drm_device *dev);

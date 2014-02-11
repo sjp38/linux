@@ -62,6 +62,7 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 {
 	struct intel_fbdev *ifbdev =
 		container_of(helper, struct intel_fbdev, helper);
+	struct drm_framebuffer *fb;
 	struct drm_device *dev = helper->dev;
 	struct drm_mode_fb_cmd2 mode_cmd = {};
 	struct drm_i915_gem_object *obj;
@@ -93,18 +94,22 @@ static int intelfb_alloc(struct drm_fb_helper *helper,
 	/* Flush everything out, we'll be doing GTT only from now on */
 	ret = intel_pin_and_fence_fb_obj(dev, obj, NULL);
 	if (ret) {
-		DRM_ERROR("failed to pin fb: %d\n", ret);
+		DRM_ERROR("failed to pin obj: %d\n", ret);
 		goto out_unref;
 	}
 
-	ret = intel_framebuffer_init(dev, &ifbdev->ifb, &mode_cmd, obj);
-	if (ret)
+	fb = __intel_framebuffer_create(dev, &mode_cmd, obj);
+	if (IS_ERR(fb)) {
+		ret = PTR_ERR(fb);
 		goto out_unpin;
+	}
+
+	ifbdev->fb = to_intel_framebuffer(fb);
 
 	return 0;
 
 out_unpin:
-	i915_gem_object_unpin(obj);
+	i915_gem_object_ggtt_unpin(obj);
 out_unref:
 	drm_gem_object_unreference(&obj->base);
 out:
@@ -116,7 +121,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 {
 	struct intel_fbdev *ifbdev =
 		container_of(helper, struct intel_fbdev, helper);
-	struct intel_framebuffer *intel_fb = &ifbdev->ifb;
+	struct intel_framebuffer *intel_fb = ifbdev->fb;
 	struct drm_device *dev = helper->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct fb_info *info;
@@ -126,11 +131,12 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	mutex_lock(&dev->struct_mutex);
 
-	if (!intel_fb->obj) {
+	if (!intel_fb || WARN_ON(!intel_fb->obj)) {
 		DRM_DEBUG_KMS("no BIOS fb, allocating a new one\n");
 		ret = intelfb_alloc(helper, sizes);
 		if (ret)
 			goto out_unlock;
+		intel_fb = ifbdev->fb;
 	} else {
 		DRM_DEBUG_KMS("re-using BIOS fb\n");
 		sizes->fb_width = intel_fb->base.width;
@@ -148,7 +154,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 
 	info->par = helper;
 
-	fb = &ifbdev->ifb.base;
+	fb = &ifbdev->fb->base;
 
 	ifbdev->helper.fb = fb;
 	ifbdev->helper.fbdev = info;
@@ -194,7 +200,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	 * If the object is stolen however, it will be full of whatever
 	 * garbage was left in there.
 	 */
-	if (ifbdev->ifb.obj->stolen)
+	if (ifbdev->fb->obj->stolen)
 		memset_io(info->screen_base, 0, info->screen_size);
 
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
@@ -208,7 +214,7 @@ static int intelfb_create(struct drm_fb_helper *helper,
 	return 0;
 
 out_unpin:
-	i915_gem_object_unpin(obj);
+	i915_gem_object_ggtt_unpin(obj);
 	drm_gem_object_unreference(&obj->base);
 out_unlock:
 	mutex_unlock(&dev->struct_mutex);
@@ -258,8 +264,7 @@ static void intel_fbdev_destroy(struct drm_device *dev,
 
 	drm_fb_helper_fini(&ifbdev->helper);
 
-	drm_framebuffer_unregister_private(&ifbdev->ifb.base);
-	intel_framebuffer_fini(&ifbdev->ifb);
+	drm_framebuffer_unreference(&ifbdev->fb->base);
 }
 
 int intel_fbdev_init(struct drm_device *dev)
@@ -322,7 +327,7 @@ void intel_fbdev_set_suspend(struct drm_device *dev, int state)
 	 * been restored from swap. If the object is stolen however, it will be
 	 * full of whatever garbage was left in there.
 	 */
-	if (state == FBINFO_STATE_RUNNING && ifbdev->ifb.obj->stolen)
+	if (state == FBINFO_STATE_RUNNING && ifbdev->fb->obj->stolen)
 		memset_io(info->screen_base, 0, info->screen_size);
 
 	fb_set_suspend(info, state);
