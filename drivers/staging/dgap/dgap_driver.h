@@ -27,7 +27,6 @@
 #ifndef __DGAP_DRIVER_H
 #define __DGAP_DRIVER_H
 
-#include <linux/version.h>	/* To get the current Linux version */
 #include <linux/types.h>        /* To pick up the varions Linux types */
 #include <linux/tty.h>          /* To pick up the various tty structs/defines */
 #include <linux/interrupt.h>    /* For irqreturn_t type */
@@ -58,7 +57,7 @@
 
 #define	PROCSTR		"dgap"			/* /proc entries	 */
 #define	DEVSTR		"/dev/dg/dgap"		/* /dev entries		 */
-#define	DRVSTR		"dgap"			/* Driver name string 
+#define	DRVSTR		"dgap"			/* Driver name string
 						 * displayed by APR	 */
 #define	APR(args)	do { PRINTF_TO_KMEM(args); printk(DRVSTR": "); printk args; \
 			   } while (0)
@@ -112,7 +111,7 @@
 #endif
 
 #if defined TRC_TO_KMEM
-#define PRINTF_TO_KMEM(args) dgap_tracef args 
+#define PRINTF_TO_KMEM(args) dgap_tracef args
 #else //!defined TRC_TO_KMEM
 #define PRINTF_TO_KMEM(args)
 #endif
@@ -192,7 +191,7 @@
  * Our major for the mgmt devices.
  *
  * We can use 22, because Digi was allocated 22 and 23 for the epca driver.
- * 22 has now become obsolete now that the "cu" devices have 
+ * 22 has now become obsolete now that the "cu" devices have
  * been removed from 2.6.
  * Also, this *IS* the epca driver, just PCI only now.
  */
@@ -290,7 +289,7 @@ extern char *dgap_state_text[];
 extern char *dgap_driver_state_text[];
 
 
-/* 
+/*
  * Modem line constants are defined as macros because DSR and
  * DCD are swapable using the ditty altpin option.
  */
@@ -322,7 +321,7 @@ struct macounter
 };
 
 
-/************************************************************************ 
+/************************************************************************
  * Device flag definitions for bd_flags.
  ************************************************************************/
 #define	BD_FEP5PLUS	0x0001          /* Supports FEP5 Plus commands */
@@ -340,7 +339,7 @@ struct board_t
 
 	int		type;		/* Type of board */
 	char		*name;		/* Product Name */
-	struct pci_dev	*pdev;		/* Pointer to the pci_dev struct */ 
+	struct pci_dev	*pdev;		/* Pointer to the pci_dev struct */
 	u16		vendor;		/* PCI vendor ID */
 	u16		device;		/* PCI device ID */
 	u16		subvendor;	/* PCI subsystem vendor ID */
@@ -396,10 +395,6 @@ struct board_t
 	u32		dgap_Serial_Major;
 	u32		dgap_TransparentPrint_Major;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
-	u32		TtyRefCnt;
-#endif
-
 	struct bs_t	*bd_bs;			/* Base structure pointer       */
 
 	char	*flipbuf;		/* Our flip buffer, alloced if board is found */
@@ -419,7 +414,7 @@ struct board_t
 
 
 
-/************************************************************************ 
+/************************************************************************
  * Unit flag definitions for un_flags.
  ************************************************************************/
 #define UN_ISOPEN	0x0001		/* Device is open		*/
@@ -439,7 +434,7 @@ struct board_t
 struct device;
 
 /************************************************************************
- * Structure for terminal or printer unit. 
+ * Structure for terminal or printer unit.
  ************************************************************************/
 struct un_t {
 	int	magic;		/* Unit Magic Number.			*/
@@ -457,7 +452,7 @@ struct un_t {
 };
 
 
-/************************************************************************ 
+/************************************************************************
  * Device flag definitions for ch_flags.
  ************************************************************************/
 #define CH_PRON         0x0001          /* Printer on string                */
@@ -484,7 +479,7 @@ struct un_t {
 #define SNIFF_WAIT_SPACE 0x4
 
 
-/************************************************************************ 
+/************************************************************************
  * Channel information structure.
  ************************************************************************/
 struct channel_t {
@@ -608,7 +603,7 @@ extern int		dgap_registerttyswithsysfs; /* Should we register the	*/
  * Global functions declared in dgap_fep5.c, but must be hidden from
  * user space programs.
  */
-extern void	dgap_poll_tasklet(unsigned long data); 
+extern void	dgap_poll_tasklet(unsigned long data);
 extern void	dgap_cmdb(struct channel_t *ch, uchar cmd, uchar byte1, uchar byte2, uint ncmds);
 extern void	dgap_cmdw(struct channel_t *ch, uchar cmd, u16 word, uint ncmds);
 extern void	dgap_wmove(struct channel_t *ch, char *buf, uint cnt);

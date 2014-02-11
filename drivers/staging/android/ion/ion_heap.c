@@ -246,7 +246,7 @@ int ion_heap_init_deferred_free(struct ion_heap *heap)
 	if (IS_ERR(heap->task)) {
 		pr_err("%s: creating thread for deferred free failed\n",
 		       __func__);
-		return PTR_RET(heap->task);
+		return PTR_ERR_OR_ZERO(heap->task);
 	}
 	sched_setscheduler(heap->task, SCHED_IDLE, &param);
 	return 0;
