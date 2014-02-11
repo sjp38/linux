@@ -1,0 +1,23 @@
+Importing jdelvare-hwmon based on 494479038d97f1b9f76fc633a360a681acdf035c
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 494479038d97f1b9f76fc633a360a681acdf035c
+HEAD is now at 494479038d97 Merge tag 'pinctrl-v3.14-2' of git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-pinctrl
+$ git am ../quilt/jdelvare-hwmon/hwmon-f71805f-fix-author-address.patch
+Applying: hwmon: (f71805f) Fix author's address
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm63-01-add-additional-sysfs-group-for-temp2_type-attribute.patch
+Applying: hwmon: (lm63) Add additional sysfs group for temp2_type attribute
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm63-02-introduce-dev-variable-to-point-to-client-dev.patch
+Applying: hwmon: (lm63) Introduce 'dev' variable to point to client->dev
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm63-03-create-all-sysfs-groups-in-one-call.patch
+Applying: hwmon: (lm63) Create all sysfs groups in one call
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm63-04-convert-to-use-devm_hwmon_device_register_with_groups.patch
+Applying: hwmon: (lm63) Convert to use devm_hwmon_device_register_with_groups
+$ git am ../quilt/jdelvare-hwmon/hwmon-adm1021-convert-to-use-devm_hwmon_device_register_with_groups.patch
+Applying: hwmon: (adm1021) Convert to use devm_hwmon_device_register_with_groups
+$ git am ../quilt/jdelvare-hwmon/hwmon-lm80-convert-to-use-devm_hwmon_device_register_with_groups.patch
+Applying: hwmon: (lm80) Convert to use devm_hwmon_device_register_with_groups
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:jdelvare-hwmon/master
+From ../quilt-tmp
+ + 4fada9bfd39d...691cb804d7b3 master     -> jdelvare-hwmon/master  (forced update)
