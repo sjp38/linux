@@ -79,7 +79,7 @@ static void free_kctls(struct hda_gen_spec *spec)
 	snd_array_free(&spec->kctls);
 }
 
-void snd_hda_gen_spec_free(struct hda_gen_spec *spec)
+static void snd_hda_gen_spec_free(struct hda_gen_spec *spec)
 {
 	if (!spec)
 		return;
@@ -87,7 +87,6 @@ void snd_hda_gen_spec_free(struct hda_gen_spec *spec)
 	snd_array_free(&spec->paths);
 	snd_array_free(&spec->loopback_list);
 }
-EXPORT_SYMBOL_GPL(snd_hda_gen_spec_free);
 
 /*
  * store user hints
@@ -762,7 +761,7 @@ void snd_hda_activate_path(struct hda_codec *codec, struct nid_path *path,
 						    AC_PWRST_D0);
 		}
 		if (enable && path->multi[i])
-			snd_hda_codec_write_cache(codec, nid, 0,
+			snd_hda_codec_update_cache(codec, nid, 0,
 					    AC_VERB_SET_CONNECT_SEL,
 					    path->idx[i]);
 		if (has_amp_in(codec, path, i))
@@ -5350,6 +5349,7 @@ EXPORT_SYMBOL_GPL(snd_hda_gen_init);
  */
 void snd_hda_gen_free(struct hda_codec *codec)
 {
+	snd_hda_apply_fixup(codec, HDA_FIXUP_ACT_FREE);
 	snd_hda_detach_beep_device(codec);
 	snd_hda_gen_spec_free(codec->spec);
 	kfree(codec->spec);

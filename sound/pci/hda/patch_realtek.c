@@ -845,11 +845,7 @@ static inline void alc_shutup(struct hda_codec *codec)
 		snd_hda_shutup_pins(codec);
 }
 
-static void alc_free(struct hda_codec *codec)
-{
-	snd_hda_apply_fixup(codec, HDA_FIXUP_ACT_FREE);
-	snd_hda_gen_free(codec);
-}
+#define alc_free	snd_hda_gen_free
 
 #ifdef CONFIG_PM
 static void alc_power_eapd(struct hda_codec *codec)
@@ -4875,8 +4871,42 @@ static void alc_fixup_bass_chmap(struct hda_codec *codec,
 	}
 }
 
+/* turn on/off mute LED per vmaster hook */
+static void alc662_led_gpio1_mute_hook(void *private_data, int enabled)
+{
+	struct hda_codec *codec = private_data;
+	struct alc_spec *spec = codec->spec;
+	unsigned int oldval = spec->gpio_led;
+
+	if (enabled)
+		spec->gpio_led &= ~0x01;
+	else
+		spec->gpio_led |= 0x01;
+	if (spec->gpio_led != oldval)
+		snd_hda_codec_write(codec, 0x01, 0, AC_VERB_SET_GPIO_DATA,
+				    spec->gpio_led);
+}
+
+static void alc662_fixup_led_gpio1(struct hda_codec *codec,
+				   const struct hda_fixup *fix, int action)
+{
+	struct alc_spec *spec = codec->spec;
+	static const struct hda_verb gpio_init[] = {
+		{ 0x01, AC_VERB_SET_GPIO_MASK, 0x01 },
+		{ 0x01, AC_VERB_SET_GPIO_DIRECTION, 0x01 },
+		{}
+	};
+
+	if (action == HDA_FIXUP_ACT_PRE_PROBE) {
+		spec->gen.vmaster_mute.hook = alc662_led_gpio1_mute_hook;
+		spec->gpio_led = 0;
+		snd_hda_add_verbs(codec, gpio_init);
+	}
+}
+
 enum {
 	ALC662_FIXUP_ASPIRE,
+	ALC662_FIXUP_LED_GPIO1,
 	ALC662_FIXUP_IDEAPAD,
 	ALC272_FIXUP_MARIO,
 	ALC662_FIXUP_CZC_P10T,
@@ -4895,9 +4925,10 @@ enum {
 	ALC662_FIXUP_INV_DMIC,
 	ALC668_FIXUP_DELL_MIC_NO_PRESENCE,
 	ALC668_FIXUP_HEADSET_MODE,
-	ALC662_FIXUP_BASS_CHMAP,
+	ALC662_FIXUP_BASS_MODE4_CHMAP,
+	ALC662_FIXUP_BASS_16,
 	ALC662_FIXUP_BASS_1A,
-	ALC662_FIXUP_BASS_1A_CHMAP,
+	ALC662_FIXUP_BASS_CHMAP,
 	ALC668_FIXUP_AUTO_MUTE,
 };
 
@@ -4909,12 +4940,18 @@ static const struct hda_fixup alc662_fixups[] = {
 			{ }
 		}
 	},
+	[ALC662_FIXUP_LED_GPIO1] = {
+		.type = HDA_FIXUP_FUNC,
+		.v.func = alc662_fixup_led_gpio1,
+	},
 	[ALC662_FIXUP_IDEAPAD] = {
 		.type = HDA_FIXUP_PINS,
 		.v.pins = (const struct hda_pintbl[]) {
 			{ 0x17, 0x99130112 }, /* subwoofer */
 			{ }
-		}
+		},
+		.chained = true,
+		.chain_id = ALC662_FIXUP_LED_GPIO1,
 	},
 	[ALC272_FIXUP_MARIO] = {
 		.type = HDA_FIXUP_FUNC,
@@ -5079,11 +5116,20 @@ static const struct hda_fixup alc662_fixups[] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc_fixup_headset_mode_alc668,
 	},
-	[ALC662_FIXUP_BASS_CHMAP] = {
+	[ALC662_FIXUP_BASS_MODE4_CHMAP] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc_fixup_bass_chmap,
 		.chained = true,
 		.chain_id = ALC662_FIXUP_ASUS_MODE4
+	},
+	[ALC662_FIXUP_BASS_16] = {
+		.type = HDA_FIXUP_PINS,
+		.v.pins = (const struct hda_pintbl[]) {
+			{0x16, 0x80106111}, /* bass speaker */
+			{}
+		},
+		.chained = true,
+		.chain_id = ALC662_FIXUP_BASS_CHMAP,
 	},
 	[ALC662_FIXUP_BASS_1A] = {
 		.type = HDA_FIXUP_PINS,
@@ -5091,12 +5137,12 @@ static const struct hda_fixup alc662_fixups[] = {
 			{0x1a, 0x80106111}, /* bass speaker */
 			{}
 		},
+		.chained = true,
+		.chain_id = ALC662_FIXUP_BASS_CHMAP,
 	},
-	[ALC662_FIXUP_BASS_1A_CHMAP] = {
+	[ALC662_FIXUP_BASS_CHMAP] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc_fixup_bass_chmap,
-		.chained = true,
-		.chain_id = ALC662_FIXUP_BASS_1A,
 	},
 };
 
@@ -5118,9 +5164,11 @@ static const struct snd_pci_quirk alc662_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x1028, 0x0628, "Dell", ALC668_FIXUP_AUTO_MUTE),
 	SND_PCI_QUIRK(0x1028, 0x064e, "Dell", ALC668_FIXUP_DELL_MIC_NO_PRESENCE),
 	SND_PCI_QUIRK(0x103c, 0x1632, "HP RP5800", ALC662_FIXUP_HP_RP5800),
-	SND_PCI_QUIRK(0x1043, 0x11cd, "Asus N550", ALC662_FIXUP_BASS_1A_CHMAP),
-	SND_PCI_QUIRK(0x1043, 0x1477, "ASUS N56VZ", ALC662_FIXUP_BASS_CHMAP),
-	SND_PCI_QUIRK(0x1043, 0x1bf3, "ASUS N76VZ", ALC662_FIXUP_BASS_CHMAP),
+	SND_PCI_QUIRK(0x1043, 0x11cd, "Asus N550", ALC662_FIXUP_BASS_1A),
+	SND_PCI_QUIRK(0x1043, 0x1477, "ASUS N56VZ", ALC662_FIXUP_BASS_MODE4_CHMAP),
+	SND_PCI_QUIRK(0x1043, 0x15a7, "ASUS UX51VZH", ALC662_FIXUP_BASS_16),
+	SND_PCI_QUIRK(0x1043, 0x1b73, "ASUS N55SF", ALC662_FIXUP_BASS_16),
+	SND_PCI_QUIRK(0x1043, 0x1bf3, "ASUS N76VZ", ALC662_FIXUP_BASS_MODE4_CHMAP),
 	SND_PCI_QUIRK(0x1043, 0x8469, "ASUS mobo", ALC662_FIXUP_NO_JACK_DETECT),
 	SND_PCI_QUIRK(0x105b, 0x0cd6, "Foxconn", ALC662_FIXUP_ASUS_MODE2),
 	SND_PCI_QUIRK(0x144d, 0xc051, "Samsung R720", ALC662_FIXUP_IDEAPAD),
