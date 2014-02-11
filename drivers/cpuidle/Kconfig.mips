@@ -1,0 +1,14 @@
+#
+# MIPS CPU Idle drivers
+#
+
+config MIPS_CPS_CPUIDLE
+	bool "Support for MIPS Coherent Processing Systems"
+	depends on SYS_SUPPORTS_MIPS_CPS && CPU_MIPSR2 && !MIPS_MT_SMTC
+	select ARCH_NEEDS_CPU_IDLE_COUPLED if MIPS_MT
+	select MIPS_CM
+	help
+	  Select this option to enable CPU idle driver for systems based
+	  around the MIPS Coherent Processing System architecture - that
+	  is, those with a Coherence Manager & optionally a Cluster
+	  Power Controller.

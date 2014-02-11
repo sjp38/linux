@@ -101,7 +101,8 @@ enum cop_op {
 	cfc_op	      = 0x02, mfhc_op	    = 0x03,
 	mtc_op        = 0x04, dmtc_op	    = 0x05,
 	ctc_op	      = 0x06, mthc_op	    = 0x07,
-	bc_op	      = 0x08, cop_op	    = 0x10,
+	bc_op	      = 0x08, mftr_op	    = 0x08,
+	mttr_op	      = 0x0c, cop_op	    = 0x10,
 	copm_op	      = 0x18
 };
 
@@ -118,7 +119,8 @@ enum bcop_op {
 enum cop0_coi_func {
 	tlbr_op	      = 0x01, tlbwi_op	    = 0x02,
 	tlbwr_op      = 0x06, tlbp_op	    = 0x08,
-	rfe_op	      = 0x10, eret_op	    = 0x18
+	rfe_op	      = 0x10, eret_op	    = 0x18,
+	wait_op       = 0x20,
 };
 
 /*
@@ -192,6 +194,13 @@ enum lx_func {
 	lwux_op = 0x10,
 	lhux_op = 0x14,
 	lbx_op	= 0x16,
+};
+
+/*
+ * hint/re field for jr instructions.
+ */
+enum jr_hint {
+	jr_hb_hint = 0x10,
 };
 
 /*
@@ -294,7 +303,9 @@ enum mm_32axf_minor_op {
 	mm_tlbwr_op = 0x0cd,
 	mm_jalrs_op = 0x13c,
 	mm_jalrshb_op = 0x17c,
+	mm_sync_op = 0x1ad,
 	mm_syscall_op = 0x22d,
+	mm_wait_op = 0x24d,
 	mm_eret_op = 0x3cd,
 };
 
