@@ -447,7 +447,6 @@ static int lm95245_detect(struct i2c_client *new_client,
 static void lm95245_init_client(struct i2c_client *client,
 				struct lm95245_data *data)
 {
-	data->valid = 0;
 	data->interval = lm95245_read_conversion_rate(client);
 
 	data->config1 = i2c_smbus_read_byte_data(client,
