@@ -34,7 +34,11 @@ struct list_lru {
 };
 
 void list_lru_destroy(struct list_lru *lru);
-int list_lru_init(struct list_lru *lru);
+int list_lru_init_key(struct list_lru *lru, struct lock_class_key *key);
+static inline int list_lru_init(struct list_lru *lru)
+{
+	return list_lru_init_key(lru, NULL);
+}
 
 /**
  * list_lru_add: add an element to the lru list's tail
