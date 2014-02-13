@@ -14,7 +14,6 @@
 #include <linux/rcupdate.h>
 #include <linux/rculist.h>
 #include <linux/cgroupstats.h>
-#include <linux/prio_heap.h>
 #include <linux/rwsem.h>
 #include <linux/idr.h>
 #include <linux/workqueue.h>
@@ -227,8 +226,8 @@ enum {
 	 *
 	 * The followings are the behaviors currently affected this flag.
 	 *
-	 * - Mount options "noprefix" and "clone_children" are disallowed.
-	 *   Also, cgroupfs file cgroup.clone_children is not created.
+	 * - Mount options "noprefix", "xattr", "clone_children",
+	 *   "release_agent" and "name" are disallowed.
 	 *
 	 * - When mounting an existing superblock, mount options should
 	 *   match.
@@ -246,7 +245,7 @@ enum {
 	 * - "release_agent" and "notify_on_release" are removed.
 	 *   Replacement notification mechanism will be implemented.
 	 *
-	 * - "xattr" mount option is deprecated.  kernfs always enables it.
+	 * - "cgroup.clone_children" is removed.
 	 *
 	 * - cpuset: tasks will be kept in empty cpusets when hotplug happens
 	 *   and take masks of ancestors with non-empty cpus/mems, instead of
@@ -267,8 +266,6 @@ enum {
 
 	/* mount options live below bit 16 */
 	CGRP_ROOT_OPTION_MASK	= (1 << 16) - 1,
-
-	CGRP_ROOT_SUBSYS_BOUND	= (1 << 16), /* subsystems finished binding */
 };
 
 /*
@@ -459,6 +456,12 @@ static inline bool cgroup_sane_behavior(const struct cgroup *cgrp)
 	return cgrp->root->flags & CGRP_ROOT_SANE_BEHAVIOR;
 }
 
+/* no synchronization, the result can only be used as a hint */
+static inline bool cgroup_has_tasks(struct cgroup *cgrp)
+{
+	return !list_empty(&cgrp->cset_links);
+}
+
 /* returns ino associated with a cgroup, 0 indicates unmounted root */
 static inline ino_t cgroup_ino(struct cgroup *cgrp)
 {
@@ -518,8 +521,6 @@ int cgroup_rm_cftypes(struct cftype *cfts);
 
 bool cgroup_is_descendant(struct cgroup *cgrp, struct cgroup *ancestor);
 
-int cgroup_task_count(const struct cgroup *cgrp);
-
 /*
  * Control Group taskset, used to pass around set of tasks to cgroup_subsys
  * methods.
@@ -527,22 +528,15 @@ int cgroup_task_count(const struct cgroup *cgrp);
 struct cgroup_taskset;
 struct task_struct *cgroup_taskset_first(struct cgroup_taskset *tset);
 struct task_struct *cgroup_taskset_next(struct cgroup_taskset *tset);
-struct cgroup_subsys_state *cgroup_taskset_cur_css(struct cgroup_taskset *tset,
-						   int subsys_id);
-int cgroup_taskset_size(struct cgroup_taskset *tset);
 
 /**
  * cgroup_taskset_for_each - iterate cgroup_taskset
  * @task: the loop cursor
- * @skip_css: skip if task's css matches this, %NULL to iterate through all
  * @tset: taskset to iterate
  */
-#define cgroup_taskset_for_each(task, skip_css, tset)			\
+#define cgroup_taskset_for_each(task, tset)				\
 	for ((task) = cgroup_taskset_first((tset)); (task);		\
-	     (task) = cgroup_taskset_next((tset)))			\
-		if (!(skip_css) ||					\
-		    cgroup_taskset_cur_css((tset),			\
-			(skip_css)->ss->id) != (skip_css))
+	     (task) = cgroup_taskset_next((tset)))
 
 /*
  * Control Group subsystem type.
@@ -810,11 +804,6 @@ void css_task_iter_start(struct cgroup_subsys_state *css,
 			 struct css_task_iter *it);
 struct task_struct *css_task_iter_next(struct css_task_iter *it);
 void css_task_iter_end(struct css_task_iter *it);
-
-int css_scan_tasks(struct cgroup_subsys_state *css,
-		   bool (*test)(struct task_struct *, void *),
-		   void (*process)(struct task_struct *, void *),
-		   void *data, struct ptr_heap *heap);
 
 int cgroup_attach_task_all(struct task_struct *from, struct task_struct *);
 int cgroup_transfer_tasks(struct cgroup *to, struct cgroup *from);
