@@ -23,7 +23,6 @@
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/gpio.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irq.h>
@@ -880,7 +879,7 @@ static int spi_imx_probe(struct platform_device *pdev)
 
 	spi_imx->irq = platform_get_irq(pdev, 0);
 	if (spi_imx->irq < 0) {
-		ret = -EINVAL;
+		ret = spi_imx->irq;
 		goto out_master_put;
 	}
 
