@@ -361,7 +361,7 @@ static int cp2112_read(struct cp2112_device *dev, u8 *data, size_t size)
 	if (ret)
 		return ret;
 
-	hid_dbg(hdev, "read %d of %d bytes requested\n",
+	hid_dbg(hdev, "read %d of %zd bytes requested\n",
 		dev->read_length, size);
 
 	if (size > dev->read_length)
@@ -552,7 +552,7 @@ static int cp2112_xfer(struct i2c_adapter *adap, u16 addr,
 	if (ret < 0)
 		goto power_normal;
 	if (ret != read_length) {
-		hid_warn(hdev, "short read: %d < %d\n", ret, read_length);
+		hid_warn(hdev, "short read: %d < %zd\n", ret, read_length);
 		ret = -EIO;
 		goto power_normal;
 	}
@@ -663,7 +663,7 @@ static ssize_t name##_show(struct device *kdev, \
 		return ret; \
 	return scnprintf(buf, PAGE_SIZE, format, ##__VA_ARGS__); \
 } \
-DEVICE_ATTR_RW(name);
+static DEVICE_ATTR_RW(name);
 
 CP2112_CONFIG_ATTR(vendor_id, ({
 	u16 vid;
@@ -784,7 +784,7 @@ static ssize_t pstr_show(struct device *kdev,
 }
 
 #define CP2112_PSTR_ATTR(name, _report) \
-struct cp2112_pstring_attribute dev_attr_##name = { \
+static struct cp2112_pstring_attribute dev_attr_##name = { \
 	.attr = __ATTR(name, (S_IWUSR | S_IRUGO), pstr_show, pstr_store), \
 	.report = _report, \
 };
