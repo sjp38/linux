@@ -753,6 +753,7 @@ struct hid_field *hidinput_get_led_field(struct hid_device *hid);
 unsigned int hidinput_count_leds(struct hid_device *hid);
 __s32 hidinput_calc_abs_res(const struct hid_field *field, __u16 code);
 void hid_output_report(struct hid_report *report, __u8 *data);
+void __hid_request(struct hid_device *hid, struct hid_report *rep, int reqtype);
 u8 *hid_alloc_report_buf(struct hid_report *report, gfp_t flags);
 struct hid_device *hid_allocate_device(void);
 struct hid_report *hid_register_report(struct hid_device *device, unsigned type, unsigned id);
@@ -965,7 +966,9 @@ static inline void hid_hw_request(struct hid_device *hdev,
 				  struct hid_report *report, int reqtype)
 {
 	if (hdev->ll_driver->request)
-		hdev->ll_driver->request(hdev, report, reqtype);
+		return hdev->ll_driver->request(hdev, report, reqtype);
+
+	__hid_request(hdev, report, reqtype);
 }
 
 /**
@@ -986,6 +989,9 @@ static inline int hid_hw_raw_request(struct hid_device *hdev,
 				  unsigned char reportnum, __u8 *buf,
 				  size_t len, unsigned char rtype, int reqtype)
 {
+	if (len < 1 || len > HID_MAX_BUFFER_SIZE || !buf)
+		return -EINVAL;
+
 	if (hdev->ll_driver->raw_request)
 		return hdev->ll_driver->raw_request(hdev, reportnum, buf, len,
 						    rtype, reqtype);
@@ -1005,6 +1011,9 @@ static inline int hid_hw_raw_request(struct hid_device *hdev,
 static inline int hid_hw_output_report(struct hid_device *hdev, __u8 *buf,
 					size_t len)
 {
+	if (len < 1 || len > HID_MAX_BUFFER_SIZE || !buf)
+		return -EINVAL;
+
 	if (hdev->ll_driver->output_report)
 		return hdev->ll_driver->output_report(hdev, buf, len);
 
