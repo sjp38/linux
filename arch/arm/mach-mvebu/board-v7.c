@@ -31,12 +31,12 @@
 #include "coherency.h"
 #include "mvebu-soc-id.h"
 
-static void __init armada_370_xp_map_io(void)
+static void __init mvebu_map_io(void)
 {
 	debug_ll_io_init();
 }
 
-static void __init armada_370_xp_timer_and_clk_init(void)
+static void __init mvebu_timer_and_clk_init(void)
 {
 	of_clk_init(NULL);
 	clocksource_of_init();
@@ -75,7 +75,7 @@ static void __init i2c_quirk(void)
 	return;
 }
 
-static void __init armada_370_xp_dt_init(void)
+static void __init mvebu_dt_init(void)
 {
 	if (of_machine_is_compatible("plathome,openblocks-ax3-4"))
 		i2c_quirk();
@@ -89,9 +89,9 @@ static const char * const armada_370_xp_dt_compat[] = {
 
 DT_MACHINE_START(ARMADA_XP_DT, "Marvell Armada 370/XP (Device Tree)")
 	.smp		= smp_ops(armada_xp_smp_ops),
-	.init_machine	= armada_370_xp_dt_init,
-	.map_io		= armada_370_xp_map_io,
-	.init_time	= armada_370_xp_timer_and_clk_init,
+	.init_machine	= mvebu_dt_init,
+	.map_io		= mvebu_map_io,
+	.init_time	= mvebu_timer_and_clk_init,
 	.restart	= mvebu_restart,
 	.dt_compat	= armada_370_xp_dt_compat,
 MACHINE_END
