@@ -16,20 +16,28 @@
 # along with this program; if not, you can access it online at
 # http://www.gnu.org/licenses/gpl-2.0.html.
 #
-# Copyright (C) IBM Corporation, 2013
+# Copyright (C) IBM Corporation, 2014
 #
 # Authors: Paul E. McKenney <paulmck@linux.vnet.ibm.com>
 
-# rcutorture_param_n_barrier_cbs bootparam-string
+# locktorture_param_onoff bootparam-string config-file
 #
-# Adds n_barrier_cbs rcutorture module parameter to kernels having it.
-rcutorture_param_n_barrier_cbs () {
-	echo $1
+# Adds onoff locktorture module parameters to kernels having it.
+locktorture_param_onoff () {
+	if ! bootparam_hotplug_cpu "$1" && configfrag_hotplug_cpu "$2"
+	then
+		echo CPU-hotplug kernel, adding locktorture onoff. 1>&2
+		echo locktorture.onoff_interval=3 locktorture.onoff_holdoff=30
+	fi
 }
 
-# rcutorture_param_onoff bootparam-string config-file
+# per_version_boot_params bootparam-string config-file seconds
 #
-# Adds onoff rcutorture module parameters to kernels having it.
-rcutorture_param_onoff () {
-	echo $1
+# Adds per-version torture-module parameters to kernels supporting them.
+per_version_boot_params () {
+	echo $1 `locktorture_param_onoff "$1" "$2"` \
+		locktorture.stat_interval=15 \
+		locktorture.shutdown_secs=$3 \
+		locktorture.locktorture_runnable=1 \
+		locktorture.verbose=1
 }
