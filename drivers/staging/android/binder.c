@@ -49,7 +49,6 @@ static HLIST_HEAD(binder_procs);
 static HLIST_HEAD(binder_deferred_list);
 static HLIST_HEAD(binder_dead_nodes);
 
-static struct dentry *binder_debugfs_dir_entry_root;
 static struct dentry *binder_debugfs_dir_entry_proc;
 static struct binder_node *binder_context_mgr_node;
 static kuid_t binder_context_mgr_uid = INVALID_UID;
@@ -3514,6 +3513,7 @@ BINDER_DEBUG_ENTRY(transaction_log);
 
 static int __init binder_init(void)
 {
+	struct dentry *binder_debugfs_dir_entry_root;
 	int ret;
 
 	binder_deferred_workqueue = create_singlethread_workqueue("binder");
