@@ -1,3 +1,4 @@
+
 /*
  * Regulator driver for DA9063 PMIC series
  *
@@ -60,7 +61,8 @@ struct da9063_regulator_info {
 	.desc.ops = &da9063_ldo_ops, \
 	.desc.min_uV = (min_mV) * 1000, \
 	.desc.uV_step = (step_mV) * 1000, \
-	.desc.n_voltages = (((max_mV) - (min_mV))/(step_mV) + 1), \
+	.desc.n_voltages = (((max_mV) - (min_mV))/(step_mV) + 1 \
+		+ (DA9063_V##regl_name##_BIAS)), \
 	.desc.enable_reg = DA9063_REG_##regl_name##_CONT, \
 	.desc.enable_mask = DA9063_LDO_EN, \
 	.desc.vsel_reg = DA9063_REG_V##regl_name##_A, \
@@ -664,7 +666,7 @@ static struct da9063_regulators_pdata *da9063_parse_regulators_dt(
 	struct device_node *node;
 	int i, n, num;
 
-	node = of_find_node_by_name(pdev->dev.parent->of_node, "regulators");
+	node = of_get_child_by_name(pdev->dev.parent->of_node, "regulators");
 	if (!node) {
 		dev_err(&pdev->dev, "Regulators device node not found\n");
 		return ERR_PTR(-ENODEV);
