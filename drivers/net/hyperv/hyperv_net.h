@@ -506,6 +506,8 @@ struct netvsc_device {
 
 	/* Holds rndis device info */
 	void *extension;
+	/* The recive buffer for this device */
+	unsigned char cb_buffer[NETVSC_PACKET_SIZE];
 };
 
 /* NdisInitialize message */
@@ -845,12 +847,6 @@ struct rndis_message {
 	union rndis_message_container msg;
 };
 
-
-struct rndis_filter_packet {
-	void *completion_ctx;
-	void (*completion)(void *context);
-	struct rndis_message msg;
-};
 
 /* Handy macros */
 
