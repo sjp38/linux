@@ -161,6 +161,41 @@ static int mei_cl_irq_read_msg(struct mei_device *dev,
 }
 
 /**
+ * mei_cl_irq_disconnect_rsp - send disconnection response message
+ *
+ * @cl: client
+ * @cb: callback block.
+ * @slots: free slots.
+ * @cmpl_list: complete list.
+ *
+ * returns 0, OK; otherwise, error.
+ */
+static int mei_cl_irq_disconnect_rsp(struct mei_cl *cl, struct mei_cl_cb *cb,
+			s32 *slots, struct mei_cl_cb *cmpl_list)
+{
+	struct mei_device *dev = cl->dev;
+	int ret;
+
+	u32 msg_slots =
+		mei_data2slots(sizeof(struct hbm_client_connect_response));
+
+	if (*slots < msg_slots)
+		return -EMSGSIZE;
+
+	*slots -= msg_slots;
+
+	ret = mei_hbm_cl_disconnect_rsp(dev, cl);
+
+	cl->state = MEI_FILE_DISCONNECTED;
+	cl->status = 0;
+	mei_io_cb_free(cb);
+
+	return ret;
+}
+
+
+
+/**
  * mei_cl_irq_close - processes close related operation from
  *	interrupt thread context - send disconnect request
  *
@@ -244,8 +279,7 @@ static int mei_cl_irq_read(struct mei_cl *cl, struct mei_cl_cb *cb,
 
 
 /**
- * mei_cl_irq_ioctl - processes client ioctl related operation from the
- *	interrupt thread context -   send connection request
+ * mei_cl_irq_connect - send connect request in irq_thread context
  *
  * @cl: client
  * @cb: callback block.
@@ -254,7 +288,7 @@ static int mei_cl_irq_read(struct mei_cl *cl, struct mei_cl_cb *cb,
  *
  * returns 0, OK; otherwise, error.
  */
-static int mei_cl_irq_ioctl(struct mei_cl *cl, struct mei_cl_cb *cb,
+static int mei_cl_irq_connect(struct mei_cl *cl, struct mei_cl_cb *cb,
 			   s32 *slots, struct mei_cl_cb *cmpl_list)
 {
 	struct mei_device *dev = cl->dev;
@@ -262,6 +296,9 @@ static int mei_cl_irq_ioctl(struct mei_cl *cl, struct mei_cl_cb *cb,
 
 	u32 msg_slots =
 		mei_data2slots(sizeof(struct hbm_client_connect_request));
+
+	if (mei_cl_is_other_connecting(cl))
+		return 0;
 
 	if (*slots < msg_slots) {
 		/* return the cancel routine */
@@ -450,12 +487,6 @@ int mei_irq_write_handler(struct mei_device *dev, struct mei_cl_cb *cmpl_list)
 		wake_up_interruptible(&dev->wait_stop_wd);
 	}
 
-	if (dev->wr_ext_msg.hdr.length) {
-		mei_write_message(dev, &dev->wr_ext_msg.hdr,
-				dev->wr_ext_msg.data);
-		slots -= mei_data2slots(dev->wr_ext_msg.hdr.length);
-		dev->wr_ext_msg.hdr.length = 0;
-	}
 	if (dev->dev_state == MEI_DEV_ENABLED) {
 		if (dev->wd_pending &&
 		    mei_cl_flow_ctrl_creds(&dev->wd_cl) > 0) {
@@ -496,16 +527,18 @@ int mei_irq_write_handler(struct mei_device *dev, struct mei_cl_cb *cmpl_list)
 				return ret;
 
 			break;
-		case MEI_FOP_IOCTL:
+		case MEI_FOP_CONNECT:
 			/* connect message */
-			if (mei_cl_is_other_connecting(cl))
-				continue;
-			ret = mei_cl_irq_ioctl(cl, cb, &slots, cmpl_list);
+			ret = mei_cl_irq_connect(cl, cb, &slots, cmpl_list);
 			if (ret)
 				return ret;
 
 			break;
-
+		case MEI_FOP_DISCONNECT_RSP:
+			/* send disconnect resp */
+			ret = mei_cl_irq_disconnect_rsp(cl, cb, &slots, cmpl_list);
+			if (ret)
+				return ret;
 		default:
 			BUG();
 		}
