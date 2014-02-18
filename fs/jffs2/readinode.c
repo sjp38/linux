@@ -1143,6 +1143,7 @@ static int jffs2_do_read_inode_internal(struct jffs2_sb_info *c,
 		JFFS2_ERROR("cannot read nodes for ino %u, returned error is %d\n", f->inocache->ino, ret);
 		if (f->inocache->state == INO_STATE_READING)
 			jffs2_set_inocache_state(c, f->inocache, INO_STATE_CHECKEDABSENT);
+		mutex_unlock(&f->sem);
 		return ret;
 	}
 
@@ -1159,6 +1160,7 @@ static int jffs2_do_read_inode_internal(struct jffs2_sb_info *c,
 			jffs2_free_tmp_dnode_info(rii.mdata_tn);
 			rii.mdata_tn = NULL;
 		}
+		mutex_unlock(&f->sem);
 		return ret;
 	}
 
@@ -1183,6 +1185,7 @@ static int jffs2_do_read_inode_internal(struct jffs2_sb_info *c,
 			if (!rii.fds) {
 				if (f->inocache->state == INO_STATE_READING)
 					jffs2_set_inocache_state(c, f->inocache, INO_STATE_CHECKEDABSENT);
+				mutex_unlock(&f->sem);
 				return -EIO;
 			}
 			JFFS2_NOTICE("but it has children so we fake some modes for it\n");
