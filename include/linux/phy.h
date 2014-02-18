@@ -80,8 +80,8 @@ typedef enum {
 
 /**
  * It maps 'enum phy_interface_t' found in include/linux/phy.h
- * into the device tree binding of 'phy-mode', so that Ethernet
- * device driver can get phy interface from device tree.
+ * into the device tree binding of 'phy-mode' or 'phy-connection-type',
+ * so that Ethernet device driver can get phy interface from device tree.
  */
 static inline const char *phy_modes(phy_interface_t interface)
 {
