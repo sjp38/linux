@@ -8,6 +8,7 @@
  * Copyright (C) 1996, 2000 by Ralf Baechle
  * Copyright (C) 2006 by Thiemo Seufer
  * Copyright (C) 2012 MIPS Technologies, Inc.  All rights reserved.
+ * Copyright (C) 2014 Imagination Technologies Ltd.
  */
 #ifndef _UAPI_ASM_INST_H
 #define _UAPI_ASM_INST_H
@@ -73,10 +74,16 @@ enum spec2_op {
 enum spec3_op {
 	ext_op, dextm_op, dextu_op, dext_op,
 	ins_op, dinsm_op, dinsu_op, dins_op,
-	lx_op = 0x0a,
-	bshfl_op = 0x20,
-	dbshfl_op = 0x24,
-	rdhwr_op = 0x3b
+	lx_op     = 0x0a, lwle_op   = 0x19,
+	lwre_op   = 0x1a, cachee_op = 0x1b,
+	sbe_op    = 0x1c, she_op    = 0x1d,
+	sce_op    = 0x1e, swe_op    = 0x1f,
+	bshfl_op  = 0x20, swle_op   = 0x21,
+	swre_op   = 0x22, prefe_op  = 0x23,
+	dbshfl_op = 0x24, lbue_op   = 0x28,
+	lhue_op   = 0x29, lbe_op    = 0x2c,
+	lhe_op    = 0x2d, lle_op    = 0x2e,
+	lwe_op    = 0x2f, rdhwr_op  = 0x3b
 };
 
 /*
@@ -101,7 +108,8 @@ enum cop_op {
 	cfc_op	      = 0x02, mfhc_op	    = 0x03,
 	mtc_op        = 0x04, dmtc_op	    = 0x05,
 	ctc_op	      = 0x06, mthc_op	    = 0x07,
-	bc_op	      = 0x08, cop_op	    = 0x10,
+	bc_op	      = 0x08, mftr_op	    = 0x08,
+	mttr_op	      = 0x0c, cop_op	    = 0x10,
 	copm_op	      = 0x18
 };
 
@@ -118,7 +126,8 @@ enum bcop_op {
 enum cop0_coi_func {
 	tlbr_op	      = 0x01, tlbwi_op	    = 0x02,
 	tlbwr_op      = 0x06, tlbp_op	    = 0x08,
-	rfe_op	      = 0x10, eret_op	    = 0x18
+	rfe_op	      = 0x10, eret_op	    = 0x18,
+	wait_op       = 0x20,
 };
 
 /*
@@ -192,6 +201,13 @@ enum lx_func {
 	lwux_op = 0x10,
 	lhux_op = 0x14,
 	lbx_op	= 0x16,
+};
+
+/*
+ * hint/re field for jr instructions.
+ */
+enum jr_hint {
+	jr_hb_hint = 0x10,
 };
 
 /*
@@ -294,7 +310,9 @@ enum mm_32axf_minor_op {
 	mm_tlbwr_op = 0x0cd,
 	mm_jalrs_op = 0x13c,
 	mm_jalrshb_op = 0x17c,
+	mm_sync_op = 0x1ad,
 	mm_syscall_op = 0x22d,
+	mm_wait_op = 0x24d,
 	mm_eret_op = 0x3cd,
 };
 
@@ -592,6 +610,15 @@ struct v_format {				/* MDMX vector format */
 	;)))))))
 };
 
+struct spec3_format {   /* SPEC3 */
+	BITFIELD_FIELD(unsigned int opcode:6,
+	BITFIELD_FIELD(unsigned int rs:5,
+	BITFIELD_FIELD(unsigned int rt:5,
+	BITFIELD_FIELD(signed int simmediate:9,
+	BITFIELD_FIELD(unsigned int func:7,
+	;)))))
+};
+
 /*
  * microMIPS instruction formats (32-bit length)
  *
@@ -863,6 +890,7 @@ union mips_instruction {
 	struct b_format b_format;
 	struct ps_format ps_format;
 	struct v_format v_format;
+	struct spec3_format spec3_format;
 	struct fb_format fb_format;
 	struct fp0_format fp0_format;
 	struct mm_fp0_format mm_fp0_format;

@@ -115,6 +115,7 @@
 #define PRID_IMP_INTERAPTIV_MP	0xa100
 #define PRID_IMP_PROAPTIV_UP	0xa200
 #define PRID_IMP_PROAPTIV_MP	0xa300
+#define PRID_IMP_P5600		0xa800
 
 /*
  * These are the PRID's for when 23:16 == PRID_COMP_SIBYTE
@@ -296,7 +297,7 @@ enum cpu_type_enum {
 	CPU_4KC, CPU_4KEC, CPU_4KSC, CPU_24K, CPU_34K, CPU_1004K, CPU_74K,
 	CPU_ALCHEMY, CPU_PR4450, CPU_BMIPS32, CPU_BMIPS3300, CPU_BMIPS4350,
 	CPU_BMIPS4380, CPU_BMIPS5000, CPU_JZRISC, CPU_LOONGSON1, CPU_M14KC,
-	CPU_M14KEC, CPU_INTERAPTIV, CPU_PROAPTIV,
+	CPU_M14KEC, CPU_INTERAPTIV, CPU_P5600, CPU_PROAPTIV, CPU_1074K,
 
 	/*
 	 * MIPS64 class processors
@@ -358,6 +359,7 @@ enum cpu_type_enum {
 #define MIPS_CPU_MICROMIPS	0x01000000 /* CPU has microMIPS capability */
 #define MIPS_CPU_TLBINV		0x02000000 /* CPU supports TLBINV/F */
 #define MIPS_CPU_SEGMENTS	0x04000000 /* CPU supports Segmentation Control registers */
+#define MIPS_CPU_EVA		0x80000000 /* CPU supports Enhanced Virtual Addressing */
 
 /*
  * CPU ASE encodings
@@ -370,5 +372,6 @@ enum cpu_type_enum {
 #define MIPS_ASE_MIPSMT		0x00000020 /* CPU supports MIPS MT */
 #define MIPS_ASE_DSP2P		0x00000040 /* Signal Processing ASE Rev 2 */
 #define MIPS_ASE_VZ		0x00000080 /* Virtualization ASE */
+#define MIPS_ASE_MSA		0x00000100 /* MIPS SIMD Architecture */
 
 #endif /* _ASM_CPU_H */
