@@ -41,7 +41,7 @@
  *
  * Return: Zero if successful, or a negative error code on failure.
  */
-int snd_device_new(struct snd_card *card, snd_device_type_t type,
+int snd_device_new(struct snd_card *card, enum snd_device_type type,
 		   void *device_data, struct snd_device_ops *ops)
 {
 	struct snd_device *dev;
@@ -50,7 +50,7 @@ int snd_device_new(struct snd_card *card, snd_device_type_t type,
 		return -ENXIO;
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (dev == NULL) {
-		snd_printk(KERN_ERR "Cannot allocate device\n");
+		dev_err(card->dev, "Cannot allocate device, type=%d\n", type);
 		return -ENOMEM;
 	}
 	dev->card = card;
@@ -90,17 +90,17 @@ int snd_device_free(struct snd_card *card, void *device_data)
 		if (dev->state == SNDRV_DEV_REGISTERED &&
 		    dev->ops->dev_disconnect)
 			if (dev->ops->dev_disconnect(dev))
-				snd_printk(KERN_ERR
-					   "device disconnect failure\n");
+				dev_err(card->dev,
+					"device disconnect failure\n");
 		if (dev->ops->dev_free) {
 			if (dev->ops->dev_free(dev))
-				snd_printk(KERN_ERR "device free failure\n");
+				dev_err(card->dev, "device free failure\n");
 		}
 		kfree(dev);
 		return 0;
 	}
-	snd_printd("device free %p (from %pF), not found\n", device_data,
-		   __builtin_return_address(0));
+	dev_dbg(card->dev, "device free %p (from %pF), not found\n",
+		device_data, __builtin_return_address(0));
 	return -ENXIO;
 }
 
@@ -131,13 +131,14 @@ int snd_device_disconnect(struct snd_card *card, void *device_data)
 		if (dev->state == SNDRV_DEV_REGISTERED &&
 		    dev->ops->dev_disconnect) {
 			if (dev->ops->dev_disconnect(dev))
-				snd_printk(KERN_ERR "device disconnect failure\n");
+				dev_err(card->dev,
+					"device disconnect failure\n");
 			dev->state = SNDRV_DEV_DISCONNECTED;
 		}
 		return 0;
 	}
-	snd_printd("device disconnect %p (from %pF), not found\n", device_data,
-		   __builtin_return_address(0));
+	dev_dbg(card->dev, "device disconnect %p (from %pF), not found\n",
+		device_data, __builtin_return_address(0));
 	return -ENXIO;
 }
 
@@ -170,7 +171,7 @@ int snd_device_register(struct snd_card *card, void *device_data)
 			dev->state = SNDRV_DEV_REGISTERED;
 			return 0;
 		}
-		snd_printd("snd_device_register busy\n");
+		dev_dbg(card->dev, "snd_device_register busy\n");
 		return -EBUSY;
 	}
 	snd_BUG();
@@ -222,7 +223,7 @@ int snd_device_disconnect_all(struct snd_card *card)
  * release all the devices on the card.
  * called from init.c
  */
-int snd_device_free_all(struct snd_card *card, snd_device_cmd_t cmd)
+int snd_device_free_all(struct snd_card *card, enum snd_device_cmd cmd)
 {
 	struct snd_device *dev;
 	int err;
@@ -230,11 +231,11 @@ int snd_device_free_all(struct snd_card *card, snd_device_cmd_t cmd)
 
 	if (snd_BUG_ON(!card))
 		return -ENXIO;
-	range_low = (__force unsigned int)cmd * SNDRV_DEV_TYPE_RANGE_SIZE;
+	range_low = (unsigned int)cmd * SNDRV_DEV_TYPE_RANGE_SIZE;
 	range_high = range_low + SNDRV_DEV_TYPE_RANGE_SIZE - 1;
       __again:
 	list_for_each_entry(dev, &card->devices, list) {
-		type = (__force unsigned int)dev->type;
+		type = (unsigned int)dev->type;
 		if (type >= range_low && type <= range_high) {
 			if ((err = snd_device_free(card, dev->device_data)) < 0)
 				return err;

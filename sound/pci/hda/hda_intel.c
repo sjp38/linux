@@ -834,18 +834,6 @@ static unsigned int azx_command_addr(u32 cmd)
 	return addr;
 }
 
-static unsigned int azx_response_addr(u32 res)
-{
-	unsigned int addr = res & 0xf;
-
-	if (addr >= AZX_MAX_CODECS) {
-		snd_BUG();
-		addr = 0;
-	}
-
-	return addr;
-}
-
 /* send a command */
 static int azx_corb_send_cmd(struct hda_bus *bus, u32 val)
 {
@@ -907,8 +895,15 @@ static void azx_update_rirb(struct azx *chip)
 		rp = chip->rirb.rp << 1; /* an RIRB entry is 8-bytes */
 		res_ex = le32_to_cpu(chip->rirb.buf[rp + 1]);
 		res = le32_to_cpu(chip->rirb.buf[rp]);
-		addr = azx_response_addr(res_ex);
-		if (res_ex & ICH6_RIRB_EX_UNSOL_EV)
+		addr = res_ex & 0xf;
+		if ((addr >= AZX_MAX_CODECS) || !(chip->codec_mask & (1 << addr))) {
+			snd_printk(KERN_ERR SFX "%s: spurious response %#x:%#x, rp = %d, wp = %d",
+				   pci_name(chip->pci),
+				   res, res_ex,
+				   chip->rirb.rp, wp);
+			snd_BUG();
+		}
+		else if (res_ex & ICH6_RIRB_EX_UNSOL_EV)
 			snd_hda_queue_unsol_event(chip->bus, res, res_ex);
 		else if (chip->rirb.cmds[addr]) {
 			chip->rirb.res[addr] = res;
@@ -3828,13 +3823,12 @@ static int azx_probe(struct pci_dev *pci,
 		return -ENOENT;
 	}
 
-	err = snd_card_create(index[dev], id[dev], THIS_MODULE, 0, &card);
+	err = snd_card_new(&pci->dev, index[dev], id[dev], THIS_MODULE,
+			   0, &card);
 	if (err < 0) {
 		snd_printk(KERN_ERR "hda-intel: Error creating card!\n");
 		return err;
 	}
-
-	snd_card_set_dev(card, &pci->dev);
 
 	err = azx_create(card, pci, dev, pci_id->driver_data, &chip);
 	if (err < 0)
@@ -4142,7 +4136,7 @@ static DEFINE_PCI_DEVICE_TABLE(azx_ids) = {
 	  .driver_data = AZX_DRIVER_CTHDA | AZX_DCAPS_PRESET_CTHDA },
 	{ PCI_DEVICE(0x1102, 0x0012),
 	  .driver_data = AZX_DRIVER_CTHDA | AZX_DCAPS_PRESET_CTHDA },
-#if !defined(CONFIG_SND_CTXFI) && !defined(CONFIG_SND_CTXFI_MODULE)
+#if !IS_ENABLED(CONFIG_SND_CTXFI)
 	/* the following entry conflicts with snd-ctxfi driver,
 	 * as ctxfi driver mutates from HD-audio to native mode with
 	 * a special command sequence.
