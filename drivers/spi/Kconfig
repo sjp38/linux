@@ -270,6 +270,7 @@ config SPI_FSL_SPI
 config SPI_FSL_DSPI
 	tristate "Freescale DSPI controller"
 	select SPI_BITBANG
+	select REGMAP_MMIO
 	depends on SOC_VF610 || COMPILE_TEST
 	help
 	  This enables support for the Freescale DSPI controller in master
@@ -307,7 +308,7 @@ config SPI_OMAP_UWIRE
 
 config SPI_OMAP24XX
 	tristate "McSPI driver for OMAP"
-	depends on ARM || ARM64 || AVR32 || HEXAGON || MIPS || SH
+	depends on ARM || ARM64 || AVR32 || HEXAGON || MIPS || SUPERH
 	depends on ARCH_OMAP2PLUS || COMPILE_TEST
 	help
 	  SPI master controller for OMAP24XX and later Multichannel SPI
@@ -446,6 +447,13 @@ config SPI_SIRF
 	help
 	  SPI driver for CSR SiRFprimaII SoCs
 
+config SPI_SUN6I
+	tristate "Allwinner A31 SPI controller"
+	depends on ARCH_SUNXI || COMPILE_TEST
+	depends on RESET_CONTROLLER
+	help
+	  This enables using the SPI controller on the Allwinner A31 SoCs.
+
 config SPI_MXS
 	tristate "Freescale MXS SPI controller"
 	depends on ARCH_MXS
@@ -546,7 +554,7 @@ config SPI_DW_MID_DMA
 
 config SPI_DW_MMIO
 	tristate "Memory-mapped io interface driver for DW SPI core"
-	depends on SPI_DESIGNWARE && HAVE_CLK
+	depends on SPI_DESIGNWARE
 
 #
 # There are lots of SPI device types, with sensors and memory
