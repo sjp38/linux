@@ -19,8 +19,6 @@
 #include "kernfs-internal.h"
 
 DEFINE_MUTEX(kernfs_mutex);
-static DEFINE_SPINLOCK(kernfs_rename_lock);	/* kn->parent and ->name */
-static char kernfs_pr_cont_buf[PATH_MAX];	/* protected by rename_lock */
 
 #define rb_to_kn(X) rb_entry((X), struct kernfs_node, rb)
 
@@ -37,141 +35,6 @@ static bool kernfs_lockdep(struct kernfs_node *kn)
 #else
 	return false;
 #endif
-}
-
-static int kernfs_name_locked(struct kernfs_node *kn, char *buf, size_t buflen)
-{
-	return strlcpy(buf, kn->parent ? kn->name : "/", buflen);
-}
-
-static char * __must_check kernfs_path_locked(struct kernfs_node *kn, char *buf,
-					      size_t buflen)
-{
-	char *p = buf + buflen;
-	int len;
-
-	*--p = '\0';
-
-	do {
-		len = strlen(kn->name);
-		if (p - buf < len + 1) {
-			buf[0] = '\0';
-			p = NULL;
-			break;
-		}
-		p -= len;
-		memcpy(p, kn->name, len);
-		*--p = '/';
-		kn = kn->parent;
-	} while (kn && kn->parent);
-
-	return p;
-}
-
-/**
- * kernfs_name - obtain the name of a given node
- * @kn: kernfs_node of interest
- * @buf: buffer to copy @kn's name into
- * @buflen: size of @buf
- *
- * Copies the name of @kn into @buf of @buflen bytes.  The behavior is
- * similar to strlcpy().  It returns the length of @kn's name and if @buf
- * isn't long enough, it's filled upto @buflen-1 and nul terminated.
- *
- * This function can be called from any context.
- */
-int kernfs_name(struct kernfs_node *kn, char *buf, size_t buflen)
-{
-	unsigned long flags;
-	int ret;
-
-	spin_lock_irqsave(&kernfs_rename_lock, flags);
-	ret = kernfs_name_locked(kn, buf, buflen);
-	spin_unlock_irqrestore(&kernfs_rename_lock, flags);
-	return ret;
-}
-
-/**
- * kernfs_path - build full path of a given node
- * @kn: kernfs_node of interest
- * @buf: buffer to copy @kn's name into
- * @buflen: size of @buf
- *
- * Builds and returns the full path of @kn in @buf of @buflen bytes.  The
- * path is built from the end of @buf so the returned pointer usually
- * doesn't match @buf.  If @buf isn't long enough, @buf is nul terminated
- * and %NULL is returned.
- */
-char *kernfs_path(struct kernfs_node *kn, char *buf, size_t buflen)
-{
-	unsigned long flags;
-	char *p;
-
-	spin_lock_irqsave(&kernfs_rename_lock, flags);
-	p = kernfs_path_locked(kn, buf, buflen);
-	spin_unlock_irqrestore(&kernfs_rename_lock, flags);
-	return p;
-}
-
-/**
- * pr_cont_kernfs_name - pr_cont name of a kernfs_node
- * @kn: kernfs_node of interest
- *
- * This function can be called from any context.
- */
-void pr_cont_kernfs_name(struct kernfs_node *kn)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&kernfs_rename_lock, flags);
-
-	kernfs_name_locked(kn, kernfs_pr_cont_buf, sizeof(kernfs_pr_cont_buf));
-	pr_cont("%s", kernfs_pr_cont_buf);
-
-	spin_unlock_irqrestore(&kernfs_rename_lock, flags);
-}
-
-/**
- * pr_cont_kernfs_path - pr_cont path of a kernfs_node
- * @kn: kernfs_node of interest
- *
- * This function can be called from any context.
- */
-void pr_cont_kernfs_path(struct kernfs_node *kn)
-{
-	unsigned long flags;
-	char *p;
-
-	spin_lock_irqsave(&kernfs_rename_lock, flags);
-
-	p = kernfs_path_locked(kn, kernfs_pr_cont_buf,
-			       sizeof(kernfs_pr_cont_buf));
-	if (p)
-		pr_cont("%s", p);
-	else
-		pr_cont("<name too long>");
-
-	spin_unlock_irqrestore(&kernfs_rename_lock, flags);
-}
-
-/**
- * kernfs_get_parent - determine the parent node and pin it
- * @kn: kernfs_node of interest
- *
- * Determines @kn's parent, pins and returns it.  This function can be
- * called from any context.
- */
-struct kernfs_node *kernfs_get_parent(struct kernfs_node *kn)
-{
-	struct kernfs_node *parent;
-	unsigned long flags;
-
-	spin_lock_irqsave(&kernfs_rename_lock, flags);
-	parent = kn->parent;
-	kernfs_get(parent);
-	spin_unlock_irqrestore(&kernfs_rename_lock, flags);
-
-	return parent;
 }
 
 /**
@@ -487,24 +350,6 @@ const struct dentry_operations kernfs_dops = {
 	.d_release	= kernfs_dop_release,
 };
 
-/**
- * kernfs_node_from_dentry - determine kernfs_node associated with a dentry
- * @dentry: the dentry in question
- *
- * Return the kernfs_node associated with @dentry.  If @dentry is not a
- * kernfs one, %NULL is returned.
- *
- * While the returned kernfs_node will stay accessible as long as @dentry
- * is accessible, the returned node can be in any state and the caller is
- * fully responsible for determining what's accessible.
- */
-struct kernfs_node *kernfs_node_from_dentry(struct dentry *dentry)
-{
-	if (dentry->d_sb->s_op == &kernfs_sops)
-		return dentry->d_fsdata;
-	return NULL;
-}
-
 static struct kernfs_node *__kernfs_new_node(struct kernfs_root *root,
 					     const char *name, umode_t mode,
 					     unsigned flags)
@@ -693,14 +538,13 @@ EXPORT_SYMBOL_GPL(kernfs_find_and_get_ns);
 /**
  * kernfs_create_root - create a new kernfs hierarchy
  * @scops: optional syscall operations for the hierarchy
- * @flags: KERNFS_ROOT_* flags
  * @priv: opaque data associated with the new directory
  *
  * Returns the root of the new hierarchy on success, ERR_PTR() value on
  * failure.
  */
 struct kernfs_root *kernfs_create_root(struct kernfs_syscall_ops *scops,
-				       unsigned int flags, void *priv)
+				       void *priv)
 {
 	struct kernfs_root *root;
 	struct kernfs_node *kn;
@@ -719,16 +563,13 @@ struct kernfs_root *kernfs_create_root(struct kernfs_syscall_ops *scops,
 		return ERR_PTR(-ENOMEM);
 	}
 
+	kernfs_activate(kn);
 	kn->priv = priv;
 	kn->dir.root = root;
 
 	root->syscall_ops = scops;
-	root->flags = flags;
 	root->kn = kn;
 	init_waitqueue_head(&root->deactivate_waitq);
-
-	if (!(root->flags & KERNFS_ROOT_CREATE_DEACTIVATED))
-		kernfs_activate(kn);
 
 	return root;
 }
@@ -993,11 +834,10 @@ static void __kernfs_remove(struct kernfs_node *kn)
 	lockdep_assert_held(&kernfs_mutex);
 
 	/*
-	 * Short-circuit if non-root @kn has already finished removal.
-	 * This is for kernfs_remove_self() which plays with active ref
-	 * after removal.
+	 * Short-circuit if @kn has already finished removal.  This is for
+	 * kernfs_remove_self() which plays with active ref after removal.
 	 */
-	if (!kn || (kn->parent && RB_EMPTY_NODE(&kn->rb)))
+	if (!kn || RB_EMPTY_NODE(&kn->rb))
 		return;
 
 	pr_debug("kernfs %s: removing\n", kn->name);
@@ -1240,13 +1080,7 @@ int kernfs_remove_by_name_ns(struct kernfs_node *parent, const char *name,
 int kernfs_rename_ns(struct kernfs_node *kn, struct kernfs_node *new_parent,
 		     const char *new_name, const void *new_ns)
 {
-	struct kernfs_node *old_parent;
-	const char *old_name = NULL;
 	int error;
-
-	/* can't move or rename root */
-	if (!kn->parent)
-		return -EINVAL;
 
 	mutex_lock(&kernfs_mutex);
 
@@ -1269,8 +1103,13 @@ int kernfs_rename_ns(struct kernfs_node *kn, struct kernfs_node *new_parent,
 		new_name = kstrdup(new_name, GFP_KERNEL);
 		if (!new_name)
 			goto out;
-	} else {
-		new_name = NULL;
+
+		if (kn->flags & KERNFS_STATIC_NAME)
+			kn->flags &= ~KERNFS_STATIC_NAME;
+		else
+			kfree(kn->name);
+
+		kn->name = new_name;
 	}
 
 	/*
@@ -1278,28 +1117,11 @@ int kernfs_rename_ns(struct kernfs_node *kn, struct kernfs_node *new_parent,
 	 */
 	kernfs_unlink_sibling(kn);
 	kernfs_get(new_parent);
-
-	/* rename_lock protects ->parent and ->name accessors */
-	spin_lock_irq(&kernfs_rename_lock);
-
-	old_parent = kn->parent;
-	kn->parent = new_parent;
-
+	kernfs_put(kn->parent);
 	kn->ns = new_ns;
-	if (new_name) {
-		if (!(kn->flags & KERNFS_STATIC_NAME))
-			old_name = kn->name;
-		kn->flags &= ~KERNFS_STATIC_NAME;
-		kn->name = new_name;
-	}
-
-	spin_unlock_irq(&kernfs_rename_lock);
-
 	kn->hash = kernfs_name_hash(kn->name, kn->ns);
+	kn->parent = new_parent;
 	kernfs_link_sibling(kn);
-
-	kernfs_put(old_parent);
-	kfree(old_name);
 
 	error = 0;
  out:
@@ -1357,7 +1179,7 @@ static struct kernfs_node *kernfs_dir_next_pos(const void *ns,
 	struct kernfs_node *parent, ino_t ino, struct kernfs_node *pos)
 {
 	pos = kernfs_dir_pos(ns, parent, ino, pos);
-	if (pos) {
+	if (pos)
 		do {
 			struct rb_node *node = rb_next(&pos->rb);
 			if (!node)
@@ -1365,7 +1187,6 @@ static struct kernfs_node *kernfs_dir_next_pos(const void *ns,
 			else
 				pos = rb_to_kn(node);
 		} while (pos && (!kernfs_active(pos) || pos->ns != ns));
-	}
 	return pos;
 }
 
