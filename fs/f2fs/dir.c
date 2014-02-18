@@ -372,6 +372,10 @@ static struct page *init_inode_metadata(struct inode *inode,
 
 put_error:
 	f2fs_put_page(page, 1);
+	/* once the failed inode becomes a bad inode, i_mode is S_IFREG */
+	truncate_inode_pages(&inode->i_data, 0);
+	truncate_blocks(inode, 0);
+	remove_dirty_dir_inode(inode);
 error:
 	remove_inode_page(inode);
 	return ERR_PTR(err);
@@ -394,9 +398,6 @@ static void update_parent_metadata(struct inode *dir, struct inode *inode,
 		F2FS_I(dir)->i_current_depth = current_depth;
 		set_inode_flag(F2FS_I(dir), FI_UPDATE_DIR);
 	}
-
-	if (is_inode_flag_set(F2FS_I(dir), FI_UPDATE_DIR))
-		update_inode_page(dir);
 
 	if (is_inode_flag_set(F2FS_I(inode), FI_INC_LINK))
 		clear_inode_flag(F2FS_I(inode), FI_INC_LINK);
@@ -511,7 +512,10 @@ add_dentry:
 
 	update_parent_metadata(dir, inode, current_depth);
 fail:
-	clear_inode_flag(F2FS_I(dir), FI_UPDATE_DIR);
+	if (is_inode_flag_set(F2FS_I(dir), FI_UPDATE_DIR)) {
+		update_inode_page(dir);
+		clear_inode_flag(F2FS_I(dir), FI_UPDATE_DIR);
+	}
 	kunmap(dentry_page);
 	f2fs_put_page(dentry_page, 1);
 	return err;
@@ -528,7 +532,6 @@ void f2fs_delete_entry(struct f2fs_dir_entry *dentry, struct page *page,
 	unsigned int bit_pos;
 	struct address_space *mapping = page->mapping;
 	struct inode *dir = mapping->host;
-	struct f2fs_sb_info *sbi = F2FS_SB(dir->i_sb);
 	int slots = GET_DENTRY_SLOTS(le16_to_cpu(dentry->name_len));
 	void *kaddr = page_address(page);
 	int i;
@@ -551,6 +554,8 @@ void f2fs_delete_entry(struct f2fs_dir_entry *dentry, struct page *page,
 	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 
 	if (inode) {
+		struct f2fs_sb_info *sbi = F2FS_SB(dir->i_sb);
+
 		if (S_ISDIR(inode->i_mode)) {
 			drop_nlink(dir);
 			update_inode_page(dir);
@@ -573,7 +578,6 @@ void f2fs_delete_entry(struct f2fs_dir_entry *dentry, struct page *page,
 		truncate_hole(dir, page->index, page->index + 1);
 		clear_page_dirty_for_io(page);
 		ClearPageUptodate(page);
-		dec_page_count(sbi, F2FS_DIRTY_DENTS);
 		inode_dec_dirty_dents(dir);
 	}
 	f2fs_put_page(page, 1);
