@@ -376,6 +376,20 @@ static inline unsigned int cal_enable_bits(struct comedi_device *dev)
 	return CAL_EN_BIT | CAL_SRC_BITS(devpriv->calibration_source);
 }
 
+static int cb_pcidas_ai_eoc(struct comedi_device *dev,
+			    struct comedi_subdevice *s,
+			    struct comedi_insn *insn,
+			    unsigned long context)
+{
+	struct cb_pcidas_private *devpriv = dev->private;
+	unsigned int status;
+
+	status = inw(devpriv->control_status + ADCMUX_CONT);
+	if (status & EOC)
+		return 0;
+	return -EBUSY;
+}
+
 static int cb_pcidas_ai_rinsn(struct comedi_device *dev,
 			      struct comedi_subdevice *s,
 			      struct comedi_insn *insn, unsigned int *data)
@@ -385,7 +399,8 @@ static int cb_pcidas_ai_rinsn(struct comedi_device *dev,
 	unsigned int range = CR_RANGE(insn->chanspec);
 	unsigned int aref = CR_AREF(insn->chanspec);
 	unsigned int bits;
-	int n, i;
+	int ret;
+	int n;
 
 	/* enable calibration input if appropriate */
 	if (insn->chanspec & CR_ALT_SOURCE) {
@@ -415,13 +430,9 @@ static int cb_pcidas_ai_rinsn(struct comedi_device *dev,
 		outw(0, devpriv->adc_fifo + ADCDATA);
 
 		/* wait for conversion to end */
-		/* return -ETIMEDOUT if there is a timeout */
-		for (i = 0; i < 10000; i++) {
-			if (inw(devpriv->control_status + ADCMUX_CONT) & EOC)
-				break;
-		}
-		if (i == 10000)
-			return -ETIMEDOUT;
+		ret = comedi_timeout(dev, s, insn, cb_pcidas_ai_eoc, 0);
+		if (ret)
+			return ret;
 
 		/* read data */
 		data[n] = inw(devpriv->adc_fifo + ADCDATA);
@@ -1006,9 +1017,9 @@ static int cb_pcidas_ai_cmd(struct comedi_device *dev,
 
 	/*  set start trigger and burst mode */
 	bits = 0;
-	if (cmd->start_src == TRIG_NOW)
+	if (cmd->start_src == TRIG_NOW) {
 		bits |= SW_TRIGGER;
-	else if (cmd->start_src == TRIG_EXT) {
+	} else {	/* TRIG_EXT */
 		bits |= EXT_TRIGGER | TGEN | XTRCL;
 		if (thisboard->is_1602) {
 			if (cmd->start_arg & CR_INVERT)
@@ -1016,9 +1027,6 @@ static int cb_pcidas_ai_cmd(struct comedi_device *dev,
 			if (cmd->start_arg & CR_EDGE)
 				bits |= TGSEL;
 		}
-	} else {
-		comedi_error(dev, "bug!");
-		return -1;
 	}
 	if (cmd->convert_src == TRIG_NOW && cmd->chanlist_len > 1)
 		bits |= BURSTE;
@@ -1575,9 +1583,6 @@ static int cb_pcidas_auto_attach(struct comedi_device *dev,
 	/*  clear and enable interrupt on amcc s5933 */
 	outl(devpriv->s5933_intcsr_bits | INTCSR_INBOX_INTR_STATUS,
 	     devpriv->s5933_config + AMCC_OP_REG_INTCSR);
-
-	dev_info(dev->class_dev, "%s: %s attached\n",
-		dev->driver->driver_name, dev->board_name);
 
 	return 0;
 }

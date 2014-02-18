@@ -297,7 +297,7 @@ static ssize_t max_read_buffer_kb_show(struct device *csdev,
 	mutex_unlock(&dev->mutex);
 
 	comedi_dev_put(dev);
-	return snprintf(buf, PAGE_SIZE, "%i\n", size);
+	return snprintf(buf, PAGE_SIZE, "%u\n", size);
 }
 
 static ssize_t max_read_buffer_kb_store(struct device *csdev,
@@ -353,7 +353,7 @@ static ssize_t read_buffer_kb_show(struct device *csdev,
 	mutex_unlock(&dev->mutex);
 
 	comedi_dev_put(dev);
-	return snprintf(buf, PAGE_SIZE, "%i\n", size);
+	return snprintf(buf, PAGE_SIZE, "%u\n", size);
 }
 
 static ssize_t read_buffer_kb_store(struct device *csdev,
@@ -410,7 +410,7 @@ static ssize_t max_write_buffer_kb_show(struct device *csdev,
 	mutex_unlock(&dev->mutex);
 
 	comedi_dev_put(dev);
-	return snprintf(buf, PAGE_SIZE, "%i\n", size);
+	return snprintf(buf, PAGE_SIZE, "%u\n", size);
 }
 
 static ssize_t max_write_buffer_kb_store(struct device *csdev,
@@ -466,7 +466,7 @@ static ssize_t write_buffer_kb_show(struct device *csdev,
 	mutex_unlock(&dev->mutex);
 
 	comedi_dev_put(dev);
-	return snprintf(buf, PAGE_SIZE, "%i\n", size);
+	return snprintf(buf, PAGE_SIZE, "%u\n", size);
 }
 
 static ssize_t write_buffer_kb_store(struct device *csdev,
@@ -1194,6 +1194,11 @@ static int parse_insn(struct comedi_device *dev, struct comedi_insn *insn,
 		switch (insn->insn) {
 		case INSN_READ:
 			ret = s->insn_read(dev, s, insn, data);
+			if (ret == -ETIMEDOUT) {
+				dev_dbg(dev->class_dev,
+					"subdevice %d read instruction timed out\n",
+					s->index);
+			}
 			break;
 		case INSN_WRITE:
 			maxdata = s->maxdata_list
@@ -1207,8 +1212,14 @@ static int parse_insn(struct comedi_device *dev, struct comedi_insn *insn,
 					break;
 				}
 			}
-			if (ret == 0)
+			if (ret == 0) {
 				ret = s->insn_write(dev, s, insn, data);
+				if (ret == -ETIMEDOUT) {
+					dev_dbg(dev->class_dev,
+						"subdevice %d write instruction timed out\n",
+						s->index);
+				}
+			}
 			break;
 		case INSN_BITS:
 			if (insn->n != 2) {

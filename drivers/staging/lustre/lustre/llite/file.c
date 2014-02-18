@@ -671,14 +671,13 @@ restart:
 
 	ll_capa_open(inode);
 
-	if (!lli->lli_has_smd) {
-		if (file->f_flags & O_LOV_DELAY_CREATE ||
-		    !(file->f_mode & FMODE_WRITE)) {
-			CDEBUG(D_INODE, "object creation was delayed\n");
-			GOTO(out_och_free, rc);
-		}
+	if (!lli->lli_has_smd &&
+	    (cl_is_lov_delay_create(file->f_flags) ||
+	     (file->f_mode & FMODE_WRITE) == 0)) {
+		CDEBUG(D_INODE, "object creation was delayed\n");
+		GOTO(out_och_free, rc);
 	}
-	file->f_flags &= ~O_LOV_DELAY_CREATE;
+	cl_lov_delay_create_clear(&file->f_flags);
 	GOTO(out_och_free, rc);
 
 out_och_free:
@@ -1092,10 +1091,6 @@ restart:
 				down_read(&lli->lli_trunc_sem);
 			}
 			break;
-		case IO_SENDFILE:
-			vio->u.sendfile.cui_actor = args->u.sendfile.via_actor;
-			vio->u.sendfile.cui_target = args->u.sendfile.via_target;
-			break;
 		case IO_SPLICE:
 			vio->u.splice.cui_pipe = args->u.splice.via_pipe;
 			vio->u.splice.cui_flags = args->u.splice.via_flags;
@@ -1340,7 +1335,7 @@ static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 	struct ll_recreate_obj ucreat;
 	struct ost_id		oi;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!capable(CFS_CAP_SYS_ADMIN))
 		return -EPERM;
 
 	if (copy_from_user(&ucreat, (struct ll_recreate_obj *)arg,
@@ -1358,7 +1353,7 @@ static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 	struct ost_id	oi;
 	obd_count	ost_idx;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!capable(CFS_CAP_SYS_ADMIN))
 		return -EPERM;
 
 	if (copy_from_user(&fid, (struct lu_fid *)arg, sizeof(fid)))
@@ -1381,23 +1376,25 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 		ccc_inode_lsm_put(inode, lsm);
 		CDEBUG(D_IOCTL, "stripe already exists for ino %lu\n",
 		       inode->i_ino);
-		return -EEXIST;
+		GOTO(out, rc = -EEXIST);
 	}
 
 	ll_inode_size_lock(inode);
 	rc = ll_intent_file_open(file, lum, lum_size, &oit);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_unlock, rc);
 	rc = oit.d.lustre.it_status;
 	if (rc < 0)
 		GOTO(out_req_free, rc);
 
 	ll_release_openhandle(file->f_dentry, &oit);
 
- out:
+out_unlock:
 	ll_inode_size_unlock(inode);
 	ll_intent_release(&oit);
 	ccc_inode_lsm_put(inode, lsm);
+out:
+	cl_lov_delay_create_clear(&file->f_flags);
 	return rc;
 out_req_free:
 	ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
@@ -1497,7 +1494,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 					    sizeof(struct lov_user_ost_data);
 	int			 rc;
 
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+	if (!capable(CFS_CAP_SYS_ADMIN))
 		return -EPERM;
 
 	OBD_ALLOC_LARGE(lump, lum_size);
@@ -1747,7 +1744,7 @@ int ll_fid2path(struct inode *inode, void *arg)
 	struct getinfo_fid2path	*gfout, *gfin;
 	int			 outsize, rc;
 
-	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
+	if (!capable(CFS_CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		return -EPERM;
 
@@ -2093,7 +2090,7 @@ static int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
 	/* Non-root users are forbidden to set or clear flags which are
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
-	    !cfs_capable(CFS_CAP_SYS_ADMIN))
+	    !capable(CFS_CAP_SYS_ADMIN))
 		return -EPERM;
 
 	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,

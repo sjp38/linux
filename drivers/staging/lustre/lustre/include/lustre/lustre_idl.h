@@ -91,8 +91,8 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
-#if !defined(LASSERT) && !defined(LPU64)
-#include <linux/libcfs/libcfs.h> /* for LASSERT, LPUX64, etc */
+#if !defined(LPU64)
+#include <linux/libcfs/libcfs.h> /* for LPUX64, etc */
 #endif
 
 /* Defn's shared with user-space. */
@@ -232,7 +232,6 @@ static inline unsigned fld_range_is_any(const struct lu_seq_range *range)
 static inline void fld_range_set_type(struct lu_seq_range *range,
 				      unsigned flags)
 {
-	LASSERT(!(flags & ~LU_SEQ_RANGE_MASK));
 	range->lsr_flags |= flags;
 }
 
@@ -615,7 +614,6 @@ static inline obd_id fid_idif_id(obd_seq seq, __u32 oid, __u32 ver)
 /* extract ost index from IDIF FID */
 static inline __u32 fid_idif_ost_idx(const struct lu_fid *fid)
 {
-	LASSERT(fid_is_idif(fid));
 	return (fid_seq(fid) >> 16) & 0xffff;
 }
 
@@ -833,11 +831,6 @@ static inline void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
  */
 static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {
-	/* check that all fields are converted */
-	CLASSERT(sizeof(*src) ==
-		 sizeof(fid_seq(src)) +
-		 sizeof(fid_oid(src)) +
-		 sizeof(fid_ver(src)));
 	dst->f_seq = cpu_to_le64(fid_seq(src));
 	dst->f_oid = cpu_to_le32(fid_oid(src));
 	dst->f_ver = cpu_to_le32(fid_ver(src));
@@ -845,11 +838,6 @@ static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 
 static inline void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 {
-	/* check that all fields are converted */
-	CLASSERT(sizeof(*src) ==
-		 sizeof(fid_seq(src)) +
-		 sizeof(fid_oid(src)) +
-		 sizeof(fid_ver(src)));
 	dst->f_seq = le64_to_cpu(fid_seq(src));
 	dst->f_oid = le32_to_cpu(fid_oid(src));
 	dst->f_ver = le32_to_cpu(fid_ver(src));
@@ -857,11 +845,6 @@ static inline void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 
 static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
 {
-	/* check that all fields are converted */
-	CLASSERT(sizeof(*src) ==
-		 sizeof(fid_seq(src)) +
-		 sizeof(fid_oid(src)) +
-		 sizeof(fid_ver(src)));
 	dst->f_seq = cpu_to_be64(fid_seq(src));
 	dst->f_oid = cpu_to_be32(fid_oid(src));
 	dst->f_ver = cpu_to_be32(fid_ver(src));
@@ -869,11 +852,6 @@ static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
 
 static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 {
-	/* check that all fields are converted */
-	CLASSERT(sizeof(*src) ==
-		 sizeof(fid_seq(src)) +
-		 sizeof(fid_oid(src)) +
-		 sizeof(fid_ver(src)));
 	dst->f_seq = be64_to_cpu(fid_seq(src));
 	dst->f_oid = be32_to_cpu(fid_oid(src));
 	dst->f_ver = be32_to_cpu(fid_ver(src));
@@ -897,11 +875,6 @@ extern void lustre_swab_lu_seq_range(struct lu_seq_range *range);
 
 static inline int lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 {
-	/* Check that there is no alignment padding. */
-	CLASSERT(sizeof(*f0) ==
-		 sizeof(f0->f_seq) +
-		 sizeof(f0->f_oid) +
-		 sizeof(f0->f_ver));
 	return memcmp(f0, f1, sizeof(*f0)) == 0;
 }
 
@@ -1331,6 +1304,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LIGHTWEIGHT 0x1000000000000ULL/* lightweight connection */
 #define OBD_CONNECT_SHORTIO     0x2000000000000ULL/* short io */
 #define OBD_CONNECT_PINGLESS	0x4000000000000ULL/* pings not required */
+#define OBD_CONNECT_FLOCK_DEAD	0x8000000000000ULL/* flock deadlock detection */
+
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
@@ -1368,7 +1343,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK | \
 				OBD_CONNECT_LVB_TYPE | OBD_CONNECT_LAYOUTLOCK |\
-				OBD_CONNECT_PINGLESS | OBD_CONNECT_MAX_EASIZE)
+				OBD_CONNECT_PINGLESS | OBD_CONNECT_MAX_EASIZE |\
+				OBD_CONNECT_FLOCK_DEAD)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
 				OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -1771,7 +1747,6 @@ static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 			  OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
 			  OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
 
-#define OBD_MD_FLXATTRLOCKED OBD_MD_FLGETATTRLOCK
 #define OBD_MD_FLXATTRALL (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS)
 
 /* don't forget obdo_fid which is way down at the bottom so it can
@@ -3328,9 +3303,10 @@ struct obdo {
 #define o_grant_used o_data_version
 
 static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
-					struct obdo *wobdo, struct obdo *lobdo)
+					struct obdo *wobdo,
+					const struct obdo *lobdo)
 {
-	memcpy(wobdo, lobdo, sizeof(*lobdo));
+	*wobdo = *lobdo;
 	wobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
 	if (ocd == NULL)
 		return;
@@ -3345,16 +3321,15 @@ static inline void lustre_set_wire_obdo(struct obd_connect_data *ocd,
 }
 
 static inline void lustre_get_wire_obdo(struct obd_connect_data *ocd,
-					struct obdo *lobdo, struct obdo *wobdo)
+					struct obdo *lobdo,
+					const struct obdo *wobdo)
 {
 	obd_flag local_flags = 0;
 
 	if (lobdo->o_valid & OBD_MD_FLFLAGS)
 		 local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
-	LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-
-	memcpy(lobdo, wobdo, sizeof(*lobdo));
+	*lobdo = *wobdo;
 	if (local_flags != 0) {
 		lobdo->o_valid |= OBD_MD_FLFLAGS;
 		lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;

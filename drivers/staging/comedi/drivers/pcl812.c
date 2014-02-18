@@ -394,16 +394,35 @@ static void setup_range_channel(struct comedi_device *dev,
 				unsigned int rangechan, char wait);
 static int pcl812_ai_cancel(struct comedi_device *dev,
 			    struct comedi_subdevice *s);
-/*
-==============================================================================
-*/
+
+static int pcl812_ai_eoc(struct comedi_device *dev,
+			 struct comedi_subdevice *s,
+			 struct comedi_insn *insn,
+			 unsigned long context)
+{
+	struct pcl812_private *devpriv = dev->private;
+	unsigned int status;
+
+	if (devpriv->ai_is16b) {
+		status = inb(dev->iobase + ACL8216_STATUS);
+		if ((status & ACL8216_DRDY) == 0)
+			return 0;
+	} else {
+		status = inb(dev->iobase + PCL812_AD_HI);
+		if ((status & PCL812_DRDY) == 0)
+			return 0;
+	}
+	return -EBUSY;
+}
+
 static int pcl812_ai_insn_read(struct comedi_device *dev,
 			       struct comedi_subdevice *s,
 			       struct comedi_insn *insn, unsigned int *data)
 {
 	struct pcl812_private *devpriv = dev->private;
+	int ret = 0;
 	int n;
-	int timeout, hi;
+	int hi;
 
 	/* select software trigger */
 	outb(devpriv->mode_reg_int | 1, dev->iobase + PCL812_MODE);
@@ -413,33 +432,25 @@ static int pcl812_ai_insn_read(struct comedi_device *dev,
 		/* start conversion */
 		outb(255, dev->iobase + PCL812_SOFTTRIG);
 		udelay(5);
-		timeout = 50;	/* wait max 50us, it must finish under 33us */
-		while (timeout--) {
-			hi = inb(dev->iobase + PCL812_AD_HI);
-			if (!(hi & PCL812_DRDY))
-				goto conv_finish;
-			udelay(1);
-		}
-		dev_dbg(dev->class_dev, "A/D insn read timeout\n");
-		outb(devpriv->mode_reg_int | 0, dev->iobase + PCL812_MODE);
-		return -ETIME;
 
-conv_finish:
+		ret = comedi_timeout(dev, s, insn, pcl812_ai_eoc, 0);
+		if (ret)
+			break;
+
+		hi = inb(dev->iobase + PCL812_AD_HI);
 		data[n] = ((hi & 0xf) << 8) | inb(dev->iobase + PCL812_AD_LO);
 	}
 	outb(devpriv->mode_reg_int | 0, dev->iobase + PCL812_MODE);
-	return n;
+
+	return ret ? ret : n;
 }
 
-/*
-==============================================================================
-*/
 static int acl8216_ai_insn_read(struct comedi_device *dev,
 				struct comedi_subdevice *s,
 				struct comedi_insn *insn, unsigned int *data)
 {
+	int ret = 0;
 	int n;
-	int timeout;
 
 	/* select software trigger */
 	outb(1, dev->iobase + PCL812_MODE);
@@ -449,23 +460,18 @@ static int acl8216_ai_insn_read(struct comedi_device *dev,
 		/* start conversion */
 		outb(255, dev->iobase + PCL812_SOFTTRIG);
 		udelay(5);
-		timeout = 50;	/* wait max 50us, it must finish under 33us */
-		while (timeout--) {
-			if (!(inb(dev->iobase + ACL8216_STATUS) & ACL8216_DRDY))
-				goto conv_finish;
-			udelay(1);
-		}
-		dev_dbg(dev->class_dev, "A/D insn read timeout\n");
-		outb(0, dev->iobase + PCL812_MODE);
-		return -ETIME;
 
-conv_finish:
+		ret = comedi_timeout(dev, s, insn, pcl812_ai_eoc, 0);
+		if (ret)
+			break;
+
 		data[n] =
 		    (inb(dev->iobase +
 			 PCL812_AD_HI) << 8) | inb(dev->iobase + PCL812_AD_LO);
 	}
 	outb(0, dev->iobase + PCL812_MODE);
-	return n;
+
+	return ret ? ret : n;
 }
 
 /*
@@ -624,24 +630,6 @@ static int pcl812_ai_cmd(struct comedi_device *dev, struct comedi_subdevice *s)
 	struct pcl812_private *devpriv = dev->private;
 	unsigned int divisor1 = 0, divisor2 = 0, i, dma_flags, bytes;
 	struct comedi_cmd *cmd = &s->async->cmd;
-
-	if (cmd->start_src != TRIG_NOW)
-		return -EINVAL;
-	if (cmd->scan_begin_src != TRIG_FOLLOW)
-		return -EINVAL;
-	if (devpriv->use_ext_trg) {
-		if (cmd->convert_src != TRIG_EXT)
-			return -EINVAL;
-	} else {
-		if (cmd->convert_src != TRIG_TIMER)
-			return -EINVAL;
-	}
-	if (cmd->scan_end_src != TRIG_COUNT)
-		return -EINVAL;
-	if (cmd->scan_end_arg != cmd->chanlist_len)
-		return -EINVAL;
-	if (cmd->chanlist_len > MAX_CHANLIST_LEN)
-		return -EINVAL;
 
 	if (cmd->convert_src == TRIG_TIMER) {
 		if (cmd->convert_arg < board->ai_ns_min)
