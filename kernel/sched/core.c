@@ -1745,8 +1745,10 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->numa_scan_seq = p->mm ? p->mm->numa_scan_seq : 0;
 	p->numa_scan_period = sysctl_numa_balancing_scan_delay;
 	p->numa_work.next = &p->numa_work;
-	p->numa_faults = NULL;
-	p->numa_faults_buffer = NULL;
+	p->numa_faults_memory = NULL;
+	p->numa_faults_buffer_memory = NULL;
+	p->last_task_numa_placement = 0;
+	p->last_sum_exec_runtime = 0;
 
 	INIT_LIST_HEAD(&p->numa_entry);
 	p->numa_group = NULL;
@@ -2167,13 +2169,6 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 
 #ifdef CONFIG_SMP
 
-/* assumes rq->lock is held */
-static inline void pre_schedule(struct rq *rq, struct task_struct *prev)
-{
-	if (prev->sched_class->pre_schedule)
-		prev->sched_class->pre_schedule(rq, prev);
-}
-
 /* rq->lock is NOT held, but preemption is disabled */
 static inline void post_schedule(struct rq *rq)
 {
@@ -2190,10 +2185,6 @@ static inline void post_schedule(struct rq *rq)
 }
 
 #else
-
-static inline void pre_schedule(struct rq *rq, struct task_struct *p)
-{
-}
 
 static inline void post_schedule(struct rq *rq)
 {
@@ -2577,18 +2568,11 @@ static inline void schedule_debug(struct task_struct *prev)
 	schedstat_inc(this_rq(), sched_count);
 }
 
-static void put_prev_task(struct rq *rq, struct task_struct *prev)
-{
-	if (prev->on_rq || rq->skip_clock_update < 0)
-		update_rq_clock(rq);
-	prev->sched_class->put_prev_task(rq, prev);
-}
-
 /*
  * Pick up the highest-prio task:
  */
 static inline struct task_struct *
-pick_next_task(struct rq *rq)
+pick_next_task(struct rq *rq, struct task_struct *prev)
 {
 	const struct sched_class *class;
 	struct task_struct *p;
@@ -2597,14 +2581,15 @@ pick_next_task(struct rq *rq)
 	 * Optimization: we know that if all tasks are in
 	 * the fair class we can call that function directly:
 	 */
-	if (likely(rq->nr_running == rq->cfs.h_nr_running)) {
-		p = fair_sched_class.pick_next_task(rq);
+	if (likely(prev->sched_class == &fair_sched_class &&
+		   rq->nr_running == rq->cfs.h_nr_running)) {
+		p = fair_sched_class.pick_next_task(rq, prev);
 		if (likely(p))
 			return p;
 	}
 
 	for_each_class(class) {
-		p = class->pick_next_task(rq);
+		p = class->pick_next_task(rq, prev);
 		if (p)
 			return p;
 	}
@@ -2700,13 +2685,10 @@ need_resched:
 		switch_count = &prev->nvcsw;
 	}
 
-	pre_schedule(rq, prev);
+	if (prev->on_rq || rq->skip_clock_update < 0)
+		update_rq_clock(rq);
 
-	if (unlikely(!rq->nr_running))
-		idle_balance(cpu, rq);
-
-	put_prev_task(rq, prev);
-	next = pick_next_task(rq);
+	next = pick_next_task(rq, prev);
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 	rq->skip_clock_update = 0;
@@ -2998,7 +2980,7 @@ void set_user_nice(struct task_struct *p, long nice)
 	unsigned long flags;
 	struct rq *rq;
 
-	if (TASK_NICE(p) == nice || nice < -20 || nice > 19)
+	if (task_nice(p) == nice || nice < -20 || nice > 19)
 		return;
 	/*
 	 * We have to be careful, if called from sys_setpriority(),
@@ -3076,7 +3058,7 @@ SYSCALL_DEFINE1(nice, int, increment)
 	if (increment > 40)
 		increment = 40;
 
-	nice = TASK_NICE(current) + increment;
+	nice = task_nice(current) + increment;
 	if (nice < -20)
 		nice = -20;
 	if (nice > 19)
@@ -3107,18 +3089,6 @@ int task_prio(const struct task_struct *p)
 {
 	return p->prio - MAX_RT_PRIO;
 }
-
-/**
- * task_nice - return the nice value of a given task.
- * @p: the task in question.
- *
- * Return: The nice value [ -20 ... 0 ... 19 ].
- */
-int task_nice(const struct task_struct *p)
-{
-	return TASK_NICE(p);
-}
-EXPORT_SYMBOL(task_nice);
 
 /**
  * idle_cpu - is a given cpu idle currently?
@@ -3319,7 +3289,7 @@ recheck:
 	 */
 	if (user && !capable(CAP_SYS_NICE)) {
 		if (fair_policy(policy)) {
-			if (attr->sched_nice < TASK_NICE(p) &&
+			if (attr->sched_nice < task_nice(p) &&
 			    !can_nice(p, attr->sched_nice))
 				return -EPERM;
 		}
@@ -3343,7 +3313,7 @@ recheck:
 		 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
 		 */
 		if (p->policy == SCHED_IDLE && policy != SCHED_IDLE) {
-			if (!can_nice(p, TASK_NICE(p)))
+			if (!can_nice(p, task_nice(p)))
 				return -EPERM;
 		}
 
@@ -3383,7 +3353,7 @@ recheck:
 	 * If not changing anything there's no need to proceed further:
 	 */
 	if (unlikely(policy == p->policy)) {
-		if (fair_policy(policy) && attr->sched_nice != TASK_NICE(p))
+		if (fair_policy(policy) && attr->sched_nice != task_nice(p))
 			goto change;
 		if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
 			goto change;
@@ -3835,7 +3805,7 @@ SYSCALL_DEFINE3(sched_getattr, pid_t, pid, struct sched_attr __user *, uattr,
 	else if (task_has_rt_policy(p))
 		attr.sched_priority = p->rt_priority;
 	else
-		attr.sched_nice = TASK_NICE(p);
+		attr.sched_nice = task_nice(p);
 
 	rcu_read_unlock();
 
@@ -4753,7 +4723,7 @@ static void migrate_tasks(unsigned int dead_cpu)
 		if (rq->nr_running == 1)
 			break;
 
-		next = pick_next_task(rq);
+		next = pick_next_task(rq, NULL);
 		BUG_ON(!next);
 		next->sched_class->put_prev_task(rq, next);
 
@@ -4843,7 +4813,7 @@ set_table_entry(struct ctl_table *entry,
 static struct ctl_table *
 sd_alloc_ctl_domain_table(struct sched_domain *sd)
 {
-	struct ctl_table *table = sd_alloc_ctl_entry(13);
+	struct ctl_table *table = sd_alloc_ctl_entry(14);
 
 	if (table == NULL)
 		return NULL;
@@ -4871,9 +4841,12 @@ sd_alloc_ctl_domain_table(struct sched_domain *sd)
 		sizeof(int), 0644, proc_dointvec_minmax, false);
 	set_table_entry(&table[10], "flags", &sd->flags,
 		sizeof(int), 0644, proc_dointvec_minmax, false);
-	set_table_entry(&table[11], "name", sd->name,
+	set_table_entry(&table[11], "max_newidle_lb_cost",
+		&sd->max_newidle_lb_cost,
+		sizeof(long), 0644, proc_doulongvec_minmax, false);
+	set_table_entry(&table[12], "name", sd->name,
 		CORENAME_MAX_SIZE, 0444, proc_dostring, false);
-	/* &table[12] is terminator */
+	/* &table[13] is terminator */
 
 	return table;
 }
@@ -7010,7 +6983,7 @@ void normalize_rt_tasks(void)
 			 * Renice negative nice level userspace
 			 * tasks back to 0:
 			 */
-			if (TASK_NICE(p) < 0 && p->mm)
+			if (task_nice(p) < 0 && p->mm)
 				set_user_nice(p, 0);
 			continue;
 		}
