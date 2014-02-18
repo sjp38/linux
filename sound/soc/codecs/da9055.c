@@ -18,6 +18,8 @@
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -1523,17 +1525,30 @@ static int da9055_remove(struct i2c_client *client)
 	return 0;
 }
 
+/*
+ * DO NOT change the device Ids. The naming is intentionally specific as both
+ * the CODEC and PMIC parts of this chip are instantiated separately as I2C
+ * devices (both have configurable I2C addresses, and are to all intents and
+ * purposes separate). As a result there are specific DA9055 Ids for CODEC
+ * and PMIC, which must be different to operate together.
+ */
 static const struct i2c_device_id da9055_i2c_id[] = {
-	{ "da9055", 0 },
+	{ "da9055-codec", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, da9055_i2c_id);
 
+static const struct of_device_id da9055_of_match[] = {
+	{ .compatible = "dlg,da9055-codec", },
+	{ }
+};
+
 /* I2C codec control layer */
 static struct i2c_driver da9055_i2c_driver = {
 	.driver = {
-		.name = "da9055",
+		.name = "da9055-codec",
 		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(da9055_of_match),
 	},
 	.probe		= da9055_i2c_probe,
 	.remove		= da9055_remove,
