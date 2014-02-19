@@ -2553,7 +2553,8 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	unsigned int size = _IOC_SIZE(cmd);
 	void __user *ubuf = (void __user *)arg;
 
-	/*pr_info("binder_ioctl: %d:%d %x %lx\n", proc->pid, current->pid, cmd, arg);*/
+	pr_debug("binder_ioctl: %d:%d %x %lx\n",
+		 proc->pid, current->pid, cmd, arg);
 
 	trace_binder_ioctl(cmd, arg);
 
@@ -2787,8 +2788,8 @@ static int binder_mmap(struct file *filp, struct vm_area_struct *vma)
 	proc->vma = vma;
 	proc->vma_vm_mm = vma->vm_mm;
 
-	/*pr_info("binder_mmap: %d %lx-%lx maps %p\n",
-		 proc->pid, vma->vm_start, vma->vm_end, proc->buffer);*/
+	pr_debug("binder_mmap: %d %lx-%lx maps %p\n",
+		 proc->pid, vma->vm_start, vma->vm_end, proc->buffer);
 	return 0;
 
 err_alloc_small_buf_failed:
