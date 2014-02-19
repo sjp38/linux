@@ -634,9 +634,6 @@ sbc_check_prot(struct se_device *dev, struct se_cmd *cmd, unsigned char *cdb,
 {
 	u8 protect = cdb[1] >> 5;
 
-	if (!cmd->t_prot_sg || !cmd->t_prot_nents)
-		return true;
-
 	switch (dev->dev_attrib.pi_prot_type) {
 	case TARGET_DIF_TYPE3_PROT:
 		cmd->reftag_seed = 0xffffffff;
