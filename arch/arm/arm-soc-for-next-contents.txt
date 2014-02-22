@@ -7,11 +7,15 @@ next/cleanup
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-cleanup-for-v3.15
 	qcom/cleanup
 		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-cleanup-for-3.15
+	mvebu/soc
+		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15
 
 next/soc
 	qcom/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-soc-for-3.15
 		contains qcom/cleanup
+	patch
+		ARM: dts: msm: Add krait-pmu to platforms with Krait CPUs
 
 next/boards
 	renesas/boards
@@ -22,6 +26,8 @@ next/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards2-for-v3.15
 	renesas/defconfig2
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig2-for-v3.15
+	mvebu/defconfig
+		git://git.infradead.org/linux-mvebu tags/mvebu-defconfig-3.15
 
 next/dt
 	renesas/dt
@@ -34,10 +40,14 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ab8500-dt-for-arm-soc
 	renesas/dt2
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt2-for-v3.15
+	mvebu/dt
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15
 
 next/drivers
 	renesas/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v3.15
+	integrator/multiplatform-base
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-1
 
 fixes
 	<no branch>
@@ -53,4 +63,3 @@ fixes
 	patch
 		ARM: tegra: Add head numbers to display controllers
 		ARM: tegra: only run PL310 init on systems with one
-
