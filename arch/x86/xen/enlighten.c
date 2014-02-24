@@ -1555,8 +1555,6 @@ asmlinkage void __init xen_start_kernel(void)
 #endif
 		__supported_pte_mask &= ~(_PAGE_PWT | _PAGE_PCD);
 
-	__supported_pte_mask |= _PAGE_IOMAP;
-
 	/*
 	 * Prevent page tables from being allocated in highmem, even
 	 * if CONFIG_HIGHPTE is enabled.
