@@ -71,6 +71,17 @@ void acpi_unlock_hp_context(void)
 	mutex_unlock(&acpi_hp_context_lock);
 }
 
+void acpi_initialize_hp_context(struct acpi_device *adev,
+				struct acpi_hotplug_context *hp,
+				int (*notify)(struct acpi_device *, u32),
+				void (*uevent)(struct acpi_device *, u32))
+{
+	acpi_lock_hp_context();
+	acpi_set_hp_context(adev, hp, notify, uevent, NULL);
+	acpi_unlock_hp_context();
+}
+EXPORT_SYMBOL_GPL(acpi_initialize_hp_context);
+
 int acpi_scan_add_handler(struct acpi_scan_handler *handler)
 {
 	if (!handler || !handler->attach)
@@ -487,24 +498,26 @@ void acpi_device_hotplug(void *data, u32 src)
 	if (adev->handle == INVALID_ACPI_HANDLE)
 		goto err_out;
 
-	if (adev->flags.hotplug_notify) {
+	if (adev->flags.is_dock_station) {
+		error = dock_notify(adev, src);
+	} else if (adev->flags.hotplug_notify) {
 		error = acpi_generic_hotplug_event(adev, src);
 		if (error == -EPERM) {
 			ost_code = ACPI_OST_SC_EJECT_NOT_SUPPORTED;
 			goto err_out;
 		}
 	} else {
-		int (*event)(struct acpi_device *, u32);
+		int (*notify)(struct acpi_device *, u32);
 
 		acpi_lock_hp_context();
-		event = adev->hp ? adev->hp->event : NULL;
+		notify = adev->hp ? adev->hp->notify : NULL;
 		acpi_unlock_hp_context();
 		/*
 		 * There may be additional notify handlers for device objects
 		 * without the .event() callback, so ignore them here.
 		 */
-		if (event)
-			error = event(adev, src);
+		if (notify)
+			error = notify(adev, src);
 		else
 			goto out;
 	}
@@ -1660,6 +1673,27 @@ bool acpi_bay_match(acpi_handle handle)
 	return acpi_ata_match(phandle);
 }
 
+bool acpi_device_is_battery(struct acpi_device *adev)
+{
+	struct acpi_hardware_id *hwid;
+
+	list_for_each_entry(hwid, &adev->pnp.ids, list)
+		if (!strcmp("PNP0C0A", hwid->id))
+			return true;
+
+	return false;
+}
+
+static bool is_ejectable_bay(struct acpi_device *adev)
+{
+	acpi_handle handle = adev->handle;
+
+	if (acpi_has_method(handle, "_EJ0") && acpi_device_is_battery(adev))
+		return true;
+
+	return acpi_bay_match(handle);
+}
+
 /*
  * acpi_dock_match - see if an acpi object has a _DCK method
  */
@@ -1964,6 +1998,10 @@ static void acpi_scan_init_hotplug(struct acpi_device *adev)
 {
 	struct acpi_hardware_id *hwid;
 
+	if (acpi_dock_match(adev->handle) || is_ejectable_bay(adev)) {
+		acpi_dock_add(adev);
+		return;
+	}
 	list_for_each_entry(hwid, &adev->pnp.ids, list) {
 		struct acpi_scan_handler *handler;
 
@@ -2036,7 +2074,11 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 static void acpi_bus_attach(struct acpi_device *device)
 {
 	struct acpi_device *child;
+	acpi_handle ejd;
 	int ret;
+
+	if (ACPI_SUCCESS(acpi_bus_get_ejd(device->handle, &ejd)))
+		register_dock_dependent_device(device, ejd);
 
 	acpi_bus_get_status(device);
 	/* Skip devices that are not present. */
@@ -2190,7 +2232,6 @@ int __init acpi_scan_init(void)
 	acpi_cmos_rtc_init();
 	acpi_container_init();
 	acpi_memory_hotplug_init();
-	acpi_dock_init();
 
 	mutex_lock(&acpi_scan_lock);
 	/*
