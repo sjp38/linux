@@ -157,9 +157,6 @@ int groups_search(const struct group_info *group_info, kgid_t grp)
  * set_groups - Change a group subscription in a set of credentials
  * @new: The newly prepared set of credentials to alter
  * @group_info: The group list to install
- *
- * Validate a group subscription and, if valid, insert it into a set
- * of credentials.
  */
 void set_groups(struct cred *new, struct group_info *group_info)
 {
