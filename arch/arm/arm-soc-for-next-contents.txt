@@ -1,3 +1,7 @@
+dependencies
+	depends/irqchip-mvebu-fixes
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
+
 next/fixes-non-critical
 
 next/cleanup
@@ -48,6 +52,10 @@ next/drivers
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v3.15
 	integrator/multiplatform-base
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-1
+	davinci/nand
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/nand
+	mvebu/watchdog
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
 
 fixes
 	<no branch>
