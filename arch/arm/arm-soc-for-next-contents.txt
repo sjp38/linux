@@ -15,6 +15,8 @@ next/cleanup
 		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-cleanup-for-3.15
 	mvebu/soc
 		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15
+	efm32/cleanup
+		git://git.pengutronix.de/git/ukl/linux.git tags/efm32-next
 
 next/soc
 	qcom/soc
