@@ -76,6 +76,10 @@ static u64 gcma_duplicate_entry;
 /*********************************
 * tunables
 **********************************/
+/* Order of total contiguous memory region size */
+static uint gcma_tcmr_order __read_mostly;
+module_param_named(tcmr_order, gcma_tcmr_order, uint, 0);
+
 /* Enable/disable gcma (disabled by default, fixed at boot for now) */
 static bool gcma_enabled __read_mostly;
 module_param_named(enabled, gcma_enabled, bool, 0);
@@ -199,6 +203,20 @@ static struct gcma_tree *gcma_trees[MAX_SWAPFILES];
 * gcma entry functions
 **********************************/
 static struct kmem_cache *gcma_entry_cache;
+static struct page *gcma_tcmr;
+
+/**
+ * gcma_secure_tcmr - secure enough amount of contiguous memory as gcma's
+ * property to use it later when contig memory allocation requirement came.
+ */
+static int gcma_secure_tcmr(void)
+{
+	/* TODO: alloc_pages alloc only 2**MAX_ORDER pages.
+	 * Should use another mechanism */
+	gcma_tcmr = alloc_pages(GFP_KERNEL, gcma_tcmr_order);
+	pr_debug("secured 2^%d pages for tcmr\n", gcma_tcmr_order);
+	return gcma_tcmr == NULL;
+}
 
 static int gcma_entry_cache_create(void)
 {
@@ -908,6 +926,10 @@ static int __init init_gcma(void)
 		return 0;
 
 	pr_info("loading gcma\n");
+	if (gcma_secure_tcmr()) {
+		pr_err("contig memory region securing failed\n");
+		goto error;
+	}
 	if (gcma_entry_cache_create()) {
 		pr_err("entry cache creation failed\n");
 		goto error;
