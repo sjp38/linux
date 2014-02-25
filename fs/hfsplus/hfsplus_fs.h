@@ -444,8 +444,10 @@ int hfsplus_cat_case_cmp_key(const hfsplus_btree_key *,
 		const hfsplus_btree_key *);
 int hfsplus_cat_bin_cmp_key(const hfsplus_btree_key *,
 		const hfsplus_btree_key *);
-void hfsplus_cat_build_key(struct super_block *sb,
+int hfsplus_cat_build_key(struct super_block *sb,
 		hfsplus_btree_key *, u32, struct qstr *);
+void hfsplus_cat_build_key_with_cnid(struct super_block *sb,
+		hfsplus_btree_key *, u32);
 int hfsplus_find_cat(struct super_block *, u32, struct hfs_find_data *);
 int hfsplus_create_cat(u32, struct inode *, struct qstr *, struct inode *);
 int hfsplus_delete_cat(u32, struct inode *, struct qstr *);
