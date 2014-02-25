@@ -1294,9 +1294,9 @@ config SYSFS_SYSCALL
 	bool "Sysfs syscall support" if EXPERT
 	default y
 	---help---
-	  sys_sysfs is an obsolete system call no longer supported in
-	  libc.Note that disabling this option while being more secure breaks
-	  compatibility with other systems.
+	  sys_sysfs is an obsolete system call no longer supported in libc.
+	  Note that disabling this option is more secure but might break
+	  compatibility with some systems.
 
 	  If unsure say Y here.
 
