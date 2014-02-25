@@ -20,7 +20,10 @@ next/soc
 		contains qcom/cleanup
 	patch
 		ARM: dts: msm: Add krait-pmu to platforms with Krait CPUs
-
+	mvebu/soc-3xx
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3xx-3.15
+		contains mvebu/soc
+	
 next/boards
 	renesas/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards-for-v3.15
@@ -46,6 +49,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt2-for-v3.15
 	mvebu/dt
 		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15
+	mvebu/dt2
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-2
 
 next/drivers
 	renesas/soc
@@ -58,6 +63,9 @@ next/drivers
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
 	patch
 		irqchip: VIC: export vic_init_cascaded
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom.git tags/qcom-drivers-for-3.15
+		contains qcom/cleanup
 
 fixes
 	<no branch>
