@@ -206,6 +206,7 @@ static struct gcma_tree *gcma_trees[MAX_SWAPFILES];
 **********************************/
 static struct kmem_cache *gcma_entry_cache;
 static struct page *gcma_tcmr;
+static spinlock_t cma_lock;
 
 /**
  * gcma_secure_tcmr - secure enough amount of contiguous memory as gcma's
@@ -213,6 +214,7 @@ static struct page *gcma_tcmr;
  */
 static int gcma_secure_tcmr(void)
 {
+	spin_lock_init(&cma_lock);
 	/* TODO: alloc_pages alloc only 2**MAX_ORDER pages.
 	 * Should use another mechanism */
 	gcma_tcmr = alloc_pages(GFP_KERNEL, gcma_tcmr_order);
@@ -250,9 +252,15 @@ static void gcma_entry_cache_free(struct gcma_entry *entry)
 /*********************************
 * gcma interfaces
 **********************************/
+static int cm_allocated;
 struct page *gcma_alloc(int count)
 {
-	return NULL;
+	struct page *ret;
+	spin_lock(&cma_lock);
+	ret = gcma_tcmr + cm_allocated;
+	cm_allocated += count;
+	spin_unlock(&cma_lock);
+	return ret;
 }
 
 int gcma_free(struct page *page)
