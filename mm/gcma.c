@@ -43,6 +43,8 @@
 #include <linux/writeback.h>
 #include <linux/pagemap.h>
 
+#include "gcma.h"
+
 /*********************************
 * statistics
 **********************************/
@@ -243,6 +245,19 @@ static struct gcma_entry *gcma_entry_cache_alloc(gfp_t gfp)
 static void gcma_entry_cache_free(struct gcma_entry *entry)
 {
 	kmem_cache_free(gcma_entry_cache, entry);
+}
+
+/*********************************
+* gcma interfaces
+**********************************/
+struct page *gcma_alloc(int count)
+{
+	return NULL;
+}
+
+int gcma_free(struct page *page)
+{
+	return 0;
 }
 
 /*********************************
