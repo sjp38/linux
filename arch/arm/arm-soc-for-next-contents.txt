@@ -39,6 +39,8 @@ next/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig2-for-v3.15
 	mvebu/defconfig
 		git://git.infradead.org/linux-mvebu tags/mvebu-defconfig-3.15
+	patch
+		ARM: qcom: Enable basic support for Qualcomm platforms in multi_v7_defconfig
 
 next/dt
 	renesas/dt
