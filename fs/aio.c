@@ -366,6 +366,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	int nr_pages;
 	int i;
 	struct file *file;
+	unsigned long flags;
 
 	/* Compensate for the ring buffer's head/tail overlap entry */
 	nr_events += 2;	/* 1 is required, 2 for good luck */
@@ -437,6 +438,14 @@ static int aio_setup_ring(struct kioctx *ctx)
 	ctx->user_id = ctx->mmap_base;
 	ctx->nr_events = nr_events; /* trusted copy */
 
+	/*
+	 * The aio ring pages are user space pages, so they can be migrated.
+	 * When writing to an aio ring page, we should ensure the page is not
+	 * being migrated. Aio page migration procedure is protected by
+	 * ctx->completion_lock, so we add this lock here.
+	 */
+	spin_lock_irqsave(&ctx->completion_lock, flags);
+
 	ring = kmap_atomic(ctx->ring_pages[0]);
 	ring->nr = nr_events;	/* user copy */
 	ring->id = ~0U;
@@ -447,6 +456,8 @@ static int aio_setup_ring(struct kioctx *ctx)
 	ring->header_length = sizeof(struct aio_ring);
 	kunmap_atomic(ring);
 	flush_dcache_page(ctx->ring_pages[0]);
+
+	spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	return 0;
 }
@@ -542,6 +553,7 @@ static int ioctx_add_table(struct kioctx *ctx, struct mm_struct *mm)
 	unsigned i, new_nr;
 	struct kioctx_table *table, *old;
 	struct aio_ring *ring;
+	unsigned long flags;
 
 	spin_lock(&mm->ioctx_lock);
 	rcu_read_lock();
@@ -556,9 +568,19 @@ static int ioctx_add_table(struct kioctx *ctx, struct mm_struct *mm)
 					rcu_read_unlock();
 					spin_unlock(&mm->ioctx_lock);
 
+					/*
+					 * Accessing ring pages must be done
+					 * holding ctx->completion_lock to
+					 * prevent aio ring page migration
+					 * procedure from migrating ring pages.
+					 */
+					spin_lock_irqsave(&ctx->completion_lock,
+							  flags);
 					ring = kmap_atomic(ctx->ring_pages[0]);
 					ring->id = ctx->id;
 					kunmap_atomic(ring);
+					spin_unlock_irqrestore(
+						&ctx->completion_lock, flags);
 					return 0;
 				}
 
@@ -1021,6 +1043,7 @@ static long aio_read_events_ring(struct kioctx *ctx,
 	unsigned head, tail, pos;
 	long ret = 0;
 	int copy_ret;
+	unsigned long flags;
 
 	mutex_lock(&ctx->ring_lock);
 
@@ -1066,10 +1089,20 @@ static long aio_read_events_ring(struct kioctx *ctx,
 		head %= ctx->nr_events;
 	}
 
+	/*
+	 * The aio ring pages are user space pages, so they can be migrated.
+	 * When writing to an aio ring page, we should ensure the page is not
+	 * being migrated. Aio page migration procedure is protected by
+	 * ctx->completion_lock, so we add this lock here.
+	 */
+	spin_lock_irqsave(&ctx->completion_lock, flags);
+
 	ring = kmap_atomic(ctx->ring_pages[0]);
 	ring->head = head;
 	kunmap_atomic(ring);
 	flush_dcache_page(ctx->ring_pages[0]);
+
+	spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	pr_debug("%li  h%u t%u\n", ret, head, tail);
 
