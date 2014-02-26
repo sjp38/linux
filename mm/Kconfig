@@ -541,6 +541,20 @@ config ZSWAP
 	  they have not be fully explored on the large set of potential
 	  configurations and workloads that exist.
 
+config GCMA
+	bool "Guaranteed contiguous memory allocator (EXPERIMENTAL)"
+	depends on FRONTSWAP
+	default n
+	help
+	  A contiguous memory allocator which guarantees success and max wait
+	  time for allocation request.
+	  It secure large amount of memory and let them be allocated to the
+	  contiguous memory request while it can be used as backedn for
+	  frontswap and cleancache concurrently.
+
+	  This is marked experimental because it is a new feature that
+	  interacts heavily with memory reclaim.
+
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
 	depends on CHECKPOINT_RESTORE && HAVE_ARCH_SOFT_DIRTY && PROC_FS
