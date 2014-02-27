@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Texas Instruments, Inc.
+ * Copyright 2013-2014 Texas Instruments, Inc.
  *
  * Keystone 2 Kepler/Hawking EVM device tree
  *
@@ -10,12 +10,14 @@
 /dts-v1/;
 
 #include "keystone.dtsi"
+#include "k2hk.dtsi"
 
 / {
-	compatible =  "ti,keystone-evm";
+	compatible =  "ti,k2hk-evm";
+	model = "Texas Instruments Keystone 2 Kepler/Hawking EVM";
 
 	soc {
-		clock {
+		clocks {
 			refclksys: refclksys {
 				#clock-cells = <0>;
 				compatible = "fixed-clock";
@@ -50,6 +52,29 @@
 				clock-frequency = <100000000>;
 				clock-output-names = "refclk-ddr3b";
 			};
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		debug1_1 {
+			label = "keystone:green:debug1";
+			gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>; /* 12 */
+		};
+
+		debug1_2 {
+			label = "keystone:red:debug1";
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>; /* 13 */
+		};
+
+		debug2 {
+			label = "keystone:blue:debug2";
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>; /* 14 */
+		};
+
+		debug3 {
+			label = "keystone:blue:debug3";
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>; /* 15 */
 		};
 	};
 };
