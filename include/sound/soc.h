@@ -341,8 +341,6 @@ typedef int (*hw_write_t)(void *,const char* ,int);
 extern struct snd_ac97_bus_ops *soc_ac97_ops;
 
 enum snd_soc_control_type {
-	SND_SOC_I2C = 1,
-	SND_SOC_SPI,
 	SND_SOC_REGMAP,
 };
 
@@ -600,7 +598,8 @@ struct snd_soc_jack_gpio {
 	struct snd_soc_jack *jack;
 	struct delayed_work work;
 
-	int (*jack_status_check)(void);
+	void *data;
+	int (*jack_status_check)(void *data);
 };
 
 struct snd_soc_jack {
