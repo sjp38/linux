@@ -82,8 +82,8 @@ dtb-$(CONFIG_ARCH_HIGHBANK) += highbank.dtb \
 	ecx-2000.dtb
 dtb-$(CONFIG_ARCH_INTEGRATOR) += integratorap.dtb \
 	integratorcp.dtb
-dtb-$(CONFIG_ARCH_LPC32XX) += ea3250.dtb phy3250.dtb
-dtb-$(CONFIG_ARCH_KIRKWOOD) += kirkwood-b3.dtb \
+kirkwood := \
+	kirkwood-b3.dtb \
 	kirkwood-cloudbox.dtb \
 	kirkwood-db-88f6281.dtb \
 	kirkwood-db-88f6282.dtb \
@@ -91,6 +91,18 @@ dtb-$(CONFIG_ARCH_KIRKWOOD) += kirkwood-b3.dtb \
 	kirkwood-dns325.dtb \
 	kirkwood-dockstar.dtb \
 	kirkwood-dreamplug.dtb \
+	kirkwood-ds109.dtb \
+	kirkwood-ds110jv10.dtb \
+	kirkwood-ds111.dtb \
+	kirkwood-ds209.dtb \
+	kirkwood-ds210.dtb \
+	kirkwood-ds212.dtb \
+	kirkwood-ds212j.dtb \
+	kirkwood-ds409.dtb \
+	kirkwood-ds409slim.dtb \
+	kirkwood-ds411.dtb \
+	kirkwood-ds411j.dtb \
+	kirkwood-ds411slim.dtb \
 	kirkwood-goflexnet.dtb \
 	kirkwood-guruplug-server-plus.dtb \
 	kirkwood-ib62x0.dtb \
@@ -116,20 +128,33 @@ dtb-$(CONFIG_ARCH_KIRKWOOD) += kirkwood-b3.dtb \
 	kirkwood-rd88f6192.dtb \
 	kirkwood-rd88f6281-a0.dtb \
 	kirkwood-rd88f6281-a1.dtb \
+	kirkwood-rs212.dtb \
+	kirkwood-rs409.dtb \
+	kirkwood-rs411.dtb \
 	kirkwood-sheevaplug.dtb \
 	kirkwood-sheevaplug-esata.dtb \
+	kirkwood-t5325.dtb \
 	kirkwood-topkick.dtb \
 	kirkwood-ts219-6281.dtb \
 	kirkwood-ts219-6282.dtb \
 	kirkwood-ts419-6281.dtb \
 	kirkwood-ts419-6282.dtb
+dtb-$(CONFIG_ARCH_KIRKWOOD) += $(kirkwood)
+dtb-$(CONFIG_MACH_KIRKWOOD) += $(kirkwood)
+dtb-$(CONFIG_ARCH_LPC32XX) += ea3250.dtb phy3250.dtb
 dtb-$(CONFIG_ARCH_MARCO) += marco-evb.dtb
 dtb-$(CONFIG_ARCH_MOXART) += moxart-uc7112lx.dtb
-dtb-$(CONFIG_ARCH_MVEBU) += armada-370-db.dtb \
+dtb-$(CONFIG_MACH_ARMADA_370) += \
+	armada-370-db.dtb \
 	armada-370-mirabox.dtb \
 	armada-370-netgear-rn102.dtb \
 	armada-370-netgear-rn104.dtb \
-	armada-370-rd.dtb \
+	armada-370-rd.dtb
+dtb-$(CONFIG_MACH_ARMADA_375) += \
+	armada-375-db.dtb
+dtb-$(CONFIG_MACH_ARMADA_38X) += \
+	armada-385-db.dtb
+dtb-$(CONFIG_MACH_ARMADA_XP) += \
 	armada-xp-axpwifiap.dtb \
 	armada-xp-db.dtb \
 	armada-xp-gp.dtb \
