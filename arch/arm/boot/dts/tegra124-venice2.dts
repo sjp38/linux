@@ -402,19 +402,11 @@
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
 			};
 			usb_vbus_en0_pn4 {
-				nvidia,pins = "usb_vbus_en0_pn4";
+				nvidia,pins = "usb_vbus_en0_pn4",
+					      "usb_vbus_en1_pn5";
 				nvidia,function = "usb";
 				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-				nvidia,pull = <TEGRA_PIN_PULL_UP>;
-				nvidia,tristate = <TEGRA_PIN_DISABLE>;
-				nvidia,lock = <TEGRA_PIN_DISABLE>;
-				nvidia,open-drain = <TEGRA_PIN_ENABLE>;
-			};
-			usb_vbus_en1_pn5 {
-				nvidia,pins = "usb_vbus_en1_pn5";
-				nvidia,function = "usb";
-				nvidia,enable-input = <TEGRA_PIN_ENABLE>;
-				nvidia,pull = <TEGRA_PIN_PULL_UP>;
+				nvidia,pull = <TEGRA_PIN_PULL_NONE>;
 				nvidia,tristate = <TEGRA_PIN_DISABLE>;
 				nvidia,lock = <TEGRA_PIN_DISABLE>;
 				nvidia,open-drain = <TEGRA_PIN_ENABLE>;
@@ -615,6 +607,8 @@
 			compatible = "ams,as3722";
 			reg = <0x40>;
 			interrupts = <0 86 IRQ_TYPE_LEVEL_HIGH>;
+
+			ams,system-power-controller;
 
 			#interrupt-cells = <2>;
 			interrupt-controller;
@@ -909,6 +903,16 @@
 					MATRIX_KEY(0x07, 0x0c, KEY_LEFT)
 				>;
 			};
+		};
+	};
+
+	spi@7000da00 {
+		status = "okay";
+		spi-max-frequency = <25000000>;
+		spi-flash@0 {
+			compatible = "winbond,w25q32dw";
+			reg = <0>;
+			spi-max-frequency = <20000000>;
 		};
 	};
 
