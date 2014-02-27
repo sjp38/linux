@@ -170,19 +170,22 @@ static int max77693_pmic_dt_parse_rdata(struct device *dev,
 	struct max77693_regulator_data *tmp;
 	int i, matched = 0;
 
-	np = of_find_node_by_name(dev->parent->of_node, "regulators");
+	np = of_get_child_by_name(dev->parent->of_node, "regulators");
 	if (!np)
 		return -EINVAL;
 
 	rmatch = devm_kzalloc(dev,
 		 sizeof(*rmatch) * ARRAY_SIZE(regulators), GFP_KERNEL);
-	if (!rmatch)
+	if (!rmatch) {
+		of_node_put(np);
 		return -ENOMEM;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(regulators); i++)
 		rmatch[i].name = regulators[i].name;
 
 	matched = of_regulator_match(dev, np, rmatch, ARRAY_SIZE(regulators));
+	of_node_put(np);
 	if (matched <= 0)
 		return matched;
 	*rdata = devm_kzalloc(dev, sizeof(**rdata) * matched, GFP_KERNEL);

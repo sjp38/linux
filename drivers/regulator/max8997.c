@@ -924,7 +924,7 @@ static int max8997_pmic_dt_parse_pdata(struct platform_device *pdev,
 		return -ENODEV;
 	}
 
-	regulators_np = of_find_node_by_name(pmic_np, "regulators");
+	regulators_np = of_get_child_by_name(pmic_np, "regulators");
 	if (!regulators_np) {
 		dev_err(&pdev->dev, "could not find regulators sub-node\n");
 		return -EINVAL;
@@ -937,7 +937,6 @@ static int max8997_pmic_dt_parse_pdata(struct platform_device *pdev,
 				pdata->num_regulators, GFP_KERNEL);
 	if (!rdata) {
 		of_node_put(regulators_np);
-		dev_err(&pdev->dev, "could not allocate memory for regulator data\n");
 		return -ENOMEM;
 	}
 

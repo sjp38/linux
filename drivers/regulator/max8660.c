@@ -330,7 +330,7 @@ static int max8660_pdata_from_dt(struct device *dev,
 	struct max8660_subdev_data *sub;
 	struct of_regulator_match rmatch[ARRAY_SIZE(max8660_reg)];
 
-	np = of_find_node_by_name(dev->of_node, "regulators");
+	np = of_get_child_by_name(dev->of_node, "regulators");
 	if (!np) {
 		dev_err(dev, "missing 'regulators' subnode in DT\n");
 		return -EINVAL;
@@ -340,6 +340,7 @@ static int max8660_pdata_from_dt(struct device *dev,
 		rmatch[i].name = max8660_reg[i].name;
 
 	matched = of_regulator_match(dev, np, rmatch, ARRAY_SIZE(rmatch));
+	of_node_put(np);
 	if (matched <= 0)
 		return matched;
 

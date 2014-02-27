@@ -400,7 +400,7 @@ static int max77686_pmic_dt_parse_pdata(struct platform_device *pdev,
 	unsigned int i;
 
 	pmic_np = iodev->dev->of_node;
-	regulators_np = of_find_node_by_name(pmic_np, "voltage-regulators");
+	regulators_np = of_get_child_by_name(pmic_np, "voltage-regulators");
 	if (!regulators_np) {
 		dev_err(&pdev->dev, "could not find regulators sub-node\n");
 		return -EINVAL;
@@ -410,8 +410,7 @@ static int max77686_pmic_dt_parse_pdata(struct platform_device *pdev,
 	rdata = devm_kzalloc(&pdev->dev, sizeof(*rdata) *
 			     pdata->num_regulators, GFP_KERNEL);
 	if (!rdata) {
-		dev_err(&pdev->dev,
-			"could not allocate memory for regulator data\n");
+		of_node_put(regulators_np);
 		return -ENOMEM;
 	}
 
@@ -425,6 +424,7 @@ static int max77686_pmic_dt_parse_pdata(struct platform_device *pdev,
 	}
 
 	pdata->regulators = rdata;
+	of_node_put(regulators_np);
 
 	return 0;
 }
