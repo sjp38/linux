@@ -386,7 +386,8 @@ static int soc_widget_read(struct snd_soc_dapm_widget *w, int reg,
 	return -1;
 }
 
-static int soc_widget_write(struct snd_soc_dapm_widget *w, int reg, int val)
+static int soc_widget_write(struct snd_soc_dapm_widget *w, int reg,
+	unsigned int val)
 {
 	if (w->codec)
 		return snd_soc_write(w->codec, reg, val);
@@ -506,7 +507,7 @@ static void dapm_set_path_status(struct snd_soc_dapm_widget *w,
 	case snd_soc_dapm_switch:
 	case snd_soc_dapm_mixer:
 	case snd_soc_dapm_mixer_named_ctl: {
-		int val;
+		unsigned int val;
 		struct soc_mixer_control *mc = (struct soc_mixer_control *)
 			w->kcontrol_news[i].private_value;
 		int reg = mc->reg;
@@ -530,7 +531,7 @@ static void dapm_set_path_status(struct snd_soc_dapm_widget *w,
 	case snd_soc_dapm_mux: {
 		struct soc_enum *e = (struct soc_enum *)
 			w->kcontrol_news[i].private_value;
-		int val, item;
+		unsigned int val, item;
 
 		soc_widget_read(w, e->reg, &val);
 		item = (val >> e->shift_l) & e->mask;
@@ -559,7 +560,7 @@ static void dapm_set_path_status(struct snd_soc_dapm_widget *w,
 	case snd_soc_dapm_value_mux: {
 		struct soc_enum *e = (struct soc_enum *)
 			w->kcontrol_news[i].private_value;
-		int val, item;
+		unsigned int val, item;
 
 		soc_widget_read(w, e->reg, &val);
 		val = (val >> e->shift_l) & e->mask;
@@ -2341,6 +2342,30 @@ static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
 }
 
 /**
+ * snd_soc_dapm_sync_unlocked - scan and power dapm paths
+ * @dapm: DAPM context
+ *
+ * Walks all dapm audio paths and powers widgets according to their
+ * stream or path usage.
+ *
+ * Requires external locking.
+ *
+ * Returns 0 for success.
+ */
+int snd_soc_dapm_sync_unlocked(struct snd_soc_dapm_context *dapm)
+{
+	/*
+	 * Suppress early reports (eg, jacks syncing their state) to avoid
+	 * silly DAPM runs during card startup.
+	 */
+	if (!dapm->card || !dapm->card->instantiated)
+		return 0;
+
+	return dapm_power_widgets(dapm->card, SND_SOC_DAPM_STREAM_NOP);
+}
+EXPORT_SYMBOL_GPL(snd_soc_dapm_sync_unlocked);
+
+/**
  * snd_soc_dapm_sync - scan and power dapm paths
  * @dapm: DAPM context
  *
@@ -2353,15 +2378,8 @@ int snd_soc_dapm_sync(struct snd_soc_dapm_context *dapm)
 {
 	int ret;
 
-	/*
-	 * Suppress early reports (eg, jacks syncing their state) to avoid
-	 * silly DAPM runs during card startup.
-	 */
-	if (!dapm->card || !dapm->card->instantiated)
-		return 0;
-
 	mutex_lock_nested(&dapm->card->dapm_mutex, SND_SOC_DAPM_CLASS_RUNTIME);
-	ret = dapm_power_widgets(dapm->card, SND_SOC_DAPM_STREAM_NOP);
+	ret = snd_soc_dapm_sync_unlocked(dapm);
 	mutex_unlock(&dapm->card->dapm_mutex);
 	return ret;
 }
