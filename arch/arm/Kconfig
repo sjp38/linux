@@ -421,9 +421,6 @@ config ARCH_EFM32
 	depends on !MMU
 	select ARCH_REQUIRE_GPIOLIB
 	select ARM_NVIC
-	# CLKSRC_MMIO is wrong here, but needed until a proper fix is merged,
-	# i.e. CLKSRC_EFM32 selecting CLKSRC_MMIO
-	select CLKSRC_MMIO
 	select CLKSRC_OF
 	select COMMON_CLK
 	select CPU_V7M
@@ -657,9 +654,8 @@ config ARCH_PXA
 	help
 	  Support for Intel/Marvell's PXA2xx/PXA3xx processor line.
 
-config ARCH_MSM_NODT
-	bool "Qualcomm MSM"
-	select ARCH_MSM
+config ARCH_MSM
+	bool "Qualcomm MSM (non-multiplatform)"
 	select ARCH_REQUIRE_GPIOLIB
 	select COMMON_CLK
 	select GENERIC_CLOCKEVENTS
@@ -1004,6 +1000,8 @@ source "arch/arm/mach-pxa/Kconfig"
 source "arch/arm/plat-pxa/Kconfig"
 
 source "arch/arm/mach-mmp/Kconfig"
+
+source "arch/arm/mach-qcom/Kconfig"
 
 source "arch/arm/mach-realview/Kconfig"
 

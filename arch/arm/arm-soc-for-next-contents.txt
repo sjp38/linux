@@ -1,0 +1,92 @@
+dependencies
+	depends/irqchip-mvebu-fixes
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
+
+next/fixes-non-critical
+	patch
+		irqchip: gic: use dmb ishst instead of dsb when raising a softirq
+
+next/cleanup
+	cleanup/timex-removal
+		git://git.pengutronix.de/git/ukl/linux tags/dropmachtimexh-v2
+	renesas/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-cleanup-for-v3.15
+	qcom/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-cleanup-for-3.15
+	mvebu/soc
+		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15
+	efm32/cleanup
+		git://git.pengutronix.de/git/ukl/linux.git tags/efm32-next
+
+next/soc
+	qcom/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-soc-for-3.15
+		contains qcom/cleanup
+	patch
+		ARM: dts: msm: Add krait-pmu to platforms with Krait CPUs
+	mvebu/soc-3xx
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3xx-3.15
+		contains mvebu/soc
+	
+next/boards
+	renesas/boards
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards-for-v3.15
+	renesas/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig-for-v3.15
+	renesas/boards2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards2-for-v3.15
+	renesas/defconfig2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig2-for-v3.15
+	mvebu/defconfig
+		git://git.infradead.org/linux-mvebu tags/mvebu-defconfig-3.15
+	patch
+		ARM: qcom: Enable basic support for Qualcomm platforms in multi_v7_defconfig
+
+next/dt
+	renesas/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt-for-v3.15
+	imx/dt-imx6
+		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx6-dt-3.15
+	imx/dt
+		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx-dt-3.15
+	ux500/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ab8500-dt-for-arm-soc
+	renesas/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt2-for-v3.15
+	mvebu/dt
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15
+	mvebu/dt2
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-2
+
+next/drivers
+	renesas/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc-for-v3.15
+	integrator/multiplatform-base
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-1
+	davinci/nand
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/nand
+	mvebu/watchdog
+		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
+	patch
+		irqchip: VIC: export vic_init_cascaded
+	qcom/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom.git tags/qcom-drivers-for-3.15
+		contains qcom/cleanup
+	patch
+		drivers: cci: Export CCI PMU revision
+		drivers: cci: Extend support to CCI revisions > r1p2
+
+fixes
+	<no branch>
+		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/pwm_pxa_for_v3.14
+	patch
+		ARM: tegra: fix RTC0 alias for Cardhu
+	<no branch>
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-against-rc1
+	patch
+		ARM: imx6: build pm-imx6q.c independently of CONFIG_PM
+	<no branch>
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-fixes-3.14
+	patch
+		ARM: tegra: Add head numbers to display controllers
+		ARM: tegra: only run PL310 init on systems with one
