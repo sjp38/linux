@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/gpio.h>
 #include <linux/serial_core.h>
+#include <linux/serial_s3c.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
 
@@ -33,7 +34,6 @@
 #include <asm/mach-types.h>
 
 //#include <asm/debug-ll.h>
-#include <plat/regs-serial.h>
 #include <mach/regs-gpio.h>
 #include <mach/regs-lcd.h>
 
@@ -106,9 +106,14 @@ static void __init smdk2413_fixup(struct tag *tags, char **cmdline,
 static void __init smdk2413_map_io(void)
 {
 	s3c24xx_init_io(smdk2413_iodesc, ARRAY_SIZE(smdk2413_iodesc));
-	s3c24xx_init_clocks(12000000);
 	s3c24xx_init_uarts(smdk2413_uartcfgs, ARRAY_SIZE(smdk2413_uartcfgs));
 	samsung_set_timer_source(SAMSUNG_PWM3, SAMSUNG_PWM4);
+}
+
+static void __init smdk2413_init_time(void)
+{
+	s3c2412_init_clocks(12000000);
+	samsung_timer_init();
 }
 
 static void __init smdk2413_machine_init(void)
@@ -159,6 +164,6 @@ MACHINE_START(SMDK2413, "SMDK2413")
 	.init_irq	= s3c2412_init_irq,
 	.map_io		= smdk2413_map_io,
 	.init_machine	= smdk2413_machine_init,
-	.init_time	= samsung_timer_init,
+	.init_time	= smdk2413_init_time,
 	.restart	= s3c2412_restart,
 MACHINE_END
