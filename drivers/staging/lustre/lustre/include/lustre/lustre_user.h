@@ -265,13 +265,11 @@ struct ost_id {
 
 #define MAX_OBD_NAME 128 /* If this changes, a NEW ioctl must be added */
 
-/* Hopefully O_LOV_DELAY_CREATE does not conflict with standard O_xxx flags.
- * Previously it was defined as 0100000000 and conflicts with FMODE_NONOTIFY
- * which was added since kernel 2.6.36, so we redefine it as 020000000.
- * To be compatible with old version's statically linked binary, finally we
- * define it as (020000000 | 0100000000).
- * */
-#define O_LOV_DELAY_CREATE      0120000000
+/* Define O_LOV_DELAY_CREATE to be a mask that is not useful for regular
+ * files, but are unlikely to be used in practice and are not harmful if
+ * used incorrectly.  O_NOCTTY and FASYNC are only meaningful for character
+ * devices and are safe for use on new files (See LU-812, LU-4209). */
+#define O_LOV_DELAY_CREATE	(O_NOCTTY | FASYNC)
 
 #define LL_FILE_IGNORE_LOCK     0x00000001
 #define LL_FILE_GROUP_LOCKED    0x00000002
@@ -1159,12 +1157,6 @@ struct hsm_progress {
 	__u32			padding;
 };
 
-/**
- * Use by copytool during any hsm request they handled.
- * This structure is initialized by llapi_hsm_copy_start()
- * which is an helper over the ioctl() interface
- * Store Lustre, internal use only, data.
- */
 struct hsm_copy {
 	__u64			hc_data_version;
 	__u16			hc_flags;

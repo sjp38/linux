@@ -158,10 +158,10 @@ typedef enum __device_msg_level {
 /*
  * Enum of context types for SendPacket
  */
-typedef enum _CONTEXT_TYPE {
-    CONTEXT_DATA_PACKET = 1,
-    CONTEXT_MGMT_PACKET
-} CONTEXT_TYPE;
+enum {
+	CONTEXT_DATA_PACKET = 1,
+	CONTEXT_MGMT_PACKET
+};
 
 /* RCB (Receive Control Block) */
 struct vnt_rcb {
@@ -179,10 +179,9 @@ struct vnt_usb_send_context {
 	void *pDevice;
 	struct sk_buff *pPacket;
 	struct urb *pUrb;
-	unsigned int uBufLen;
-	CONTEXT_TYPE Type;
 	struct ethhdr sEthHeader;
-	void *Next;
+	unsigned int uBufLen;
+	u8 type;
 	bool bBoolInUse;
 	unsigned char Data[MAX_TOTAL_SIZE_WITH_ALL_HEADERS];
 };
@@ -206,29 +205,10 @@ typedef struct _DEFAULT_CONFIG {
 /*
  * Structure to keep track of USB interrupt packets
  */
-typedef struct {
-    unsigned int            uDataLen;
-    u8 *           pDataBuf;
-  /* struct urb *pUrb; */
-    bool            bInUse;
-} INT_BUFFER, *PINT_BUFFER;
-
-/* 0:11A 1:11B 2:11G */
-typedef enum _VIA_BB_TYPE
-{
-    BB_TYPE_11A = 0,
-    BB_TYPE_11B,
-    BB_TYPE_11G
-} VIA_BB_TYPE, *PVIA_BB_TYPE;
-
-/* 0:11a, 1:11b, 2:11gb (only CCK in BasicRate), 3:11ga(OFDM in BasicRate) */
-typedef enum _VIA_PKT_TYPE
-{
-    PK_TYPE_11A = 0,
-    PK_TYPE_11B,
-    PK_TYPE_11GB,
-    PK_TYPE_11GA
-} VIA_PKT_TYPE, *PVIA_PKT_TYPE;
+struct vnt_interrupt_buffer {
+	u8 *data_buf;
+	bool in_use;
+};
 
 /*++ NDIS related */
 
@@ -437,8 +417,7 @@ struct vnt_private {
 	struct vnt_tx_pkt_info pkt_info[16];
 
 	/* Variables to track resources for the Interrupt In Pipe */
-	INT_BUFFER intBuf;
-	int fKillEventPollingThread;
+	struct vnt_interrupt_buffer int_buf;
 	int bEventAvailable;
 
 	/* default config from file by user setting */
@@ -549,8 +528,8 @@ struct vnt_private {
 	u8  byCWMaxMin;
 
 	/* Rate */
-	VIA_BB_TYPE byBBType; /* 0: 11A, 1:11B, 2:11G */
-	VIA_PKT_TYPE byPacketType; /* 0:11a 1:11b 2:11gb 3:11ga */
+	u8 byBBType; /* 0: 11A, 1:11B, 2:11G */
+	u8 byPacketType; /* 0:11a 1:11b 2:11gb 3:11ga */
 	u16 wBasicRate;
 	u8 byACKRate;
 	u8 byTopOFDMBasicRate;
@@ -588,7 +567,9 @@ struct vnt_private {
 	u16 wFragmentationThreshold;
 	u8 byShortRetryLimit;
 	u8 byLongRetryLimit;
-	CARD_OP_MODE eOPMode;
+
+	enum nl80211_iftype op_mode;
+
 	int bBSSIDFilter;
 	u16 wMaxTransmitMSDULifetime;
 	u8 abyBSSID[ETH_ALEN];
@@ -807,5 +788,6 @@ struct vnt_private {
                                  (fMP_DISCONNECTED | fMP_RESET_IN_PROGRESS | fMP_HALT_IN_PROGRESS | fMP_INIT_IN_PROGRESS | fMP_SURPRISE_REMOVED)) == 0)
 
 int device_alloc_frag_buf(struct vnt_private *, PSDeFragControlBlock pDeF);
+void vnt_configure_filter(struct vnt_private *);
 
 #endif

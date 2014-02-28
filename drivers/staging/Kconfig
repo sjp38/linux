@@ -146,4 +146,8 @@ source "drivers/staging/dgnc/Kconfig"
 
 source "drivers/staging/dgap/Kconfig"
 
+source "drivers/staging/gs_fpgaboot/Kconfig"
+
+source "drivers/staging/nokia_h4p/Kconfig"
+
 endif # STAGING

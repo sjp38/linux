@@ -21,7 +21,7 @@
 	};
 
 	soc {
-		display@di1 {
+		display1: display@di1 {
 			compatible = "fsl,imx-parallel-display";
 			crtcs = <&ipu 1>;
 			interface-pix-fmt = "bgr666";
@@ -52,6 +52,12 @@
 		brightness-levels = <0 4 8 16 32 64 128 255>;
 		default-brightness-level = <6>;
 		power-supply = <&reg_backlight>;
+	};
+
+	imx-drm {
+		compatible = "fsl,imx-drm";
+		crtcs = <&ipu 1>;
+		connectors = <&display1>;
 	};
 
 	leds {

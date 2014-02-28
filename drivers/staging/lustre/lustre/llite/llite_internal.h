@@ -296,13 +296,6 @@ int ll_xattr_cache_get(struct inode *inode,
 			size_t size,
 			__u64 valid);
 
-int ll_xattr_cache_update(struct inode *inode,
-			const char *name,
-			const char *newval,
-			size_t size,
-			__u64 valid,
-			int flags);
-
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.
@@ -828,7 +821,7 @@ int ll_lease_close(struct obd_client_handle *och, struct inode *inode,
 
 /* llite/dcache.c */
 
-int ll_dops_init(struct dentry *de, int block, int init_sa);
+int ll_d_init(struct dentry *de);
 extern struct dentry_operations ll_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
@@ -919,8 +912,6 @@ void vvp_write_complete(struct ccc_object *club, struct ccc_page *page);
 enum vvp_io_subtype {
 	/** normal IO */
 	IO_NORMAL,
-	/** io called from .sendfile */
-	IO_SENDFILE,
 	/** io started from splice_{read|write} */
 	IO_SPLICE
 };
@@ -931,10 +922,6 @@ struct vvp_io {
 	enum vvp_io_subtype    cui_io_subtype;
 
 	union {
-		struct {
-			read_actor_t      cui_actor;
-			void	     *cui_target;
-		} sendfile;
 		struct {
 			struct pipe_inode_info *cui_pipe;
 			unsigned int	    cui_flags;
@@ -981,7 +968,7 @@ struct vvp_io {
  * IO arguments for various VFS I/O interfaces.
  */
 struct vvp_io_args {
-	/** normal/sendfile/splice */
+	/** normal/splice */
 	enum vvp_io_subtype via_io_subtype;
 
 	union {
@@ -990,10 +977,6 @@ struct vvp_io_args {
 			struct iovec      *via_iov;
 			unsigned long      via_nrsegs;
 		} normal;
-		struct {
-			read_actor_t       via_actor;
-			void	      *via_target;
-		} sendfile;
 		struct {
 			struct pipe_inode_info  *via_pipe;
 			unsigned int       via_flags;
@@ -1320,7 +1303,8 @@ ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 	if (lli->lli_opendir_pid != current_pid())
 		return;
 
-	if (sai != NULL && ldd != NULL)
+	LASSERT(ldd != NULL);
+	if (sai != NULL)
 		ldd->lld_sa_generation = sai->sai_generation;
 }
 

@@ -35,6 +35,12 @@
 		status = "disabled";
 	};
 
+	imx-drm {
+		compatible = "fsl,imx-drm";
+		crtcs = <&ipu 1>;
+		connectors = <&disp1>, <&tve>;
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;

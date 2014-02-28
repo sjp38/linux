@@ -1,31 +1,31 @@
 /*
-   This is part of rtl818x pci OpenSource driver - v 0.1
-   Copyright (C) Andrea Merello 2004-2005  <andrea.merello@gmail.com>
-   Released under the terms of GPL (General Public License)
-
-   Parts of this driver are based on the GPL part of the official
-   Realtek driver.
-
-   Parts of this driver are based on the rtl8180 driver skeleton
-   from Patric Schenke & Andres Salomon.
-
-   Parts of this driver are based on the Intel Pro Wireless 2100 GPL driver.
-
-   Parts of BB/RF code are derived from David Young rtl8180 netbsd driver.
-
-   RSSI calc function from 'The Deuce'
-
-   Some ideas borrowed from the 8139too.c driver included in linux kernel.
-
-   We (I?) want to thanks the Authors of those projecs and also the
-   Ndiswrapper's project Authors.
-
-   A big big thanks goes also to Realtek corp. for their help in my attempt to
-   add RTL8185 and RTL8225 support, and to David Young also.
-
-   Power management interface routines.
-   Written by Mariusz Matuszek.
-*/
+ * This is part of rtl818x pci OpenSource driver - v 0.1
+ * Copyright (C) Andrea Merello 2004-2005  <andrea.merello@gmail.com>
+ * Released under the terms of GPL (General Public License)
+ *
+ * Parts of this driver are based on the GPL part of the official
+ * Realtek driver.
+ *
+ * Parts of this driver are based on the rtl8180 driver skeleton
+ * from Patric Schenke & Andres Salomon.
+ *
+ * Parts of this driver are based on the Intel Pro Wireless 2100 GPL driver.
+ *
+ * Parts of BB/RF code are derived from David Young rtl8180 netbsd driver.
+ *
+ * RSSI calc function from 'The Deuce'
+ *
+ * Some ideas borrowed from the 8139too.c driver included in linux kernel.
+ *
+ * We (I?) want to thanks the Authors of those projecs and also the
+ * Ndiswrapper's project Authors.
+ *
+ * A big big thanks goes also to Realtek corp. for their help in my attempt to
+ * add RTL8185 and RTL8225 support, and to David Young also.
+ *
+ * Power management interface routines.
+ * Written by Mariusz Matuszek.
+ */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -347,9 +347,9 @@ static void rtl8180_proc_init_one(struct net_device *dev)
 }
 
 /*
-  FIXME: check if we can use some standard already-existent
-  data type+functions in kernel
-*/
+ * FIXME: check if we can use some standard already-existent
+ * data type+functions in kernel.
+ */
 
 static short buffer_add(struct buffer **buffer, u32 *buf, dma_addr_t dma,
 			struct buffer **bufferhead)
@@ -1206,8 +1206,9 @@ static void rtl8180_rx(struct net_device *dev)
 	rx_desc_size = 8;
 
 	if ((*(priv->rxringtail)) & (1<<31)) {
-		/* we have got an RX int, but the descriptor
-		 * we are pointing is empty */
+		/* we have got an RX int, but the descriptor. we are pointing
+		 * is empty.
+		 */
 
 		priv->stats.rxnodata++;
 		priv->ieee80211->stats.rx_errors++;
@@ -1254,10 +1255,9 @@ static void rtl8180_rx(struct net_device *dev)
 		if (last) {
 			lastlen = ((*priv->rxringtail) & 0xfff);
 
-			/* if the last descriptor (that should
-			 * tell us the total packet len) tell
-			 * us something less than the descriptors
-			 * len we had until now, then there is some
+			/* if the last descriptor (that should tell us the total
+			 * packet len) tell us something less than the
+			 * descriptors len we had until now, then there is some
 			 * problem..
 			 * workaround to prevent kernel panic
 			 */
@@ -1293,11 +1293,11 @@ static void rtl8180_rx(struct net_device *dev)
 		priv->rx_prevlen += len;
 
 		if (priv->rx_prevlen > MAX_FRAG_THRESHOLD + 100) {
-			/* HW is probably passing several buggy frames
-			* without FD or LD flag set.
-			* Throw this garbage away to prevent skb
-			* memory exhausting
-			*/
+			/* HW is probably passing several buggy frames without
+			 * FD or LD flag set.
+			 * Throw this garbage away to prevent skb memory
+			 * exhausting
+			 */
 			if (!priv->rx_skb_complete)
 				dev_kfree_skb_any(priv->rx_skb);
 			priv->rx_skb_complete = 1;
@@ -1361,7 +1361,9 @@ static void rtl8180_rx(struct net_device *dev)
 			quality = 127 - quality;
 		priv->SignalQuality = quality;
 
-		stats.signal = (u8)quality; /*priv->wstats.qual.level = priv->SignalStrength; */
+		stats.signal = (u8)quality; /* priv->wstats.qual.level = priv->
+					     * SignalStrength;
+					     */
 		stats.signalstrength = RXAGC;
 		if (stats.signalstrength > 100)
 			stats.signalstrength = 100;
@@ -1402,14 +1404,17 @@ static void rtl8180_rx(struct net_device *dev)
 
 			priv->LastSignalStrengthInPercent = SignalStrengthIndex;
 			priv->Stats_SignalStrength = TranslateToDbm8185((u8)SignalStrengthIndex);
-		/*
-		 * We need more correct power of received packets and the  "SignalStrength" of RxStats is beautified,
-		 * so we record the correct power here.
-		 */
+			/*
+			 * We need more correct power of received packets and
+			 * the "SignalStrength" of RxStats is beautified,
+			 * so we record the correct power here.
+			 */
 			priv->Stats_SignalQuality = (long)(priv->Stats_SignalQuality * 5 + (long)priv->SignalQuality + 5) / 6;
 			priv->Stats_RecvSignalPower = (long)(priv->Stats_RecvSignalPower * 5 + priv->RecvSignalPower - 1) / 6;
 
-		/* Figure out which antenna that received the last packet. */
+			/* Figure out which antenna that received the last
+			 * packet.
+			 */
 			priv->LastRxPktAntenna = Antenna ? 1 : 0; /* 0: aux, 1: main. */
 			SwAntennaDiversityRxOk8185(dev, priv->SignalStrength);
 		}
@@ -1417,7 +1422,8 @@ static void rtl8180_rx(struct net_device *dev)
 		if (first) {
 			if (!priv->rx_skb_complete) {
 				/* seems that HW sometimes fails to receive and
-				   doesn't provide the last descriptor */
+				 * doesn't provide the last descriptor.
+				 */
 				dev_kfree_skb_any(priv->rx_skb);
 				priv->stats.rxnolast++;
 			}
@@ -1428,12 +1434,12 @@ static void rtl8180_rx(struct net_device *dev)
 			priv->rx_skb_complete = 0;
 			priv->rx_skb->dev = dev;
 		} else {
-			/* if we are here we should have already RXed
-			* the first frame.
-			* If we get here and the skb is not allocated then
-			* we have just throw out garbage (skb not allocated)
-			* and we are still rxing garbage....
-			*/
+			/* if we are here we should have already RXed the first
+			 * frame.
+			 * If we get here and the skb is not allocated then
+			 * we have just throw out garbage (skb not allocated)
+			 * and we are still rxing garbage....
+			 */
 			if (!priv->rx_skb_complete) {
 
 				tmp_skb = dev_alloc_skb(priv->rx_skb->len+len+2);
@@ -1547,11 +1553,10 @@ static void rtl8180_hard_data_xmit(struct sk_buff *skb, struct net_device *dev,
 
 	rate = ieeerate2rtlrate(rate);
 	/*
-	 * This function doesn't require lock because we make
-	 * sure it's called with the tx_lock already acquired.
-	 * this come from the kernel's hard_xmit callback (through
-	 * the ieee stack, or from the try_wake_queue (again through
-	 * the ieee stack.
+	 * This function doesn't require lock because we make sure it's called
+	 * with the tx_lock already acquired.
+	 * This come from the kernel's hard_xmit callback (through the ieee
+	 * stack, or from the try_wake_queue (again through the ieee stack.
 	 */
 	priority = AC2Q(skb->priority);
 	spin_lock_irqsave(&priv->tx_lock, flags);
@@ -1613,55 +1618,6 @@ static int rtl8180_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
-/* longpre 144+48 shortpre 72+24 */
-u16 rtl8180_len2duration(u32 len, short rate, short *ext)
-{
-	u16 duration;
-	u16 drift;
-	*ext = 0;
-
-	switch (rate) {
-	case 0: /* 1mbps */
-		*ext = 0;
-		duration = ((len+4)<<4) / 0x2;
-		drift = ((len+4)<<4) % 0x2;
-		if (drift == 0)
-			break;
-		duration++;
-		break;
-	case 1: /* 2mbps */
-		*ext = 0;
-		duration = ((len+4)<<4) / 0x4;
-		drift = ((len+4)<<4) % 0x4;
-		if (drift == 0)
-			break;
-		duration++;
-		break;
-	case 2: /* 5.5mbps */
-		*ext = 0;
-		duration = ((len+4)<<4) / 0xb;
-		drift = ((len+4)<<4) % 0xb;
-		if (drift == 0)
-			break;
-		duration++;
-		break;
-	default:
-	case 3: /* 11mbps */
-		*ext = 0;
-		duration = ((len+4)<<4) / 0x16;
-		drift = ((len+4)<<4) % 0x16;
-		if (drift == 0)
-			break;
-		duration++;
-		if (drift > 6)
-			break;
-		*ext = 1;
-		break;
-	}
-
-	return duration;
-}
-
 static void rtl8180_prepare_beacon(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
@@ -1681,9 +1637,9 @@ static void rtl8180_prepare_beacon(struct net_device *dev)
 }
 
 /*
- * This function do the real dirty work: it enqueues a TX command
- * descriptor in the ring buffer, copyes the frame in a TX buffer
- * and kicks the NIC to ensure it does the DMA transfer.
+ * This function do the real dirty work: it enqueues a TX command descriptor in
+ * the ring buffer, copyes the frame in a TX buffer and kicks the NIC to ensure
+ * it does the DMA transfer.
  */
 short rtl8180_tx(struct net_device *dev, u8 *txbuf, int len, int priority,
 		 short morefrag, short descfrag, int rate)
@@ -2225,7 +2181,7 @@ static void watch_dog_adaptive(unsigned long data)
 	add_timer(&priv->watch_dog_timer);
 }
 
-static CHANNEL_LIST ChannelPlan[] = {
+static struct rtl8187se_channel_list channel_plan_list[] = {
 	{{1,2,3,4,5,6,7,8,9,10,11,36,40,44,48,52,56,60,64},19},		/* FCC */
 	{{1,2,3,4,5,6,7,8,9,10,11},11},					/* IC */
 	{{1,2,3,4,5,6,7,8,9,10,11,12,13,36,40,44,48,52,56,60,64},21},	/* ETSI */
@@ -2261,13 +2217,13 @@ static void rtl8180_set_channel_map(u8 channel_plan,
 		{
 			Dot11d_Init(ieee);
 			ieee->bGlobalDomain = false;
-			if (ChannelPlan[channel_plan].Len != 0) {
+			if (channel_plan_list[channel_plan].len != 0) {
 				/* Clear old channel map */
 				memset(GET_DOT11D_INFO(ieee)->channel_map, 0, sizeof(GET_DOT11D_INFO(ieee)->channel_map));
 				/* Set new channel map */
-				for (i = 0; i < ChannelPlan[channel_plan].Len; i++) {
-					if (ChannelPlan[channel_plan].Channel[i] <= 14)
-						GET_DOT11D_INFO(ieee)->channel_map[ChannelPlan[channel_plan].Channel[i]] = 1;
+				for (i = 0; i < channel_plan_list[channel_plan].len; i++) {
+					if (channel_plan_list[channel_plan].channel[i] <= 14)
+						GET_DOT11D_INFO(ieee)->channel_map[channel_plan_list[channel_plan].channel[i]] = 1;
 				}
 			}
 			break;
@@ -2300,15 +2256,15 @@ static void rtl8180_set_channel_map(u8 channel_plan,
 void GPIOChangeRFWorkItemCallBack(struct work_struct *work);
 
 /* YJ,add,080828 */
-static void rtl8180_statistics_init(struct Stats *pstats)
+static void rtl8180_statistics_init(struct stats *pstats)
 {
-	memset(pstats, 0, sizeof(struct Stats));
+	memset(pstats, 0, sizeof(struct stats));
 }
 
-static void rtl8180_link_detect_init(plink_detect_t plink_detect)
+static void rtl8180_link_detect_init(struct link_detect_t *plink_detect)
 {
-	memset(plink_detect, 0, sizeof(link_detect_t));
-	plink_detect->SlotNum = DEFAULT_SLOT_NUM;
+	memset(plink_detect, 0, sizeof(struct link_detect_t));
+	plink_detect->slot_num = DEFAULT_SLOT_NUM;
 }
 
 /* YJ,add,080828,end */
@@ -2812,9 +2768,9 @@ void rtl8180_start_tx_beacon(struct net_device *dev)
 	word  = read_nic_word(dev, BintrItv);
 	word &= ~BintrItv_BintrItv;
 	word |= 1000; /* priv->ieee80211->current_network.beacon_interval *
-		((priv->txbeaconcount > 1)?(priv->txbeaconcount-1):1);
-	// FIXME: check if correct ^^ worked with 0x3e8;
-	*/
+		       * ((priv->txbeaconcount > 1)?(priv->txbeaconcount-1):1);
+		       * FIXME: check if correct ^^ worked with 0x3e8;
+		       */
 	write_nic_word(dev, BintrItv, word);
 
 	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
@@ -2890,23 +2846,23 @@ static void MgntLinkKeepAlive(struct r8180_priv *priv)
 		 */
 
 		if ((priv->keepAliveLevel == 2) ||
-			(priv->link_detect.LastNumTxUnicast == priv->NumTxUnicast &&
-			priv->link_detect.LastNumRxUnicast == priv->ieee80211->NumRxUnicast)
+			(priv->link_detect.last_num_tx_unicast == priv->NumTxUnicast &&
+			priv->link_detect.last_num_rx_unicast == priv->ieee80211->NumRxUnicast)
 			) {
-			priv->link_detect.IdleCount++;
+			priv->link_detect.idle_count++;
 
 			/*
 			 * Send a Keep-Alive packet packet to AP if we had been idle for a while.
 			 */
-			if (priv->link_detect.IdleCount >= ((KEEP_ALIVE_INTERVAL / CHECK_FOR_HANG_PERIOD)-1)) {
-				priv->link_detect.IdleCount = 0;
+			if (priv->link_detect.idle_count >= ((KEEP_ALIVE_INTERVAL / CHECK_FOR_HANG_PERIOD)-1)) {
+				priv->link_detect.idle_count = 0;
 				ieee80211_sta_ps_send_null_frame(priv->ieee80211, false);
 			}
 		} else {
-			priv->link_detect.IdleCount = 0;
+			priv->link_detect.idle_count = 0;
 		}
-		priv->link_detect.LastNumTxUnicast = priv->NumTxUnicast;
-		priv->link_detect.LastNumRxUnicast = priv->ieee80211->NumRxUnicast;
+		priv->link_detect.last_num_tx_unicast = priv->NumTxUnicast;
+		priv->link_detect.last_num_rx_unicast = priv->ieee80211->NumRxUnicast;
 	}
 }
 
@@ -2927,10 +2883,10 @@ void rtl8180_watch_dog(struct net_device *dev)
 	}
 	/* YJ,add,080828,for link state check */
 	if ((priv->ieee80211->state == IEEE80211_LINKED) && (priv->ieee80211->iw_mode == IW_MODE_INFRA)) {
-		SlotIndex = (priv->link_detect.SlotIndex++) % priv->link_detect.SlotNum;
-		priv->link_detect.RxFrameNum[SlotIndex] = priv->ieee80211->NumRxDataInPeriod + priv->ieee80211->NumRxBcnInPeriod;
-		for (i = 0; i < priv->link_detect.SlotNum; i++)
-			TotalRxNum += priv->link_detect.RxFrameNum[i];
+		SlotIndex = (priv->link_detect.slot_index++) % priv->link_detect.slot_num;
+		priv->link_detect.rx_frame_num[SlotIndex] = priv->ieee80211->NumRxDataInPeriod + priv->ieee80211->NumRxBcnInPeriod;
+		for (i = 0; i < priv->link_detect.slot_num; i++)
+			TotalRxNum += priv->link_detect.rx_frame_num[i];
 
 		if (TotalRxNum == 0) {
 			priv->ieee80211->state = IEEE80211_ASSOCIATING;
@@ -2945,13 +2901,13 @@ void rtl8180_watch_dog(struct net_device *dev)
 	LeisurePSLeave(priv);
 
 	if (priv->ieee80211->state == IEEE80211_LINKED) {
-		priv->link_detect.NumRxOkInPeriod = priv->ieee80211->NumRxDataInPeriod;
-		if (priv->link_detect.NumRxOkInPeriod > 666 ||
-			priv->link_detect.NumTxOkInPeriod > 666) {
+		priv->link_detect.num_rx_ok_in_period = priv->ieee80211->NumRxDataInPeriod;
+		if (priv->link_detect.num_rx_ok_in_period > 666 ||
+			priv->link_detect.num_tx_ok_in_period > 666) {
 			bBusyTraffic = true;
 		}
-		if (((priv->link_detect.NumRxOkInPeriod + priv->link_detect.NumTxOkInPeriod) > 8)
-			|| (priv->link_detect.NumRxOkInPeriod > 2)) {
+		if (((priv->link_detect.num_rx_ok_in_period + priv->link_detect.num_tx_ok_in_period) > 8)
+			|| (priv->link_detect.num_rx_ok_in_period > 2)) {
 			bEnterPS = false;
 		} else
 			bEnterPS = true;
@@ -2962,9 +2918,9 @@ void rtl8180_watch_dog(struct net_device *dev)
 			LeisurePSLeave(priv);
 	} else
 		LeisurePSLeave(priv);
-	priv->link_detect.bBusyTraffic = bBusyTraffic;
-	priv->link_detect.NumRxOkInPeriod = 0;
-	priv->link_detect.NumTxOkInPeriod = 0;
+	priv->link_detect.b_busy_traffic = bBusyTraffic;
+	priv->link_detect.num_rx_ok_in_period = 0;
+	priv->link_detect.num_tx_ok_in_period = 0;
 	priv->ieee80211->NumRxDataInPeriod = 0;
 	priv->ieee80211->NumRxBcnInPeriod = 0;
 }
@@ -3586,7 +3542,7 @@ static irqreturn_t rtl8180_interrupt(int irq, void *netdev)
 	}
 
 	if (inta & ISR_THPDOK) { /* High priority tx ok */
-		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
+		priv->link_detect.num_tx_ok_in_period++; /* YJ,add,080828 */
 		priv->stats.txhpokint++;
 		rtl8180_tx_isr(dev, HI_PRIORITY, 0);
 	}
@@ -3649,14 +3605,14 @@ static irqreturn_t rtl8180_interrupt(int irq, void *netdev)
 		priv->stats.txoverflow++;
 
 	if (inta & ISR_TNPDOK) { /* Normal priority tx ok */
-		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
+		priv->link_detect.num_tx_ok_in_period++; /* YJ,add,080828 */
 		priv->stats.txnpokint++;
 		rtl8180_tx_isr(dev, NORM_PRIORITY, 0);
 		rtl8180_try_wake_queue(dev, NORM_PRIORITY);
 	}
 
 	if (inta & ISR_TLPDOK) { /* Low priority tx ok */
-		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
+		priv->link_detect.num_tx_ok_in_period++; /* YJ,add,080828 */
 		priv->stats.txlpokint++;
 		rtl8180_tx_isr(dev, LOW_PRIORITY, 0);
 		rtl8180_try_wake_queue(dev, LOW_PRIORITY);
@@ -3664,14 +3620,14 @@ static irqreturn_t rtl8180_interrupt(int irq, void *netdev)
 
 	if (inta & ISR_TBKDOK) { /* corresponding to BK_PRIORITY */
 		priv->stats.txbkpokint++;
-		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
+		priv->link_detect.num_tx_ok_in_period++; /* YJ,add,080828 */
 		rtl8180_tx_isr(dev, BK_PRIORITY, 0);
 		rtl8180_try_wake_queue(dev, BE_PRIORITY);
 	}
 
 	if (inta & ISR_TBEDOK) { /* corresponding to BE_PRIORITY */
 		priv->stats.txbeperr++;
-		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
+		priv->link_detect.num_tx_ok_in_period++; /* YJ,add,080828 */
 		rtl8180_tx_isr(dev, BE_PRIORITY, 0);
 		rtl8180_try_wake_queue(dev, BE_PRIORITY);
 	}
