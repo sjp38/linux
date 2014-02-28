@@ -5,6 +5,8 @@ dependencies
 next/fixes-non-critical
 	patch
 		irqchip: gic: use dmb ishst instead of dsb when raising a softirq
+		MAINTAINERS: ARM: clps711x: Use regex patterns to involve all CLPS711X drivers
+		ARM: clps711x: autcpu12: Fix incorrect NAND CLE GPIO
 
 next/cleanup
 	cleanup/timex-removal
@@ -17,6 +19,9 @@ next/cleanup
 		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15
 	efm32/cleanup
 		git://git.pengutronix.de/git/ukl/linux.git tags/efm32-next
+	patch
+		ARM: clps711x: Update defconfig
+		ARM: clps711x: Remove EP72XX_ROM_BOOT option
 
 next/soc
 	qcom/soc
@@ -27,6 +32,10 @@ next/soc
 	mvebu/soc-3xx
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3xx-3.15
 		contains mvebu/soc
+	patch
+		ARM: clps711x: Migrate CLPS711X subarch to the new irqchip driver
+		ARM: dts: clps711x: Add bindings documentation for CLPS711X irqchip driver
+		ARM: clps711x: Add CLPS711X irqchip driver
 	
 next/boards
 	renesas/boards
