@@ -20,7 +20,6 @@
  */
 
 #include <linux/input.h>
-#include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/export.h>
@@ -167,13 +166,13 @@ static int snd_hda_do_attach(struct hda_beep *beep)
 	input_dev->evbit[0] = BIT_MASK(EV_SND);
 	input_dev->sndbit[0] = BIT_MASK(SND_BELL) | BIT_MASK(SND_TONE);
 	input_dev->event = snd_hda_beep_event;
-	input_dev->dev.parent = &codec->bus->pci->dev;
+	input_dev->dev.parent = &codec->dev;
 	input_set_drvdata(input_dev, beep);
 
 	err = input_register_device(input_dev);
 	if (err < 0) {
 		input_free_device(input_dev);
-		printk(KERN_INFO "hda_beep: unable to register input device\n");
+		codec_err(codec, "hda_beep: unable to register input device\n");
 		return err;
 	}
 	beep->dev = input_dev;
