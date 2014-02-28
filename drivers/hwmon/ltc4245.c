@@ -95,7 +95,7 @@ static void ltc4245_update_gpios(struct device *dev)
 	 * readings as stale by setting them to -EAGAIN
 	 */
 	if (time_after(jiffies, data->last_updated + 5 * HZ)) {
-		dev_dbg(&client->dev, "Marking GPIOs invalid\n");
+		dev_dbg(dev, "Marking GPIOs invalid\n");
 		for (i = 0; i < ARRAY_SIZE(data->gpios); i++)
 			data->gpios[i] = -EAGAIN;
 	}
@@ -141,7 +141,7 @@ static struct ltc4245_data *ltc4245_update_device(struct device *dev)
 
 	if (time_after(jiffies, data->last_updated + HZ) || !data->valid) {
 
-		dev_dbg(&client->dev, "Starting ltc4245 update\n");
+		dev_dbg(dev, "Starting ltc4245 update\n");
 
 		/* Read control registers -- 0x00 to 0x07 */
 		for (i = 0; i < ARRAY_SIZE(data->cregs); i++) {
@@ -470,19 +470,15 @@ static void ltc4245_sysfs_add_groups(struct ltc4245_data *data)
 static bool ltc4245_use_extra_gpios(struct i2c_client *client)
 {
 	struct ltc4245_platform_data *pdata = dev_get_platdata(&client->dev);
-#ifdef CONFIG_OF
 	struct device_node *np = client->dev.of_node;
-#endif
 
 	/* prefer platform data */
 	if (pdata)
 		return pdata->use_extra_gpios;
 
-#ifdef CONFIG_OF
 	/* fallback on OF */
 	if (of_find_property(np, "ltc4245,use-extra-gpios", NULL))
 		return true;
-#endif
 
 	return false;
 }
@@ -512,24 +508,10 @@ static int ltc4245_probe(struct i2c_client *client,
 	/* Add sysfs hooks */
 	ltc4245_sysfs_add_groups(data);
 
-	hwmon_dev = hwmon_device_register_with_groups(&client->dev,
-						      client->name, data,
-						      data->groups);
-	if (IS_ERR(hwmon_dev))
-		return PTR_ERR(hwmon_dev);
-
-	i2c_set_clientdata(client, hwmon_dev);
-
-	return 0;
-}
-
-static int ltc4245_remove(struct i2c_client *client)
-{
-	struct device *hwmon_dev = i2c_get_clientdata(client);
-
-	hwmon_device_unregister(hwmon_dev);
-
-	return 0;
+	hwmon_dev = devm_hwmon_device_register_with_groups(&client->dev,
+							   client->name, data,
+							   data->groups);
+	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
 static const struct i2c_device_id ltc4245_id[] = {
@@ -544,7 +526,6 @@ static struct i2c_driver ltc4245_driver = {
 		.name	= "ltc4245",
 	},
 	.probe		= ltc4245_probe,
-	.remove		= ltc4245_remove,
 	.id_table	= ltc4245_id,
 };
 
