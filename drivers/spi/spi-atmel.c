@@ -9,7 +9,6 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -992,13 +991,6 @@ static int atmel_spi_setup(struct spi_device *spi)
 	int			ret;
 
 	as = spi_master_get_devdata(spi->master);
-
-	if (spi->chip_select > spi->master->num_chipselect) {
-		dev_dbg(&spi->dev,
-				"setup: invalid chipselect %u (%u defined)\n",
-				spi->chip_select, spi->master->num_chipselect);
-		return -EINVAL;
-	}
 
 	/* see notes above re chipselect */
 	if (!atmel_spi_is_v2(as)

@@ -22,7 +22,6 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-direction.h>
 #include <linux/dma-mapping.h>
-#include <linux/sirfsoc_dma.h>
 
 #define DRIVER_NAME "sirfsoc_spi"
 
@@ -459,11 +458,6 @@ spi_sirfsoc_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 		regval |= SIRFSOC_SPI_TRAN_DAT_FORMAT_8;
 		sspi->rx_word = spi_sirfsoc_rx_word_u8;
 		sspi->tx_word = spi_sirfsoc_tx_word_u8;
-		txfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_BYTE;
-		rxfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_BYTE;
-		sspi->word_width = 1;
 		break;
 	case 12:
 	case 16:
@@ -471,25 +465,21 @@ spi_sirfsoc_setup_transfer(struct spi_device *spi, struct spi_transfer *t)
 			SIRFSOC_SPI_TRAN_DAT_FORMAT_16;
 		sspi->rx_word = spi_sirfsoc_rx_word_u16;
 		sspi->tx_word = spi_sirfsoc_tx_word_u16;
-		txfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_WORD;
-		rxfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_WORD;
-		sspi->word_width = 2;
 		break;
 	case 32:
 		regval |= SIRFSOC_SPI_TRAN_DAT_FORMAT_32;
 		sspi->rx_word = spi_sirfsoc_rx_word_u32;
 		sspi->tx_word = spi_sirfsoc_tx_word_u32;
-		txfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_DWORD;
-		rxfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
-					SIRFSOC_SPI_FIFO_WIDTH_DWORD;
-		sspi->word_width = 4;
 		break;
 	default:
 		BUG();
 	}
+
+	sspi->word_width = DIV_ROUND_UP(bits_per_word, 8);
+	txfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
+					   sspi->word_width;
+	rxfifo_ctrl = SIRFSOC_SPI_FIFO_THD(SIRFSOC_SPI_FIFO_SIZE / 2) |
+					   sspi->word_width;
 
 	if (!(spi->mode & SPI_CS_HIGH))
 		regval |= SIRFSOC_SPI_CS_IDLE_STAT;
@@ -548,8 +538,6 @@ static int spi_sirfsoc_probe(struct platform_device *pdev)
 	struct spi_master *master;
 	struct resource *mem_res;
 	int num_cs, cs_gpio, irq;
-	u32 rx_dma_ch, tx_dma_ch;
-	dma_cap_mask_t dma_cap_mask;
 	int i;
 	int ret;
 
@@ -557,20 +545,6 @@ static int spi_sirfsoc_probe(struct platform_device *pdev)
 			"sirf,spi-num-chipselects", &num_cs);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Unable to get chip select number\n");
-		goto err_cs;
-	}
-
-	ret = of_property_read_u32(pdev->dev.of_node,
-			"sirf,spi-dma-rx-channel", &rx_dma_ch);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Unable to get rx dma channel\n");
-		goto err_cs;
-	}
-
-	ret = of_property_read_u32(pdev->dev.of_node,
-			"sirf,spi-dma-tx-channel", &tx_dma_ch);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Unable to get tx dma channel\n");
 		goto err_cs;
 	}
 
@@ -637,18 +611,13 @@ static int spi_sirfsoc_probe(struct platform_device *pdev)
 	sspi->bitbang.master->dev.of_node = pdev->dev.of_node;
 
 	/* request DMA channels */
-	dma_cap_zero(dma_cap_mask);
-	dma_cap_set(DMA_INTERLEAVE, dma_cap_mask);
-
-	sspi->rx_chan = dma_request_channel(dma_cap_mask, (dma_filter_fn)sirfsoc_dma_filter_id,
-		(void *)rx_dma_ch);
+	sspi->rx_chan = dma_request_slave_channel(&pdev->dev, "rx");
 	if (!sspi->rx_chan) {
 		dev_err(&pdev->dev, "can not allocate rx dma channel\n");
 		ret = -ENODEV;
 		goto free_master;
 	}
-	sspi->tx_chan = dma_request_channel(dma_cap_mask, (dma_filter_fn)sirfsoc_dma_filter_id,
-		(void *)tx_dma_ch);
+	sspi->tx_chan = dma_request_slave_channel(&pdev->dev, "tx");
 	if (!sspi->tx_chan) {
 		dev_err(&pdev->dev, "can not allocate tx dma channel\n");
 		ret = -ENODEV;
@@ -724,7 +693,7 @@ static int  spi_sirfsoc_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int spi_sirfsoc_suspend(struct device *dev)
 {
 	struct spi_master *master = dev_get_drvdata(dev);
@@ -747,12 +716,10 @@ static int spi_sirfsoc_resume(struct device *dev)
 
 	return 0;
 }
-
-static const struct dev_pm_ops spi_sirfsoc_pm_ops = {
-	.suspend = spi_sirfsoc_suspend,
-	.resume = spi_sirfsoc_resume,
-};
 #endif
+
+static SIMPLE_DEV_PM_OPS(spi_sirfsoc_pm_ops, spi_sirfsoc_suspend,
+			 spi_sirfsoc_resume);
 
 static const struct of_device_id spi_sirfsoc_of_match[] = {
 	{ .compatible = "sirf,prima2-spi", },
@@ -765,9 +732,7 @@ static struct platform_driver spi_sirfsoc_driver = {
 	.driver = {
 		.name = DRIVER_NAME,
 		.owner = THIS_MODULE,
-#ifdef CONFIG_PM
 		.pm     = &spi_sirfsoc_pm_ops,
-#endif
 		.of_match_table = spi_sirfsoc_of_match,
 	},
 	.probe = spi_sirfsoc_probe,

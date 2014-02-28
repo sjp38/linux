@@ -11,7 +11,6 @@
 #include <linux/spi/spi.h>
 #include <linux/module.h>
 #include <linux/delay.h>
-#include <linux/init.h>
 #include <linux/io.h>
 #include <linux/of.h>
 
@@ -37,7 +36,6 @@ struct octeon_spi_setup {
 	u32 max_speed_hz;
 	u8 chip_select;
 	u8 mode;
-	u8 bits_per_word;
 };
 
 static void octeon_spi_wait_ready(struct octeon_spi *p)
@@ -179,7 +177,8 @@ static int octeon_spi_transfer_one_message(struct spi_master *master,
 	}
 
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
-		bool last_xfer = &xfer->transfer_list == msg->transfers.prev;
+		bool last_xfer = list_is_last(&xfer->transfer_list,
+					      &msg->transfers);
 		int r = octeon_spi_do_transfer(p, msg, xfer, last_xfer);
 		if (r < 0) {
 			status = r;
@@ -203,7 +202,6 @@ static struct octeon_spi_setup *octeon_spi_new_setup(struct spi_device *spi)
 	setup->max_speed_hz = spi->max_speed_hz;
 	setup->chip_select = spi->chip_select;
 	setup->mode = spi->mode;
-	setup->bits_per_word = spi->bits_per_word;
 	return setup;
 }
 
@@ -257,8 +255,6 @@ static int octeon_spi_probe(struct platform_device *pdev)
 	p->register_base = (u64)devm_ioremap(&pdev->dev, res_mem->start,
 					     resource_size(res_mem));
 
-	/* Dynamic bus numbering */
-	master->bus_num = -1;
 	master->num_chipselect = 4;
 	master->mode_bits = SPI_CPHA |
 			    SPI_CPOL |
