@@ -88,17 +88,10 @@ out:
 static int br_dev_init(struct net_device *dev)
 {
 	struct net_bridge *br = netdev_priv(dev);
-	int i;
 
-	br->stats = alloc_percpu(struct pcpu_sw_netstats);
+	br->stats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 	if (!br->stats)
 		return -ENOMEM;
-
-	for_each_possible_cpu(i) {
-		struct pcpu_sw_netstats *br_dev_stats;
-		br_dev_stats = per_cpu_ptr(br->stats, i);
-		u64_stats_init(&br_dev_stats->syncp);
-	}
 
 	return 0;
 }
@@ -374,7 +367,7 @@ void br_dev_setup(struct net_device *dev)
 	br->bridge_id.prio[0] = 0x80;
 	br->bridge_id.prio[1] = 0x00;
 
-	memcpy(br->group_addr, eth_reserved_addr_base, ETH_ALEN);
+	ether_addr_copy(br->group_addr, eth_reserved_addr_base);
 
 	br->stp_enabled = BR_NO_STP;
 	br->group_fwd_mask = BR_GROUPFWD_DEFAULT;

@@ -768,11 +768,11 @@ static int ad_lacpdu_send(struct port *port)
 
 	lacpdu_header = (struct lacpdu_header *)skb_put(skb, length);
 
-	memcpy(lacpdu_header->hdr.h_dest, lacpdu_mcast_addr, ETH_ALEN);
+	ether_addr_copy(lacpdu_header->hdr.h_dest, lacpdu_mcast_addr);
 	/* Note: source address is set to be the member's PERMANENT address,
 	 * because we use it to identify loopback lacpdus in receive.
 	 */
-	memcpy(lacpdu_header->hdr.h_source, slave->perm_hwaddr, ETH_ALEN);
+	ether_addr_copy(lacpdu_header->hdr.h_source, slave->perm_hwaddr);
 	lacpdu_header->hdr.h_proto = PKT_TYPE_LACPDU;
 
 	lacpdu_header->lacpdu = port->lacpdu;
@@ -810,11 +810,11 @@ static int ad_marker_send(struct port *port, struct bond_marker *marker)
 
 	marker_header = (struct bond_marker_header *)skb_put(skb, length);
 
-	memcpy(marker_header->hdr.h_dest, lacpdu_mcast_addr, ETH_ALEN);
+	ether_addr_copy(marker_header->hdr.h_dest, lacpdu_mcast_addr);
 	/* Note: source address is set to be the member's PERMANENT address,
 	 * because we use it to identify loopback MARKERs in receive.
 	 */
-	memcpy(marker_header->hdr.h_source, slave->perm_hwaddr, ETH_ALEN);
+	ether_addr_copy(marker_header->hdr.h_source, slave->perm_hwaddr);
 	marker_header->hdr.h_proto = PKT_TYPE_LACPDU;
 
 	marker_header->marker = *marker;
@@ -1079,7 +1079,8 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 			/* detect loopback situation */
 			if (MAC_ADDRESS_EQUAL(&(lacpdu->actor_system),
 					      &(port->actor_system))) {
-				pr_err("%s: An illegal loopback occurred on adapter (%s).\nCheck the configuration to verify that all adapters are connected to 802.3ad compliant switch ports\n",
+				pr_err("%s: An illegal loopback occurred on adapter (%s)\n"
+				       "Check the configuration to verify that all adapters are connected to 802.3ad compliant switch ports\n",
 				       port->slave->bond->dev->name,
 				       port->slave->dev->name);
 				return;
@@ -1948,7 +1949,7 @@ void bond_3ad_unbind_slave(struct slave *slave)
 			 * new aggregator
 			 */
 			if ((new_aggregator) && ((!new_aggregator->lag_ports) || ((new_aggregator->lag_ports == port) && !new_aggregator->lag_ports->next_port_in_aggregator))) {
-				pr_debug("Some port(s) related to LAG %d - replaceing with LAG %d\n",
+				pr_debug("Some port(s) related to LAG %d - replacing with LAG %d\n",
 					 aggregator->aggregator_identifier,
 					 new_aggregator->aggregator_identifier);
 
@@ -2310,9 +2311,9 @@ void bond_3ad_handle_link_change(struct slave *slave, char link)
 		port->actor_oper_port_key = (port->actor_admin_port_key &=
 					     ~AD_SPEED_KEY_BITS);
 	}
-	pr_debug("Port %d changed link status to %s",
-		port->actor_port_number,
-		(link == BOND_LINK_UP) ? "UP" : "DOWN");
+	pr_debug("Port %d changed link status to %s\n",
+		 port->actor_port_number,
+		 link == BOND_LINK_UP ? "UP" : "DOWN");
 	/* there is no need to reselect a new aggregator, just signal the
 	 * state machines to reinitialize
 	 */
@@ -2390,17 +2391,16 @@ int __bond_3ad_get_active_agg_info(struct bonding *bond,
 		}
 	}
 
-	if (aggregator) {
-		ad_info->aggregator_id = aggregator->aggregator_identifier;
-		ad_info->ports = aggregator->num_of_ports;
-		ad_info->actor_key = aggregator->actor_oper_aggregator_key;
-		ad_info->partner_key = aggregator->partner_oper_aggregator_key;
-		memcpy(ad_info->partner_system,
-		       aggregator->partner_system.mac_addr_value, ETH_ALEN);
-		return 0;
-	}
+	if (!aggregator)
+		return -1;
 
-	return -1;
+	ad_info->aggregator_id = aggregator->aggregator_identifier;
+	ad_info->ports = aggregator->num_of_ports;
+	ad_info->actor_key = aggregator->actor_oper_aggregator_key;
+	ad_info->partner_key = aggregator->partner_oper_aggregator_key;
+	ether_addr_copy(ad_info->partner_system,
+			aggregator->partner_system.mac_addr_value);
+	return 0;
 }
 
 /* Wrapper used to hold bond->lock so no slave manipulation can occur */
