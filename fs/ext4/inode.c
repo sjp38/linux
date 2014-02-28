@@ -514,6 +514,12 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		  "logical block %lu\n", inode->i_ino, flags, map->m_len,
 		  (unsigned long) map->m_lblk);
 
+	/*
+	 * ext4_map_blocks returns an int, and m_len is an unsigned int
+	 */
+	if (unlikely(map->m_len > INT_MAX))
+		map->m_len = INT_MAX;
+
 	/* Lookup extent status tree firstly */
 	if (ext4_es_lookup_extent(inode, map->m_lblk, &es)) {
 		ext4_es_lru_add(inode);
@@ -3608,6 +3614,12 @@ int ext4_punch_hole(struct inode *inode, loff_t offset, loff_t length)
 	up_write(&EXT4_I(inode)->i_data_sem);
 	if (IS_SYNC(inode))
 		ext4_handle_sync(handle);
+
+	/* Now release the pages again to reduce race window */
+	if (last_block_offset > first_block_offset)
+		truncate_pagecache_range(inode, first_block_offset,
+					 last_block_offset);
+
 	inode->i_mtime = inode->i_ctime = ext4_current_time(inode);
 	ext4_mark_inode_dirty(handle, inode);
 out_stop:
