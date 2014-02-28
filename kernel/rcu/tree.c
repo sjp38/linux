@@ -12,8 +12,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * Copyright IBM Corporation, 2008
  *
@@ -58,8 +58,6 @@
 #include <linux/suspend.h>
 
 #include "tree.h"
-#include <trace/events/rcu.h>
-
 #include "rcu.h"
 
 MODULE_ALIAS("rcutree");
@@ -294,6 +292,24 @@ void rcutorture_record_test_transition(void)
 	rcutorture_vernum = 0;
 }
 EXPORT_SYMBOL_GPL(rcutorture_record_test_transition);
+
+/*
+ * Send along grace-period-related data for rcutorture diagnostics.
+ */
+void rcutorture_get_gp_data(enum rcutorture_type test_type, int *flags,
+			    unsigned long *gpnum, unsigned long *completed)
+{
+	if (test_type == RTORT_SRCU || test_type == RTORT_BUSTED) {
+		*flags = 0;
+		*gpnum = 0;
+		*completed = 0;
+		return;
+	}
+	*flags = ACCESS_ONCE(rcu_state->gp_flags);
+	*gpnum = ACCESS_ONCE(rcu_state->gpnum);
+	*completed = ACCESS_ONCE(rcu_state->completed);
+}
+EXPORT_SYMBOL_GPL(rcutorture_get_gp_data);
 
 /*
  * Record the number of writer passes through the current rcutorture test.
@@ -837,7 +853,7 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 	 * to the next.  Only do this for the primary flavor of RCU.
 	 */
 	if (rdp->rsp == rcu_state &&
-	    ULONG_CMP_GE(ACCESS_ONCE(jiffies), rdp->rsp->jiffies_resched)) {
+	    ULONG_CMP_GE(jiffies, rdp->rsp->jiffies_resched)) {
 		rdp->rsp->jiffies_resched += 5;
 		resched_cpu(rdp->cpu);
 	}
@@ -847,7 +863,7 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 
 static void record_gp_stall_check_time(struct rcu_state *rsp)
 {
-	unsigned long j = ACCESS_ONCE(jiffies);
+	unsigned long j = jiffies;
 	unsigned long j1;
 
 	rsp->gp_start = j;
@@ -1005,7 +1021,7 @@ static void check_cpu_stall(struct rcu_state *rsp, struct rcu_data *rdp)
 
 	if (rcu_cpu_stall_suppress || !rcu_gp_in_progress(rsp))
 		return;
-	j = ACCESS_ONCE(jiffies);
+	j = jiffies;
 
 	/*
 	 * Lots of memory barriers to reject false positives.
@@ -1405,12 +1421,12 @@ static int rcu_gp_init(struct rcu_state *rsp)
 	rcu_bind_gp_kthread();
 	raw_spin_lock_irq(&rnp->lock);
 	smp_mb__after_unlock_lock();
-	if (rsp->gp_flags == 0) {
+	if (!ACCESS_ONCE(rsp->gp_flags)) {
 		/* Spurious wakeup, tell caller to go back to sleep.  */
 		raw_spin_unlock_irq(&rnp->lock);
 		return 0;
 	}
-	rsp->gp_flags = 0; /* Clear all flags: New grace period. */
+	ACCESS_ONCE(rsp->gp_flags) = 0; /* Clear all flags: New grace period. */
 
 	if (WARN_ON_ONCE(rcu_gp_in_progress(rsp))) {
 		/*
@@ -1502,7 +1518,7 @@ static int rcu_gp_fqs(struct rcu_state *rsp, int fqs_state_in)
 	if (ACCESS_ONCE(rsp->gp_flags) & RCU_GP_FLAG_FQS) {
 		raw_spin_lock_irq(&rnp->lock);
 		smp_mb__after_unlock_lock();
-		rsp->gp_flags &= ~RCU_GP_FLAG_FQS;
+		ACCESS_ONCE(rsp->gp_flags) &= ~RCU_GP_FLAG_FQS;
 		raw_spin_unlock_irq(&rnp->lock);
 	}
 	return fqs_state;
@@ -1566,7 +1582,7 @@ static void rcu_gp_cleanup(struct rcu_state *rsp)
 	rdp = this_cpu_ptr(rsp->rda);
 	rcu_advance_cbs(rsp, rnp, rdp);  /* Reduce false positives below. */
 	if (cpu_needs_another_gp(rsp, rdp)) {
-		rsp->gp_flags = RCU_GP_FLAG_INIT;
+		ACCESS_ONCE(rsp->gp_flags) = RCU_GP_FLAG_INIT;
 		trace_rcu_grace_period(rsp->name,
 				       ACCESS_ONCE(rsp->gpnum),
 				       TPS("newreq"));
@@ -1695,7 +1711,7 @@ rcu_start_gp_advanced(struct rcu_state *rsp, struct rcu_node *rnp,
 		 */
 		return;
 	}
-	rsp->gp_flags = RCU_GP_FLAG_INIT;
+	ACCESS_ONCE(rsp->gp_flags) = RCU_GP_FLAG_INIT;
 	trace_rcu_grace_period(rsp->name, ACCESS_ONCE(rsp->gpnum),
 			       TPS("newreq"));
 
@@ -2304,7 +2320,7 @@ static void force_quiescent_state(struct rcu_state *rsp)
 		if (rnp_old != NULL)
 			raw_spin_unlock(&rnp_old->fqslock);
 		if (ret) {
-			rsp->n_force_qs_lh++;
+			ACCESS_ONCE(rsp->n_force_qs_lh)++;
 			return;
 		}
 		rnp_old = rnp;
@@ -2316,11 +2332,11 @@ static void force_quiescent_state(struct rcu_state *rsp)
 	smp_mb__after_unlock_lock();
 	raw_spin_unlock(&rnp_old->fqslock);
 	if (ACCESS_ONCE(rsp->gp_flags) & RCU_GP_FLAG_FQS) {
-		rsp->n_force_qs_lh++;
+		ACCESS_ONCE(rsp->n_force_qs_lh)++;
 		raw_spin_unlock_irqrestore(&rnp_old->lock, flags);
 		return;  /* Someone beat us to it. */
 	}
-	rsp->gp_flags |= RCU_GP_FLAG_FQS;
+	ACCESS_ONCE(rsp->gp_flags) |= RCU_GP_FLAG_FQS;
 	raw_spin_unlock_irqrestore(&rnp_old->lock, flags);
 	wake_up(&rsp->gp_wq);  /* Memory barrier implied by wake_up() path. */
 }
@@ -2880,7 +2896,7 @@ static int rcu_pending(int cpu)
  * non-NULL, store an indication of whether all callbacks are lazy.
  * (If there are no callbacks, all of them are deemed to be lazy.)
  */
-static int rcu_cpu_has_callbacks(int cpu, bool *all_lazy)
+static int __maybe_unused rcu_cpu_has_callbacks(int cpu, bool *all_lazy)
 {
 	bool al = true;
 	bool hc = false;
