@@ -57,6 +57,9 @@ next/dt
 		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15
 	mvebu/dt2
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-2
+	qcom/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom.git tags/qcom-dt-for-3.15
+		contains qcom/cleanup
 
 next/drivers
 	renesas/soc
