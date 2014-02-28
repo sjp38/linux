@@ -52,7 +52,7 @@ struct gfs2_log_header_host {
  */
 
 struct gfs2_log_operations {
-	void (*lo_before_commit) (struct gfs2_sbd *sdp);
+	void (*lo_before_commit) (struct gfs2_sbd *sdp, struct gfs2_trans *tr);
 	void (*lo_after_commit) (struct gfs2_sbd *sdp, struct gfs2_trans *tr);
 	void (*lo_before_scan) (struct gfs2_jdesc *jd,
 				struct gfs2_log_header_host *head, int pass);
@@ -462,11 +462,11 @@ struct gfs2_trans {
 	unsigned int tr_blocks;
 	unsigned int tr_revokes;
 	unsigned int tr_reserved;
+	unsigned int tr_touched:1;
+	unsigned int tr_attached:1;
 
 	struct gfs2_holder tr_t_gh;
 
-	int tr_touched;
-	int tr_attached;
 
 	unsigned int tr_num_buf_new;
 	unsigned int tr_num_databuf_new;
@@ -476,6 +476,8 @@ struct gfs2_trans {
 	unsigned int tr_num_revoke_rm;
 
 	struct list_head tr_list;
+	struct list_head tr_databuf;
+	struct list_head tr_buf;
 
 	unsigned int tr_first;
 	struct list_head tr_ail1_list;
@@ -746,19 +748,12 @@ struct gfs2_sbd {
 
 	struct gfs2_trans *sd_log_tr;
 	unsigned int sd_log_blks_reserved;
-	unsigned int sd_log_commited_buf;
-	unsigned int sd_log_commited_databuf;
 	int sd_log_commited_revoke;
 
 	atomic_t sd_log_pinned;
-	unsigned int sd_log_num_buf;
 	unsigned int sd_log_num_revoke;
-	unsigned int sd_log_num_rg;
-	unsigned int sd_log_num_databuf;
 
-	struct list_head sd_log_le_buf;
 	struct list_head sd_log_le_revoke;
-	struct list_head sd_log_le_databuf;
 	struct list_head sd_log_le_ordered;
 	spinlock_t sd_ordered_lock;
 

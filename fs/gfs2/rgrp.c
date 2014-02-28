@@ -1102,7 +1102,7 @@ static u32 count_unlinked(struct gfs2_rgrpd *rgd)
  * Returns: errno
  */
 
-int gfs2_rgrp_bh_get(struct gfs2_rgrpd *rgd)
+static int gfs2_rgrp_bh_get(struct gfs2_rgrpd *rgd)
 {
 	struct gfs2_sbd *sdp = rgd->rd_sbd;
 	struct gfs2_glock *gl = rgd->rd_gl;
@@ -1169,7 +1169,7 @@ fail:
 	return error;
 }
 
-int update_rgrp_lvb(struct gfs2_rgrpd *rgd)
+static int update_rgrp_lvb(struct gfs2_rgrpd *rgd)
 {
 	u32 rl_flags;
 
@@ -2296,7 +2296,7 @@ int gfs2_alloc_blocks(struct gfs2_inode *ip, u64 *bn, unsigned int *nblocks,
 
 	gfs2_statfs_change(sdp, 0, -(s64)*nblocks, dinode ? 1 : 0);
 	if (dinode)
-		gfs2_trans_add_unrevoke(sdp, block, 1);
+		gfs2_trans_add_unrevoke(sdp, block, *nblocks);
 
 	gfs2_quota_change(ip, *nblocks, ip->i_inode.i_uid, ip->i_inode.i_gid);
 
