@@ -178,19 +178,6 @@ static int hw_ep_get_halt(struct ci_hdrc *ci, int num, int dir)
 }
 
 /**
- * hw_test_and_clear_setup_status: test & clear setup status (execute without
- *                                 interruption)
- * @n: endpoint number
- *
- * This function returns setup status
- */
-static int hw_test_and_clear_setup_status(struct ci_hdrc *ci, int n)
-{
-	n = ep_to_bit(ci, n);
-	return hw_test_and_clear(ci, OP_ENDPTSETUPSTAT, BIT(n));
-}
-
-/**
  * hw_ep_prime: primes endpoint (execute without interruption)
  * @num:     endpoint number
  * @dir:     endpoint direction
@@ -997,14 +984,10 @@ __acquires(ci->lock)
 			}
 		}
 
-		if (hwep->type != USB_ENDPOINT_XFER_CONTROL ||
-		    !hw_test_and_clear_setup_status(ci, i))
+		/* Only handle setup packet below */
+		if (i != 0 ||
+			!hw_test_and_clear(ci, OP_ENDPTSETUPSTAT, BIT(0)))
 			continue;
-
-		if (i != 0) {
-			dev_warn(ci->dev, "ctrl traffic at endpoint %d\n", i);
-			continue;
-		}
 
 		/*
 		 * Flush data and handshake transactions of previous
@@ -1192,6 +1175,11 @@ static int ep_enable(struct usb_ep *ep,
 	hwep->qh.ptr->cap = cpu_to_le32(cap);
 
 	hwep->qh.ptr->td.next |= cpu_to_le32(TD_TERMINATE);   /* needed? */
+
+	if (hwep->num != 0 && hwep->type == USB_ENDPOINT_XFER_CONTROL) {
+		dev_err(hwep->ci->dev, "Set control xfer at non-ep0\n");
+		retval = -EINVAL;
+	}
 
 	/*
 	 * Enable endpoints in the HW other than ep0 as ep0
@@ -1837,12 +1825,6 @@ void ci_hdrc_gadget_destroy(struct ci_hdrc *ci)
 
 	dma_pool_destroy(ci->td_pool);
 	dma_pool_destroy(ci->qh_pool);
-
-	if (ci->transceiver) {
-		otg_set_peripheral(ci->transceiver->otg, NULL);
-		if (ci->global_phy)
-			usb_put_phy(ci->transceiver);
-	}
 }
 
 static int udc_id_switch_for_device(struct ci_hdrc *ci)
