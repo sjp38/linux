@@ -213,7 +213,7 @@ static int act8865_pdata_from_dt(struct device *dev,
 	struct device_node *np;
 	struct act8865_regulator_data *regulator;
 
-	np = of_find_node_by_name(dev->of_node, "regulators");
+	np = of_get_child_by_name(dev->of_node, "regulators");
 	if (!np) {
 		dev_err(dev, "missing 'regulators' subnode in DT\n");
 		return -EINVAL;
@@ -221,17 +221,15 @@ static int act8865_pdata_from_dt(struct device *dev,
 
 	matched = of_regulator_match(dev, np,
 				act8865_matches, ARRAY_SIZE(act8865_matches));
+	of_node_put(np);
 	if (matched <= 0)
 		return matched;
 
 	pdata->regulators = devm_kzalloc(dev,
 				sizeof(struct act8865_regulator_data) *
 				ARRAY_SIZE(act8865_matches), GFP_KERNEL);
-	if (!pdata->regulators) {
-		dev_err(dev, "%s: failed to allocate act8865 registor\n",
-						__func__);
+	if (!pdata->regulators)
 		return -ENOMEM;
-	}
 
 	pdata->num_regulators = matched;
 	regulator = pdata->regulators;

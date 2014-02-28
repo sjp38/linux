@@ -254,7 +254,7 @@ static int max8925_regulator_dt_init(struct platform_device *pdev,
 	nproot = of_node_get(pdev->dev.parent->of_node);
 	if (!nproot)
 		return -ENODEV;
-	np = of_find_node_by_name(nproot, "regulators");
+	np = of_get_child_by_name(nproot, "regulators");
 	if (!np) {
 		dev_err(&pdev->dev, "failed to find regulators node\n");
 		return -ENODEV;
@@ -264,7 +264,7 @@ static int max8925_regulator_dt_init(struct platform_device *pdev,
 				&max8925_regulator_matches[ridx], 1);
 	of_node_put(np);
 	if (rcount < 0)
-		return -ENODEV;
+		return rcount;
 	config->init_data =	max8925_regulator_matches[ridx].init_data;
 	config->of_node = max8925_regulator_matches[ridx].of_node;
 

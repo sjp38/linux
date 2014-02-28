@@ -231,7 +231,7 @@ static int max8907_regulator_parse_dt(struct platform_device *pdev)
 	if (!np)
 		return 0;
 
-	regulators = of_find_node_by_name(np, "regulators");
+	regulators = of_get_child_by_name(np, "regulators");
 	if (!regulators) {
 		dev_err(&pdev->dev, "regulators node not found\n");
 		return -EINVAL;
@@ -292,10 +292,9 @@ static int max8907_regulator_probe(struct platform_device *pdev)
 		return ret;
 
 	pmic = devm_kzalloc(&pdev->dev, sizeof(*pmic), GFP_KERNEL);
-	if (!pmic) {
-		dev_err(&pdev->dev, "Failed to alloc pmic\n");
+	if (!pmic)
 		return -ENOMEM;
-	}
+
 	platform_set_drvdata(pdev, pmic);
 
 	memcpy(pmic->desc, max8907_regulators, sizeof(pmic->desc));

@@ -92,7 +92,7 @@ MODULE_DEVICE_TABLE(of, pfuze_dt_ids);
 static int pfuze100_set_ramp_delay(struct regulator_dev *rdev, int ramp_delay)
 {
 	struct pfuze_chip *pfuze100 = rdev_get_drvdata(rdev);
-	int id = rdev->desc->id;
+	int id = rdev_get_id(rdev);
 	unsigned int ramp_bits;
 	int ret;
 
@@ -250,11 +250,11 @@ static int pfuze_parse_regulators_dt(struct pfuze_chip *chip)
 	struct device_node *np, *parent;
 	int ret;
 
-	np = of_node_get(dev->parent->of_node);
+	np = of_node_get(dev->of_node);
 	if (!np)
-		return 0;
+		return -EINVAL;
 
-	parent = of_find_node_by_name(np, "regulators");
+	parent = of_get_child_by_name(np, "regulators");
 	if (!parent) {
 		dev_err(dev, "regulators node not found\n");
 		return -EINVAL;
