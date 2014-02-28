@@ -675,12 +675,12 @@ static u8 sdhci_calc_timeout(struct sdhci_host *host, struct mmc_command *cmd)
 		return 0xE;
 
 	/* Unspecified timeout, assume max */
-	if (!data && !cmd->cmd_timeout_ms)
+	if (!data && !cmd->busy_timeout)
 		return 0xE;
 
 	/* timeout in us */
 	if (!data)
-		target_timeout = cmd->cmd_timeout_ms * 1000;
+		target_timeout = cmd->busy_timeout * 1000;
 	else {
 		target_timeout = data->timeout_ns / 1000;
 		if (host->clock)
@@ -1019,8 +1019,8 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	}
 
 	timeout = jiffies;
-	if (!cmd->data && cmd->cmd_timeout_ms > 9000)
-		timeout += DIV_ROUND_UP(cmd->cmd_timeout_ms, 1000) * HZ + HZ;
+	if (!cmd->data && cmd->busy_timeout > 9000)
+		timeout += DIV_ROUND_UP(cmd->busy_timeout, 1000) * HZ + HZ;
 	else
 		timeout += 10 * HZ;
 	mod_timer(&host->timer, timeout);
@@ -2941,7 +2941,7 @@ int sdhci_add_host(struct sdhci_host *host)
 	if (host->quirks & SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK)
 		host->timeout_clk = mmc->f_max / 1000;
 
-	mmc->max_discard_to = (1 << 27) / host->timeout_clk;
+	mmc->max_busy_timeout = (1 << 27) / host->timeout_clk;
 
 	mmc->caps |= MMC_CAP_SDIO_IRQ | MMC_CAP_ERASE | MMC_CAP_CMD23;
 
@@ -3020,7 +3020,8 @@ int sdhci_add_host(struct sdhci_host *host)
 	} else if (caps[1] & SDHCI_SUPPORT_SDR50)
 		mmc->caps |= MMC_CAP_UHS_SDR50;
 
-	if (caps[1] & SDHCI_SUPPORT_DDR50)
+	if ((caps[1] & SDHCI_SUPPORT_DDR50) &&
+		!(host->quirks2 & SDHCI_QUIRK2_BROKEN_DDR50))
 		mmc->caps |= MMC_CAP_UHS_DDR50;
 
 	/* Does the host need tuning for SDR50? */
