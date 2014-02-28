@@ -61,6 +61,33 @@ ep_matches (
 	if (USB_ENDPOINT_XFER_CONTROL == type)
 		return 0;
 
+	/* first check feature flags */
+	if (usb_endpoint_dir_in(desc))
+		if (!ep->has_dir_in)
+			return 0;
+
+	if (usb_endpoint_dir_out(desc))
+		if (!ep->has_dir_out)
+			return 0;
+
+	switch (type) {
+	case USB_ENDPOINT_XFER_CONTROL:
+		/* only ep0 */
+		return 0;
+	case USB_ENDPOINT_XFER_BULK:
+		if (ep->has_bulk)
+			goto match;
+		break;
+	case USB_ENDPOINT_XFER_INT:
+		if (ep->has_interrupt)
+			goto match;
+		break;
+	case USB_ENDPOINT_XFER_ISOC:
+		if (ep->has_isochronous)
+			goto match;
+		break;
+	}
+
 	/* some other naming convention */
 	if ('e' != ep->name[0])
 		return 0;
@@ -158,8 +185,7 @@ ep_matches (
 		break;
 	}
 
-	/* MATCH!! */
-
+match:
 	/* report address */
 	desc->bEndpointAddress &= USB_DIR_IN;
 	if (isdigit (ep->name [2])) {
