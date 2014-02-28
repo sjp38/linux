@@ -380,6 +380,28 @@ static void regmap_range_exit(struct regmap *map)
 	kfree(map->selector_work_buf);
 }
 
+int regmap_attach_dev(struct device *dev, struct regmap *map,
+		      const struct regmap_config *config)
+{
+	struct regmap **m;
+
+	map->dev = dev;
+
+	regmap_debugfs_init(map, config->name);
+
+	/* Add a devres resource for dev_get_regmap() */
+	m = devres_alloc(dev_get_regmap_release, sizeof(*m), GFP_KERNEL);
+	if (!m) {
+		regmap_debugfs_exit(map);
+		return -ENOMEM;
+	}
+	*m = map;
+	devres_add(dev, m);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(regmap_attach_dev);
+
 /**
  * regmap_init(): Initialise register map
  *
@@ -397,7 +419,7 @@ struct regmap *regmap_init(struct device *dev,
 			   void *bus_context,
 			   const struct regmap_config *config)
 {
-	struct regmap *map, **m;
+	struct regmap *map;
 	int ret = -EINVAL;
 	enum regmap_endian reg_endian, val_endian;
 	int i, j;
@@ -718,7 +740,7 @@ skip_format_initialization:
 		new->window_start = range_cfg->window_start;
 		new->window_len = range_cfg->window_len;
 
-		if (_regmap_range_add(map, new) == false) {
+		if (!_regmap_range_add(map, new)) {
 			dev_err(map->dev, "Failed to add range %d\n", i);
 			kfree(new);
 			goto err_range;
@@ -734,25 +756,18 @@ skip_format_initialization:
 		}
 	}
 
-	regmap_debugfs_init(map, config->name);
-
 	ret = regcache_init(map, config);
 	if (ret != 0)
 		goto err_range;
 
-	/* Add a devres resource for dev_get_regmap() */
-	m = devres_alloc(dev_get_regmap_release, sizeof(*m), GFP_KERNEL);
-	if (!m) {
-		ret = -ENOMEM;
-		goto err_debugfs;
-	}
-	*m = map;
-	devres_add(dev, m);
+	if (dev)
+		ret = regmap_attach_dev(dev, map, config);
+		if (ret != 0)
+			goto err_regcache;
 
 	return map;
 
-err_debugfs:
-	regmap_debugfs_exit(map);
+err_regcache:
 	regcache_exit(map);
 err_range:
 	regmap_range_exit(map);
@@ -1576,6 +1591,26 @@ out:
 }
 EXPORT_SYMBOL_GPL(regmap_bulk_write);
 
+static int _regmap_multi_reg_write(struct regmap *map,
+				   const struct reg_default *regs,
+				   int num_regs)
+{
+	int i, ret;
+
+	for (i = 0; i < num_regs; i++) {
+		if (regs[i].reg % map->reg_stride)
+			return -EINVAL;
+		ret = _regmap_write(map, regs[i].reg, regs[i].def);
+		if (ret != 0) {
+			dev_err(map->dev, "Failed to write %x = %x: %d\n",
+				regs[i].reg, regs[i].def, ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * regmap_multi_reg_write(): Write multiple registers to the device
  *
@@ -1592,30 +1627,59 @@ EXPORT_SYMBOL_GPL(regmap_bulk_write);
  * A value of zero will be returned on success, a negative errno will
  * be returned in error cases.
  */
-int regmap_multi_reg_write(struct regmap *map, struct reg_default *regs,
-				int num_regs)
+int regmap_multi_reg_write(struct regmap *map, const struct reg_default *regs,
+			   int num_regs)
 {
-	int ret = 0, i;
-
-	for (i = 0; i < num_regs; i++) {
-		int reg = regs[i].reg;
-		if (reg % map->reg_stride)
-			return -EINVAL;
-	}
+	int ret;
 
 	map->lock(map->lock_arg);
 
-	for (i = 0; i < num_regs; i++) {
-		ret = _regmap_write(map, regs[i].reg, regs[i].def);
-		if (ret != 0)
-			goto out;
-	}
-out:
+	ret = _regmap_multi_reg_write(map, regs, num_regs);
+
 	map->unlock(map->lock_arg);
 
 	return ret;
 }
 EXPORT_SYMBOL_GPL(regmap_multi_reg_write);
+
+/*
+ * regmap_multi_reg_write_bypassed(): Write multiple registers to the
+ *                                    device but not the cache
+ *
+ * where the set of register are supplied in any order
+ *
+ * @map: Register map to write to
+ * @regs: Array of structures containing register,value to be written
+ * @num_regs: Number of registers to write
+ *
+ * This function is intended to be used for writing a large block of data
+ * atomically to the device in single transfer for those I2C client devices
+ * that implement this alternative block write mode.
+ *
+ * A value of zero will be returned on success, a negative errno will
+ * be returned in error cases.
+ */
+int regmap_multi_reg_write_bypassed(struct regmap *map,
+				    const struct reg_default *regs,
+				    int num_regs)
+{
+	int ret;
+	bool bypass;
+
+	map->lock(map->lock_arg);
+
+	bypass = map->cache_bypass;
+	map->cache_bypass = true;
+
+	ret = _regmap_multi_reg_write(map, regs, num_regs);
+
+	map->cache_bypass = bypass;
+
+	map->unlock(map->lock_arg);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(regmap_multi_reg_write_bypassed);
 
 /**
  * regmap_raw_write_async(): Write raw values to one or more registers
@@ -1735,6 +1799,9 @@ static int _regmap_read(struct regmap *map, unsigned int reg,
 
 	if (map->cache_only)
 		return -EBUSY;
+
+	if (!regmap_readable(map, reg))
+		return -EIO;
 
 	ret = map->reg_read(context, reg, val);
 	if (ret == 0) {
@@ -1966,9 +2033,11 @@ static int _regmap_update_bits(struct regmap *map, unsigned int reg,
 
 	if (tmp != orig) {
 		ret = _regmap_write(map, reg, tmp);
-		*change = true;
+		if (change)
+			*change = true;
 	} else {
-		*change = false;
+		if (change)
+			*change = false;
 	}
 
 	return ret;
@@ -1987,11 +2056,10 @@ static int _regmap_update_bits(struct regmap *map, unsigned int reg,
 int regmap_update_bits(struct regmap *map, unsigned int reg,
 		       unsigned int mask, unsigned int val)
 {
-	bool change;
 	int ret;
 
 	map->lock(map->lock_arg);
-	ret = _regmap_update_bits(map, reg, mask, val, &change);
+	ret = _regmap_update_bits(map, reg, mask, val, NULL);
 	map->unlock(map->lock_arg);
 
 	return ret;
@@ -2016,14 +2084,13 @@ EXPORT_SYMBOL_GPL(regmap_update_bits);
 int regmap_update_bits_async(struct regmap *map, unsigned int reg,
 			     unsigned int mask, unsigned int val)
 {
-	bool change;
 	int ret;
 
 	map->lock(map->lock_arg);
 
 	map->async = true;
 
-	ret = _regmap_update_bits(map, reg, mask, val, &change);
+	ret = _regmap_update_bits(map, reg, mask, val, NULL);
 
 	map->async = false;
 
@@ -2178,7 +2245,7 @@ int regmap_register_patch(struct regmap *map, const struct reg_default *regs,
 			  int num_regs)
 {
 	struct reg_default *p;
-	int i, ret;
+	int ret;
 	bool bypass;
 
 	if (WARN_ONCE(num_regs <= 0, "invalid registers number (%d)\n",
@@ -2192,15 +2259,9 @@ int regmap_register_patch(struct regmap *map, const struct reg_default *regs,
 	map->cache_bypass = true;
 	map->async = true;
 
-	/* Write out first; it's useful to apply even if we fail later. */
-	for (i = 0; i < num_regs; i++) {
-		ret = _regmap_write(map, regs[i].reg, regs[i].def);
-		if (ret != 0) {
-			dev_err(map->dev, "Failed to write %x = %x: %d\n",
-				regs[i].reg, regs[i].def, ret);
-			goto out;
-		}
-	}
+	ret = _regmap_multi_reg_write(map, regs, num_regs);
+	if (ret != 0)
+		goto out;
 
 	p = krealloc(map->patch,
 		     sizeof(struct reg_default) * (map->patch_regs + num_regs),
