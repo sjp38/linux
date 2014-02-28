@@ -29,20 +29,21 @@
  * mei_me_cl_by_uuid - locate index of me client
  *
  * @dev: mei device
+ *
+ * Locking: called under "dev->device_lock" lock
+ *
  * returns me client index or -ENOENT if not found
  */
 int mei_me_cl_by_uuid(const struct mei_device *dev, const uuid_le *uuid)
 {
-	int i, res = -ENOENT;
+	int i;
 
 	for (i = 0; i < dev->me_clients_num; ++i)
 		if (uuid_le_cmp(*uuid,
-				dev->me_clients[i].props.protocol_name) == 0) {
-			res = i;
-			break;
-		}
+				dev->me_clients[i].props.protocol_name) == 0)
+			return i;
 
-	return res;
+	return -ENOENT;
 }
 
 
@@ -60,16 +61,12 @@ int mei_me_cl_by_uuid(const struct mei_device *dev, const uuid_le *uuid)
 int mei_me_cl_by_id(struct mei_device *dev, u8 client_id)
 {
 	int i;
+
 	for (i = 0; i < dev->me_clients_num; i++)
 		if (dev->me_clients[i].client_id == client_id)
-			break;
-	if (WARN_ON(dev->me_clients[i].client_id != client_id))
-		return -ENOENT;
+			return i;
 
-	if (i == dev->me_clients_num)
-		return -ENOENT;
-
-	return i;
+	return -ENOENT;
 }
 
 
@@ -254,10 +251,9 @@ struct mei_cl *mei_cl_allocate(struct mei_device *dev)
 struct mei_cl_cb *mei_cl_find_read_cb(struct mei_cl *cl)
 {
 	struct mei_device *dev = cl->dev;
-	struct mei_cl_cb *cb = NULL;
-	struct mei_cl_cb *next = NULL;
+	struct mei_cl_cb *cb;
 
-	list_for_each_entry_safe(cb, next, &dev->read_list.list, list)
+	list_for_each_entry(cb, &dev->read_list.list, list)
 		if (mei_cl_cmp_id(cl, cb->cl))
 			return cb;
 	return NULL;
@@ -461,17 +457,17 @@ free:
 bool mei_cl_is_other_connecting(struct mei_cl *cl)
 {
 	struct mei_device *dev;
-	struct mei_cl *pos;
-	struct mei_cl *next;
+	struct mei_cl *ocl; /* the other client */
 
 	if (WARN_ON(!cl || !cl->dev))
 		return false;
 
 	dev = cl->dev;
 
-	list_for_each_entry_safe(pos, next, &dev->file_list, link) {
-		if ((pos->state == MEI_FILE_CONNECTING) &&
-		    (pos != cl) && cl->me_client_id == pos->me_client_id)
+	list_for_each_entry(ocl, &dev->file_list, link) {
+		if (ocl->state == MEI_FILE_CONNECTING &&
+		    ocl != cl &&
+		    cl->me_client_id == ocl->me_client_id)
 			return true;
 
 	}
@@ -505,7 +501,7 @@ int mei_cl_connect(struct mei_cl *cl, struct file *file)
 		goto out;
 	}
 
-	cb->fop_type = MEI_FOP_IOCTL;
+	cb->fop_type = MEI_FOP_CONNECT;
 
 	if (dev->hbuf_is_ready && !mei_cl_is_other_connecting(cl)) {
 		dev->hbuf_is_ready = false;
@@ -521,18 +517,19 @@ int mei_cl_connect(struct mei_cl *cl, struct file *file)
 	}
 
 	mutex_unlock(&dev->device_lock);
-	rets = wait_event_timeout(dev->wait_recvd_msg,
-				 (cl->state == MEI_FILE_CONNECTED ||
-				  cl->state == MEI_FILE_DISCONNECTED),
-				 mei_secs_to_jiffies(MEI_CL_CONNECT_TIMEOUT));
+	wait_event_timeout(dev->wait_recvd_msg,
+			(cl->state == MEI_FILE_CONNECTED ||
+			 cl->state == MEI_FILE_DISCONNECTED),
+			mei_secs_to_jiffies(MEI_CL_CONNECT_TIMEOUT));
 	mutex_lock(&dev->device_lock);
 
 	if (cl->state != MEI_FILE_CONNECTED) {
-		rets = -EFAULT;
+		/* something went really wrong */
+		if (!cl->status)
+			cl->status = -EFAULT;
 
 		mei_io_list_flush(&dev->ctrl_rd_list, cl);
 		mei_io_list_flush(&dev->ctrl_wr_list, cl);
-		goto out;
 	}
 
 	rets = cl->status;
@@ -554,7 +551,8 @@ out:
 int mei_cl_flow_ctrl_creds(struct mei_cl *cl)
 {
 	struct mei_device *dev;
-	int i;
+	struct mei_me_client *me_cl;
+	int id;
 
 	if (WARN_ON(!cl || !cl->dev))
 		return -EINVAL;
@@ -567,19 +565,19 @@ int mei_cl_flow_ctrl_creds(struct mei_cl *cl)
 	if (cl->mei_flow_ctrl_creds > 0)
 		return 1;
 
-	for (i = 0; i < dev->me_clients_num; i++) {
-		struct mei_me_client  *me_cl = &dev->me_clients[i];
-		if (me_cl->client_id == cl->me_client_id) {
-			if (me_cl->mei_flow_ctrl_creds) {
-				if (WARN_ON(me_cl->props.single_recv_buf == 0))
-					return -EINVAL;
-				return 1;
-			} else {
-				return 0;
-			}
-		}
+	id = mei_me_cl_by_id(dev, cl->me_client_id);
+	if (id < 0) {
+		cl_err(dev, cl, "no such me client %d\n", cl->me_client_id);
+		return id;
 	}
-	return -ENOENT;
+
+	me_cl = &dev->me_clients[id];
+	if (me_cl->mei_flow_ctrl_creds) {
+		if (WARN_ON(me_cl->props.single_recv_buf == 0))
+			return -EINVAL;
+		return 1;
+	}
+	return 0;
 }
 
 /**
@@ -595,32 +593,31 @@ int mei_cl_flow_ctrl_creds(struct mei_cl *cl)
 int mei_cl_flow_ctrl_reduce(struct mei_cl *cl)
 {
 	struct mei_device *dev;
-	int i;
+	struct mei_me_client *me_cl;
+	int id;
 
 	if (WARN_ON(!cl || !cl->dev))
 		return -EINVAL;
 
 	dev = cl->dev;
 
-	if (!dev->me_clients_num)
-		return -ENOENT;
-
-	for (i = 0; i < dev->me_clients_num; i++) {
-		struct mei_me_client  *me_cl = &dev->me_clients[i];
-		if (me_cl->client_id == cl->me_client_id) {
-			if (me_cl->props.single_recv_buf != 0) {
-				if (WARN_ON(me_cl->mei_flow_ctrl_creds <= 0))
-					return -EINVAL;
-				dev->me_clients[i].mei_flow_ctrl_creds--;
-			} else {
-				if (WARN_ON(cl->mei_flow_ctrl_creds <= 0))
-					return -EINVAL;
-				cl->mei_flow_ctrl_creds--;
-			}
-			return 0;
-		}
+	id = mei_me_cl_by_id(dev, cl->me_client_id);
+	if (id < 0) {
+		cl_err(dev, cl, "no such me client %d\n", cl->me_client_id);
+		return id;
 	}
-	return -ENOENT;
+
+	me_cl = &dev->me_clients[id];
+	if (me_cl->props.single_recv_buf != 0) {
+		if (WARN_ON(me_cl->mei_flow_ctrl_creds <= 0))
+			return -EINVAL;
+		me_cl->mei_flow_ctrl_creds--;
+	} else {
+		if (WARN_ON(cl->mei_flow_ctrl_creds <= 0))
+			return -EINVAL;
+		cl->mei_flow_ctrl_creds--;
+	}
+	return 0;
 }
 
 /**
@@ -905,9 +902,9 @@ void mei_cl_complete(struct mei_cl *cl, struct mei_cl_cb *cb)
 
 void mei_cl_all_disconnect(struct mei_device *dev)
 {
-	struct mei_cl *cl, *next;
+	struct mei_cl *cl;
 
-	list_for_each_entry_safe(cl, next, &dev->file_list, link) {
+	list_for_each_entry(cl, &dev->file_list, link) {
 		cl->state = MEI_FILE_DISCONNECTED;
 		cl->mei_flow_ctrl_creds = 0;
 		cl->timer_count = 0;
@@ -922,8 +919,8 @@ void mei_cl_all_disconnect(struct mei_device *dev)
  */
 void mei_cl_all_wakeup(struct mei_device *dev)
 {
-	struct mei_cl *cl, *next;
-	list_for_each_entry_safe(cl, next, &dev->file_list, link) {
+	struct mei_cl *cl;
+	list_for_each_entry(cl, &dev->file_list, link) {
 		if (waitqueue_active(&cl->rx_wait)) {
 			cl_dbg(dev, cl, "Waking up reading client!\n");
 			wake_up_interruptible(&cl->rx_wait);

@@ -21,7 +21,6 @@
 #include <linux/fcntl.h>
 #include <linux/aio.h>
 #include <linux/pci.h>
-#include <linux/init.h>
 #include <linux/ioctl.h>
 #include <linux/cdev.h>
 #include <linux/list.h>
@@ -116,14 +115,11 @@ int mei_amthif_host_init(struct mei_device *dev)
 
 	cl->state = MEI_FILE_CONNECTING;
 
-	if (mei_hbm_cl_connect_req(dev, cl)) {
-		dev_dbg(&dev->pdev->dev, "amthif: Failed to connect to ME client\n");
-		cl->state = MEI_FILE_DISCONNECTED;
-		cl->host_client_id = 0;
-	} else {
-		cl->timer_count = MEI_CONNECT_TIMEOUT;
-	}
-	return 0;
+	ret = mei_cl_connect(cl, NULL);
+
+	dev->iamthif_state = MEI_IAMTHIF_IDLE;
+
+	return ret;
 }
 
 /**
@@ -137,14 +133,12 @@ int mei_amthif_host_init(struct mei_device *dev)
 struct mei_cl_cb *mei_amthif_find_read_list_entry(struct mei_device *dev,
 						struct file *file)
 {
-	struct mei_cl_cb *pos = NULL;
-	struct mei_cl_cb *next = NULL;
+	struct mei_cl_cb *cb;
 
-	list_for_each_entry_safe(pos, next,
-				&dev->amthif_rd_complete_list.list, list) {
-		if (pos->cl && pos->cl == &dev->iamthif_cl &&
-			pos->file_object == file)
-			return pos;
+	list_for_each_entry(cb, &dev->amthif_rd_complete_list.list, list) {
+		if (cb->cl && cb->cl == &dev->iamthif_cl &&
+			cb->file_object == file)
+			return cb;
 	}
 	return NULL;
 }
@@ -365,7 +359,7 @@ int mei_amthif_write(struct mei_device *dev, struct mei_cl_cb *cb)
 	if (ret)
 		return ret;
 
-	cb->fop_type = MEI_FOP_IOCTL;
+	cb->fop_type = MEI_FOP_WRITE;
 
 	if (!list_empty(&dev->amthif_cmd_list.list) ||
 	    dev->iamthif_state != MEI_IAMTHIF_IDLE) {
