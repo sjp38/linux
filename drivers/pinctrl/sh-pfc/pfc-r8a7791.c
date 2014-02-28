@@ -1943,6 +1943,50 @@ static const unsigned int i2c4_c_pins[] = {
 static const unsigned int i2c4_c_mux[] = {
 	SCL4_C_MARK, SDA4_C_MARK,
 };
+/* - I2C7 ------------------------------------------------------------------- */
+static const unsigned int i2c7_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(5, 15), RCAR_GP_PIN(5, 16),
+};
+static const unsigned int i2c7_mux[] = {
+	SCL7_MARK, SDA7_MARK,
+};
+static const unsigned int i2c7_b_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(2, 2), RCAR_GP_PIN(2, 3),
+};
+static const unsigned int i2c7_b_mux[] = {
+	SCL7_B_MARK, SDA7_B_MARK,
+};
+static const unsigned int i2c7_c_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(6, 28), RCAR_GP_PIN(6, 29),
+};
+static const unsigned int i2c7_c_mux[] = {
+	SCL7_C_MARK, SDA7_C_MARK,
+};
+/* - I2C8 ------------------------------------------------------------------- */
+static const unsigned int i2c8_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(4, 13), RCAR_GP_PIN(4, 14),
+};
+static const unsigned int i2c8_mux[] = {
+	SCL8_MARK, SDA8_MARK,
+};
+static const unsigned int i2c8_b_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(2, 4), RCAR_GP_PIN(2, 5),
+};
+static const unsigned int i2c8_b_mux[] = {
+	SCL8_B_MARK, SDA8_B_MARK,
+};
+static const unsigned int i2c8_c_pins[] = {
+	/* SCL, SDA */
+	RCAR_GP_PIN(6, 22), RCAR_GP_PIN(6, 23),
+};
+static const unsigned int i2c8_c_mux[] = {
+	SCL8_C_MARK, SDA8_C_MARK,
+};
 /* - INTC ------------------------------------------------------------------- */
 static const unsigned int intc_irq0_pins[] = {
 	/* IRQ */
@@ -2134,6 +2178,53 @@ static const unsigned int msiof2_tx_pins[] = {
 };
 static const unsigned int msiof2_tx_mux[] = {
 	MSIOF2_TXD_MARK,
+};
+/* - QSPI ------------------------------------------------------------------- */
+static const unsigned int qspi_ctrl_pins[] = {
+	/* SPCLK, SSL */
+	RCAR_GP_PIN(1, 4), RCAR_GP_PIN(1, 9),
+};
+static const unsigned int qspi_ctrl_mux[] = {
+	SPCLK_MARK, SSL_MARK,
+};
+static const unsigned int qspi_data2_pins[] = {
+	/* MOSI_IO0, MISO_IO1 */
+	RCAR_GP_PIN(1, 5), RCAR_GP_PIN(1, 6),
+};
+static const unsigned int qspi_data2_mux[] = {
+	MOSI_IO0_MARK, MISO_IO1_MARK,
+};
+static const unsigned int qspi_data4_pins[] = {
+	/* MOSI_IO0, MISO_IO1, IO2, IO3 */
+	RCAR_GP_PIN(1, 5), RCAR_GP_PIN(1, 6), RCAR_GP_PIN(1, 7),
+	RCAR_GP_PIN(1, 8),
+};
+static const unsigned int qspi_data4_mux[] = {
+	MOSI_IO0_MARK, MISO_IO1_MARK, IO2_MARK, IO3_MARK,
+};
+
+static const unsigned int qspi_ctrl_b_pins[] = {
+	/* SPCLK, SSL */
+	RCAR_GP_PIN(6, 0), RCAR_GP_PIN(6, 5),
+};
+static const unsigned int qspi_ctrl_b_mux[] = {
+	SPCLK_B_MARK, SSL_B_MARK,
+};
+static const unsigned int qspi_data2_b_pins[] = {
+	/* MOSI_IO0, MISO_IO1 */
+	RCAR_GP_PIN(6, 1), RCAR_GP_PIN(6, 2),
+};
+static const unsigned int qspi_data2_b_mux[] = {
+	MOSI_IO0_B_MARK, MISO_IO1_B_MARK,
+};
+static const unsigned int qspi_data4_b_pins[] = {
+	/* MOSI_IO0, MISO_IO1, IO2, IO3 */
+	RCAR_GP_PIN(6, 1), RCAR_GP_PIN(6, 2), RCAR_GP_PIN(6, 3),
+	RCAR_GP_PIN(6, 4),
+};
+static const unsigned int qspi_data4_b_mux[] = {
+	SPCLK_B_MARK, MOSI_IO0_B_MARK, MISO_IO1_B_MARK,
+	IO2_B_MARK, IO3_B_MARK, SSL_B_MARK,
 };
 /* - SCIF0 ------------------------------------------------------------------ */
 static const unsigned int scif0_data_pins[] = {
@@ -3123,6 +3214,12 @@ static const struct sh_pfc_pin_group pinmux_groups[] = {
 	SH_PFC_PIN_GROUP(i2c4),
 	SH_PFC_PIN_GROUP(i2c4_b),
 	SH_PFC_PIN_GROUP(i2c4_c),
+	SH_PFC_PIN_GROUP(i2c7),
+	SH_PFC_PIN_GROUP(i2c7_b),
+	SH_PFC_PIN_GROUP(i2c7_c),
+	SH_PFC_PIN_GROUP(i2c8),
+	SH_PFC_PIN_GROUP(i2c8_b),
+	SH_PFC_PIN_GROUP(i2c8_c),
 	SH_PFC_PIN_GROUP(intc_irq0),
 	SH_PFC_PIN_GROUP(intc_irq1),
 	SH_PFC_PIN_GROUP(intc_irq2),
@@ -3149,6 +3246,12 @@ static const struct sh_pfc_pin_group pinmux_groups[] = {
 	SH_PFC_PIN_GROUP(msiof2_ss2),
 	SH_PFC_PIN_GROUP(msiof2_rx),
 	SH_PFC_PIN_GROUP(msiof2_tx),
+	SH_PFC_PIN_GROUP(qspi_ctrl),
+	SH_PFC_PIN_GROUP(qspi_data2),
+	SH_PFC_PIN_GROUP(qspi_data4),
+	SH_PFC_PIN_GROUP(qspi_ctrl_b),
+	SH_PFC_PIN_GROUP(qspi_data2_b),
+	SH_PFC_PIN_GROUP(qspi_data4_b),
 	SH_PFC_PIN_GROUP(scif0_data),
 	SH_PFC_PIN_GROUP(scif0_data_b),
 	SH_PFC_PIN_GROUP(scif0_data_c),
@@ -3335,6 +3438,18 @@ static const char * const i2c4_groups[] = {
 	"i2c4_c",
 };
 
+static const char * const i2c7_groups[] = {
+	"i2c7",
+	"i2c7_b",
+	"i2c7_c",
+};
+
+static const char * const i2c8_groups[] = {
+	"i2c8",
+	"i2c8_b",
+	"i2c8_c",
+};
+
 static const char * const intc_groups[] = {
 	"intc_irq0",
 	"intc_irq1",
@@ -3374,6 +3489,15 @@ static const char * const msiof2_groups[] = {
 	"msiof2_ss2",
 	"msiof2_rx",
 	"msiof2_tx",
+};
+
+static const char * const qspi_groups[] = {
+	"qspi_ctrl",
+	"qspi_data2",
+	"qspi_data4",
+	"qspi_ctrl_b",
+	"qspi_data2_b",
+	"qspi_data4_b",
 };
 
 static const char * const scif0_groups[] = {
@@ -3566,11 +3690,14 @@ static const struct sh_pfc_function pinmux_functions[] = {
 	SH_PFC_FUNCTION(i2c2),
 	SH_PFC_FUNCTION(i2c3),
 	SH_PFC_FUNCTION(i2c4),
+	SH_PFC_FUNCTION(i2c7),
+	SH_PFC_FUNCTION(i2c8),
 	SH_PFC_FUNCTION(intc),
 	SH_PFC_FUNCTION(mmc),
 	SH_PFC_FUNCTION(msiof0),
 	SH_PFC_FUNCTION(msiof1),
 	SH_PFC_FUNCTION(msiof2),
+	SH_PFC_FUNCTION(qspi),
 	SH_PFC_FUNCTION(scif0),
 	SH_PFC_FUNCTION(scif1),
 	SH_PFC_FUNCTION(scif2),
