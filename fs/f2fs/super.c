@@ -184,6 +184,7 @@ F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, max_small_discards, max_discards);
 F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, ipu_policy, ipu_policy);
 F2FS_RW_ATTR(SM_INFO, f2fs_sm_info, min_ipu_util, min_ipu_util);
 F2FS_RW_ATTR(F2FS_SBI, f2fs_sb_info, max_victim_search, max_victim_search);
+F2FS_RW_ATTR(F2FS_SBI, f2fs_sb_info, dir_level, dir_level);
 
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
@@ -196,6 +197,7 @@ static struct attribute *f2fs_attrs[] = {
 	ATTR_LIST(ipu_policy),
 	ATTR_LIST(min_ipu_util),
 	ATTR_LIST(max_victim_search),
+	ATTR_LIST(dir_level),
 	NULL,
 };
 
@@ -358,6 +360,9 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 
 	if (test_opt(F2FS_SB(sb), INLINE_XATTR))
 		set_inode_flag(fi, FI_INLINE_XATTR);
+
+	/* Will be used by directory only */
+	fi->i_dir_level = F2FS_SB(sb)->dir_level;
 
 	return &fi->vfs_inode;
 }
@@ -785,6 +790,8 @@ static void init_sb_info(struct f2fs_sb_info *sbi)
 
 	for (i = 0; i < NR_COUNT_TYPE; i++)
 		atomic_set(&sbi->nr_pages[i], 0);
+
+	sbi->dir_level = DEF_DIR_LEVEL;
 }
 
 /*
@@ -989,28 +996,9 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 		goto free_root_inode;
 	}
 
-	/* recover fsynced data */
-	if (!test_opt(sbi, DISABLE_ROLL_FORWARD)) {
-		err = recover_fsync_data(sbi);
-		if (err)
-			f2fs_msg(sb, KERN_ERR,
-				"Cannot recover all fsync data errno=%ld", err);
-	}
-
-	/*
-	 * If filesystem is not mounted as read-only then
-	 * do start the gc_thread.
-	 */
-	if (!(sb->s_flags & MS_RDONLY)) {
-		/* After POR, we can run background GC thread.*/
-		err = start_gc_thread(sbi);
-		if (err)
-			goto free_gc;
-	}
-
 	err = f2fs_build_stats(sbi);
 	if (err)
-		goto free_gc;
+		goto free_root_inode;
 
 	if (f2fs_proc_root)
 		sbi->s_proc = proc_mkdir(sb->s_id, f2fs_proc_root);
@@ -1032,17 +1020,36 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	err = kobject_init_and_add(&sbi->s_kobj, &f2fs_ktype, NULL,
 							"%s", sb->s_id);
 	if (err)
-		goto fail;
+		goto free_proc;
 
+	/* recover fsynced data */
+	if (!test_opt(sbi, DISABLE_ROLL_FORWARD)) {
+		err = recover_fsync_data(sbi);
+		if (err)
+			f2fs_msg(sb, KERN_ERR,
+				"Cannot recover all fsync data errno=%ld", err);
+	}
+
+	/*
+	 * If filesystem is not mounted as read-only then
+	 * do start the gc_thread.
+	 */
+	if (!(sb->s_flags & MS_RDONLY)) {
+		/* After POR, we can run background GC thread.*/
+		err = start_gc_thread(sbi);
+		if (err)
+			goto free_kobj;
+	}
 	return 0;
-fail:
+
+free_kobj:
+	kobject_del(&sbi->s_kobj);
+free_proc:
 	if (sbi->s_proc) {
 		remove_proc_entry("segment_info", sbi->s_proc);
 		remove_proc_entry(sb->s_id, f2fs_proc_root);
 	}
 	f2fs_destroy_stats(sbi);
-free_gc:
-	stop_gc_thread(sbi);
 free_root_inode:
 	dput(sb->s_root);
 	sb->s_root = NULL;
