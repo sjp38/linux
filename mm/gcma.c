@@ -24,22 +24,90 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
+#include <linux/memblock.h>
+
+#define MAX_CMA	16
+
+/* stands for contiguous memory area */
+struct cma {
+	unsigned long start_pfn;
+	unsigned long size;
+	unsigned long flags;
+	unsigned long nr_alloced;
+};
+
+static struct cma cmas[MAX_CMA];
+static unsigned cma_count;
 
 /*********************************
 * tunables
 **********************************/
 /* Enable/disable gcma (disabled by default, fixed at boot for now) */
-static bool gcma_enabled __read_mostly;
-module_param_named(enabled, gcma_enabled, bool, 0);
+static bool enabled __read_mostly;
+module_param_named(enabled, enabled, bool, 0);
+
+/* Default size of contiguous memory area */
+static unsigned long def_cma_size __read_mostly;
+
+static int __init early_gcma(char *p)
+{
+	pr_debug("received %s as default cma size kern param\n", p);
+	def_cma_size = memparse(p, &p);
+	return 0;
+}
+early_param("gcma.def_cma_size", early_gcma);
+
+/*********************************
+* contig mem allocations
+**********************************/
+
+/**
+ * gcma_reserve_cma() - Reserve contiguous memory area
+ * @size: Size of the reserved area (in bytes), 0 for default size
+ *
+ * This function reserves memory from early allocator. It can be called
+ * several times.
+ *
+ * Returns id of reserved contiguous memory area if success,
+ * Returns negative number if failed
+ */
+int __init gcma_reserve_cma(phys_addr_t size)
+{
+	phys_addr_t addr;
+	struct cma *cma;
+
+	if (size == 0) {
+		pr_info("size is 0. use default size, %ld\n", def_cma_size);
+		size = def_cma_size;
+	}
+	pr_info("will allocate %ld bytes of contig memory area\n",
+			(unsigned long)size);
+
+	addr = __memblock_alloc_base(size, PAGE_SIZE, 0);
+	if (!addr) {
+		pr_debug("failed to reserve cma\n");
+		return -ENOMEM;
+	}
+	pr_debug("%ld size cma reserved\n", (unsigned long)size);
+
+	cma = &cmas[cma_count];
+	cma->start_pfn = PFN_DOWN(addr);
+	cma->size = size;
+	cma->flags = 0;
+	cma->nr_alloced = 0;
+
+	return cma_count++;
+}
 
 /*********************************
 * module init and exit
 **********************************/
 static int __init init_gcma(void)
 {
-	if (!gcma_enabled)
+	pr_debug("init_gcma\n");
+	if (!enabled)
 		return 0;
-	pr_info("loading gcma\n");
+	pr_info("gcma loaded\n");
 
 	return 0;
 }
