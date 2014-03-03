@@ -27,6 +27,8 @@ else
 	obj-y		+= bootmem.o
 endif
 
+CFLAGS_gcma.o := -DDEBUG
+
 obj-$(CONFIG_HAVE_MEMBLOCK) += memblock.o
 
 obj-$(CONFIG_BOUNCE)	+= bounce.o
