@@ -177,9 +177,10 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 
 	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
 
+	pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
+
 	/* No printks while decoding is disabled! */
 	if (!dev->mmio_always_on) {
-		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
 		if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
 			pci_write_config_word(dev, PCI_COMMAND,
 				orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
@@ -215,9 +216,13 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		if (res->flags & IORESOURCE_IO) {
 			l &= PCI_BASE_ADDRESS_IO_MASK;
 			mask = PCI_BASE_ADDRESS_IO_MASK & (u32) IO_SPACE_LIMIT;
+			if (!(orig_cmd & PCI_COMMAND_IO))
+				res->flags |= IORESOURCE_UNSET;
 		} else {
 			l &= PCI_BASE_ADDRESS_MEM_MASK;
 			mask = (u32)PCI_BASE_ADDRESS_MEM_MASK;
+			if (!(orig_cmd & PCI_COMMAND_MEMORY))
+				res->flags |= IORESOURCE_UNSET;
 		}
 	} else {
 		res->flags |= (l & IORESOURCE_ROM_ENABLE);
@@ -252,6 +257,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 			/* Address above 32-bit boundary; disable the BAR */
 			pci_write_config_dword(dev, pos, 0);
 			pci_write_config_dword(dev, pos + 4, 0);
+			res->flags |= IORESOURCE_UNSET;
 			region.start = 0;
 			region.end = sz64;
 			bar_disabled = true;
