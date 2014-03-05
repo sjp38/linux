@@ -23,19 +23,31 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/memblock.h>
+#include <linux/slab.h>
 
 #define MAX_CMA	16
 
-/* stands for contiguous memory area */
-struct cma {
-	unsigned long start_pfn;
-	unsigned long size;
-	unsigned long flags;
-	unsigned long nr_alloced;
+enum status {
+	GCMA_FREE,
+	GCMA_ALLOCED,
+	GCMA_FRONTSWAP_USE,
+	GCMA_CLEANCACHE_USE
 };
 
+/* stands for contiguous memory area */
+struct cma {
+	unsigned long		start_pfn;
+	unsigned long		offset;
+	unsigned long		size;
+	unsigned long		flags;
+	enum status		status;
+	struct list_head	list;
+};
+
+static struct list_head cma_heads[MAX_CMA];
 static struct cma cmas[MAX_CMA];
 static unsigned cma_count;
 
@@ -75,6 +87,7 @@ int __init gcma_reserve_cma(phys_addr_t size)
 {
 	phys_addr_t addr;
 	struct cma *cma;
+	struct list_head *head;
 
 	if (cma_count == MAX_CMA) {
 		pr_warn("cma reserving is limited to %d times\n", MAX_CMA);
@@ -97,9 +110,15 @@ int __init gcma_reserve_cma(phys_addr_t size)
 
 	cma = &cmas[cma_count];
 	cma->start_pfn = PFN_DOWN(addr);
+	cma->offset = 0;
 	cma->size = size;
 	cma->flags = 0;
-	cma->nr_alloced = 0;
+	cma->status = GCMA_FREE;
+	INIT_LIST_HEAD(&cma->list);
+
+	head = &cma_heads[cma_count];
+	INIT_LIST_HEAD(head);
+	list_add(&cma->list, head);
 
 	return cma_count++;
 }
@@ -115,23 +134,46 @@ int __init gcma_reserve_cma(phys_addr_t size)
 struct page *gcma_alloc_from_contiguous(int id, int count,
 				       unsigned int align)
 {
-	struct cma *cma;
-	struct page *ret;
+	struct cma *c, *new_free;
+	struct list_head *head;
 
+	pr_debug("%s called\n", __func__);
 	if (id >= cma_count) {
 		pr_warn("too big id\n");
 		return NULL;
 	}
-	cma = &cmas[id];
+	head = &cma_heads[id];
 
-	if (cma->nr_alloced + count >= cma->size) {
-		pr_warn("no more space on the cma %d\n", id);
-		return NULL;
+	pr_debug("will iterate...\n");
+	list_for_each_entry(c, head, list) {
+		pr_debug("iterate cmas... offset: %ld, size: %ld, stat: %d cnt: %d\n",
+				c->offset, c->size, c->status, count);
+		if (c->status != GCMA_FREE || c->size < count) {
+			pr_debug("not free or size is smaller than count\n");
+			continue;
+		}
+		if (c->size == count) {
+			pr_debug("just fit\n");
+			c->status = GCMA_ALLOCED;
+		} else {
+			new_free = kmalloc(sizeof(*new_free),
+					GFP_KERNEL);
+			new_free->start_pfn = c->start_pfn;
+			new_free->offset = c->offset + count;
+			new_free->size = c->size - count;
+			new_free->flags = 0;
+			new_free->status = GCMA_FREE;
+			INIT_LIST_HEAD(&new_free->list);
+
+			c->size = count;
+			c->status = GCMA_ALLOCED;
+			list_add(&new_free->list, head);
+		}
+		return pfn_to_page(c->start_pfn + c->offset);
 	}
-	ret = pfn_to_page(cma->start_pfn + cma->nr_alloced);
-	cma->nr_alloced += count;
 
-	return ret;
+	pr_warn("failed to allocate\n");
+	return NULL;
 }
 
 bool gcma_release_from_contiguous(int id, struct page *pages,
