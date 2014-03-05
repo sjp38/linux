@@ -99,6 +99,19 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	return cma_count++;
 }
 
+struct page *gcma_alloc_from_contiguous(int id, int count,
+				       unsigned int align)
+{
+	return NULL;
+}
+
+bool gcma_release_from_contiguous(int id, struct page *pages,
+				 int count)
+{
+	return false;
+}
+
+
 /*********************************
 * module init and exit
 **********************************/
