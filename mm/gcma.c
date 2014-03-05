@@ -76,6 +76,11 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	phys_addr_t addr;
 	struct cma *cma;
 
+	if (cma_count == MAX_CMA) {
+		pr_warn("cma reserving is limited to %d times\n", MAX_CMA);
+		return -1;
+	}
+
 	if (size == 0) {
 		pr_info("size is 0. use default size, %ld\n", def_cma_size);
 		size = def_cma_size;
