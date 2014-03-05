@@ -104,10 +104,34 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	return cma_count++;
 }
 
+/**
+ * gcma_alloc_from_contiguous() - allocate pages from contiguous area
+ * @id:	id to specific cma
+ * @count: number of pages requesting
+ * @align: alignment of pages requesting
+ *
+ * Returns NULL if failed to allocate
+ */
 struct page *gcma_alloc_from_contiguous(int id, int count,
 				       unsigned int align)
 {
-	return NULL;
+	struct cma *cma;
+	struct page *ret;
+
+	if (id >= cma_count) {
+		pr_warn("too big id\n");
+		return NULL;
+	}
+	cma = &cmas[id];
+
+	if (cma->nr_alloced + count >= cma->size) {
+		pr_warn("no more space on the cma %d\n", id);
+		return NULL;
+	}
+	ret = pfn_to_page(cma->start_pfn + cma->nr_alloced);
+	cma->nr_alloced += count;
+
+	return ret;
 }
 
 bool gcma_release_from_contiguous(int id, struct page *pages,
