@@ -176,9 +176,105 @@ struct page *gcma_alloc_from_contiguous(int id, int count,
 	return NULL;
 }
 
+/**
+ * gcma_release_from_contiguous() - release pages from contiguous area
+ * @id: id to specific cma
+ * @pages: pointer to first page which want to be released
+ * @count: number of pages want to release
+ *
+ * TODO: Should merge contiguous free cmas into one cma.
+ *
+ * Returns true if success,
+ * Returns false if failed
+ */
 bool gcma_release_from_contiguous(int id, struct page *pages,
 				 int count)
 {
+	struct cma *c, *new_cma;
+	struct list_head *head;
+
+	unsigned long free_start, free_end, cma_start, cma_end;
+
+	if (id >= cma_count) {
+		pr_err("too big id\n");
+		return NULL;
+	}
+	head = &cma_heads[id];
+
+	free_start = page_to_pfn(pages);
+	free_end = free_start + count;
+
+	pr_debug("will iterate...\n");
+	list_for_each_entry(c, head, list) {
+		pr_debug("iterate cmas... offset: %ld, size: %ld, stat: %d cnt: %d\n",
+				c->offset, c->size, c->status, count);
+		cma_start = c->start_pfn + c->offset;
+		cma_end = c->start_pfn + c->size;
+		if (cma_start <= free_start && cma_end >= free_start &&
+				c->status == GCMA_FREE) {
+			pr_err("freeing free area\n");
+			return false;
+		}
+		/* case 1: freeing region is the cma
+		 * [||||||||||||||||||||||||||||] */
+		if (cma_start == free_start && cma_end == free_end) {
+			pr_debug("just fit.");
+			c->status = GCMA_FREE;
+			return true;
+		}
+
+		new_cma = kmalloc(sizeof(*new_cma), GFP_KERNEL);
+		new_cma->start_pfn = c->start_pfn;
+
+		/* case 2: freeing region is from cma's start to inside cma
+		 * [||||||||                    ] */
+		if (cma_start == free_start && cma_end > free_end) {
+			pr_debug("freeing [|||||          ]\n");
+			new_cma->offset = c->offset + count;
+			new_cma->size = c->size - count;
+			new_cma->flags = 0;
+			new_cma->status = GCMA_ALLOCED;
+			INIT_LIST_HEAD(&new_cma->list);
+
+			c->size = count;
+			c->status = GCMA_FREE;
+			list_add(&new_cma->list, &c->list);
+			return true;
+		}
+		/* case 3: freeing region is from inside cma to end of cma
+		 * [                  ||||||||||] */
+		if (cma_start < free_start && cma_end == free_end) {
+			pr_debug("freeing [        |||||||]\n");
+			new_cma->offset = free_start - c->start_pfn;
+			new_cma->size = count;
+			new_cma->flags = 0;
+			new_cma->status = GCMA_FREE;
+			INIT_LIST_HEAD(&new_cma->list);
+
+			c->size = c->size - count;
+			list_add(&new_cma->list, &c->list);
+			return true;
+		}
+		/* case 4: freeing region is from inside cma to outside of cma
+		 * [                  ||||||||||]|||||||| */
+		if (cma_start < free_start && cma_end < free_end) {
+			pr_debug("freeing [        |||||||]|||\n");
+			new_cma->offset = free_start - c->start_pfn;
+			new_cma->size = cma_end - free_start;
+			new_cma->flags = 0;
+			new_cma->status = GCMA_FREE;
+			INIT_LIST_HEAD(&new_cma->list);
+
+			c->size = free_start - cma_start;
+			list_add(&new_cma->list, &c->list);
+			return gcma_release_from_contiguous(id,
+						pfn_to_page(cma_end),
+						count - new_cma->size);
+		}
+
+	}
+
+	pr_warn("failed to free cma\n");
 	return false;
 }
 
