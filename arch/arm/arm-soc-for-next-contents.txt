@@ -87,6 +87,8 @@ next/drivers
 	patch
 		drivers: cci: Export CCI PMU revision
 		drivers: cci: Extend support to CCI revisions > r1p2
+	bcm/drivers
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/drivers
 
 fixes
 	<no branch>
