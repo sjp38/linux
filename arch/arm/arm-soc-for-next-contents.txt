@@ -1,12 +1,8 @@
-dependencies
-	depends/irqchip-mvebu-fixes
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
-
 next/fixes-non-critical
 	patch
 		irqchip: gic: use dmb ishst instead of dsb when raising a softirq
-		MAINTAINERS: ARM: clps711x: Use regex patterns to involve all CLPS711X drivers
 		ARM: clps711x: autcpu12: Fix incorrect NAND CLE GPIO
+		MAINTAINERS: ARM: clps711x: Use regex patterns to involve all CLPS711X drivers
 
 next/cleanup
 	cleanup/timex-removal
@@ -18,10 +14,20 @@ next/cleanup
 	mvebu/soc
 		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15
 	efm32/cleanup
-		git://git.pengutronix.de/git/ukl/linux.git tags/efm32-next
+		git://git.pengutronix.de/git/ukl/linux tags/efm32-next
+	cleanup/kconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/robh/linux tags/kconfig-cleanup-for-3.15
 	patch
-		ARM: clps711x: Update defconfig
 		ARM: clps711x: Remove EP72XX_ROM_BOOT option
+		ARM: clps711x: Update defconfig
+	samsung/drivers
+		http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/samsung-drivers
+	samsung/cleanup
+		http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/samsung-cleanup
+	mmp/irq
+		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/irq-mmp
+	sirf/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/baohua/linux tags/sirf-soc-for-3.15
 
 next/soc
 	qcom/soc
@@ -29,14 +35,24 @@ next/soc
 		contains qcom/cleanup
 	patch
 		ARM: dts: msm: Add krait-pmu to platforms with Krait CPUs
+	mvebu/soc
+		Merge branch 'mvebu/soc' into next/soc
 	mvebu/soc-3xx
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3xx-3.15
-		contains mvebu/soc
+		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3xx-3.15
 	patch
-		ARM: clps711x: Migrate CLPS711X subarch to the new irqchip driver
-		ARM: dts: clps711x: Add bindings documentation for CLPS711X irqchip driver
 		ARM: clps711x: Add CLPS711X irqchip driver
-	
+		ARM: dts: clps711x: Add bindings documentation for CLPS711X irqchip driver
+		ARM: clps711x: Migrate CLPS711X subarch to the new irqchip driver
+	rockchip/smp
+		git://git.kernel.org/pub/scm/linux/kernel/git/mmind/linux-rockchip tags/v3.15-rockchip-smp
+	omap/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/soc-signed
+	omap/prcm
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/prcm-signed
+	imx/soc
+		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx-soc-3.15
+		contains cleanup/kconfig
+
 next/boards
 	renesas/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards-for-v3.15
@@ -50,6 +66,8 @@ next/boards
 		git://git.infradead.org/linux-mvebu tags/mvebu-defconfig-3.15
 	patch
 		ARM: qcom: Enable basic support for Qualcomm platforms in multi_v7_defconfig
+	pxa/soc
+		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/pxa
 
 next/dt
 	renesas/dt
@@ -65,10 +83,25 @@ next/dt
 	mvebu/dt
 		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15
 	mvebu/dt2
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15-2
+	qcom/cleanup
+		Merge branch 'qcom/cleanup' into next/dt
 	qcom/dt
-		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom.git tags/qcom-dt-for-3.15
-		contains qcom/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-dt-for-3.15
+	omap/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-signed
+	samsung/dt
+		http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/samsung-dt
+	samsung/exynos-clk
+		http://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/exynos-clk
+	sunxi/dt
+		https://github.com/mripard/linux tags/sunxi-dt-for-3.15
+	ux500/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-stericsson tags/ux500-dt-v3.15-2
+	imx/dt-imx6-2
+		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx6-dt-3.15-2
+	imx/dt2
+		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx-dt-3.15-2
 
 next/drivers
 	renesas/soc
@@ -76,31 +109,42 @@ next/drivers
 	integrator/multiplatform-base
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-1
 	davinci/nand
-		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/nand
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v3.15/nand
+	depends/irqchip-mvebu-fixes
+		git://git.infradead.org/linux-mvebu tags/irqchip-mvebu-fixes-3.14
 	mvebu/watchdog
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-watchdog-3.15
+		git://git.infradead.org/linux-mvebu tags/mvebu-watchdog-3.15
 	patch
 		irqchip: VIC: export vic_init_cascaded
+	qcom/cleanup
+		Merge branch 'qcom/cleanup' into next/drivers
 	qcom/drivers
-		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom.git tags/qcom-drivers-for-3.15
-		contains qcom/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/galak/linux-qcom tags/qcom-drivers-for-3.15
 	patch
-		drivers: cci: Export CCI PMU revision
 		drivers: cci: Extend support to CCI revisions > r1p2
+		drivers: cci: Export CCI PMU revision
 	bcm/drivers
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/drivers
+	mvebu/watchdog2
+		git://git.infradead.org/linux-mvebu tags/mvebu-watchdog-3.15-2
+	omap/crossbar
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/crossbar-signed
+
+next/cleanup2
+	integrator/multiplatform-base
+		Merge branch 'integrator/multiplatform-base' into next/cleanup2
+	integrator/cleanup
+		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-2
 
 fixes
-	<no branch>
-		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/pwm_pxa_for_v3.14
+	<no branch> (4b41636878ee32d4c45a49de7749abca9721bd6a)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-rc4
 	patch
-		ARM: tegra: fix RTC0 alias for Cardhu
-	<no branch>
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-against-rc1
-	patch
-		ARM: imx6: build pm-imx6q.c independently of CONFIG_PM
-	<no branch>
-		git://git.infradead.org/linux-mvebu tags/mvebu-dt-fixes-3.14
-	patch
-		ARM: tegra: Add head numbers to display controllers
-		ARM: tegra: only run PL310 init on systems with one
+		ARM: tegra: add LED options back into tegra_defconfig
+	<no branch> (40dd8f3b900cac1d925605a9d3199368c4af0a40)
+		https://github.com/mripard/linux tags/sunxi-fixes-for-3.14
+	<no branch> (735ea23c4868bf3123a4c79184e9206e0cc60211)
+		git://github.com/broadcom/bcm11351 tags/bcm-for-3.14-pinctrl-reduced-rename
+	<no branch> (ae41a3030ce8901853b3cfd5e118a4b0288aa068)
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-dt-rc4
+
