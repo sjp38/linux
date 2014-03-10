@@ -19,18 +19,91 @@
 	memory {
 		reg = <0x80000000 0x4000000>;
 	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_fec_3v3: regulator@0 {
+			compatible = "regulator-fixed";
+			reg = <0>;
+			regulator-name = "fec-3v3";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio2 3 0>;
+			enable-active-high;
+		};
+	};
 };
 
-&uart1 {
+&esdhc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_esdhc1>;
+	cd-gpios = <&gpio2 1 0>;
+	wp-gpios = <&gpio2 0 0>;
 	status = "okay";
 };
 
 &fec {
 	phy-mode = "rmii";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec>;
+	phy-supply = <&reg_fec_3v3>;
+	phy-reset-gpios = <&gpio4 8 0>;
 	status = "okay";
+};
+
+&iomuxc {
+	imx25-pdk {
+		pinctrl_esdhc1: esdhc1grp {
+			fsl,pins = <
+				MX25_PAD_SD1_CMD__SD1_CMD		0x80000000
+				MX25_PAD_SD1_CLK__SD1_CLK		0x80000000
+				MX25_PAD_SD1_DATA0__SD1_DATA0		0x80000000
+				MX25_PAD_SD1_DATA1__SD1_DATA1		0x80000000
+				MX25_PAD_SD1_DATA2__SD1_DATA2		0x80000000
+				MX25_PAD_SD1_DATA3__SD1_DATA3		0x80000000
+				MX25_PAD_A14__GPIO_2_0			0x80000000
+				MX25_PAD_A15__GPIO_2_1			0x80000000
+			>;
+		};
+
+		pinctrl_fec: fecgrp {
+			fsl,pins = <
+				MX25_PAD_FEC_MDC__FEC_MDC		0x80000000
+				MX25_PAD_FEC_MDIO__FEC_MDIO		0x400001e0
+				MX25_PAD_FEC_TDATA0__FEC_TDATA0		0x80000000
+				MX25_PAD_FEC_TDATA1__FEC_TDATA1		0x80000000
+				MX25_PAD_FEC_TX_EN__FEC_TX_EN		0x80000000
+				MX25_PAD_FEC_RDATA0__FEC_RDATA0		0x80000000
+				MX25_PAD_FEC_RDATA1__FEC_RDATA1		0x80000000
+				MX25_PAD_FEC_RX_DV__FEC_RX_DV		0x80000000
+				MX25_PAD_FEC_TX_CLK__FEC_TX_CLK		0x1c0
+				MX25_PAD_A17__GPIO_2_3			0x80000000
+				MX25_PAD_D12__GPIO_4_8			0x80000000
+			>;
+		};
+
+		pinctrl_uart1: uart1grp {
+			fsl,pins = <
+				MX25_PAD_UART1_RTS__UART1_RTS		0xe0
+				MX25_PAD_UART1_CTS__UART1_CTS		0xe0
+				MX25_PAD_UART1_TXD__UART1_TXD		0x80000000
+				MX25_PAD_UART1_RXD__UART1_RXD		0xc0
+			>;
+		};
+	};
 };
 
 &nfc {
 	nand-on-flash-bbt;
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	fsl,uart-has-rtscts;
 	status = "okay";
 };
