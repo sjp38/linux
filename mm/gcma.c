@@ -197,7 +197,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 
 	if (id >= cma_count) {
 		pr_err("too big id\n");
-		return NULL;
+		return false;
 	}
 	head = &cma_heads[id];
 
