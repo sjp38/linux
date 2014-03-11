@@ -271,7 +271,6 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 						pfn_to_page(cma_end),
 						count - new_cma->size);
 		}
-
 	}
 
 	pr_warn("failed to free cma\n");
