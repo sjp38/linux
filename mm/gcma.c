@@ -111,7 +111,7 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	cma = &cmas[cma_count];
 	cma->start_pfn = PFN_DOWN(addr);
 	cma->offset = 0;
-	cma->size = size;
+	cma->size = size / PAGE_SIZE;
 	cma->flags = 0;
 	cma->status = GCMA_FREE;
 	INIT_LIST_HEAD(&cma->list);
