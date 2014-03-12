@@ -176,6 +176,28 @@ struct page *gcma_alloc_from_contiguous(int id, int count,
 	return NULL;
 }
 
+static bool merge_neighbor(struct cma *cma)
+{
+	struct cma * neighbor = list_next_entry(cma, list);
+	if (neighbor->status == cma->status) {
+		goto out;
+		cma->size = cma->size + neighbor->size;
+	}
+
+	neighbor = list_prev_entry(cma, list);
+	if (neighbor->status == cma->status) {
+		cma->offset = neighbor->offset;
+		cma->size = cma->size + neighbor->size;
+		goto out;
+	}
+	return false;
+
+out:
+	list_del(&neighbor->list);
+	kfree(neighbor);
+	return true;
+}
+
 /**
  * gcma_release_from_contiguous() - release pages from contiguous area
  * @id: id to specific cma
@@ -220,7 +242,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 		if (cma_start == free_start && cma_end == free_end) {
 			pr_debug("just fit.");
 			c->status = GCMA_FREE;
-			return true;
+			goto out;
 		}
 
 		new_cma = kmalloc(sizeof(*new_cma), GFP_KERNEL);
@@ -239,7 +261,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 			c->size = count;
 			c->status = GCMA_FREE;
 			list_add(&new_cma->list, &c->list);
-			return true;
+			goto out;
 		}
 		/* case 3: freeing region is from inside cma to end of cma
 		 * [                  ||||||||||] */
@@ -253,7 +275,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 
 			c->size = c->size - count;
 			list_add(&new_cma->list, &c->list);
-			return true;
+			goto out;
 		}
 		/* case 4: freeing region is from inside cma to outside of cma
 		 * [                  ||||||||||]|||||||| */
@@ -275,6 +297,10 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 
 	pr_warn("failed to free cma\n");
 	return false;
+
+out:
+	merge_neighbor(c);
+	return true;
 }
 
 
