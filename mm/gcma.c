@@ -26,6 +26,8 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/memblock.h>
+#include <linux/mmzone.h>
+#include <linux/pageblock-flags.h>
 #include <linux/slab.h>
 
 #define MAX_CMA	16
@@ -100,6 +102,8 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	}
 	pr_info("will allocate %ld bytes of contig memory area\n",
 			(unsigned long)size);
+	size = ALIGN(size, PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order));
+	pr_debug("aligned size is: %ld\n", (unsigned long)size);
 
 	addr = __memblock_alloc_base(size, PAGE_SIZE, 0);
 	if (!addr) {
