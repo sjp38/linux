@@ -50,6 +50,38 @@ static int test_gcma_alloc_release(void)
 	return 0;
 }
 
+static int test_gcma_merge(void)
+{
+	struct page *cma1, *cma2, *cma3;
+
+	pr_info("%s called\n", __func__);
+
+	cma1 = gcma_alloc_from_contiguous(0, 10, 1);
+	pr_info("[test] alloc 1st\n");
+	if (cma1 == NULL)
+		return -1;
+	cma2 = gcma_alloc_from_contiguous(0, 20, 1);
+	pr_info("[test] alloc 2nd\n");
+	if (cma2 == NULL)
+		return -1;
+	cma3 = gcma_alloc_from_contiguous(0, 5, 1);
+	pr_info("[test] alloc 3rd\n");
+	if (cma3 == NULL)
+		return -1;
+
+	pr_info("[test] release 2nd\n");
+	if (!gcma_release_from_contiguous(0, cma2, 20))
+		return -1;
+	pr_info("[test] free 1st\n");
+	if (!gcma_release_from_contiguous(0, cma1, 10))
+		return -1;
+	pr_info("[test] free 3rd\n");
+	if (!gcma_release_from_contiguous(0, cma3, 5))
+		return -1;
+
+	return 0;
+}
+
 #define do_test(test)					\
 	do {						\
 		if (test()) {				\
@@ -69,6 +101,7 @@ static int __init init_gcma(void)
 	pr_info("test gcma\n");
 
 	do_test(test_gcma_alloc_release);
+	do_test(test_gcma_merge);
 
 	return 0;
 }
