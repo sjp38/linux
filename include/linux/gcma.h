@@ -28,4 +28,6 @@ int gcma_reserve_cma(phys_addr_t size);
 
 struct page *gcma_alloc_contig(int id, int count);
 
+bool gcma_release_contig(int id, struct page *pages, int count);
+
 #endif /* _LINUX_GCMA_H */
