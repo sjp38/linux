@@ -142,6 +142,52 @@ struct page *gcma_alloc_contig(int id, int count)
 	return NULL;
 }
 
+/**
+ * gcma_release_contig() - release pages from contiguous area
+ * @id: Identifier of contiguous memory area which the releasing be done.
+ * @count: Requested number of pages.
+ *
+ * Returns true if release success,
+ * Returns false if release failed.
+ */
+bool gcma_release_contig(int id, struct page *pages, int count)
+{
+	int i;
+	unsigned long pfn, offset;
+	u8 *bitmap;
+
+	pr_debug("%s called with id %d, pages %p\n, count %d\n",
+			__func__, id, pages, count);
+	if (id >= nr_reserved_cma) {
+		pr_info("too big id for allocation\n");
+		return NULL;
+	}
+	if (count % 8) {
+		pr_warn("count should be aligned to 8\n");
+	}
+
+	pfn = page_to_pfn(pages);
+	offset = pfn - cma_pfns[id];
+	pr_debug("pfn: %ld, cma start: %ld, offset: %ld\n",
+			pfn, cma_pfns[id], offset);
+	if (offset % 8) {
+		pr_warn("offset is not aligned to 8: %ld %ld %ld\n",
+				pfn, cma_pfns[id], offset);
+		return false;
+	}
+	bitmap = &cma_bitmaps[id][offset / 8];
+	for (i = 0; i < count / 8; i++) {
+		pr_debug("check %ld for release: 0x%2x\n",
+				offset / 8 + i, bitmap[i]);
+		if (bitmap[i] != 0xff) {
+			pr_warn("freeing free area\n");
+			return false;
+		}
+	}
+	memset(bitmap, 0, count / 8);
+	return true;
+}
+
 /*********************************
 * module init and exit
 **********************************/
