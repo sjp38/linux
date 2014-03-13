@@ -33,18 +33,35 @@
 static bool enabled __read_mostly;
 module_param_named(enabled, enabled, bool, 0);
 
-static int test_alloc_contig(void)
+static int test_alloc_release_contig(void)
 {
-	if (!gcma_alloc_contig(0, 5)) {
+	struct page *cma1, *cma2, *cma3;
+	cma1 = gcma_alloc_contig(0, 5);
+	if (!cma1) {
 		pr_err("failed to alloc 5 contig pages\n");
 		return -1;
 	}
-	if (!gcma_alloc_contig(0, 10)) {
+	cma2 = gcma_alloc_contig(0, 10);
+	if (!cma2) {
 		pr_err("failed to alloc 10 contig pages\n");
 		return -1;
 	}
-	if (!gcma_alloc_contig(0, 16)) {
+	cma3 = gcma_alloc_contig(0, 16);
+	if (!cma3) {
 		pr_err("failed to alloc 16 contig pages\n");
+		return -1;
+	}
+
+	if (!gcma_release_contig(0, cma2, 10)) {
+		pr_err("failed to release 2nd cma\n");
+		return -1;
+	}
+	if (!gcma_release_contig(0, cma1, 5)) {
+		pr_err("failed to release 1st cma\n");
+		return -1;
+	}
+	if (!gcma_release_contig(0, cma3, 16)) {
+		pr_err("failed to release 3rd cma\n");
 		return -1;
 	}
 
@@ -69,7 +86,7 @@ static int __init init_gcma(void)
 		return 0;
 	pr_info("test gcma\n");
 
-	do_test(test_alloc_contig);
+	do_test(test_alloc_release_contig);
 
 	return 0;
 }
