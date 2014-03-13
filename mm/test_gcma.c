@@ -24,6 +24,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
+#include <linux/gcma.h>
 
 /*********************************
 * tunables
@@ -32,8 +33,21 @@
 static bool enabled __read_mostly;
 module_param_named(enabled, enabled, bool, 0);
 
-static int test_foo(void)
+static int test_alloc_contig(void)
 {
+	if (!gcma_alloc_contig(0, 5)) {
+		pr_err("failed to alloc 5 contig pages\n");
+		return -1;
+	}
+	if (!gcma_alloc_contig(0, 10)) {
+		pr_err("failed to alloc 10 contig pages\n");
+		return -1;
+	}
+	if (!gcma_alloc_contig(0, 16)) {
+		pr_err("failed to alloc 16 contig pages\n");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -55,7 +69,7 @@ static int __init init_gcma(void)
 		return 0;
 	pr_info("test gcma\n");
 
-	do_test(test_foo);
+	do_test(test_alloc_contig);
 
 	return 0;
 }
