@@ -102,6 +102,46 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	return nr_reserved_cma++;
 }
 
+/**
+ * gcma_alloc_contig() - allocate pages from contiguous area
+ * @id: Identifier of contiguous memory area which the allocation be done.
+ * @count: Requested number of pages.
+ *
+ * Returns NULL if failed to allocate,
+ * Returns address of allocated contiguous memory area's start page.
+ */
+struct page *gcma_alloc_contig(int id, int count)
+{
+	int i, j;
+	u8 *bitmap;
+
+	pr_debug("%s called with id %d, count %d\n", __func__, id, count);
+	if (id >= nr_reserved_cma) {
+		pr_info("too big id for allocation\n");
+		return NULL;
+	}
+
+	count = ALIGN(count, 8);
+	pr_debug("now alloc %d pages\n", count);
+
+	bitmap = cma_bitmaps[id];
+
+	for (i = 0; i < cma_sizes[id] / PAGE_SIZE - count; i++) {
+		for (j = 0; j < count / 8; j++) {
+			pr_debug("check %d to 8 bits: 0x%02x\n",
+					i + j, bitmap[i + j]);
+			if (bitmap[i + j] != 0)
+				break;
+		}
+
+		if (j == count / 8) {
+			memset(bitmap + i, -1, count / 8);
+			return pfn_to_page(cma_pfns[id] + i * 8);
+		}
+	}
+	return NULL;
+}
+
 /*********************************
 * module init and exit
 **********************************/
