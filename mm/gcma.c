@@ -184,8 +184,8 @@ static bool merge_neighbor(struct cma *cma)
 {
 	struct cma * neighbor = list_next_entry(cma, list);
 	if (neighbor->status == cma->status) {
-		goto out;
 		cma->size = cma->size + neighbor->size;
+		goto out;
 	}
 
 	neighbor = list_prev_entry(cma, list);
@@ -235,8 +235,8 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 		pr_debug("iterate cmas... offset: %ld, size: %ld, stat: %d cnt: %d\n",
 				c->offset, c->size, c->status, count);
 		cma_start = c->start_pfn + c->offset;
-		cma_end = c->start_pfn + c->size;
-		if (cma_start <= free_start && cma_end >= free_start &&
+		cma_end = cma_start + c->size;
+		if (cma_start <= free_start && cma_end >= free_start + 1 &&
 				c->status == GCMA_FREE) {
 			pr_err("freeing free area\n");
 			return false;
@@ -283,8 +283,9 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 		}
 		/* case 4: freeing region is from inside cma to outside of cma
 		 * [                  ||||||||||]|||||||| */
-		if (cma_start < free_start && cma_end < free_end) {
-			pr_debug("freeing [        |||||||]|||\n");
+		if (cma_start < free_start && free_start < cma_end &&
+				cma_end < free_end) {
+			pr_info("freeing [        |||||||]|||\n");
 			new_cma->offset = free_start - c->start_pfn;
 			new_cma->size = cma_end - free_start;
 			new_cma->flags = 0;
