@@ -50,6 +50,7 @@
 #include <linux/init_ohci1394_dma.h>
 #include <linux/kvm_para.h>
 #include <linux/dma-contiguous.h>
+#include <linux/gcma.h>
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -1103,6 +1104,11 @@ void __init setup_arch(char **cmdline_p)
 
 	memblock_set_current_limit(get_max_mapped());
 	dma_contiguous_reserve(0);
+
+#ifdef CONFIG_GCMA
+	if (gcma_reserve_cma(0) < 0)
+		printk(KERN_WARNING "gcma reserving failed\n");
+#endif
 
 	/*
 	 * NOTE: On x86-32, only from this point on, fixmaps are ready for use.
