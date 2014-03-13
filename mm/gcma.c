@@ -31,6 +31,7 @@
 #include <linux/slab.h>
 
 #define MAX_CMA	16
+#define DEBUG_CMA_LIST 1
 
 enum status {
 	GCMA_FREE,
@@ -127,6 +128,22 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	return cma_count++;
 }
 
+static void print_cma_list(int id)
+{
+#if DEBUG_CMA_LIST
+	struct cma *c;
+	struct list_head *head = &cma_heads[id];
+
+	pr_debug("print list of cma %d\n", id);
+	list_for_each_entry(c, head, list) {
+		pr_debug("    pfn: %ld, offset: %ld, size: %ld, flags: %ld, status: %d\n",
+				c->start_pfn, c->offset, c->size, c->flags,
+				(int)c->status);
+	}
+	pr_debug("list end\n");
+#endif
+}
+
 /**
  * gcma_alloc_from_contiguous() - allocate pages from contiguous area
  * @id:	id to specific cma
@@ -141,14 +158,15 @@ struct page *gcma_alloc_from_contiguous(int id, int count,
 	struct cma *c, *new_free;
 	struct list_head *head;
 
-	pr_debug("%s called\n", __func__);
+	pr_debug("%s called with id %d, count %d, align %d\n",
+			__func__, id, count, align);
+	print_cma_list(id);
 	if (id >= cma_count) {
 		pr_err("too big id\n");
 		return NULL;
 	}
 	head = &cma_heads[id];
 
-	pr_debug("will iterate...\n");
 	list_for_each_entry(c, head, list) {
 		pr_debug("iterate cmas... offset: %ld, size: %ld, stat: %d cnt: %d\n",
 				c->offset, c->size, c->status, count);
@@ -160,6 +178,7 @@ struct page *gcma_alloc_from_contiguous(int id, int count,
 			pr_debug("just fit\n");
 			c->status = GCMA_ALLOCED;
 		} else {
+			pr_debug("make new cma\n");
 			new_free = kmalloc(sizeof(*new_free),
 					GFP_KERNEL);
 			new_free->start_pfn = c->start_pfn;
@@ -173,6 +192,7 @@ struct page *gcma_alloc_from_contiguous(int id, int count,
 			c->status = GCMA_ALLOCED;
 			list_add(&new_free->list, &c->list);
 		}
+		print_cma_list(id);
 		return pfn_to_page(c->start_pfn + c->offset);
 	}
 
@@ -184,12 +204,14 @@ static bool merge_neighbor(struct cma *cma)
 {
 	struct cma * neighbor = list_next_entry(cma, list);
 	if (neighbor->status == cma->status) {
+		pr_debug("merge next entry\n");
 		cma->size = cma->size + neighbor->size;
 		goto out;
 	}
 
 	neighbor = list_prev_entry(cma, list);
 	if (neighbor->status == cma->status) {
+		pr_debug("merge prev entry\n");
 		cma->offset = neighbor->offset;
 		cma->size = cma->size + neighbor->size;
 		goto out;
@@ -221,6 +243,10 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 
 	unsigned long free_start, free_end, cma_start, cma_end;
 
+	pr_debug("%s called with id %d, pages %p, count %d\n",
+			__func__, id, pages, count);
+
+	print_cma_list(id);
 	if (id >= cma_count) {
 		pr_err("too big id\n");
 		return false;
@@ -230,12 +256,13 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 	free_start = page_to_pfn(pages);
 	free_end = free_start + count;
 
-	pr_debug("will iterate...\n");
 	list_for_each_entry(c, head, list) {
 		pr_debug("iterate cmas... offset: %ld, size: %ld, stat: %d cnt: %d\n",
 				c->offset, c->size, c->status, count);
 		cma_start = c->start_pfn + c->offset;
 		cma_end = cma_start + c->size;
+		pr_debug("free %ld to %ld, checking cma %ld to %ld\n",
+				free_start, free_end, cma_start, cma_end);
 		if (cma_start <= free_start && cma_end >= free_start + 1 &&
 				c->status == GCMA_FREE) {
 			pr_err("freeing free area\n");
@@ -285,7 +312,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 		 * [                  ||||||||||]|||||||| */
 		if (cma_start < free_start && free_start < cma_end &&
 				cma_end < free_end) {
-			pr_info("freeing [        |||||||]|||\n");
+			pr_debug("freeing [        |||||||]|||\n");
 			new_cma->offset = free_start - c->start_pfn;
 			new_cma->size = cma_end - free_start;
 			new_cma->flags = 0;
@@ -305,6 +332,7 @@ bool gcma_release_from_contiguous(int id, struct page *pages,
 
 out:
 	merge_neighbor(c);
+	print_cma_list(id);
 	return true;
 }
 
