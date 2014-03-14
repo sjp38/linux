@@ -166,13 +166,16 @@ bool gcma_release_contig(int id, struct page *pages, int count)
 			pfn, cma_pfns[id], offset);
 
 	bitmap = cma_bitmaps[id];
+	spin_lock(&cma_spinlocks[id]);
 	next_zero_bit = find_next_zero_bit(bitmap, offset + count, offset);
 	if (next_zero_bit < offset + count - 1) {
 		pr_err("freeing free area. free page: %ld\n", next_zero_bit);
+		spin_unlock(&cma_spinlocks[id]);
 		return false;
 	}
 
 	bitmap_clear(bitmap, offset, count);
+	spin_unlock(&cma_spinlocks[id]);
 	return true;
 }
 
