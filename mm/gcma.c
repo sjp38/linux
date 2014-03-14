@@ -241,6 +241,7 @@ static int __init init_gcma(void)
 			return -ENOMEM;
 		}
 	}
+	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 	return 0;
 }
