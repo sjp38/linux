@@ -26,6 +26,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/memblock.h>
+#include <linux/frontswap.h>
 
 /*********************************
 * tunables
@@ -177,6 +178,46 @@ bool gcma_release_contig(int id, struct page *pages, int count)
 	return true;
 }
 
+
+/**********************************
+* frontswap backend
+***********************************/
+static void gcma_frontswap_init(unsigned type)
+{
+	return;
+}
+
+static int gcma_frontswap_store(unsigned type, pgoff_t offset,
+				struct page *page)
+{
+	return 0;
+}
+
+static int gcma_frontswap_load(unsigned type, pgoff_t offset,
+			       struct page *page)
+{
+	return 0;
+}
+
+static void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
+{
+	return;
+}
+
+static void gcma_frontswap_invalidate_area(unsigned type)
+{
+	return;
+}
+
+static struct frontswap_ops gcma_frontswap_ops = {
+	.init = gcma_frontswap_init,
+	.store = gcma_frontswap_store,
+	.load = gcma_frontswap_load,
+	.invalidate_page = gcma_frontswap_invalidate_page,
+	.invalidate_area = gcma_frontswap_invalidate_area
+};
+
+
 /*********************************
 * module init and exit
 **********************************/
@@ -200,6 +241,7 @@ static int __init init_gcma(void)
 			return -ENOMEM;
 		}
 	}
+	frontswap_register_ops(&gcma_frontswap_ops);
 	return 0;
 }
 
