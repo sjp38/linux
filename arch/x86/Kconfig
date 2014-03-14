@@ -2363,11 +2363,12 @@ config X86_DMA_REMAP
 	depends on STA2X11
 
 config IOSF_MBI
-	bool
+	bool "IOSF MBI support" if EXPERT
+	default y
 	depends on PCI
 	---help---
 	  To be selected by modules requiring access to the Intel OnChip System
-	  Fabric (IOSF) Sideband MailBox Interface (MBI). For MBI platforms
+	  Fabric (IOSF) Sideband MailBox Interface (MBI). For IOSF platforms
 	  enumerable by PCI.
 
 source "net/Kconfig"
