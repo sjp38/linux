@@ -54,7 +54,7 @@ early_param("gcma.def_cma_bytes", early_gcma);
 /* bitmap of contiguous memory areas.
  * 1 means alloced, 0 means free.
  */
-static u8 *cma_bitmaps[MAX_CMA];
+static unsigned long *cma_bitmaps[MAX_CMA];
 static unsigned long cma_pfns[MAX_CMA];
 static phys_addr_t cma_sizes[MAX_CMA];
 static int nr_reserved_cma = 0;
@@ -232,15 +232,17 @@ static struct frontswap_ops gcma_frontswap_ops = {
 **********************************/
 static int __init init_gcma(void)
 {
-	int i;
+	int i, bitmap_bytes;
 
 	if (!gcma_enabled)
 		return 0;
 	pr_info("loading gcma\n");
 
 	for (i = 0; i < nr_reserved_cma; i++) {
-		cma_bitmaps[i] = kzalloc(cma_sizes[i] / PAGE_SIZE / 8,
-					     GFP_KERNEL);
+		bitmap_bytes = cma_sizes[i] / PAGE_SIZE / sizeof(*cma_bitmaps);
+		if ((cma_sizes[i] / PAGE_SIZE) % sizeof(*cma_bitmaps))
+			bitmap_bytes += 1;
+		cma_bitmaps[i] = kzalloc(bitmap_bytes, GFP_KERNEL);
 		if (!cma_bitmaps[i]) {
 			pr_debug("failed to alloc bitmap\n");
 			return -ENOMEM;
