@@ -57,6 +57,7 @@ early_param("gcma.def_cma_bytes", early_gcma);
 static unsigned long *cma_bitmaps[MAX_CMA];
 static unsigned long cma_pfns[MAX_CMA];
 static phys_addr_t cma_sizes[MAX_CMA];
+static spinlock_t cma_spinlocks[MAX_CMA];
 static int nr_reserved_cma = 0;
 
 /**
@@ -123,14 +124,18 @@ struct page *gcma_alloc_contig(int id, int count)
 
 	bitmap = cma_bitmaps[id];
 
+	spin_lock(&cma_spinlocks[id]);
 	next_zero_area = bitmap_find_next_zero_area(bitmap,
 			cma_sizes[id] / PAGE_SIZE, 0, count, 1);
 	if (next_zero_area > cma_sizes[id] / PAGE_SIZE) {
 		pr_warn("failed to alloc pages. no such contig memory\n");
+		spin_unlock(&cma_spinlocks[id]);
 		return NULL;
 	}
 
 	bitmap_set(bitmap, next_zero_area, count);
+	spin_unlock(&cma_spinlocks[id]);
+
 	return pfn_to_page(cma_pfns[id] + next_zero_area);
 }
 
@@ -223,6 +228,8 @@ static int __init init_gcma(void)
 	pr_info("loading gcma\n");
 
 	for (i = 0; i < nr_reserved_cma; i++) {
+		spin_lock_init(&cma_spinlocks[i]);
+
 		bitmap_bytes = cma_sizes[i] / PAGE_SIZE / sizeof(*cma_bitmaps);
 		if ((cma_sizes[i] / PAGE_SIZE) % sizeof(*cma_bitmaps))
 			bitmap_bytes += 1;
