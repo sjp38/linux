@@ -52,11 +52,11 @@ static int test_alloc_release_contig(void)
 		return -1;
 	}
 
-	if (!gcma_release_contig(0, cma2, 16)) {
+	if (!gcma_release_contig(0, cma2, 10)) {
 		pr_err("failed to release 2nd cma\n");
 		return -1;
 	}
-	if (!gcma_release_contig(0, cma1, 8)) {
+	if (!gcma_release_contig(0, cma1, 5)) {
 		pr_err("failed to release 1st cma\n");
 		return -1;
 	}
