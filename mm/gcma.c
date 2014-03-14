@@ -113,8 +113,7 @@ int __init gcma_reserve_cma(phys_addr_t size)
  */
 struct page *gcma_alloc_contig(int id, int count)
 {
-	int i, j;
-	u8 *bitmap;
+	unsigned long *bitmap, next_zero_area;
 
 	pr_debug("%s called with id %d, count %d\n", __func__, id, count);
 	if (id >= nr_reserved_cma) {
@@ -122,25 +121,17 @@ struct page *gcma_alloc_contig(int id, int count)
 		return NULL;
 	}
 
-	count = ALIGN(count, 8);
-	pr_debug("now alloc %d pages\n", count);
-
 	bitmap = cma_bitmaps[id];
 
-	for (i = 0; i < cma_sizes[id] / PAGE_SIZE - count; i++) {
-		for (j = 0; j < count / 8; j++) {
-			pr_debug("check %d to 8 bits: 0x%02x\n",
-					i + j, bitmap[i + j]);
-			if (bitmap[i + j] != 0)
-				break;
-		}
-
-		if (j == count / 8) {
-			memset(bitmap + i, -1, count / 8);
-			return pfn_to_page(cma_pfns[id] + i * 8);
-		}
+	next_zero_area = bitmap_find_next_zero_area(bitmap,
+			cma_sizes[id] / PAGE_SIZE, 0, count, 1);
+	if (next_zero_area > cma_sizes[id] / PAGE_SIZE) {
+		pr_warn("failed to alloc pages. no such contig memory\n");
+		return NULL;
 	}
-	return NULL;
+
+	bitmap_set(bitmap, next_zero_area, count);
+	return pfn_to_page(cma_pfns[id] + next_zero_area);
 }
 
 /**
