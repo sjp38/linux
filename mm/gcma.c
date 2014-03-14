@@ -144,39 +144,30 @@ struct page *gcma_alloc_contig(int id, int count)
  */
 bool gcma_release_contig(int id, struct page *pages, int count)
 {
-	int i;
 	unsigned long pfn, offset;
-	u8 *bitmap;
+	unsigned long *bitmap;
+	unsigned long next_zero_bit;
 
-	pr_debug("%s called with id %d, pages %p\n, count %d\n",
-			__func__, id, pages, count);
+	pr_debug("%s called with id %d, count %d\n, pages %p\n",
+			__func__, id, count, pages);
 	if (id >= nr_reserved_cma) {
 		pr_info("too big id for allocation\n");
 		return NULL;
-	}
-	if (count % 8) {
-		pr_warn("count should be aligned to 8\n");
 	}
 
 	pfn = page_to_pfn(pages);
 	offset = pfn - cma_pfns[id];
 	pr_debug("pfn: %ld, cma start: %ld, offset: %ld\n",
 			pfn, cma_pfns[id], offset);
-	if (offset % 8) {
-		pr_warn("offset is not aligned to 8: %ld %ld %ld\n",
-				pfn, cma_pfns[id], offset);
+
+	bitmap = cma_bitmaps[id];
+	next_zero_bit = find_next_zero_bit(bitmap, offset + count, offset);
+	if (next_zero_bit < offset + count - 1) {
+		pr_err("freeing free area. free page: %ld\n", next_zero_bit);
 		return false;
 	}
-	bitmap = &cma_bitmaps[id][offset / 8];
-	for (i = 0; i < count / 8; i++) {
-		pr_debug("check %ld for release: 0x%2x\n",
-				offset / 8 + i, bitmap[i]);
-		if (bitmap[i] != 0xff) {
-			pr_warn("freeing free area\n");
-			return false;
-		}
-	}
-	memset(bitmap, 0, count / 8);
+
+	bitmap_clear(bitmap, offset, count);
 	return true;
 }
 
