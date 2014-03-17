@@ -102,6 +102,41 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	return nr_reserved_cma++;
 }
 
+/**
+ * gcma_alloc_contig - allocate pages from contiguous area
+ * @id: Identifier of contiguous memory area which the allocation be done.
+ * @count: Requested number of pages.
+ *
+ * Returns NULL if failed to allocate,
+ * Returns address of allocated contiguous memory area's start page.
+ */
+struct page *gcma_alloc_contig(int id, int count)
+{
+	unsigned long *bitmap, next_zero_area;
+
+	pr_debug("%s called with id %d, count %d\n", __func__, id, count);
+	if (id >= nr_reserved_cma) {
+		pr_info("too big id for allocation\n");
+		return NULL;
+	}
+
+	bitmap = cma_bitmaps[id];
+
+	spin_lock(&cma_spinlocks[id]);
+	next_zero_area = bitmap_find_next_zero_area(bitmap,
+			cma_sizes[id] / PAGE_SIZE, 0, count, 1);
+	if (next_zero_area > cma_sizes[id] / PAGE_SIZE) {
+		pr_warn("failed to alloc pages. no such contig memory\n");
+		spin_unlock(&cma_spinlocks[id]);
+		return NULL;
+	}
+
+	bitmap_set(bitmap, next_zero_area, count);
+	spin_unlock(&cma_spinlocks[id]);
+
+	return pfn_to_page(cma_pfns[id] + next_zero_area);
+}
+
 /*********************************
 * module init and exit
 **********************************/
@@ -114,6 +149,8 @@ static int __init init_gcma(void)
 	pr_info("loading gcma\n");
 
 	for (i = 0; i < nr_reserved_cma; i++) {
+		spin_lock_init(&cma_spinlocks[i]);
+
 		bitmap_bytes = cma_sizes[i] / PAGE_SIZE / sizeof(*cma_bitmaps);
 		if ((cma_sizes[i] / PAGE_SIZE) % sizeof(*cma_bitmaps))
 			bitmap_bytes += 1;
