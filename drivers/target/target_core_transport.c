@@ -1382,19 +1382,6 @@ int target_submit_cmd_map_sgls(struct se_cmd *se_cmd, struct se_session *se_sess
 	}
 
 	/*
-	 * Fail if protection operation requiers protection
-	 * information buffers but None are provided!
-	 */
-	if ((!se_cmd->t_prot_sg || !se_cmd->t_prot_nents) &&
-	    (se_cmd->prot_op != TARGET_PROT_NORMAL)) {
-		pr_err("ERROR: protection information was requested but "
-		       "protection buffers weren't provided.\n");
-		transport_generic_request_failure(se_cmd,
-						  TCM_INVALID_CDB_FIELD);
-		return 0;
-	}
-
-	/*
 	 * When a non zero sgl_count has been passed perform SGL passthrough
 	 * mapping for pre-allocated fabric memory instead of having target
 	 * core perform an internal SGL allocation..
