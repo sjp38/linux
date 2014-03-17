@@ -37,25 +37,44 @@ module_param_named(enabled, enabled, bool, 0);
 extern void gcma_frontswap_init(unsigned type);
 extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		struct page *page);
+extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
+		struct page *page);
 
-static int test_frontswap_store(void)
+static int test_frontswap(void)
 {
-	struct page *page;
-	void *page_va;
+	struct page *store_page, *load_page;
+	void *store_page_va, *load_page_va;
 
 	gcma_frontswap_init(0);
-	page = alloc_page(GFP_KERNEL);
-	if (!page) {
+	store_page = alloc_page(GFP_KERNEL);
+	if (!store_page) {
 		pr_info("alloc_page failed\n");
 	}
-	page_va = page_address(page);
-	memset(page_va, 1, PAGE_SIZE);
-	if (gcma_frontswap_store(0, 17, page)) {
+	store_page_va = page_address(store_page);
+	memset(store_page_va, 1, PAGE_SIZE);
+	if (gcma_frontswap_store(0, 17, store_page)) {
 		pr_info("failed gcma_frontswap_store call\n");
 		return -1;
 	}
 
-	free_page((unsigned long)page_va);
+	load_page = alloc_page(GFP_KERNEL);
+	if (!load_page) {
+		pr_info("alloc_page for frontswap load op check failed\n");
+		return -1;
+	}
+	if (gcma_frontswap_load(0, 17, load_page)) {
+		pr_info("failed gcma_frontswap_load call\n");
+		return -1;
+	}
+
+	load_page_va = page_address(load_page);
+	if (memcmp(store_page_va, load_page_va, PAGE_SIZE)) {
+		pr_info("data corrupted\n");
+		return -1;
+	}
+
+	free_page((unsigned long)store_page_va);
+	free_page((unsigned long)load_page_va);
 	return 0;
 }
 
@@ -113,7 +132,7 @@ static int __init init_gcma(void)
 	pr_info("test gcma\n");
 
 	do_test(test_alloc_release_contig);
-	do_test(test_frontswap_store);
+	do_test(test_frontswap);
 
 	return 0;
 }
