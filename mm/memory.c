@@ -3387,7 +3387,7 @@ static int __init fault_around_debugfs(void)
 	ret = debugfs_create_file("fault_around_order",	0644, NULL, NULL,
 			&fault_around_order_fops);
 	if (!ret)
-		pr_warning("Failed to create fault_around_order in debugfs");
+		pr_warn("Failed to create fault_around_order in debugfs");
 	return 0;
 }
 late_initcall(fault_around_debugfs);
