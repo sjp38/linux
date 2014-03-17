@@ -38,6 +38,8 @@ next/cleanup
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi tags/bcm2835-for-3.15-soc
 	at91/cleanup
 		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
+	patch
+		ARM: prima2: build reset code standalone
 
 next/soc
 	qcom/soc
