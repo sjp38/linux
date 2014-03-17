@@ -3,6 +3,10 @@ next/fixes-non-critical
 		irqchip: gic: use dmb ishst instead of dsb when raising a softirq
 		ARM: clps711x: autcpu12: Fix incorrect NAND CLE GPIO
 		MAINTAINERS: ARM: clps711x: Use regex patterns to involve all CLPS711X drivers
+		CNS3xxx: Fix PCIe early iotable_init
+		CNS3xxx: Fix a WARN() related to IRQ allocation.
+	omap/fixes
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/fixes-for-merge-window
 
 next/cleanup
 	cleanup/timex-removal
@@ -32,6 +36,8 @@ next/cleanup
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/cleanup
 	bcm2835/move
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi tags/bcm2835-for-3.15-soc
+	at91/cleanup
+		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
 
 next/soc
 	qcom/soc
