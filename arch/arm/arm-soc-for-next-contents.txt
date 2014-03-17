@@ -69,6 +69,16 @@ next/soc
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3.15-2
 	mvebu/soc3
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3.15-3
+	sunxi/soc
+		https://github.com/mripard/linux.git tags/sunxi-core-for-3.15
+	bcm/soc2
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/soc-3
+	patch
+		MAINTAINERS: Update ARM STi maintainers
+		ARM: davinci: tnetv107x removal
+	davinci/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/soc
+
 
 next/boards
 	renesas/boards
@@ -93,6 +103,8 @@ next/boards
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig3-for-v3.15
 	mvebu/defconfig2
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-defconfig-3.15-2
+	sunxi/defconfig
+		https://github.com/mripard/linux.git tags/sunxi-defconfig-for-3.15
 
 next/dt
 	renesas/dt
@@ -149,6 +161,16 @@ next/dt
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-4
 	mvebu/dt5
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-5
+	at91/dt
+		git://github.com/at91linux/linux-at91.git tags/at91-dt
+	sunxi/dt
+		https://github.com/mripard/linux.git tags/sunxi-dt-for-3.15-2
+	omap/dt3
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-part3
+	omap/overo
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-overo-signed
+	bcm/dt2
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/dt-2
 
 next/drivers
 	renesas/soc
