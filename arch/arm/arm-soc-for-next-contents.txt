@@ -86,7 +86,8 @@ next/soc
 		ARM: davinci: tnetv107x removal
 	davinci/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/soc
-
+	bcm/soc3
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/soc-4
 
 next/boards
 	renesas/boards
