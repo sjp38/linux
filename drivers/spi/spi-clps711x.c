@@ -25,134 +25,95 @@
 #define DRIVER_NAME	"spi-clps711x"
 
 struct spi_clps711x_data {
-	struct completion	done;
-
 	struct clk		*spi_clk;
 	u32			max_speed_hz;
 
 	u8			*tx_buf;
 	u8			*rx_buf;
-	int			count;
+	unsigned int		bpw;
 	int			len;
-
-	int			chipselect[0];
 };
 
 static int spi_clps711x_setup(struct spi_device *spi)
 {
-	struct spi_clps711x_data *hw = spi_master_get_devdata(spi->master);
-
 	/* We are expect that SPI-device is not selected */
-	gpio_direction_output(hw->chipselect[spi->chip_select],
-			      !(spi->mode & SPI_CS_HIGH));
+	gpio_direction_output(spi->cs_gpio, !(spi->mode & SPI_CS_HIGH));
 
 	return 0;
 }
 
-static void spi_clps711x_setup_mode(struct spi_device *spi)
+static void spi_clps711x_setup_xfer(struct spi_device *spi,
+				    struct spi_transfer *xfer)
 {
-	/* Setup edge for transfer */
-	if (spi->mode & SPI_CPHA)
-		clps_writew(clps_readw(SYSCON3) | SYSCON3_ADCCKNSEN, SYSCON3);
-	else
-		clps_writew(clps_readw(SYSCON3) & ~SYSCON3_ADCCKNSEN, SYSCON3);
-}
-
-static int spi_clps711x_setup_xfer(struct spi_device *spi,
-				   struct spi_transfer *xfer)
-{
-	u32 speed = xfer->speed_hz ? : spi->max_speed_hz;
-	u8 bpw = xfer->bits_per_word;
 	struct spi_clps711x_data *hw = spi_master_get_devdata(spi->master);
 
-	if (bpw != 8) {
-		dev_err(&spi->dev, "Unsupported master bus width %i\n", bpw);
-		return -EINVAL;
-	}
-
 	/* Setup SPI frequency divider */
-	if (!speed || (speed >= hw->max_speed_hz))
+	if (!xfer->speed_hz || (xfer->speed_hz >= hw->max_speed_hz))
 		clps_writel((clps_readl(SYSCON1) & ~SYSCON1_ADCKSEL_MASK) |
 			    SYSCON1_ADCKSEL(3), SYSCON1);
-	else if (speed >= (hw->max_speed_hz / 2))
+	else if (xfer->speed_hz >= (hw->max_speed_hz / 2))
 		clps_writel((clps_readl(SYSCON1) & ~SYSCON1_ADCKSEL_MASK) |
 			    SYSCON1_ADCKSEL(2), SYSCON1);
-	else if (speed >= (hw->max_speed_hz / 8))
+	else if (xfer->speed_hz >= (hw->max_speed_hz / 8))
 		clps_writel((clps_readl(SYSCON1) & ~SYSCON1_ADCKSEL_MASK) |
 			    SYSCON1_ADCKSEL(1), SYSCON1);
 	else
 		clps_writel((clps_readl(SYSCON1) & ~SYSCON1_ADCKSEL_MASK) |
 			    SYSCON1_ADCKSEL(0), SYSCON1);
+}
+
+static int spi_clps711x_prepare_message(struct spi_master *master,
+					struct spi_message *msg)
+{
+	struct spi_device *spi = msg->spi;
+
+	/* Setup edge for transfer */
+	if (spi->mode & SPI_CPHA)
+		clps_writew(clps_readw(SYSCON3) | SYSCON3_ADCCKNSEN, SYSCON3);
+	else
+		clps_writew(clps_readw(SYSCON3) & ~SYSCON3_ADCCKNSEN, SYSCON3);
 
 	return 0;
 }
 
-static int spi_clps711x_transfer_one_message(struct spi_master *master,
-					     struct spi_message *msg)
+static int spi_clps711x_transfer_one(struct spi_master *master,
+				     struct spi_device *spi,
+				     struct spi_transfer *xfer)
 {
 	struct spi_clps711x_data *hw = spi_master_get_devdata(master);
-	struct spi_transfer *xfer;
-	int status = 0, cs = hw->chipselect[msg->spi->chip_select];
-	u32 data;
+	u8 data;
 
-	spi_clps711x_setup_mode(msg->spi);
+	spi_clps711x_setup_xfer(spi, xfer);
 
-	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
-		if (spi_clps711x_setup_xfer(msg->spi, xfer)) {
-			status = -EINVAL;
-			goto out_xfr;
-		}
+	hw->len = xfer->len;
+	hw->bpw = xfer->bits_per_word;
+	hw->tx_buf = (u8 *)xfer->tx_buf;
+	hw->rx_buf = (u8 *)xfer->rx_buf;
 
-		gpio_set_value(cs, !!(msg->spi->mode & SPI_CS_HIGH));
-
-		reinit_completion(&hw->done);
-
-		hw->count = 0;
-		hw->len = xfer->len;
-		hw->tx_buf = (u8 *)xfer->tx_buf;
-		hw->rx_buf = (u8 *)xfer->rx_buf;
-
-		/* Initiate transfer */
-		data = hw->tx_buf ? hw->tx_buf[hw->count] : 0;
-		clps_writel(data | SYNCIO_FRMLEN(8) | SYNCIO_TXFRMEN, SYNCIO);
-
-		wait_for_completion(&hw->done);
-
-		if (xfer->delay_usecs)
-			udelay(xfer->delay_usecs);
-
-		if (xfer->cs_change ||
-		    list_is_last(&xfer->transfer_list, &msg->transfers))
-			gpio_set_value(cs, !(msg->spi->mode & SPI_CS_HIGH));
-
-		msg->actual_length += xfer->len;
-	}
-
-out_xfr:
-	msg->status = status;
-	spi_finalize_current_message(master);
-
-	return 0;
+	/* Initiate transfer */
+	data = hw->tx_buf ? *hw->tx_buf++ : 0;
+	clps_writel(data | SYNCIO_FRMLEN(hw->bpw) | SYNCIO_TXFRMEN, SYNCIO);
+	return 1;
 }
 
 static irqreturn_t spi_clps711x_isr(int irq, void *dev_id)
 {
-	struct spi_clps711x_data *hw = (struct spi_clps711x_data *)dev_id;
-	u32 data;
+	struct spi_master *master = dev_id;
+	struct spi_clps711x_data *hw = spi_master_get_devdata(master);
+	u8 data;
 
 	/* Handle RX */
 	data = clps_readb(SYNCIO);
 	if (hw->rx_buf)
-		hw->rx_buf[hw->count] = (u8)data;
-
-	hw->count++;
+		*hw->rx_buf++ = data;
 
 	/* Handle TX */
-	if (hw->count < hw->len) {
-		data = hw->tx_buf ? hw->tx_buf[hw->count] : 0;
-		clps_writel(data | SYNCIO_FRMLEN(8) | SYNCIO_TXFRMEN, SYNCIO);
+	if (--hw->len > 0) {
+		data = hw->tx_buf ? *hw->tx_buf++ : 0;
+		clps_writel(data | SYNCIO_FRMLEN(hw->bpw) | SYNCIO_TXFRMEN,
+			    SYNCIO);
 	} else
-		complete(&hw->done);
+		spi_finalize_current_transfer(master);
 
 	return IRQ_HANDLED;
 }
@@ -174,33 +135,33 @@ static int spi_clps711x_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	master = spi_alloc_master(&pdev->dev,
-				  sizeof(struct spi_clps711x_data) +
-				  sizeof(int) * pdata->num_chipselect);
-	if (!master) {
-		dev_err(&pdev->dev, "SPI allocating memory error\n");
+	master = spi_alloc_master(&pdev->dev, sizeof(*hw));
+	if (!master)
 		return -ENOMEM;
+
+	master->cs_gpios = devm_kzalloc(&pdev->dev, sizeof(int) *
+					pdata->num_chipselect, GFP_KERNEL);
+	if (!master->cs_gpios) {
+		ret = -ENOMEM;
+		goto err_out;
 	}
 
 	master->bus_num = pdev->id;
 	master->mode_bits = SPI_CPHA | SPI_CS_HIGH;
-	master->bits_per_word_mask = SPI_BPW_MASK(8);
+	master->bits_per_word_mask =  SPI_BPW_RANGE_MASK(1, 8);
 	master->num_chipselect = pdata->num_chipselect;
 	master->setup = spi_clps711x_setup;
-	master->transfer_one_message = spi_clps711x_transfer_one_message;
+	master->prepare_message = spi_clps711x_prepare_message;
+	master->transfer_one = spi_clps711x_transfer_one;
 
 	hw = spi_master_get_devdata(master);
 
 	for (i = 0; i < master->num_chipselect; i++) {
-		hw->chipselect[i] = pdata->chipselect[i];
-		if (!gpio_is_valid(hw->chipselect[i])) {
-			dev_err(&pdev->dev, "Invalid CS GPIO %i\n", i);
-			ret = -EINVAL;
-			goto err_out;
-		}
-		if (devm_gpio_request(&pdev->dev, hw->chipselect[i], NULL)) {
+		master->cs_gpios[i] = pdata->chipselect[i];
+		ret = devm_gpio_request(&pdev->dev, master->cs_gpios[i],
+					DRIVER_NAME);
+		if (ret) {
 			dev_err(&pdev->dev, "Can't get CS GPIO %i\n", i);
-			ret = -EINVAL;
 			goto err_out;
 		}
 	}
@@ -213,7 +174,6 @@ static int spi_clps711x_probe(struct platform_device *pdev)
 	}
 	hw->max_speed_hz = clk_get_rate(hw->spi_clk);
 
-	init_completion(&hw->done);
 	platform_set_drvdata(pdev, master);
 
 	/* Disable extended mode due hardware problems */
@@ -223,7 +183,7 @@ static int spi_clps711x_probe(struct platform_device *pdev)
 	clps_readl(SYNCIO);
 
 	ret = devm_request_irq(&pdev->dev, IRQ_SSEOTI, spi_clps711x_isr, 0,
-			       dev_name(&pdev->dev), hw);
+			       dev_name(&pdev->dev), master);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't request IRQ\n");
 		goto err_out;
