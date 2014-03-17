@@ -445,7 +445,22 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 
 static void gcma_frontswap_invalidate_area(unsigned type)
 {
-	return;
+	struct frontswap_tree *tree = frontswap_trees[type];
+	struct frontswap_entry *entry, *n;
+
+	if (!tree) {
+		pr_warn("failed to get frontswap tree for type %d\n", type);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode)
+		frontswap_free_entry(entry);
+	tree->rbroot = RB_ROOT;
+	spin_unlock(&tree->lock);
+
+	kfree(tree);
+	frontswap_trees[type] = NULL;
 }
 
 static struct frontswap_ops gcma_frontswap_ops = {
