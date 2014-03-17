@@ -496,11 +496,13 @@ int hfsplus_file_extend(struct inode *inode)
 			goto insert_extent;
 	}
 out:
-	mutex_unlock(&hip->extents_lock);
 	if (!res) {
 		hip->alloc_blocks += len;
+		mutex_unlock(&hip->extents_lock);
 		hfsplus_mark_inode_dirty(inode, HFSPLUS_I_ALLOC_DIRTY);
+		return 0;
 	}
+	mutex_unlock(&hip->extents_lock);
 	return res;
 
 insert_extent:
@@ -590,9 +592,9 @@ void hfsplus_file_truncate(struct inode *inode)
 		hfs_brec_remove(&fd);
 	}
 	hfs_find_exit(&fd);
-	mutex_unlock(&hip->extents_lock);
 
 	hip->alloc_blocks = blk_cnt;
+	mutex_unlock(&hip->extents_lock);
 out:
 	hip->phys_size = inode->i_size;
 	hip->fs_blocks = (inode->i_size + sb->s_blocksize - 1) >>
