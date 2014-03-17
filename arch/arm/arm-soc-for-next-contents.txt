@@ -28,6 +28,10 @@ next/cleanup
 		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/irq-mmp
 	sirf/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/baohua/linux tags/sirf-soc-for-3.15
+	bcm/cleanup
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/cleanup
+	bcm2835/move
+		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi tags/bcm2835-for-3.15-soc
 
 next/soc
 	qcom/soc
@@ -52,6 +56,15 @@ next/soc
 	imx/soc
 		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx-soc-3.15
 		contains cleanup/kconfig
+		contains depends/irqchip-mvebu-fixes
+	patch
+		ARM: enable ARM_HAS_SG_CHAIN for multiplatform
+	bcm/soc
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/soc-2
+	renesas/soc2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc2-for-v3.15
+	renesas/soc3
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc3-for-v3.15
 
 next/boards
 	renesas/boards
@@ -68,6 +81,12 @@ next/boards
 		ARM: qcom: Enable basic support for Qualcomm platforms in multi_v7_defconfig
 	pxa/soc
 		https://git.kernel.org/pub/scm/linux/kernel/git/hzhuang1/linux tags/pxa
+	keystone/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone-soc
+	renesas/boards3
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-boards3-for-v3.15
+	renesas/defconfig3
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig3-for-v3.15
 
 next/dt
 	renesas/dt
@@ -102,6 +121,20 @@ next/dt
 		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx6-dt-3.15-2
 	imx/dt2
 		git://git.linaro.org/people/shawnguo/linux-2.6 tags/imx-dt-3.15-2
+	keystone/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/ssantosh/linux-keystone tags/keystone-dts
+	bcm/dt
+		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/dt
+	bcm2835/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi tags/bcm2835-for-3.15-dt
+	omap/dt2
+		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-part2
+	zynq/dt
+		git://git.xilinx.com/linux-xlnx tags/zynq-dt-for-3.15
+	renesas/dt3
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt3-for-v3.15
+	renesas/dt4
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt4-for-v3.15
 
 next/drivers
 	renesas/soc
@@ -129,6 +162,18 @@ next/drivers
 		git://git.infradead.org/linux-mvebu tags/mvebu-watchdog-3.15-2
 	omap/crossbar
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/crossbar-signed
+	renesas/soc-clocks
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-clock-for-v3.15
+	renesas/soc-clocks2
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-clock2-for-v3.15
+	renesas/soc-clocks3
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-clock3-for-v3.15
+	renesas/soc-clocks4
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-clock4-for-v3.15
+
+next/sh
+	renesas/sh-intc
+		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-intc-for-v3.15
 
 next/cleanup2
 	integrator/multiplatform-base
@@ -145,6 +190,10 @@ fixes
 		https://github.com/mripard/linux tags/sunxi-fixes-for-3.14
 	<no branch> (735ea23c4868bf3123a4c79184e9206e0cc60211)
 		git://github.com/broadcom/bcm11351 tags/bcm-for-3.14-pinctrl-reduced-rename
+		contains depends/irqchip-mvebu-fixes
 	<no branch> (ae41a3030ce8901853b3cfd5e118a4b0288aa068)
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-dt-rc4
+	patch
+		MAINTAINERS: update IMX kernel git tree
+		ARM: at91: fix network interface ordering for sama5d36
 
