@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/memblock.h>
 #include <linux/frontswap.h>
+#include <linux/highmem.h>
 
 /*********************************
 * tunables
@@ -182,15 +183,131 @@ bool gcma_release_contig(int id, struct page *pages, int count)
 /**********************************
 * frontswap backend
 ***********************************/
+
+struct frontswap_entry {
+	struct rb_node rbnode;
+	pgoff_t offset;
+	unsigned int cma_index;
+	struct page *page;
+	int refcount;
+};
+
+struct frontswap_tree {
+	struct rb_root rbroot;
+	spinlock_t lock;
+};
+
+static struct frontswap_tree *frontswap_trees[MAX_SWAPFILES];
+static struct kmem_cache *frontswap_entry_cache;
+
+/*
+ * Stolen from zswap.
+ * In the case that a entry with the same offset is found, a pointer to
+ * the existing entry is stored in dupentry and the function returns -EEXIST
+ */
+static int frontswap_rb_insert(struct rb_root *root,
+		struct frontswap_entry *entry,
+		struct frontswap_entry **dupentry)
+{
+	struct rb_node **link = &root->rb_node, *parent = NULL;
+	struct frontswap_entry *myentry;
+
+	while (*link) {
+		parent = *link;
+		myentry = rb_entry(parent, struct frontswap_entry, rbnode);
+		if (myentry->offset > entry->offset)
+			link = &(*link)->rb_left;
+		else if (myentry->offset < entry->offset)
+			link = &(*link)->rb_right;
+		else {
+			*dupentry = myentry;
+			return -EEXIST;
+		}
+	}
+	rb_link_node(&entry->rbnode, parent, link);
+	rb_insert_color(&entry->rbnode, root);
+	return 0;
+}
+
+/*
+ * Stolen from zswap.
+ */
+static void frontswap_rb_erase(struct rb_root *root,
+		struct frontswap_entry *entry)
+{
+	if (!RB_EMPTY_NODE(&entry->rbnode)) {
+		rb_erase(&entry->rbnode, root);
+		RB_CLEAR_NODE(&entry->rbnode);
+	}
+}
+
 static void gcma_frontswap_init(unsigned type)
 {
+	struct frontswap_tree *tree;
+
+	tree = kzalloc(sizeof(struct frontswap_tree), GFP_KERNEL);
+	if (!tree) {
+		pr_err("front swap tree for type %d failed\n", type);
+		return;
+	}
+	tree->rbroot = RB_ROOT;
+	spin_lock_init(&tree->lock);
+	frontswap_trees[type] = tree;
 	return;
 }
 
 static int gcma_frontswap_store(unsigned type, pgoff_t offset,
 				struct page *page)
 {
-	return 0;
+	struct frontswap_entry *entry, *dupentry;
+	struct page *cma_page = NULL;
+	struct frontswap_tree *tree = frontswap_trees[type];
+	u8 *src, *dst;
+	int i, ret;
+
+	if (!tree) {
+		pr_warn("frontswap tree for type %d is not exist\n",
+				type);
+		return -ENODEV;
+	}
+
+	for (i = 0; i < nr_reserved_cma; i++) {
+		cma_page = gcma_alloc_contig(i, 1);
+		if (cma_page != NULL)
+			break;
+	}
+	if (cma_page == NULL) {
+		pr_warn("failed to get 1 page from gcma\n");
+		return -ENOMEM;
+	}
+
+	entry = kmem_cache_alloc(frontswap_entry_cache, GFP_KERNEL);
+	if (!entry) {
+		pr_warn("failed to get frontswap entry from cache\n");
+		return -ENOMEM;
+	}
+	entry->page = cma_page;
+	entry->refcount = 1;
+	RB_CLEAR_NODE(&entry->rbnode);
+
+	src = kmap_atomic(page);
+	dst = kmap_atomic(cma_page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	entry->offset = offset;
+	entry->cma_index = i;
+
+	spin_lock(&tree->lock);
+	do {
+		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
+		if (ret == -EEXIST)
+			frontswap_rb_erase(&tree->rbroot, dupentry);
+	} while (ret == -EEXIST);
+	spin_unlock(&tree->lock);
+
+	return ret;
 }
 
 static int gcma_frontswap_load(unsigned type, pgoff_t offset,
@@ -241,6 +358,12 @@ static int __init init_gcma(void)
 			return -ENOMEM;
 		}
 	}
+	frontswap_entry_cache = KMEM_CACHE(frontswap_entry, 0);
+	if (frontswap_entry_cache == NULL) {
+		pr_warn("failed to create frontswap cache\n");
+		return -ENOMEM;
+	}
+
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 	return 0;
