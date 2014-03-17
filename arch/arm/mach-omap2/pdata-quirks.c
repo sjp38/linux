@@ -23,6 +23,8 @@
 #include "common-board-devices.h"
 #include "dss-common.h"
 #include "control.h"
+#include "omap-secure.h"
+#include "omap_device.h"
 #include "soc.h"
 
 struct pdata_init {
