@@ -241,6 +241,70 @@ static void frontswap_rb_erase(struct rb_root *root,
 	}
 }
 
+/*
+ * Stolen from zswap.
+ */
+static struct frontswap_entry *frontswap_rb_search(struct rb_root *root,
+		pgoff_t offset)
+{
+	struct rb_node *node = root->rb_node;
+	struct frontswap_entry *entry;
+
+	while (node) {
+		entry = rb_entry(node, struct frontswap_entry, rbnode);
+		if (entry->offset > offset)
+			node = node->rb_left;
+		else if (entry->offset < offset)
+			node = node->rb_right;
+		else
+			return entry;
+	}
+	return NULL;
+}
+
+static void frontswap_free_entry(struct frontswap_entry *entry)
+{
+	gcma_release_contig(entry->cma_index, entry->page, 1);
+	kmem_cache_free(frontswap_entry_cache, entry);
+}
+
+/*
+ * Caller should hold frontswap tree spinlock
+ */
+static void frontswap_entry_get(struct frontswap_entry *entry)
+{
+	entry->refcount++;
+}
+
+/*
+ * Stolen from zswap.
+ * Caller should hold frontswap tree spinlock
+ * remove from the tree and free it, if nobody reference the entry
+ */
+static void frontswap_entry_put(struct frontswap_tree *tree,
+		struct frontswap_entry *entry)
+{
+	int refcount = --entry->refcount;
+
+	BUG_ON(refcount < 0);
+	if (refcount == 0) {
+		frontswap_rb_erase(&tree->rbroot, entry);
+		frontswap_free_entry(entry);
+	}
+}
+
+/*
+ * Caller should hold frontswap tree spinlock
+ */
+static struct frontswap_entry *frontswap_rb_find_get(struct rb_root *root,
+			pgoff_t offset)
+{
+	struct frontswap_entry *entry = frontswap_rb_search(root, offset);
+	if (entry)
+		frontswap_entry_get(entry);
+	return entry;
+}
+
 #define TEST_FRONTSWAP 1
 
 #if !TEST_FRONTSWAP
@@ -318,9 +382,40 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	return ret;
 }
 
+/*
+ * returns 0 if success
+ * returns non-zero if failed
+ */
 static int gcma_frontswap_load(unsigned type, pgoff_t offset,
 			       struct page *page)
 {
+	struct frontswap_tree *tree = frontswap_trees[type];
+	struct frontswap_entry *entry;
+	u8 *src, *dst;
+
+	if (!tree) {
+		pr_warn("tree for type %d not exist\n", type);
+		return -1;
+	}
+	spin_lock(&tree->lock);
+	entry = frontswap_rb_find_get(&tree->rbroot, offset);
+	spin_unlock(&tree->lock);
+	if (!entry) {
+		pr_warn("couldn't find the page(type %d, offset %ld) from frontswap tree\n",
+				type, offset);
+		return -1;
+	}
+
+	src = kmap_atomic(entry->page);
+	dst = kmap_atomic(page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	spin_lock(&tree->lock);
+	frontswap_entry_put(tree, entry);
+	spin_unlock(&tree->lock);
+
 	return 0;
 }
 
