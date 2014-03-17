@@ -40,6 +40,7 @@ extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
 extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
 		struct page *page);
 extern void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset);
+extern void gcma_frontswap_invalidate_area(unsigned type);
 
 static int test_frontswap(void)
 {
@@ -77,6 +78,12 @@ static int test_frontswap(void)
 	gcma_frontswap_invalidate_page(0, 17);
 	if (!gcma_frontswap_load(0, 17, load_page)) {
 		pr_info("invalidated page still alive. test fail\n");
+		return -1;
+	}
+
+	gcma_frontswap_invalidate_area(0);
+	if (!gcma_frontswap_load(0, 19, load_page)) {
+		pr_info("invalidated type still alive. test fail\n");
 		return -1;
 	}
 
