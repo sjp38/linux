@@ -681,17 +681,14 @@ static int ocfs2_move_extent(struct ocfs2_move_extents_context *context,
 	}
 
 	gd = (struct ocfs2_group_desc *)gd_bh->b_data;
-	ret = ocfs2_alloc_dinode_update_counts(gb_inode, handle, gb_bh, len,
-					       le16_to_cpu(gd->bg_chain));
+	ret = ocfs2_alloc_dinode_update_bitmap(handle,
+				gb_inode, gb_bh, gd, gb_bh,
+				le16_to_cpu(gd->bg_chain),
+				goal_bit, len);
 	if (ret) {
 		mlog_errno(ret);
 		goto out_commit;
 	}
-
-	ret = ocfs2_block_group_set_bits(handle, gb_inode, gd, gd_bh,
-					 goal_bit, len);
-	if (ret)
-		mlog_errno(ret);
 
 	/*
 	 * Here we should write the new page out first if we are

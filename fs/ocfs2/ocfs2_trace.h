@@ -788,7 +788,7 @@ DEFINE_OCFS2_UINT_UINT_UINT_EVENT(ocfs2_reserve_suballoc_bits_no_new_group);
 
 DEFINE_OCFS2_ULL_EVENT(ocfs2_reserve_new_inode_new_group);
 
-DEFINE_OCFS2_UINT_UINT_EVENT(ocfs2_block_group_set_bits);
+DEFINE_OCFS2_UINT_UINT_EVENT(ocfs2_alloc_dinode_update_bitmap);
 
 TRACE_EVENT(ocfs2_relink_block_group,
 	TP_PROTO(unsigned long long i_blkno, unsigned int chain,
