@@ -556,11 +556,13 @@ void hfsplus_file_truncate(struct inode *inode)
 
 	blk_cnt = (inode->i_size + HFSPLUS_SB(sb)->alloc_blksz - 1) >>
 			HFSPLUS_SB(sb)->alloc_blksz_shift;
-	alloc_cnt = hip->alloc_blocks;
-	if (blk_cnt == alloc_cnt)
-		goto out;
 
 	mutex_lock(&hip->extents_lock);
+
+	alloc_cnt = hip->alloc_blocks;
+	if (blk_cnt == alloc_cnt)
+		goto out_unlock;
+
 	res = hfs_find_init(HFSPLUS_SB(sb)->ext_tree, &fd);
 	if (res) {
 		mutex_unlock(&hip->extents_lock);
@@ -594,6 +596,7 @@ void hfsplus_file_truncate(struct inode *inode)
 	hfs_find_exit(&fd);
 
 	hip->alloc_blocks = blk_cnt;
+out_unlock:
 	mutex_unlock(&hip->extents_lock);
 out:
 	hip->phys_size = inode->i_size;
