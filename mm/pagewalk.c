@@ -321,7 +321,7 @@ int walk_page_range(unsigned long start, unsigned long end,
 			next = vma->vm_start;
 		} else { /* inside the found vma */
 			walk->vma = vma;
-			next = min_t(unsigned long, end, vma->vm_end);
+			next = min(end, vma->vm_end);
 
 			err = walk_page_test(start, next, walk);
 			if (skip_lower_level_walking(walk))
