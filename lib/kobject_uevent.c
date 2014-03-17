@@ -342,10 +342,10 @@ int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 		info = call_usermodehelper_setup(env->argv[0], env->argv,
 						 env->envp, GFP_KERNEL,
 						 NULL, cleanup_uevent_env, env);
-		if (info)
+		if (info) {
 			retval = call_usermodehelper_exec(info, UMH_NO_WAIT);
-		if (!retval)
-			env = NULL;	/* will be freed by cleanup_uevent_env */
+			env = NULL;	/* freed by cleanup_uevent_env */
+		}
 	}
 
 exit:
