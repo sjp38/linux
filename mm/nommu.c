@@ -461,7 +461,7 @@ EXPORT_SYMBOL_GPL(vm_unmap_aliases);
  * Implement a stub for vmalloc_sync_all() if the architecture chose not to
  * have one.
  */
-void  __weak vmalloc_sync_all(void)
+void __weak vmalloc_sync_all(void)
 {
 }
 
