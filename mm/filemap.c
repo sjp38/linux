@@ -790,9 +790,9 @@ pgoff_t page_cache_prev_hole(struct address_space *mapping,
 EXPORT_SYMBOL(page_cache_prev_hole);
 
 /**
- * __find_get_page - find and get a page reference
+ * find_get_entry - find and get a page cache entry
  * @mapping: the address_space to search
- * @offset: the page index
+ * @offset: the page cache index
  *
  * Looks up the page cache slot at @mapping & @offset.  If there is a
  * page cache page, it is returned with an increased refcount.
@@ -802,7 +802,7 @@ EXPORT_SYMBOL(page_cache_prev_hole);
  *
  * Otherwise, %NULL is returned.
  */
-struct page *__find_get_page(struct address_space *mapping, pgoff_t offset)
+struct page *find_get_entry(struct address_space *mapping, pgoff_t offset)
 {
 	void **pagep;
 	struct page *page;
@@ -843,7 +843,7 @@ out:
 
 	return page;
 }
-EXPORT_SYMBOL(__find_get_page);
+EXPORT_SYMBOL(find_get_entry);
 
 /**
  * find_get_page - find and get a page reference
@@ -857,7 +857,7 @@ EXPORT_SYMBOL(__find_get_page);
  */
 struct page *find_get_page(struct address_space *mapping, pgoff_t offset)
 {
-	struct page *page = __find_get_page(mapping, offset);
+	struct page *page = find_get_entry(mapping, offset);
 
 	if (radix_tree_exceptional_entry(page))
 		page = NULL;
@@ -866,9 +866,9 @@ struct page *find_get_page(struct address_space *mapping, pgoff_t offset)
 EXPORT_SYMBOL(find_get_page);
 
 /**
- * __find_lock_page - locate, pin and lock a pagecache page
+ * find_lock_entry - locate, pin and lock a page cache entry
  * @mapping: the address_space to search
- * @offset: the page index
+ * @offset: the page cache index
  *
  * Looks up the page cache slot at @mapping & @offset.  If there is a
  * page cache page, it is returned locked and with an increased
@@ -879,13 +879,14 @@ EXPORT_SYMBOL(find_get_page);
  *
  * Otherwise, %NULL is returned.
  *
- * __find_lock_page() may sleep.
+ * find_lock_entry() may sleep.
  */
-struct page *__find_lock_page(struct address_space *mapping, pgoff_t offset)
+struct page *find_lock_entry(struct address_space *mapping, pgoff_t offset)
 {
 	struct page *page;
+
 repeat:
-	page = __find_get_page(mapping, offset);
+	page = find_get_entry(mapping, offset);
 	if (page && !radix_tree_exception(page)) {
 		lock_page(page);
 		/* Has the page been truncated? */
@@ -898,7 +899,7 @@ repeat:
 	}
 	return page;
 }
-EXPORT_SYMBOL(__find_lock_page);
+EXPORT_SYMBOL(find_lock_entry);
 
 /**
  * find_lock_page - locate, pin and lock a pagecache page
@@ -915,7 +916,7 @@ EXPORT_SYMBOL(__find_lock_page);
  */
 struct page *find_lock_page(struct address_space *mapping, pgoff_t offset)
 {
-	struct page *page = __find_lock_page(mapping, offset);
+	struct page *page = find_lock_entry(mapping, offset);
 
 	if (radix_tree_exceptional_entry(page))
 		page = NULL;
@@ -973,35 +974,37 @@ repeat:
 EXPORT_SYMBOL(find_or_create_page);
 
 /**
- * __find_get_pages - gang pagecache lookup
+ * find_get_entries - gang pagecache lookup
  * @mapping:	The address_space to search
- * @start:	The starting page index
- * @nr_pages:	The maximum number of pages
- * @pages:	Where the resulting entries are placed
- * @indices:	The cache indices corresponding to the entries in @pages
+ * @start:	The starting page cache index
+ * @nr_entries:	The maximum number of entries
+ * @entries:	Where the resulting entries are placed
+ * @indices:	The cache indices corresponding to the entries in @entries
  *
- * __find_get_pages() will search for and return a group of up to
- * @nr_pages pages in the mapping.  The pages are placed at @pages.
- * __find_get_pages() takes a reference against the returned pages.
+ * find_get_entries() will search for and return a group of up to
+ * @nr_entries entries in the mapping.  The entries are placed at
+ * @entries.  find_get_entries() takes a reference against any actual
+ * pages it returns.
  *
- * The search returns a group of mapping-contiguous pages with ascending
- * indexes.  There may be holes in the indices due to not-present pages.
+ * The search returns a group of mapping-contiguous page cache entries
+ * with ascending indexes.  There may be holes in the indices due to
+ * not-present pages.
  *
  * Any shadow entries of evicted pages are included in the returned
  * array.
  *
- * __find_get_pages() returns the number of pages and shadow entries
+ * find_get_entries() returns the number of pages and shadow entries
  * which were found.
  */
-unsigned __find_get_pages(struct address_space *mapping,
-			  pgoff_t start, unsigned int nr_pages,
-			  struct page **pages, pgoff_t *indices)
+unsigned find_get_entries(struct address_space *mapping,
+			  pgoff_t start, unsigned int nr_entries,
+			  struct page **entries, pgoff_t *indices)
 {
 	void **slot;
 	unsigned int ret = 0;
 	struct radix_tree_iter iter;
 
-	if (!nr_pages)
+	if (!nr_entries)
 		return 0;
 
 	rcu_read_lock();
@@ -1032,8 +1035,8 @@ repeat:
 		}
 export:
 		indices[ret] = iter.index;
-		pages[ret] = page;
-		if (++ret == nr_pages)
+		entries[ret] = page;
+		if (++ret == nr_entries)
 			break;
 	}
 	rcu_read_unlock();

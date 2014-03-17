@@ -248,14 +248,14 @@ pgoff_t page_cache_next_hole(struct address_space *mapping,
 pgoff_t page_cache_prev_hole(struct address_space *mapping,
 			     pgoff_t index, unsigned long max_scan);
 
-struct page *__find_get_page(struct address_space *mapping, pgoff_t offset);
+struct page *find_get_entry(struct address_space *mapping, pgoff_t offset);
 struct page *find_get_page(struct address_space *mapping, pgoff_t offset);
-struct page *__find_lock_page(struct address_space *mapping, pgoff_t offset);
+struct page *find_lock_entry(struct address_space *mapping, pgoff_t offset);
 struct page *find_lock_page(struct address_space *mapping, pgoff_t offset);
 struct page *find_or_create_page(struct address_space *mapping, pgoff_t index,
 				 gfp_t gfp_mask);
-unsigned __find_get_pages(struct address_space *mapping, pgoff_t start,
-			  unsigned int nr_pages, struct page **pages,
+unsigned find_get_entries(struct address_space *mapping, pgoff_t start,
+			  unsigned int nr_entries, struct page **entries,
 			  pgoff_t *indices);
 unsigned find_get_pages(struct address_space *mapping, pgoff_t start,
 			unsigned int nr_pages, struct page **pages);
