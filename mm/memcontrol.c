@@ -2757,6 +2757,35 @@ bypass:
 	return -EINTR;
 }
 
+/**
+ * mem_cgroup_try_charge_mm - try charging a mm
+ * @mm: mm_struct to charge
+ * @nr_pages: number of pages to charge
+ * @oom: trigger OOM if reclaim fails
+ *
+ * Returns the charged mem_cgroup associated with the given mm_struct or
+ * NULL the charge failed.
+ */
+static struct mem_cgroup *mem_cgroup_try_charge_mm(struct mm_struct *mm,
+				 gfp_t gfp_mask,
+				 unsigned int nr_pages,
+				 bool oom)
+
+{
+	struct mem_cgroup *memcg;
+	int ret;
+
+	memcg = get_mem_cgroup_from_mm(mm);
+	ret = mem_cgroup_try_charge(memcg, gfp_mask, nr_pages, oom);
+	css_put(&memcg->css);
+	if (ret == -EINTR)
+		memcg = root_mem_cgroup;
+	else if (ret)
+		memcg = NULL;
+
+	return memcg;
+}
+
 /*
  * Somemtimes we have to undo a charge we got by try_charge().
  * This function is for that and do uncharge, put css's refcnt.
@@ -3827,7 +3856,6 @@ int mem_cgroup_newpage_charge(struct page *page,
 	unsigned int nr_pages = 1;
 	struct mem_cgroup *memcg;
 	bool oom = true;
-	int ret;
 
 	if (mem_cgroup_disabled())
 		return 0;
@@ -3846,13 +3874,9 @@ int mem_cgroup_newpage_charge(struct page *page,
 		oom = false;
 	}
 
-	memcg = get_mem_cgroup_from_mm(mm);
-	ret = mem_cgroup_try_charge(memcg, gfp_mask, nr_pages, oom);
-	css_put(&memcg->css);
-	if (ret == -EINTR)
-		memcg = root_mem_cgroup;
-	else if (ret)
-		return ret;
+	memcg = mem_cgroup_try_charge_mm(mm, gfp_mask, nr_pages, oom);
+	if (!memcg)
+		return -ENOMEM;
 	__mem_cgroup_commit_charge(memcg, page, nr_pages,
 				   MEM_CGROUP_CHARGE_TYPE_ANON, false);
 	return 0;
@@ -3913,15 +3937,10 @@ int mem_cgroup_try_charge_swapin(struct mm_struct *mm, struct page *page,
 	 */
 	if (!PageSwapCache(page)) {
 		struct mem_cgroup *memcg;
-		int ret;
 
-		memcg = get_mem_cgroup_from_mm(mm);
-		ret = mem_cgroup_try_charge(memcg, gfp_mask, 1, true);
-		css_put(&memcg->css);
-		if (ret == -EINTR)
-			memcg = root_mem_cgroup;
-		else if (ret)
-			return ret;
+		memcg = mem_cgroup_try_charge_mm(mm, gfp_mask, 1, true);
+		if (!memcg)
+			return -ENOMEM;
 		*memcgp = memcg;
 		return 0;
 	}
@@ -3995,13 +4014,9 @@ int mem_cgroup_cache_charge(struct page *page, struct mm_struct *mm,
 	if (unlikely(!mm))
 		memcg = root_mem_cgroup;
 	else {
-		memcg = get_mem_cgroup_from_mm(mm);
-		ret = mem_cgroup_try_charge(memcg, gfp_mask, 1, true);
-		css_put(&memcg->css);
-		if (ret == -EINTR)
-			memcg = root_mem_cgroup;
-		else if (ret)
-			return ret;
+		memcg = mem_cgroup_try_charge_mm(mm, gfp_mask, 1, true);
+		if (!memcg)
+			return -ENOMEM;
 	}
 	__mem_cgroup_commit_charge(memcg, page, 1, type, false);
 	return 0;
