@@ -39,6 +39,7 @@ extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		struct page *page);
 extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
 		struct page *page);
+extern void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset);
 
 static int test_frontswap(void)
 {
@@ -70,6 +71,12 @@ static int test_frontswap(void)
 	load_page_va = page_address(load_page);
 	if (memcmp(store_page_va, load_page_va, PAGE_SIZE)) {
 		pr_info("data corrupted\n");
+		return -1;
+	}
+
+	gcma_frontswap_invalidate_page(0, 17);
+	if (!gcma_frontswap_load(0, 17, load_page)) {
+		pr_info("invalidated page still alive. test fail\n");
 		return -1;
 	}
 
