@@ -58,7 +58,10 @@ early_param("gcma.def_cma_bytes", early_gcma);
 static unsigned long *cma_bitmaps[MAX_CMA];
 static unsigned long cma_pfns[MAX_CMA];
 static phys_addr_t cma_sizes[MAX_CMA];
+static spinlock_t cma_spinlocks[MAX_CMA];
 static int nr_reserved_cma;
+static atomic_t total_size = ATOMIC_INIT(0);
+static atomic_t alloced_size = ATOMIC_INIT(0);
 
 /**
  * gcma_reserve_cma - Reserve contiguous memory area
@@ -101,8 +104,11 @@ int __init gcma_reserve_cma(phys_addr_t size)
 	cma_sizes[nr_reserved_cma] = size;
 	cma_pfns[nr_reserved_cma] = PFN_DOWN(addr);
 
+	atomic_add(size, &total_size);
 	return nr_reserved_cma++;
 }
+
+static void cleanup_frontswap(void);
 
 /**
  * gcma_alloc_contig - allocate pages from contiguous area
@@ -135,6 +141,13 @@ struct page *gcma_alloc_contig(int id, int count)
 
 	bitmap_set(bitmap, next_zero_area, count);
 	spin_unlock(&cma_spinlocks[id]);
+
+	atomic_add(count * PAGE_SIZE, &alloced_size);
+	/* Trigger frontswap cleanup if 50% of contiguous memory is full */
+	if (atomic_read(&alloced_size) >= atomic_read(&total_size) / 2) {
+		pr_debug("trigger frontswap cleanup\n");
+		cleanup_frontswap();
+	}
 
 	return pfn_to_page(cma_pfns[id] + next_zero_area);
 }
@@ -176,6 +189,7 @@ bool gcma_release_contig(int id, struct page *pages, int count)
 
 	bitmap_clear(bitmap, offset, count);
 	spin_unlock(&cma_spinlocks[id]);
+	atomic_sub(count * PAGE_SIZE, &alloced_size);
 	return true;
 }
 
@@ -199,6 +213,7 @@ struct frontswap_tree {
 
 static struct frontswap_tree *frontswap_trees[MAX_SWAPFILES];
 static struct kmem_cache *frontswap_entry_cache;
+static spinlock_t cleanup_lock;
 
 /*
  * Stolen from zswap.
@@ -443,6 +458,23 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 	spin_unlock(&tree->lock);
 }
 
+static void gcma_frontswap_cleanup_area(unsigned type)
+{
+	struct frontswap_tree *tree = frontswap_trees[type];
+	struct frontswap_entry *entry, *n;
+
+	if (!tree) {
+		pr_warn("failed to get frontswap tree for type %d\n", type);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode)
+		frontswap_free_entry(entry);
+	tree->rbroot = RB_ROOT;
+	spin_unlock(&tree->lock);
+}
+
 #if !TEST_FRONTSWAP
 static
 #endif
@@ -464,6 +496,20 @@ void gcma_frontswap_invalidate_area(unsigned type)
 
 	kfree(tree);
 	frontswap_trees[type] = NULL;
+}
+
+static void cleanup_frontswap(void)
+{
+	int i = 0;
+
+	spin_lock(&cleanup_lock);
+	for (i = 0; i < MAX_SWAPFILES; i++) {
+		if (frontswap_trees[i]) {
+			pr_debug("cleanup %d type!!!!\n", i);
+			gcma_frontswap_cleanup_area(i);
+		}
+	}
+	spin_unlock(&cleanup_lock);
 }
 
 static struct frontswap_ops gcma_frontswap_ops = {
@@ -498,6 +544,7 @@ static int __init init_gcma(void)
 			return -ENOMEM;
 		}
 	}
+	spin_lock_init(&cleanup_lock);
 	frontswap_entry_cache = KMEM_CACHE(frontswap_entry, 0);
 	if (frontswap_entry_cache == NULL) {
 		pr_warn("failed to create frontswap cache\n");
