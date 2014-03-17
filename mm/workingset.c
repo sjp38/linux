@@ -273,7 +273,10 @@ static unsigned long count_shadow_nodes(struct shrinker *shrinker,
 	unsigned long max_nodes;
 	unsigned long pages;
 
+	local_irq_disable();
 	shadow_nodes = list_lru_count_node(&workingset_shadow_nodes, sc->nid);
+	local_irq_enable();
+
 	pages = node_present_pages(sc->nid);
 	/*
 	 * Active cache pages are limited to 50% of memory, and shadow
@@ -322,7 +325,7 @@ static enum lru_status shadow_lru_isolate(struct list_head *item,
 	mapping = node->private_data;
 
 	/* Coming from the list, invert the lock order */
-	if (!spin_trylock_irq(&mapping->tree_lock)) {
+	if (!spin_trylock(&mapping->tree_lock)) {
 		spin_unlock(lru_lock);
 		ret = LRU_RETRY;
 		goto out;
@@ -355,10 +358,12 @@ static enum lru_status shadow_lru_isolate(struct list_head *item,
 	if (!__radix_tree_delete_node(&mapping->page_tree, node))
 		BUG();
 
-	spin_unlock_irq(&mapping->tree_lock);
+	spin_unlock(&mapping->tree_lock);
 	ret = LRU_REMOVED_RETRY;
 out:
+	local_irq_enable();
 	cond_resched();
+	local_irq_disable();
 	spin_lock(lru_lock);
 	return ret;
 }
@@ -366,8 +371,13 @@ out:
 static unsigned long scan_shadow_nodes(struct shrinker *shrinker,
 				       struct shrink_control *sc)
 {
-	return list_lru_walk_node(&workingset_shadow_nodes, sc->nid,
+	unsigned long ret;
+
+	local_irq_disable();
+	ret =  list_lru_walk_node(&workingset_shadow_nodes, sc->nid,
 				  shadow_lru_isolate, NULL, &sc->nr_to_scan);
+	local_irq_enable();
+	return ret;
 }
 
 static struct shrinker workingset_shadow_shrinker = {
@@ -377,11 +387,17 @@ static struct shrinker workingset_shadow_shrinker = {
 	.flags = SHRINKER_NUMA_AWARE,
 };
 
+/*
+ * Our list_lru->lock is IRQ-safe as it nests inside the IRQ-safe
+ * mapping->tree_lock.
+ */
+static struct lock_class_key shadow_nodes_key;
+
 static int __init workingset_init(void)
 {
 	int ret;
 
-	ret = list_lru_init(&workingset_shadow_nodes);
+	ret = list_lru_init_key(&workingset_shadow_nodes, &shadow_nodes_key);
 	if (ret)
 		goto err;
 	ret = register_shrinker(&workingset_shadow_shrinker);
