@@ -143,7 +143,7 @@ int list_lru_init_key(struct list_lru *lru, struct lock_class_key *key)
 	}
 	return 0;
 }
-EXPORT_SYMBOL_GPL(list_lru_init);
+EXPORT_SYMBOL_GPL(list_lru_init_key);
 
 void list_lru_destroy(struct list_lru *lru)
 {
