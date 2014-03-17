@@ -424,7 +424,20 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 
 static void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 {
-	return;
+	struct frontswap_tree *tree = frontswap_trees[type];
+	struct frontswap_entry *entry;
+
+	spin_lock(&tree->lock);
+	entry = frontswap_rb_search(&tree->rbroot, offset);
+	if (!entry) {
+		pr_warn("failed to get entry\n");
+		spin_unlock(&tree->lock);
+		return;
+	}
+	frontswap_rb_erase(&tree->rbroot, entry);
+	frontswap_entry_put(tree, entry);
+
+	spin_unlock(&tree->lock);
 }
 
 static void gcma_frontswap_invalidate_area(unsigned type)
