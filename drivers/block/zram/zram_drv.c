@@ -583,7 +583,7 @@ static ssize_t disksize_store(struct device *dev,
 	struct zcomp *comp;
 	struct zram_meta *meta;
 	struct zram *zram = dev_to_zram(dev);
-	int err = -EBUSY;
+	int err;
 
 	disksize = memparse(buf, NULL);
 	if (!disksize)
@@ -599,14 +599,14 @@ static ssize_t disksize_store(struct device *dev,
 		pr_info("Cannot initialise %s compressing backend\n",
 				zram->compressor);
 		err = PTR_ERR(comp);
-		goto out_cleanup;
+		goto out_free_meta;
 	}
 
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {
-		up_write(&zram->init_lock);
 		pr_info("Cannot change disksize for initialized device\n");
-		goto out_cleanup;
+		err = -EBUSY;
+		goto out_destroy_comp;
 	}
 
 	zram->meta = meta;
@@ -614,12 +614,12 @@ static ssize_t disksize_store(struct device *dev,
 	zram->disksize = disksize;
 	set_capacity(zram->disk, zram->disksize >> SECTOR_SHIFT);
 	up_write(&zram->init_lock);
-
 	return len;
 
-out_cleanup:
-	if (!IS_ERR(comp))
-		zcomp_destroy(comp);
+out_destroy_comp:
+	up_write(&zram->init_lock);
+	zcomp_destroy(comp);
+out_free_meta:
 	zram_meta_free(meta);
 	return err;
 }
