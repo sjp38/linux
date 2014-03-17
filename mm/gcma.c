@@ -443,7 +443,10 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 	spin_unlock(&tree->lock);
 }
 
-static void gcma_frontswap_invalidate_area(unsigned type)
+#if !TEST_FRONTSWAP
+static
+#endif
+void gcma_frontswap_invalidate_area(unsigned type)
 {
 	struct frontswap_tree *tree = frontswap_trees[type];
 	struct frontswap_entry *entry, *n;
