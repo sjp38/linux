@@ -47,7 +47,8 @@ dtb-$(CONFIG_ARCH_AT91)	+= sama5d36ek.dtb
 
 dtb-$(CONFIG_ARCH_ATLAS6) += atlas6-evb.dtb
 dtb-$(CONFIG_ARCH_BCM2835) += bcm2835-rpi-b.dtb
-dtb-$(CONFIG_ARCH_BCM_MOBILE) += bcm28155-ap.dtb
+dtb-$(CONFIG_ARCH_BCM_MOBILE) += bcm28155-ap.dtb \
+	bcm21664-garnet.dtb
 dtb-$(CONFIG_ARCH_BCM2835) += bcm2835-rpi-b.dtb
 dtb-$(CONFIG_ARCH_BCM_5301X) += bcm4708-netgear-r6250.dtb
 dtb-$(CONFIG_ARCH_BERLIN) += \
@@ -244,6 +245,16 @@ dtb-$(CONFIG_ARCH_OMAP2PLUS) += omap2420-h4.dtb \
 	omap3-n900.dtb \
 	omap3-n9.dtb \
 	omap3-n950.dtb \
+	omap3-overo-alto35.dtb \
+	omap3-overo-storm-alto35.dtb \
+	omap3-overo-chestnut43.dtb \
+	omap3-overo-storm-chestnut43.dtb \
+	omap3-overo-gallop43.dtb \
+	omap3-overo-storm-gallop43.dtb \
+	omap3-overo-palo43.dtb \
+	omap3-overo-storm-palo43.dtb \
+	omap3-overo-summit.dtb \
+	omap3-overo-storm-summit.dtb \
 	omap3-overo-tobi.dtb \
 	omap3-overo-storm-tobi.dtb \
 	omap3-gta04.dtb \
@@ -326,6 +337,8 @@ dtb-$(CONFIG_ARCH_SUNXI) += \
 	sun4i-a10-cubieboard.dtb \
 	sun4i-a10-mini-xplus.dtb \
 	sun4i-a10-hackberry.dtb \
+	sun4i-a10-inet97fv2.dtb \
+	sun4i-a10-olinuxino-lime.dtb \
 	sun4i-a10-pcduino.dtb \
 	sun5i-a10s-olinuxino-micro.dtb \
 	sun5i-a13-olinuxino.dtb \
