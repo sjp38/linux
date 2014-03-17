@@ -3850,7 +3850,7 @@ out:
 	return ret;
 }
 
-int mem_cgroup_newpage_charge(struct page *page,
+int mem_cgroup_charge_anon(struct page *page,
 			      struct mm_struct *mm, gfp_t gfp_mask)
 {
 	unsigned int nr_pages = 1;
@@ -3986,7 +3986,7 @@ void mem_cgroup_commit_charge_swapin(struct page *page,
 					  MEM_CGROUP_CHARGE_TYPE_ANON);
 }
 
-int mem_cgroup_cache_charge(struct page *page, struct mm_struct *mm,
+int mem_cgroup_charge_file(struct page *page, struct mm_struct *mm,
 				gfp_t gfp_mask)
 {
 	enum charge_type type = MEM_CGROUP_CHARGE_TYPE_CACHE;
