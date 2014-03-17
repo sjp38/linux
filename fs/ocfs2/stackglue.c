@@ -607,9 +607,7 @@ static ssize_t ocfs2_dlm_recover_show(struct kobject *kobj,
 					struct kobj_attribute *attr,
 					char *buf)
 {
-	ssize_t ret;
-	ret = snprintf(buf, PAGE_SIZE, "1\n");
-	return ret;
+	return snprintf(buf, PAGE_SIZE, "1\n");
 }
 
 static struct kobj_attribute ocfs2_attr_dlm_recover_support =
