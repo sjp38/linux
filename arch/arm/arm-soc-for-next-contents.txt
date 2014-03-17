@@ -113,6 +113,8 @@ next/boards
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-defconfig-3.15-2
 	sunxi/defconfig
 		https://github.com/mripard/linux.git tags/sunxi-defconfig-for-3.15
+	patch
+		ARM: add Marvell Dove and some drivers to multi_v7 defconfig
 
 next/dt
 	renesas/dt
