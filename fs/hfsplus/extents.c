@@ -598,7 +598,6 @@ void hfsplus_file_truncate(struct inode *inode)
 	hip->alloc_blocks = blk_cnt;
 out_unlock:
 	mutex_unlock(&hip->extents_lock);
-out:
 	hip->phys_size = inode->i_size;
 	hip->fs_blocks = (inode->i_size + sb->s_blocksize - 1) >>
 		sb->s_blocksize_bits;
