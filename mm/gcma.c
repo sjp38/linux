@@ -241,7 +241,12 @@ static void frontswap_rb_erase(struct rb_root *root,
 	}
 }
 
-static void gcma_frontswap_init(unsigned type)
+#define TEST_FRONTSWAP 1
+
+#if !TEST_FRONTSWAP
+static
+#endif
+void gcma_frontswap_init(unsigned type)
 {
 	struct frontswap_tree *tree;
 
@@ -256,7 +261,10 @@ static void gcma_frontswap_init(unsigned type)
 	return;
 }
 
-static int gcma_frontswap_store(unsigned type, pgoff_t offset,
+#if !TEST_FRONTSWAP
+static
+#endif
+int gcma_frontswap_store(unsigned type, pgoff_t offset,
 				struct page *page)
 {
 	struct frontswap_entry *entry, *dupentry;

@@ -25,6 +25,7 @@
 
 #include <linux/module.h>
 #include <linux/gcma.h>
+#include <linux/mm.h>
 
 /*********************************
 * tunables
@@ -32,6 +33,31 @@
 /* Enable/disable gcma (disabled by default, fixed at boot for now) */
 static bool enabled __read_mostly;
 module_param_named(enabled, enabled, bool, 0);
+
+extern void gcma_frontswap_init(unsigned type);
+extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
+		struct page *page);
+
+static int test_frontswap_store(void)
+{
+	struct page *page;
+	void *page_va;
+
+	gcma_frontswap_init(0);
+	page = alloc_page(GFP_KERNEL);
+	if (!page) {
+		pr_info("alloc_page failed\n");
+	}
+	page_va = page_address(page);
+	memset(page_va, 1, PAGE_SIZE);
+	if (gcma_frontswap_store(0, 17, page)) {
+		pr_info("failed gcma_frontswap_store call\n");
+		return -1;
+	}
+
+	free_page((unsigned long)page_va);
+	return 0;
+}
 
 static int test_alloc_release_contig(void)
 {
@@ -87,6 +113,7 @@ static int __init init_gcma(void)
 	pr_info("test gcma\n");
 
 	do_test(test_alloc_release_contig);
+	do_test(test_frontswap_store);
 
 	return 0;
 }
