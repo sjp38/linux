@@ -73,7 +73,7 @@ do { \
 		else \
 			mm->mmap = NULL; \
 		rb_erase(&high_vma->vm_rb, &mm->mm_rb); \
-		mm->mmap_cache = NULL; \
+		vmacache_invalidate(mm); \
 		mm->map_count--; \
 		remove_vma(high_vma); \
 	} \

@@ -363,7 +363,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 
 	mm->locked_vm = 0;
 	mm->mmap = NULL;
-	mm->mmap_cache = NULL;
+	mm->vmacache_seqnum = 0;
 	mm->map_count = 0;
 	cpumask_clear(mm_cpumask(mm));
 	mm->mm_rb = RB_ROOT;
@@ -837,6 +837,9 @@ static struct mm_struct *dup_mm(struct task_struct *tsk)
 
 	if (mm->binfmt && !try_module_get(mm->binfmt->module))
 		goto free_pt;
+
+	/* initialize the new vmacache entries */
+	vmacache_flush(tsk);
 
 	return mm;
 
