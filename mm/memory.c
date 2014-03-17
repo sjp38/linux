@@ -3415,6 +3415,7 @@ static int do_shared_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		pgoff_t pgoff, unsigned int flags, pte_t orig_pte)
 {
 	struct page *fault_page;
+	struct address_space *mapping;
 	spinlock_t *ptl;
 	pte_t entry, *pte;
 	int dirtied = 0;
@@ -3475,13 +3476,14 @@ set_pte:
 
 	if (set_page_dirty(fault_page))
 		dirtied = 1;
+	mapping = fault_page->mapping;
 	unlock_page(fault_page);
-	if ((dirtied || vma->vm_ops->page_mkwrite) && fault_page->mapping) {
+	if ((dirtied || vma->vm_ops->page_mkwrite) && mapping) {
 		/*
 		 * Some device drivers do not set page.mapping but still
 		 * dirty their pages
 		 */
-		balance_dirty_pages_ratelimited(fault_page->mapping);
+		balance_dirty_pages_ratelimited(mapping);
 	}
 
 	/* file_update_time outside page_lock */
