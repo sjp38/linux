@@ -422,7 +422,10 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	return 0;
 }
 
-static void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
+#if !TEST_FRONTSWAP
+static
+#endif
+void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 {
 	struct frontswap_tree *tree = frontswap_trees[type];
 	struct frontswap_entry *entry;
