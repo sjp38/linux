@@ -26,12 +26,10 @@
 ** TypeDefs
 *****************************************************************************/
 
-typedef unsigned short TBLOCKENTRY;	/* index the blk transfer table 0-7 */
-
 typedef struct TransferDesc {
 	long long lpvBuff;	/* address of transfer area (for 64 or 32 bit) */
 	unsigned int dwLength;	/* length of the area */
-	TBLOCKENTRY wAreaNum;	/* number of transfer area to set up */
+	unsigned short wAreaNum;	/* number of transfer area to set up */
 	short eSize;		/* element size - is tohost flag for circular */
 } TRANSFERDESC;
 
@@ -84,12 +82,6 @@ typedef struct TCSBlock {
  * type of call so as to provide some sort of type safety in the calling:
  */
 #define CED_MAGIC_IOC 0xce
-
-/* NBNB: READ and WRITE are from the point of view of the device, not user. */
-typedef struct ced_ioc_string {
-	int nChars;
-	char buffer[256];
-} CED_IOC_STRING;
 
 #define IOCTL_CED_SENDSTRING(n)		_IOC(_IOC_WRITE, CED_MAGIC_IOC, 2, n)
 

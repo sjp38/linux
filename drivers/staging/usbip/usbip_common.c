@@ -55,7 +55,8 @@ static ssize_t usbip_debug_store(struct device *dev,
 				 struct device_attribute *attr, const char *buf,
 				 size_t count)
 {
-	sscanf(buf, "%lx", &usbip_debug_flag);
+	if (sscanf(buf, "%lx", &usbip_debug_flag) != 1)
+		return -EINVAL;
 	return count;
 }
 DEVICE_ATTR_RW(usbip_debug);
@@ -99,26 +100,8 @@ static void usbip_dump_usb_device(struct usb_device *udev)
 	struct device *dev = &udev->dev;
 	int i;
 
-	dev_dbg(dev, "       devnum(%d) devpath(%s) ",
-		udev->devnum, udev->devpath);
-
-	switch (udev->speed) {
-	case USB_SPEED_HIGH:
-		pr_debug("SPD_HIGH ");
-		break;
-	case USB_SPEED_FULL:
-		pr_debug("SPD_FULL ");
-		break;
-	case USB_SPEED_LOW:
-		pr_debug("SPD_LOW ");
-		break;
-	case USB_SPEED_UNKNOWN:
-		pr_debug("SPD_UNKNOWN ");
-		break;
-	default:
-		pr_debug("SPD_ERROR ");
-		break;
-	}
+	dev_dbg(dev, "       devnum(%d) devpath(%s) usb speed(%s)",
+		udev->devnum, udev->devpath, usb_speed_string(udev->speed));
 
 	pr_debug("tt %p, ttport %d\n", udev->tt, udev->ttport);
 
