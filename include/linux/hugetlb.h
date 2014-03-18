@@ -6,6 +6,8 @@
 #include <linux/fs.h>
 #include <linux/hugetlb_inline.h>
 #include <linux/cgroup.h>
+#include <linux/list.h>
+#include <linux/kref.h>
 
 struct ctl_table;
 struct user_struct;
@@ -23,6 +25,14 @@ struct hugepage_subpool {
 	long max_hpages, used_hpages;
 };
 
+struct resv_map {
+	struct kref refs;
+	spinlock_t lock;
+	struct list_head regions;
+};
+extern struct resv_map *resv_map_alloc(void);
+void resv_map_release(struct kref *ref);
+
 extern spinlock_t hugetlb_lock;
 extern int hugetlb_max_hstate __read_mostly;
 #define for_each_hstate(h) \
@@ -30,8 +40,6 @@ extern int hugetlb_max_hstate __read_mostly;
 
 struct hugepage_subpool *hugepage_new_subpool(long nr_blocks);
 void hugepage_put_subpool(struct hugepage_subpool *spool);
-
-int PageHuge(struct page *page);
 
 void reset_vma_resv_huge_pages(struct vm_area_struct *vma);
 int hugetlb_sysctl_handler(struct ctl_table *, int, void __user *, size_t *, loff_t *);
@@ -98,11 +106,6 @@ unsigned long hugetlb_change_protection(struct vm_area_struct *vma,
 		unsigned long address, unsigned long end, pgprot_t newprot);
 
 #else /* !CONFIG_HUGETLB_PAGE */
-
-static inline int PageHuge(struct page *page)
-{
-	return 0;
-}
 
 static inline void reset_vma_resv_huge_pages(struct vm_area_struct *vma)
 {

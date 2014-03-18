@@ -1,0 +1,21 @@
+* Real-Time Clock for Qualcomm 8058/8921 PMICs
+
+Required properties:
+- compatible: should be one of the following.
+    * "qcom,pm8058-rtc"
+    * "qcom,pm8921-rtc"
+- reg: base address of the register region
+- interrupts: interrupt list for the RTC, must contain a single interrupt
+              specifier for the alarm interrupt
+
+Optional properties:
+- allow-set-time: indicates that the setting of RTC time is allowed by
+                  the host CPU
+
+Example:
+
+	rtc@11d {
+		compatible = "qcom,pm8921-rtc";
+		reg = <0x11d>;
+		interrupts = <0x27 0>;
+	};
