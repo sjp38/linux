@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005 - 2013 Emulex
+ * Copyright (C) 2005 - 2014 Emulex
  * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -203,6 +203,7 @@ struct be_mcc_mailbox {
 #define OPCODE_COMMON_GET_BEACON_STATE			70
 #define OPCODE_COMMON_READ_TRANSRECV_DATA		73
 #define OPCODE_COMMON_GET_PORT_NAME			77
+#define OPCODE_COMMON_SET_LOGICAL_LINK_CONFIG		80
 #define OPCODE_COMMON_SET_INTERRUPT_ENABLE		89
 #define OPCODE_COMMON_SET_FN_PRIVILEGES			100
 #define OPCODE_COMMON_GET_PHY_DETAILS			102
@@ -1098,14 +1099,6 @@ struct be_cmd_resp_query_fw_cfg {
 	u32 function_caps;
 };
 
-/* Is BE in a multi-channel mode */
-static inline bool be_is_mc(struct be_adapter *adapter)
-{
-	return adapter->function_mode & FLEX10_MODE ||
-		adapter->function_mode & VNIC_MODE ||
-		adapter->function_mode & UMC_ENABLED;
-}
-
 /******************** RSS Config ****************************************/
 /* RSS type		Input parameters used to compute RX hash
  * RSS_ENABLE_IPV4	SRC IPv4, DST IPv4
@@ -1828,6 +1821,7 @@ struct be_cmd_req_set_ext_fat_caps {
 #define NIC_RESOURCE_DESC_TYPE_V0		0x41
 #define PCIE_RESOURCE_DESC_TYPE_V1		0x50
 #define NIC_RESOURCE_DESC_TYPE_V1		0x51
+#define PORT_RESOURCE_DESC_TYPE_V1		0x55
 #define MAX_RESOURCE_DESC			264
 
 /* QOS unit number */
@@ -1890,6 +1884,33 @@ struct be_nic_res_desc {
 	u16 rsvd7;
 	u32 rsvd8[7];
 } __packed;
+
+/************ Multi-Channel type ***********/
+enum mc_type {
+	MC_NONE = 0x01,
+	UMC = 0x02,
+	FLEX10 = 0x03,
+	vNIC1 = 0x04,
+	nPAR = 0x05,
+	UFP = 0x06,
+	vNIC2 = 0x07
+};
+
+struct be_port_res_desc {
+	struct be_res_desc_hdr hdr;
+	u8 rsvd0;
+	u8 flags;
+	u8 rsvd1;
+	u8 mc_type;
+	u16 rsvd2;
+	u32 rsvd3[20];
+} __packed;
+
+/* Is BE in a multi-channel mode */
+static inline bool be_is_mc(struct be_adapter *adapter)
+{
+	return adapter->mc_type > MC_NONE;
+}
 
 struct be_cmd_req_get_func_config {
 	struct be_cmd_req_hdr hdr;
@@ -1969,6 +1990,13 @@ struct be_cmd_resp_get_iface_list {
 	struct be_cmd_req_hdr hdr;
 	u32 if_cnt;
 	struct be_if_desc if_desc;
+};
+
+/*************** Set logical link ********************/
+#define PLINK_TRACK_SHIFT	8
+struct be_cmd_req_set_ll_link {
+	struct be_cmd_req_hdr hdr;
+	u32 link_config; /* Bit 0: UP_DOWN, Bit 9: PLINK */
 };
 
 int be_pci_fnum_get(struct be_adapter *adapter);
@@ -2092,3 +2120,5 @@ int be_cmd_get_if_id(struct be_adapter *adapter, struct be_vf_cfg *vf_cfg,
 		     int vf_num);
 int be_cmd_enable_vf(struct be_adapter *adapter, u8 domain);
 int be_cmd_intr_set(struct be_adapter *adapter, bool intr_enable);
+int be_cmd_set_logical_link_config(struct be_adapter *adapter,
+					  int link_state, u8 domain);

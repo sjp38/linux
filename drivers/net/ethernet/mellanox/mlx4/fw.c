@@ -935,7 +935,10 @@ int mlx4_QUERY_PORT_wrapper(struct mlx4_dev *dev, int slave,
 		MLX4_PUT(outbox->buf, port_type,
 			 QUERY_PORT_SUPPORTED_TYPE_OFFSET);
 
-		short_field = 1; /* slave max gids */
+		if (dev->caps.port_type[vhcr->in_modifier] == MLX4_PORT_TYPE_ETH)
+			short_field = mlx4_get_slave_num_gids(dev, slave);
+		else
+			short_field = 1; /* slave max gids */
 		MLX4_PUT(outbox->buf, short_field,
 			 QUERY_PORT_CUR_MAX_GID_OFFSET);
 
@@ -1891,7 +1894,8 @@ void mlx4_opreq_action(struct work_struct *work)
 			err = EINVAL;
 			break;
 		}
-		err = mlx4_cmd(dev, 0, ((u32) err | cpu_to_be32(token) << 16),
+		err = mlx4_cmd(dev, 0, ((u32) err |
+					(__force u32)cpu_to_be32(token) << 16),
 			       1, MLX4_CMD_GET_OP_REQ, MLX4_CMD_TIME_CLASS_A,
 			       MLX4_CMD_NATIVE);
 		if (err) {

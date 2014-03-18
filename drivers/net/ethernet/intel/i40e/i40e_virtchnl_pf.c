@@ -69,7 +69,7 @@ static inline bool i40e_vc_isvalid_vector_id(struct i40e_vf *vf, u8 vector_id)
 {
 	struct i40e_pf *pf = vf->pf;
 
-	return vector_id <= pf->hw.func_caps.num_msix_vectors_vf;
+	return vector_id < pf->hw.func_caps.num_msix_vectors_vf;
 }
 
 /***********************vf resource mgmt routines*****************/
@@ -126,8 +126,8 @@ static void i40e_config_irq_link_list(struct i40e_vf *vf, u16 vsi_idx,
 		reg_idx = I40E_VPINT_LNKLST0(vf->vf_id);
 	else
 		reg_idx = I40E_VPINT_LNKLSTN(
-					   (pf->hw.func_caps.num_msix_vectors_vf
-					      * vf->vf_id) + (vector_id - 1));
+		     ((pf->hw.func_caps.num_msix_vectors_vf - 1) * vf->vf_id) +
+		     (vector_id - 1));
 
 	if (vecmap->rxq_map == 0 && vecmap->txq_map == 0) {
 		/* Special case - No queues mapped on this vector */
@@ -408,18 +408,10 @@ static int i40e_alloc_vsi_res(struct i40e_vf *vf, enum i40e_vsi_type type)
 				 "Could not allocate VF broadcast filter\n");
 	}
 
-	if (!f) {
-		dev_err(&pf->pdev->dev, "Unable to add ucast filter\n");
-		ret = -ENOMEM;
-		goto error_alloc_vsi_res;
-	}
-
 	/* program mac filter */
 	ret = i40e_sync_vsi_filters(vsi);
-	if (ret) {
+	if (ret)
 		dev_err(&pf->pdev->dev, "Unable to program ucast filters\n");
-		goto error_alloc_vsi_res;
-	}
 
 error_alloc_vsi_res:
 	return ret;
@@ -514,7 +506,8 @@ static void i40e_free_vf_res(struct i40e_vf *vf)
 		vf->lan_vsi_index = 0;
 		vf->lan_vsi_id = 0;
 	}
-	msix_vf = pf->hw.func_caps.num_msix_vectors_vf + 1;
+	msix_vf = pf->hw.func_caps.num_msix_vectors_vf;
+
 	/* disable interrupts so the VF starts in a known state */
 	for (i = 0; i < msix_vf; i++) {
 		/* format is same for both registers */
@@ -679,9 +672,9 @@ void i40e_reset_vf(struct i40e_vf *vf, bool flr)
 complete_reset:
 	/* reallocate vf resources to reset the VSI state */
 	i40e_free_vf_res(vf);
-	mdelay(10);
 	i40e_alloc_vf_res(vf);
 	i40e_enable_vf_mappings(vf);
+	set_bit(I40E_VF_STAT_ACTIVE, &vf->vf_states);
 
 	/* tell the VF the reset is done */
 	wr32(hw, I40E_VFGEN_RSTAT1(vf->vf_id), I40E_VFR_VFACTIVE);
@@ -847,7 +840,7 @@ void i40e_free_vfs(struct i40e_pf *pf)
  *
  * allocate vf resources
  **/
-static int i40e_alloc_vfs(struct i40e_pf *pf, u16 num_alloc_vfs)
+int i40e_alloc_vfs(struct i40e_pf *pf, u16 num_alloc_vfs)
 {
 	struct i40e_vf *vfs;
 	int i, ret = 0;
@@ -855,16 +848,18 @@ static int i40e_alloc_vfs(struct i40e_pf *pf, u16 num_alloc_vfs)
 	/* Disable interrupt 0 so we don't try to handle the VFLR. */
 	i40e_irq_dynamic_disable_icr0(pf);
 
-	ret = pci_enable_sriov(pf->pdev, num_alloc_vfs);
-	if (ret) {
-		dev_err(&pf->pdev->dev,
-			"pci_enable_sriov failed with error %d!\n", ret);
-		pf->num_alloc_vfs = 0;
-		goto err_iov;
+	/* Check to see if we're just allocating resources for extant VFs */
+	if (pci_num_vf(pf->pdev) != num_alloc_vfs) {
+		ret = pci_enable_sriov(pf->pdev, num_alloc_vfs);
+		if (ret) {
+			dev_err(&pf->pdev->dev,
+				"Failed to enable SR-IOV, error %d.\n", ret);
+			pf->num_alloc_vfs = 0;
+			goto err_iov;
+		}
 	}
-
 	/* allocate memory */
-	vfs = kzalloc(num_alloc_vfs * sizeof(struct i40e_vf), GFP_KERNEL);
+	vfs = kcalloc(num_alloc_vfs, sizeof(struct i40e_vf), GFP_KERNEL);
 	if (!vfs) {
 		ret = -ENOMEM;
 		goto err_alloc;
@@ -1873,7 +1868,8 @@ int i40e_vc_process_vflr_event(struct i40e_pf *pf)
 			/* clear the bit in GLGEN_VFLRSTAT */
 			wr32(hw, I40E_GLGEN_VFLRSTAT(reg_idx), (1 << bit_idx));
 
-			i40e_reset_vf(vf, true);
+			if (!test_bit(__I40E_DOWN, &pf->state))
+				i40e_reset_vf(vf, true);
 		}
 	}
 

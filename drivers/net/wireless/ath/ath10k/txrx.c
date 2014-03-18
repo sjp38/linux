@@ -204,7 +204,7 @@ static void process_rx_rates(struct ath10k *ar, struct htt_rx_info *info,
 			break;
 		/* 80MHZ */
 		case 2:
-			status->flag |= RX_FLAG_80MHZ;
+			status->vht_flag |= RX_VHT_FLAG_80MHZ;
 		}
 
 		status->flag |= RX_FLAG_VHT;
@@ -259,19 +259,19 @@ void ath10k_process_rx(struct ath10k *ar, struct htt_rx_info *info)
 	status->freq = ch->center_freq;
 
 	ath10k_dbg(ATH10K_DBG_DATA,
-		   "rx skb %p len %u %s%s%s%s%s %srate_idx %u vht_nss %u freq %u band %u\n",
+		   "rx skb %p len %u %s%s%s%s%s %srate_idx %u vht_nss %u freq %u band %u flag 0x%x fcs-err %i\n",
 		   info->skb,
 		   info->skb->len,
 		   status->flag == 0 ? "legacy" : "",
 		   status->flag & RX_FLAG_HT ? "ht" : "",
 		   status->flag & RX_FLAG_VHT ? "vht" : "",
 		   status->flag & RX_FLAG_40MHZ ? "40" : "",
-		   status->flag & RX_FLAG_80MHZ ? "80" : "",
+		   status->vht_flag & RX_VHT_FLAG_80MHZ ? "80" : "",
 		   status->flag & RX_FLAG_SHORT_GI ? "sgi " : "",
 		   status->rate_idx,
 		   status->vht_nss,
 		   status->freq,
-		   status->band);
+		   status->band, status->flag, info->fcs_err);
 	ath10k_dbg_dump(ATH10K_DBG_HTT_DUMP, NULL, "rx skb: ",
 			info->skb->data, info->skb->len);
 

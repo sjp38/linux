@@ -122,7 +122,7 @@ static void iwl_mvm_set_tx_cmd(struct iwl_mvm *mvm, struct sk_buff *skb,
 		 * it
 		 */
 		WARN_ON_ONCE(info->flags & IEEE80211_TX_CTL_AMPDU);
-	} else if (skb->protocol == cpu_to_be16(ETH_P_PAE)) {
+	} else if (info->control.flags & IEEE80211_TX_CTRL_PORT_CTRL_PROTO) {
 		tx_cmd->pm_frame_timeout = cpu_to_le16(2);
 	} else {
 		tx_cmd->pm_frame_timeout = 0;
@@ -207,7 +207,7 @@ static void iwl_mvm_set_tx_cmd_rate(struct iwl_mvm *mvm,
 	rate_plcp = iwl_mvm_mac80211_idx_to_hwrate(rate_idx);
 
 	mvm->mgmt_last_antenna_idx =
-		iwl_mvm_next_antenna(mvm, iwl_fw_valid_tx_ant(mvm->fw),
+		iwl_mvm_next_antenna(mvm, mvm->fw->valid_tx_ant,
 				     mvm->mgmt_last_antenna_idx);
 	rate_flags = BIT(mvm->mgmt_last_antenna_idx) << RATE_MCS_ANT_POS;
 
@@ -377,6 +377,13 @@ int iwl_mvm_tx_skb(struct iwl_mvm *mvm, struct sk_buff *skb,
 	tx_cmd = (struct iwl_tx_cmd *)dev_cmd->payload;
 	/* From now on, we cannot access info->control */
 
+	/*
+	 * we handle that entirely ourselves -- for uAPSD the firmware
+	 * will always send a notification, and for PS-Poll responses
+	 * we'll notify mac80211 when getting frame status
+	 */
+	info->flags &= ~IEEE80211_TX_STATUS_EOSP;
+
 	spin_lock(&mvmsta->lock);
 
 	if (ieee80211_is_data_qos(fc) && !ieee80211_is_qos_nullfunc(fc)) {
@@ -436,6 +443,17 @@ static void iwl_mvm_check_ratid_empty(struct iwl_mvm *mvm,
 	struct ieee80211_vif *vif = mvmsta->vif;
 
 	lockdep_assert_held(&mvmsta->lock);
+
+	if ((tid_data->state == IWL_AGG_ON ||
+	     tid_data->state == IWL_EMPTYING_HW_QUEUE_DELBA) &&
+	    iwl_mvm_tid_queued(tid_data) == 0) {
+		/*
+		 * Now that this aggregation queue is empty tell mac80211 so it
+		 * knows we no longer have frames buffered for the station on
+		 * this TID (for the TIM bitmap calculation.)
+		 */
+		ieee80211_sta_set_buffered(sta, tid, false);
+	}
 
 	if (tid_data->ssn != tid_data->next_reclaimed)
 		return;
@@ -679,6 +697,11 @@ static void iwl_mvm_rx_tx_cmd_single(struct iwl_mvm *mvm,
 					   next_reclaimed);
 			iwl_mvm_check_ratid_empty(mvm, sta, tid);
 			spin_unlock_bh(&mvmsta->lock);
+		}
+
+		if (mvmsta->next_status_eosp) {
+			mvmsta->next_status_eosp = false;
+			ieee80211_sta_eosp(sta);
 		}
 	} else {
 		mvmsta = NULL;
