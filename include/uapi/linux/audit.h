@@ -109,6 +109,7 @@
 #define AUDIT_NETFILTER_PKT	1324	/* Packets traversing netfilter chains */
 #define AUDIT_NETFILTER_CFG	1325	/* Netfilter chain modifications */
 #define AUDIT_SECCOMP		1326	/* Secure Computing event */
+#define AUDIT_PROCTITLE		1327	/* Proctitle emit event */
 
 #define AUDIT_AVC		1400	/* SE Linux avc denial or grant */
 #define AUDIT_SELINUX_ERR	1401	/* Internal SE Linux Errors */
@@ -360,6 +361,12 @@ enum {
 #define AUDIT_ARCH_SPARC	(EM_SPARC)
 #define AUDIT_ARCH_SPARC64	(EM_SPARCV9|__AUDIT_ARCH_64BIT)
 #define AUDIT_ARCH_X86_64	(EM_X86_64|__AUDIT_ARCH_64BIT|__AUDIT_ARCH_LE)
+
+#ifdef CONFIG_COMPAT
+#define audit_is_compat(arch)	(!((arch) & __AUDIT_ARCH_64BIT))
+#else
+#define audit_is_compat(arch)	false
+#endif
 
 #define AUDIT_PERM_EXEC		1
 #define AUDIT_PERM_WRITE	2
