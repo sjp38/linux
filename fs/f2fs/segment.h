@@ -57,6 +57,9 @@
 	((blk_addr) - SM_I(sbi)->seg0_blkaddr)
 #define GET_SEGNO_FROM_SEG0(sbi, blk_addr)				\
 	(GET_SEGOFF_FROM_SEG0(sbi, blk_addr) >> sbi->log_blocks_per_seg)
+#define GET_BLKOFF_FROM_SEG0(sbi, blk_addr)				\
+	(GET_SEGOFF_FROM_SEG0(sbi, blk_addr) & (sbi->blocks_per_seg - 1))
+
 #define GET_SEGNO(sbi, blk_addr)					\
 	(((blk_addr == NULL_ADDR) || (blk_addr == NEW_ADDR)) ?		\
 	NULL_SEGNO : GET_L2R_SEGNO(FREE_I(sbi),			\
@@ -377,26 +380,12 @@ static inline void get_sit_bitmap(struct f2fs_sb_info *sbi,
 
 static inline block_t written_block_count(struct f2fs_sb_info *sbi)
 {
-	struct sit_info *sit_i = SIT_I(sbi);
-	block_t vblocks;
-
-	mutex_lock(&sit_i->sentry_lock);
-	vblocks = sit_i->written_valid_blocks;
-	mutex_unlock(&sit_i->sentry_lock);
-
-	return vblocks;
+	return SIT_I(sbi)->written_valid_blocks;
 }
 
 static inline unsigned int free_segments(struct f2fs_sb_info *sbi)
 {
-	struct free_segmap_info *free_i = FREE_I(sbi);
-	unsigned int free_segs;
-
-	read_lock(&free_i->segmap_lock);
-	free_segs = free_i->free_segments;
-	read_unlock(&free_i->segmap_lock);
-
-	return free_segs;
+	return FREE_I(sbi)->free_segments;
 }
 
 static inline int reserved_segments(struct f2fs_sb_info *sbi)
@@ -406,14 +395,7 @@ static inline int reserved_segments(struct f2fs_sb_info *sbi)
 
 static inline unsigned int free_sections(struct f2fs_sb_info *sbi)
 {
-	struct free_segmap_info *free_i = FREE_I(sbi);
-	unsigned int free_secs;
-
-	read_lock(&free_i->segmap_lock);
-	free_secs = free_i->free_sections;
-	read_unlock(&free_i->segmap_lock);
-
-	return free_secs;
+	return FREE_I(sbi)->free_sections;
 }
 
 static inline unsigned int prefree_segments(struct f2fs_sb_info *sbi)

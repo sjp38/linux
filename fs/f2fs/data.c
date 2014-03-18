@@ -45,7 +45,7 @@ static void f2fs_read_end_io(struct bio *bio, int err)
 
 static void f2fs_write_end_io(struct bio *bio, int err)
 {
-	struct f2fs_sb_info *sbi = F2FS_SB(bio->bi_io_vec->bv_page->mapping->host->i_sb);
+	struct f2fs_sb_info *sbi = bio->bi_private;
 	struct bio_vec *bvec;
 	int i;
 
@@ -55,15 +55,16 @@ static void f2fs_write_end_io(struct bio *bio, int err)
 		if (unlikely(err)) {
 			SetPageError(page);
 			set_bit(AS_EIO, &page->mapping->flags);
-			set_ckpt_flags(sbi->ckpt, CP_ERROR_FLAG);
-			sbi->sb->s_flags |= MS_RDONLY;
+			f2fs_stop_checkpoint(sbi);
 		}
 		end_page_writeback(page);
 		dec_page_count(sbi, F2FS_WRITEBACK);
 	}
 
-	if (bio->bi_private)
-		complete(bio->bi_private);
+	if (sbi->wait_io) {
+		complete(sbi->wait_io);
+		sbi->wait_io = NULL;
+	}
 
 	if (!get_pages(sbi, F2FS_WRITEBACK) &&
 			!list_empty(&sbi->cp_wait.task_list))
@@ -86,6 +87,7 @@ static struct bio *__bio_alloc(struct f2fs_sb_info *sbi, block_t blk_addr,
 	bio->bi_bdev = sbi->sb->s_bdev;
 	bio->bi_iter.bi_sector = SECTOR_FROM_BLOCK(sbi, blk_addr);
 	bio->bi_end_io = is_read ? f2fs_read_end_io : f2fs_write_end_io;
+	bio->bi_private = sbi;
 
 	return bio;
 }
@@ -113,7 +115,7 @@ static void __submit_merged_bio(struct f2fs_bio_info *io)
 		 */
 		if (fio->type == META_FLUSH) {
 			DECLARE_COMPLETION_ONSTACK(wait);
-			io->bio->bi_private = &wait;
+			io->sbi->wait_io = &wait;
 			submit_bio(rw, io->bio);
 			wait_for_completion(&wait);
 		} else {
@@ -797,48 +799,36 @@ static int f2fs_write_data_page(struct page *page,
 	 */
 	offset = i_size & (PAGE_CACHE_SIZE - 1);
 	if ((page->index >= end_index + 1) || !offset) {
-		if (S_ISDIR(inode->i_mode)) {
-			dec_page_count(sbi, F2FS_DIRTY_DENTS);
-			inode_dec_dirty_dents(inode);
-		}
+		inode_dec_dirty_dents(inode);
 		goto out;
 	}
 
 	zero_user_segment(page, offset, PAGE_CACHE_SIZE);
 write:
-	if (unlikely(sbi->por_doing)) {
-		err = AOP_WRITEPAGE_ACTIVATE;
+	if (unlikely(sbi->por_doing))
 		goto redirty_out;
-	}
 
 	/* Dentry blocks are controlled by checkpoint */
 	if (S_ISDIR(inode->i_mode)) {
-		dec_page_count(sbi, F2FS_DIRTY_DENTS);
 		inode_dec_dirty_dents(inode);
 		err = do_write_data_page(page, &fio);
-	} else {
-		f2fs_lock_op(sbi);
-
-		if (f2fs_has_inline_data(inode) || f2fs_may_inline(inode)) {
-			err = f2fs_write_inline_data(inode, page, offset);
-			f2fs_unlock_op(sbi);
-			goto out;
-		} else {
-			err = do_write_data_page(page, &fio);
-		}
-
-		f2fs_unlock_op(sbi);
-		need_balance_fs = true;
+		goto done;
 	}
-	if (err == -ENOENT)
-		goto out;
-	else if (err)
+
+	if (!wbc->for_reclaim)
+		need_balance_fs = true;
+	else if (has_not_enough_free_secs(sbi, 0))
 		goto redirty_out;
 
-	if (wbc->for_reclaim) {
-		f2fs_submit_merged_bio(sbi, DATA, WRITE);
-		need_balance_fs = false;
-	}
+	f2fs_lock_op(sbi);
+	if (f2fs_has_inline_data(inode) || f2fs_may_inline(inode))
+		err = f2fs_write_inline_data(inode, page, offset);
+	else
+		err = do_write_data_page(page, &fio);
+	f2fs_unlock_op(sbi);
+done:
+	if (err && err != -ENOENT)
+		goto redirty_out;
 
 	clear_cold_data(page);
 out:
@@ -849,8 +839,9 @@ out:
 
 redirty_out:
 	wbc->pages_skipped++;
+	account_page_redirty(page);
 	set_page_dirty(page);
-	return err;
+	return AOP_WRITEPAGE_ACTIVATE;
 }
 
 #define MAX_DESIRED_PAGES_WP	4096
@@ -1031,11 +1022,8 @@ static void f2fs_invalidate_data_page(struct page *page, unsigned int offset,
 				      unsigned int length)
 {
 	struct inode *inode = page->mapping->host;
-	struct f2fs_sb_info *sbi = F2FS_SB(inode->i_sb);
-	if (S_ISDIR(inode->i_mode) && PageDirty(page)) {
-		dec_page_count(sbi, F2FS_DIRTY_DENTS);
+	if (PageDirty(page))
 		inode_dec_dirty_dents(inode);
-	}
 	ClearPagePrivate(page);
 }
 
