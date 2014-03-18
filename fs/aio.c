@@ -327,6 +327,14 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 		pgoff_t idx;
 		spin_lock_irqsave(&ctx->completion_lock, flags);
 		migrate_page_copy(new, old);
+
+		/*
+		 * Ensure memory copy is finished before updating
+		 * ctx->ring_pages[]. Otherwise other processes may access to
+		 * new ring pages which are not fully initialized.
+		 */
+		smp_wmb();
+
 		idx = old->index;
 		if (idx < (pgoff_t)ctx->nr_pages) {
 			/* And only do the move if things haven't changed */
@@ -437,6 +445,14 @@ static int aio_setup_ring(struct kioctx *ctx)
 	ctx->user_id = ctx->mmap_base;
 	ctx->nr_events = nr_events; /* trusted copy */
 
+	/*
+	 * The aio ring pages are user space pages, so they can be migrated.
+	 * When writing to an aio ring page, we should ensure the page is not
+	 * being migrated. Aio page migration procedure is protected by
+	 * ctx->completion_lock, so we add this lock here.
+	 */
+	spin_lock_irq(&ctx->completion_lock);
+
 	ring = kmap_atomic(ctx->ring_pages[0]);
 	ring->nr = nr_events;	/* user copy */
 	ring->id = ~0U;
@@ -447,6 +463,8 @@ static int aio_setup_ring(struct kioctx *ctx)
 	ring->header_length = sizeof(struct aio_ring);
 	kunmap_atomic(ring);
 	flush_dcache_page(ctx->ring_pages[0]);
+
+	spin_unlock_irq(&ctx->completion_lock);
 
 	return 0;
 }
@@ -556,9 +574,17 @@ static int ioctx_add_table(struct kioctx *ctx, struct mm_struct *mm)
 					rcu_read_unlock();
 					spin_unlock(&mm->ioctx_lock);
 
+					/*
+					 * Accessing ring pages must be done
+					 * holding ctx->completion_lock to
+					 * prevent aio ring page migration
+					 * procedure from migrating ring pages.
+					 */
+					spin_lock_irq(&ctx->completion_lock);
 					ring = kmap_atomic(ctx->ring_pages[0]);
 					ring->id = ctx->id;
 					kunmap_atomic(ring);
+					spin_unlock_irq(&ctx->completion_lock);
 					return 0;
 				}
 
@@ -1051,6 +1077,12 @@ static long aio_read_events_ring(struct kioctx *ctx,
 		page = ctx->ring_pages[pos / AIO_EVENTS_PER_PAGE];
 		pos %= AIO_EVENTS_PER_PAGE;
 
+		/*
+		 * Ensure that the page's data was copied from old one by
+		 * aio_migratepage().
+		 */
+		smp_read_barrier_depends();
+
 		ev = kmap(page);
 		copy_ret = copy_to_user(event + ret, ev + pos,
 					sizeof(*ev) * avail);
@@ -1066,10 +1098,20 @@ static long aio_read_events_ring(struct kioctx *ctx,
 		head %= ctx->nr_events;
 	}
 
+	/*
+	 * The aio ring pages are user space pages, so they can be migrated.
+	 * When writing to an aio ring page, we should ensure the page is not
+	 * being migrated. Aio page migration procedure is protected by
+	 * ctx->completion_lock, so we add this lock here.
+	 */
+	spin_lock_irq(&ctx->completion_lock);
+
 	ring = kmap_atomic(ctx->ring_pages[0]);
 	ring->head = head;
 	kunmap_atomic(ring);
 	flush_dcache_page(ctx->ring_pages[0]);
+
+	spin_unlock_irq(&ctx->completion_lock);
 
 	pr_debug("%li  h%u t%u\n", ret, head, tail);
 
