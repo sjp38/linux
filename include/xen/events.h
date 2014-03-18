@@ -52,7 +52,6 @@ int evtchn_get(unsigned int evtchn);
 void evtchn_put(unsigned int evtchn);
 
 void xen_send_IPI_one(unsigned int cpu, enum ipi_vector vector);
-int resend_irq_on_evtchn(unsigned int irq);
 void rebind_evtchn_irq(int evtchn, int irq);
 
 static inline void notify_remote_via_evtchn(int port)
@@ -102,7 +101,7 @@ int xen_bind_pirq_gsi_to_irq(unsigned gsi,
 int xen_allocate_pirq_msi(struct pci_dev *dev, struct msi_desc *msidesc);
 /* Bind an PSI pirq to an irq. */
 int xen_bind_pirq_msi_to_irq(struct pci_dev *dev, struct msi_desc *msidesc,
-			     int pirq, const char *name, domid_t domid);
+			     int pirq, int nvec, const char *name, domid_t domid);
 #endif
 
 /* De-allocates the above mentioned physical interrupt. */
