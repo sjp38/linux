@@ -352,7 +352,7 @@ const struct dev_pm_ops name = { \
 
 /*
  * Use this for defining a set of PM operations to be used in all situations
- * (sustem suspend, hibernation or runtime PM).
+ * (system suspend, hibernation or runtime PM).
  * NOTE: In general, system suspend callbacks, .suspend() and .resume(), should
  * be different from the corresponding runtime PM callbacks, .runtime_suspend(),
  * and .runtime_resume(), because .runtime_suspend() always works on an already
@@ -542,6 +542,8 @@ struct dev_pm_info {
 	unsigned int		async_suspend:1;
 	bool			is_prepared:1;	/* Owned by the PM core */
 	bool			is_suspended:1;	/* Ditto */
+	bool			is_noirq_suspended:1;
+	bool			is_late_suspended:1;
 	bool			ignore_children:1;
 	bool			early_init:1;	/* Owned by the PM core */
 	spinlock_t		lock;
@@ -582,6 +584,7 @@ struct dev_pm_info {
 	unsigned long		accounting_timestamp;
 #endif
 	struct pm_subsys_data	*subsys_data;  /* Owned by the subsystem. */
+	void (*set_latency_tolerance)(struct device *, s32);
 	struct dev_pm_qos	*qos;
 };
 
@@ -717,14 +720,26 @@ static inline void dpm_for_each_dev(void *data, void (*fn)(struct device *, void
 {
 }
 
-#define pm_generic_prepare	NULL
-#define pm_generic_suspend	NULL
-#define pm_generic_resume	NULL
-#define pm_generic_freeze	NULL
-#define pm_generic_thaw		NULL
-#define pm_generic_restore	NULL
-#define pm_generic_poweroff	NULL
-#define pm_generic_complete	NULL
+#define pm_generic_prepare		NULL
+#define pm_generic_suspend_late		NULL
+#define pm_generic_suspend_noirq	NULL
+#define pm_generic_suspend		NULL
+#define pm_generic_resume_early		NULL
+#define pm_generic_resume_noirq		NULL
+#define pm_generic_resume		NULL
+#define pm_generic_freeze_noirq		NULL
+#define pm_generic_freeze_late		NULL
+#define pm_generic_freeze		NULL
+#define pm_generic_thaw_noirq		NULL
+#define pm_generic_thaw_early		NULL
+#define pm_generic_thaw			NULL
+#define pm_generic_restore_noirq	NULL
+#define pm_generic_restore_early	NULL
+#define pm_generic_restore		NULL
+#define pm_generic_poweroff_noirq	NULL
+#define pm_generic_poweroff_late	NULL
+#define pm_generic_poweroff		NULL
+#define pm_generic_complete		NULL
 #endif /* !CONFIG_PM_SLEEP */
 
 /* How to reorder dpm_list after device_move() */
