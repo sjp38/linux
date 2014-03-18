@@ -177,17 +177,6 @@ struct execute_work {
 #define DECLARE_DEFERRABLE_WORK(n, f)					\
 	struct delayed_work n = __DELAYED_WORK_INITIALIZER(n, f, TIMER_DEFERRABLE)
 
-/*
- * initialize a work item's function pointer
- */
-#define PREPARE_WORK(_work, _func)					\
-	do {								\
-		(_work)->func = (_func);				\
-	} while (0)
-
-#define PREPARE_DELAYED_WORK(_work, _func)				\
-	PREPARE_WORK(&(_work)->work, (_func))
-
 #ifdef CONFIG_DEBUG_OBJECTS_WORK
 extern void __init_work(struct work_struct *work, int onstack);
 extern void destroy_work_on_stack(struct work_struct *work);
@@ -217,7 +206,7 @@ static inline unsigned int work_static(struct work_struct *work) { return 0; }
 		(_work)->data = (atomic_long_t) WORK_DATA_INIT();	\
 		lockdep_init_map(&(_work)->lockdep_map, #_work, &__key, 0); \
 		INIT_LIST_HEAD(&(_work)->entry);			\
-		PREPARE_WORK((_work), (_func));				\
+		(_work)->func = (_func);				\
 	} while (0)
 #else
 #define __INIT_WORK(_work, _func, _onstack)				\
@@ -225,7 +214,7 @@ static inline unsigned int work_static(struct work_struct *work) { return 0; }
 		__init_work((_work), _onstack);				\
 		(_work)->data = (atomic_long_t) WORK_DATA_INIT();	\
 		INIT_LIST_HEAD(&(_work)->entry);			\
-		PREPARE_WORK((_work), (_func));				\
+		(_work)->func = (_func);				\
 	} while (0)
 #endif
 
@@ -600,21 +589,6 @@ static inline bool schedule_delayed_work(struct delayed_work *dwork,
 static inline bool keventd_up(void)
 {
 	return system_wq != NULL;
-}
-
-/*
- * Like above, but uses del_timer() instead of del_timer_sync(). This means,
- * if it returns 0 the timer function may be running and the queueing is in
- * progress.
- */
-static inline bool __deprecated __cancel_delayed_work(struct delayed_work *work)
-{
-	bool ret;
-
-	ret = del_timer(&work->timer);
-	if (ret)
-		work_clear_pending(&work->work);
-	return ret;
 }
 
 /* used to be different but now identical to flush_work(), deprecated */
