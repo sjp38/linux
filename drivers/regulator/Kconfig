@@ -139,6 +139,14 @@ config REGULATOR_AS3722
 	  AS3722 PMIC. This will enable support for all the software
 	  controllable DCDC/LDO regulators.
 
+config REGULATOR_BCM590XX
+	tristate "Broadcom BCM590xx PMU Regulators"
+	depends on MFD_BCM590XX
+	help
+	  This driver provides support for the voltage regulators on the
+	  BCM590xx PMUs. This will enable support for the software
+	  controllable LDO/Switching regulators.
+
 config REGULATOR_DA903X
 	tristate "Dialog Semiconductor DA9030/DA9034 regulators"
 	depends on PMIC_DA903X
@@ -408,12 +416,12 @@ config REGULATOR_PCF50633
 	 on PCF50633
 
 config REGULATOR_PFUZE100
-	tristate "Freescale PFUZE100 regulator driver"
+	tristate "Freescale PFUZE100/PFUZE200 regulator driver"
 	depends on I2C
 	select REGMAP_I2C
 	help
-	  Say y here to support the regulators found on the Freescale PFUZE100
-	  PMIC.
+	  Say y here to support the regulators found on the Freescale
+	  PFUZE100/PFUZE200 PMIC.
 
 config REGULATOR_RC5T583
 	tristate "RICOH RC5T583 Power regulators"
@@ -519,6 +527,15 @@ config REGULATOR_TPS65217
 	help
 	  This driver supports TPS65217 voltage regulator chips. TPS65217
 	  provides three step-down converters and four general-purpose LDO
+	  voltage regulators. It supports software based voltage control
+	  for different voltage domains
+
+config REGULATOR_TPS65218
+	tristate "TI TPS65218 Power regulators"
+	depends on MFD_TPS65218 && OF
+	help
+	  This driver supports TPS65218 voltage regulator chips. TPS65218
+	  provides six step-down converters and one general-purpose LDO
 	  voltage regulators. It supports software based voltage control
 	  for different voltage domains
 
