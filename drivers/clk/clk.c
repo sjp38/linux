@@ -1339,8 +1339,11 @@ static int __clk_speculate_rates(struct clk *clk, unsigned long parent_rate)
 	if (clk->notifier_count)
 		ret = __clk_notify(clk, PRE_RATE_CHANGE, clk->rate, new_rate);
 
-	if (ret & NOTIFY_STOP_MASK)
+	if (ret & NOTIFY_STOP_MASK) {
+		pr_debug("%s: clk notifier callback for clock %s aborted with error %d\n",
+				__func__, clk->name, ret);
 		goto out;
+	}
 
 	hlist_for_each_entry(child, &clk->children, child_node) {
 		ret = __clk_speculate_rates(child, new_rate);
@@ -2260,19 +2263,10 @@ void __clk_put(struct clk *clk)
  * re-enter into the clk framework by calling any top-level clk APIs;
  * this will cause a nested prepare_lock mutex.
  *
- * Pre-change notifier callbacks will be passed the current, pre-change
- * rate of the clk via struct clk_notifier_data.old_rate.  The new,
- * post-change rate of the clk is passed via struct
+ * In all notification cases cases (pre, post and abort rate change) the
+ * original clock rate is passed to the callback via struct
+ * clk_notifier_data.old_rate and the new frequency is passed via struct
  * clk_notifier_data.new_rate.
- *
- * Post-change notifiers will pass the now-current, post-change rate of
- * the clk in both struct clk_notifier_data.old_rate and struct
- * clk_notifier_data.new_rate.
- *
- * Abort-change notifiers are effectively the opposite of pre-change
- * notifiers: the original pre-change clk rate is passed in via struct
- * clk_notifier_data.new_rate and the failed post-change rate is passed
- * in via struct clk_notifier_data.old_rate.
  *
  * clk_notifier_register() must be called from non-atomic context.
  * Returns -EINVAL if called with null arguments, -ENOMEM upon
@@ -2473,7 +2467,7 @@ EXPORT_SYMBOL_GPL(of_clk_del_provider);
 struct clk *__of_clk_get_from_provider(struct of_phandle_args *clkspec)
 {
 	struct of_clk_provider *provider;
-	struct clk *clk = ERR_PTR(-ENOENT);
+	struct clk *clk = ERR_PTR(-EPROBE_DEFER);
 
 	/* Check if we have such a provider in our array */
 	list_for_each_entry(provider, &of_clk_providers, link) {
@@ -2506,8 +2500,12 @@ EXPORT_SYMBOL_GPL(of_clk_get_parent_count);
 const char *of_clk_get_parent_name(struct device_node *np, int index)
 {
 	struct of_phandle_args clkspec;
+	struct property *prop;
 	const char *clk_name;
+	const __be32 *vp;
+	u32 pv;
 	int rc;
+	int count;
 
 	if (index < 0)
 		return NULL;
@@ -2517,8 +2515,22 @@ const char *of_clk_get_parent_name(struct device_node *np, int index)
 	if (rc)
 		return NULL;
 
+	index = clkspec.args_count ? clkspec.args[0] : 0;
+	count = 0;
+
+	/* if there is an indices property, use it to transfer the index
+	 * specified into an array offset for the clock-output-names property.
+	 */
+	of_property_for_each_u32(clkspec.np, "clock-indices", prop, vp, pv) {
+		if (index == pv) {
+			index = count;
+			break;
+		}
+		count++;
+	}
+
 	if (of_property_read_string_index(clkspec.np, "clock-output-names",
-					  clkspec.args_count ? clkspec.args[0] : 0,
+					  index,
 					  &clk_name) < 0)
 		clk_name = clkspec.np->name;
 
