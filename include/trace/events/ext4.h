@@ -16,6 +16,11 @@ struct mpage_da_data;
 struct ext4_map_blocks;
 struct extent_status;
 
+/* shim until we merge in the xfs_collapse_range branch */
+#ifndef FALLOC_FL_COLLAPSE_RANGE
+#define FALLOC_FL_COLLAPSE_RANGE	0x08
+#endif
+
 #define EXT4_I(inode) (container_of(inode, struct ext4_inode_info, vfs_inode))
 
 #define show_mballoc_flags(flags) __print_flags(flags, "|",	\
@@ -67,6 +72,12 @@ struct extent_status;
 	{ EXTENT_STATUS_UNWRITTEN,	"U" },			\
 	{ EXTENT_STATUS_DELAYED,	"D" },			\
 	{ EXTENT_STATUS_HOLE,		"H" })
+
+#define show_falloc_mode(mode) __print_flags(mode, "|",		\
+	{ FALLOC_FL_KEEP_SIZE,		"KEEP_SIZE"},		\
+	{ FALLOC_FL_PUNCH_HOLE,		"PUNCH_HOLE"},		\
+	{ FALLOC_FL_NO_HIDE_STALE,	"NO_HIDE_STALE"},	\
+	{ FALLOC_FL_COLLAPSE_RANGE,	"COLLAPSE_RANGE"})
 
 
 TRACE_EVENT(ext4_free_inode,
@@ -1349,10 +1360,10 @@ TRACE_EVENT(ext4_fallocate_enter,
 		__entry->mode	= mode;
 	),
 
-	TP_printk("dev %d,%d ino %lu pos %lld len %lld mode %d",
+	TP_printk("dev %d,%d ino %lu pos %lld len %lld mode %s",
 		  MAJOR(__entry->dev), MINOR(__entry->dev),
 		  (unsigned long) __entry->ino, __entry->pos,
-		  __entry->len, __entry->mode)
+		  __entry->len, show_falloc_mode(__entry->mode))
 );
 
 TRACE_EVENT(ext4_fallocate_exit,
@@ -2408,6 +2419,31 @@ TRACE_EVENT(ext4_es_shrink_exit,
 	TP_printk("dev %d,%d shrunk_nr %d cache_cnt %d",
 		  MAJOR(__entry->dev), MINOR(__entry->dev),
 		  __entry->shrunk_nr, __entry->cache_cnt)
+);
+
+TRACE_EVENT(ext4_collapse_range,
+	TP_PROTO(struct inode *inode, loff_t offset, loff_t len),
+
+	TP_ARGS(inode, offset, len),
+
+	TP_STRUCT__entry(
+		__field(dev_t,	dev)
+		__field(ino_t,	ino)
+		__field(loff_t,	offset)
+		__field(loff_t, len)
+	),
+
+	TP_fast_assign(
+		__entry->dev	= inode->i_sb->s_dev;
+		__entry->ino	= inode->i_ino;
+		__entry->offset	= offset;
+		__entry->len	= len;
+	),
+
+	TP_printk("dev %d,%d ino %lu offset %lld len %lld",
+		  MAJOR(__entry->dev), MINOR(__entry->dev),
+		  (unsigned long) __entry->ino,
+		  __entry->offset, __entry->len)
 );
 
 #endif /* _TRACE_EXT4_H */
