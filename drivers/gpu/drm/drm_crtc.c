@@ -215,6 +215,16 @@ static const struct drm_prop_enum_list drm_encoder_enum_list[] =
 	{ DRM_MODE_ENCODER_DSI, "DSI" },
 };
 
+static const struct drm_prop_enum_list drm_subpixel_enum_list[] =
+{
+	{ SubPixelUnknown, "Unknown" },
+	{ SubPixelHorizontalRGB, "Horizontal RGB" },
+	{ SubPixelHorizontalBGR, "Horizontal BGR" },
+	{ SubPixelVerticalRGB, "Vertical RGB" },
+	{ SubPixelVerticalBGR, "Vertical BGR" },
+	{ SubPixelNone, "None" },
+};
+
 void drm_connector_ida_init(void)
 {
 	int i;
@@ -263,6 +273,19 @@ const char *drm_get_connector_status_name(enum drm_connector_status status)
 		return "unknown";
 }
 EXPORT_SYMBOL(drm_get_connector_status_name);
+
+/**
+ * drm_get_subpixel_order_name - return a string for a given subpixel enum
+ * @order: enum of subpixel_order
+ *
+ * Note you could abuse this and return something out of bounds, but that
+ * would be a caller error.  No unscrubbed user data should make it here.
+ */
+const char *drm_get_subpixel_order_name(enum subpixel_order order)
+{
+	return drm_subpixel_enum_list[order].name;
+}
+EXPORT_SYMBOL(drm_get_subpixel_order_name);
 
 static char printable_char(int c)
 {
@@ -3761,9 +3784,26 @@ int drm_mode_create_dumb_ioctl(struct drm_device *dev,
 			       void *data, struct drm_file *file_priv)
 {
 	struct drm_mode_create_dumb *args = data;
+	u32 cpp, stride, size;
 
 	if (!dev->driver->dumb_create)
 		return -ENOSYS;
+	if (!args->width || !args->height || !args->bpp)
+		return -EINVAL;
+
+	/* overflow checks for 32bit size calculations */
+	cpp = DIV_ROUND_UP(args->bpp, 8);
+	if (cpp > 0xffffffffU / args->width)
+		return -EINVAL;
+	stride = cpp * args->width;
+	if (args->height > 0xffffffffU / stride)
+		return -EINVAL;
+
+	/* test for wrap-around */
+	size = args->height * stride;
+	if (PAGE_ALIGN(size) == 0)
+		return -EINVAL;
+
 	return dev->driver->dumb_create(file_priv, dev, args);
 }
 
