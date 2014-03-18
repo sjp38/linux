@@ -2018,7 +2018,7 @@ static int sci_remap_port(struct uart_port *port)
 		 * need to do any remapping, just cast the cookie
 		 * directly.
 		 */
-		port->membase = (void __iomem *)port->mapbase;
+		port->membase = (void __iomem *)(uintptr_t)port->mapbase;
 	}
 
 	return 0;
@@ -2564,6 +2564,7 @@ static int sci_probe(struct platform_device *dev)
 	ret = cpufreq_register_notifier(&sp->freq_transition,
 					CPUFREQ_TRANSITION_NOTIFIER);
 	if (unlikely(ret < 0)) {
+		uart_remove_one_port(&sci_uart_driver, &sp->port);
 		sci_cleanup_single(sp);
 		return ret;
 	}
