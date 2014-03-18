@@ -127,7 +127,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idcode		= 0x32412001,
 		.idmask		= 0xffffffff,
 		.map_io		= s3c2412_map_io,
-		.init_clocks	= s3c2412_init_clocks,
 		.init_uarts	= s3c2412_init_uarts,
 		.init		= s3c2412_init,
 		.name		= name_s3c2412,
@@ -136,7 +135,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idcode		= 0x32412003,
 		.idmask		= 0xffffffff,
 		.map_io		= s3c2412_map_io,
-		.init_clocks	= s3c2412_init_clocks,
 		.init_uarts	= s3c2412_init_uarts,
 		.init		= s3c2412_init,
 		.name		= name_s3c2412,
@@ -145,7 +143,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idcode		= 0x32450003,
 		.idmask		= 0xffffffff,
 		.map_io		= s3c2416_map_io,
-		.init_clocks	= s3c2416_init_clocks,
 		.init_uarts	= s3c2416_init_uarts,
 		.init		= s3c2416_init,
 		.name		= name_s3c2416,
@@ -154,7 +151,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 		.idcode		= 0x32443001,
 		.idmask		= 0xffffffff,
 		.map_io		= s3c2443_map_io,
-		.init_clocks	= s3c2443_init_clocks,
 		.init_uarts	= s3c2443_init_uarts,
 		.init		= s3c2443_init,
 		.name		= name_s3c2443,
@@ -318,6 +314,7 @@ struct s3c24xx_uart_resources s3c2410_uart_resources[] __initdata = {
 
 /* initialise all the clocks */
 
+#ifdef CONFIG_SAMSUNG_CLOCK
 void __init_or_cpufreq s3c24xx_setup_clocks(unsigned long fclk,
 					   unsigned long hclk,
 					   unsigned long pclk)
@@ -330,6 +327,7 @@ void __init_or_cpufreq s3c24xx_setup_clocks(unsigned long fclk,
 	clk_p.rate = pclk;
 	clk_f.rate = fclk;
 }
+#endif
 
 #if defined(CONFIG_CPU_S3C2410) || defined(CONFIG_CPU_S3C2412) || \
 	defined(CONFIG_CPU_S3C2440) || defined(CONFIG_CPU_S3C2442)
@@ -483,7 +481,7 @@ struct platform_device s3c2440_device_dma = {
 };
 #endif
 
-#if defined(CONFIG_CPUS_3C2443) || defined(CONFIG_CPU_S3C2416)
+#if defined(CONFIG_CPU_S3C2443) || defined(CONFIG_CPU_S3C2416)
 static struct resource s3c2443_dma_resource[] = {
 	[0] = DEFINE_RES_MEM(S3C24XX_PA_DMA, S3C24XX_SZ_DMA),
 	[1] = DEFINE_RES_IRQ(IRQ_S3C2443_DMA0),
@@ -533,4 +531,25 @@ struct platform_device s3c2443_device_dma = {
 		.platform_data	= &s3c2443_dma_platdata,
 	},
 };
+#endif
+
+#ifdef CONFIG_CPU_S3C2412
+void __init s3c2412_init_clocks(int xtal)
+{
+	s3c2412_common_clk_init(NULL, xtal, 0, S3C24XX_VA_CLKPWR);
+}
+#endif
+
+#ifdef CONFIG_CPU_S3C2416
+void __init s3c2416_init_clocks(int xtal)
+{
+	s3c2443_common_clk_init(NULL, xtal, 0, S3C24XX_VA_CLKPWR);
+}
+#endif
+
+#ifdef CONFIG_CPU_S3C2443
+void __init s3c2443_init_clocks(int xtal)
+{
+	s3c2443_common_clk_init(NULL, xtal, 1, S3C24XX_VA_CLKPWR);
+}
 #endif
