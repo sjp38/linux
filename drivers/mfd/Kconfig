@@ -100,7 +100,7 @@ config PMIC_DA903X
 	bool "Dialog Semiconductor DA9030/DA9034 PMIC Support"
 	depends on I2C=y
 	help
-	  Say yes here to support for Dialog Semiconductor DA9030 (a.k.a
+	  Say yes here to add support for Dialog Semiconductor DA9030 (a.k.a
 	  ARAVA) and DA9034 (a.k.a MICCO), these are Power Management IC
 	  usually found on PXA processors-based platforms. This includes
 	  the I2C driver and the core APIs _only_, you have to select
@@ -270,13 +270,18 @@ config MFD_KEMPLD
 	  device may provide functions like watchdog, GPIO, UART and I2C bus.
 
 	  The following modules are supported:
+		* COMe-bHL6
 		* COMe-bIP#
 		* COMe-bPC2 (ETXexpress-PC)
 		* COMe-bSC# (ETXexpress-SC T#)
+		* COMe-cBT6
 		* COMe-cCT6
 		* COMe-cDC2 (microETXexpress-DC)
+		* COMe-cHL6
 		* COMe-cPC2 (microETXexpress-PC)
+		* COMe-mBT10
 		* COMe-mCT10
+		* COMe-mTT10 (nanoETXexpress-TT)
 		* ETX-OH
 
 	  This driver can also be built as a module. If so, the module
@@ -324,7 +329,7 @@ config MFD_MAX14577
 	select REGMAP_I2C
 	select IRQ_DOMAIN
 	help
-	  Say yes here to support for Maxim Semiconductor MAX14577.
+	  Say yes here to add support for Maxim Semiconductor MAX14577.
 	  This is a Micro-USB IC with Charger controls on chip.
 	  This driver provides common support for accessing the device;
 	  additional drivers must be enabled in order to use the functionality
@@ -337,7 +342,7 @@ config MFD_MAX77686
 	select REGMAP_I2C
 	select IRQ_DOMAIN
 	help
-	  Say yes here to support for Maxim Semiconductor MAX77686.
+	  Say yes here to add support for Maxim Semiconductor MAX77686.
 	  This is a Power Management IC with RTC on chip.
 	  This driver provides common support for accessing the device;
 	  additional drivers must be enabled in order to use the functionality
@@ -349,7 +354,7 @@ config MFD_MAX77693
 	select MFD_CORE
 	select REGMAP_I2C
 	help
-	  Say yes here to support for Maxim Semiconductor MAX77693.
+	  Say yes here to add support for Maxim Semiconductor MAX77693.
 	  This is a companion Power Management IC with Flash, Haptic, Charger,
 	  and MUIC(Micro USB Interface Controller) controls on chip.
 	  This driver provides common support for accessing the device;
@@ -363,7 +368,7 @@ config MFD_MAX8907
 	select REGMAP_I2C
 	select REGMAP_IRQ
 	help
-	  Say yes here to support for Maxim Semiconductor MAX8907. This is
+	  Say yes here to add support for Maxim Semiconductor MAX8907. This is
 	  a Power Management IC. This driver provides common support for
 	  accessing the device; additional drivers must be enabled in order
 	  to use the functionality of the device.
@@ -373,7 +378,7 @@ config MFD_MAX8925
 	depends on I2C=y
 	select MFD_CORE
 	help
-	  Say yes here to support for Maxim Semiconductor MAX8925. This is
+	  Say yes here to add support for Maxim Semiconductor MAX8925. This is
 	  a Power Management IC. This driver provides common support for
 	  accessing the device, additional drivers must be enabled in order
 	  to use the functionality of the device.
@@ -384,7 +389,7 @@ config MFD_MAX8997
 	select MFD_CORE
 	select IRQ_DOMAIN
 	help
-	  Say yes here to support for Maxim Semiconductor MAX8997/8966.
+	  Say yes here to add support for Maxim Semiconductor MAX8997/8966.
 	  This is a Power Management IC with RTC, Flash, Fuel Gauge, Haptic,
 	  MUIC controls on chip.
 	  This driver provides common support for accessing the device;
@@ -397,7 +402,7 @@ config MFD_MAX8998
 	select MFD_CORE
 	select IRQ_DOMAIN
 	help
-	  Say yes here to support for Maxim Semiconductor MAX8998 and
+	  Say yes here to add support for Maxim Semiconductor MAX8998 and
 	  National Semiconductor LP3974. This is a Power Management IC.
 	  This driver provides common support for accessing the device,
 	  additional drivers must be enabled in order to use the functionality
@@ -473,10 +478,11 @@ config MFD_PM8XXX
 
 config MFD_PM8921_CORE
 	tristate "Qualcomm PM8921 PMIC chip"
-	depends on (ARCH_MSM || HEXAGON)
-	depends on BROKEN
+	depends on (ARM || HEXAGON)
+	select IRQ_DOMAIN
 	select MFD_CORE
 	select MFD_PM8XXX
+	select REGMAP
 	help
 	  If you say yes to this option, support will be included for the
 	  built-in PM8921 PMIC chip.
@@ -486,16 +492,6 @@ config MFD_PM8921_CORE
 
 	  Say M here if you want to include support for PM8921 chip as a module.
 	  This will build a module called "pm8921-core".
-
-config MFD_PM8XXX_IRQ
-	bool "Qualcomm PM8xxx IRQ features"
-	depends on MFD_PM8XXX
-	default y if MFD_PM8XXX
-	help
-	  This is the IRQ driver for Qualcomm PM 8xxx PMIC chips.
-
-	  This is required to use certain other PM 8xxx features, such as GPIO
-	  and MPP.
 
 config MFD_RDC321X
 	tristate "RDC R-321x southbridge"
@@ -515,6 +511,16 @@ config MFD_RTSX_PCI
 	  rts5229, rtl8411, etc. Realtek card reader supports access to many
 	  types of memory cards, such as Memory Stick, Memory Stick Pro,
 	  Secure Digital and MultiMediaCard.
+
+config MFD_RTSX_USB
+	tristate "Realtek USB card reader"
+	depends on USB
+	select MFD_CORE
+	help
+	  Select this option to get support for Realtek USB 2.0 card readers
+	  including RTS5129, RTS5139, RTS5179 and RTS5170.
+	  Realtek card reader supports access to many types of memory cards,
+	  such as Memory Stick Pro, Secure Digital and MultiMediaCard.
 
 config MFD_RC5T583
 	bool "Ricoh RC5T583 Power Management system device"
@@ -852,6 +858,21 @@ config MFD_TPS65217
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called tps65217.
+
+config MFD_TPS65218
+	tristate "TI TPS65218 Power Management chips"
+	depends on I2C
+	select MFD_CORE
+	select REGMAP_I2C
+	help
+	  If you say yes here you get support for the TPS65218 series of
+	  Power Management chips.
+	  These include voltage regulators, gpio and other features
+	  that are often used in portable devices. Only regulator
+	  component is currently supported.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called tps65218.
 
 config MFD_TPS6586X
 	bool "TI TPS6586x Power Management chips"
@@ -1193,9 +1214,6 @@ config MFD_STW481X
 	  in various ST Microelectronics and ST-Ericsson embedded
 	  Nomadik series.
 
-endmenu
-endif
-
 menu "Multimedia Capabilities Port drivers"
 	depends on ARCH_SA1100
 
@@ -1226,3 +1244,6 @@ config VEXPRESS_CONFIG
 	help
 	  Platform configuration infrastructure for the ARM Ltd.
 	  Versatile Express.
+
+endmenu
+endif
