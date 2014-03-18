@@ -182,6 +182,8 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-overo-signed
 	bcm/dt2
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/dt-2
+	sti/dt
+		git://git.stlinux.com/devel/kernel/linux-sti.git tags/DT-for-v3.15-part-1-v2
 
 next/drivers
 	renesas/soc
@@ -222,6 +224,8 @@ next/drivers
 	mvebu/drivers2
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-drivers-3.15
 		git://git.infradead.org/linux-mvebu.git tags/mvebu-drivers-3.15-2
+	sti/reset
+		git://git.stlinux.com/devel/kernel/linux-sti.git tags/sti-reset-for-v3.15
 
 next/sh
 	renesas/sh-intc
