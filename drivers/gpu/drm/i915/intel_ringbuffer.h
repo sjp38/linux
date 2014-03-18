@@ -33,6 +33,8 @@ struct  intel_hw_status_page {
 #define I915_READ_IMR(ring) I915_READ(RING_IMR((ring)->mmio_base))
 #define I915_WRITE_IMR(ring, val) I915_WRITE(RING_IMR((ring)->mmio_base), val)
 
+#define I915_READ_MODE(ring) I915_READ(RING_MI_MODE((ring)->mmio_base))
+
 enum intel_ring_hangcheck_action {
 	HANGCHECK_IDLE = 0,
 	HANGCHECK_WAIT,
@@ -164,6 +166,38 @@ struct  intel_ring_buffer {
 		u32 gtt_offset;
 		volatile u32 *cpu_page;
 	} scratch;
+
+	/*
+	 * Tables of commands the command parser needs to know about
+	 * for this ring.
+	 */
+	const struct drm_i915_cmd_table *cmd_tables;
+	int cmd_table_count;
+
+	/*
+	 * Table of registers allowed in commands that read/write registers.
+	 */
+	const u32 *reg_table;
+	int reg_count;
+
+	/*
+	 * Table of registers allowed in commands that read/write registers, but
+	 * only from the DRM master.
+	 */
+	const u32 *master_reg_table;
+	int master_reg_count;
+
+	/*
+	 * Returns the bitmask for the length field of the specified command.
+	 * Return 0 for an unrecognized/invalid command.
+	 *
+	 * If the command parser finds an entry for a command in the ring's
+	 * cmd_tables, it gets the command's length based on the table entry.
+	 * If not, it calls this function to determine the per-ring length field
+	 * encoding for the command (i.e. certain opcode ranges use certain bits
+	 * to encode the command length in the header).
+	 */
+	u32 (*get_cmd_length_mask)(u32 cmd_header);
 };
 
 static inline bool
