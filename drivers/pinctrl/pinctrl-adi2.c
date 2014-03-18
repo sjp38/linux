@@ -329,7 +329,7 @@ static void adi_gpio_unmask_irq(struct irq_data *d)
 	spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static unsigned int adi_gpio_irq_startup(struct irq_data *d)
+static int adi_gpio_irq_startup(struct irq_data *d)
 {
 	unsigned long flags;
 	struct gpio_port *port = irq_data_get_irq_chip_data(d);
