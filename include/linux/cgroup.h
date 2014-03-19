@@ -24,7 +24,7 @@
 
 #ifdef CONFIG_CGROUPS
 
-struct cgroupfs_root;
+struct cgroup_root;
 struct cgroup_subsys;
 struct inode;
 struct cgroup;
@@ -173,10 +173,13 @@ struct cgroup {
 	 */
 	u64 serial_nr;
 
+	/* The bitmask of subsystems attached to this cgroup */
+	unsigned long subsys_mask;
+
 	/* Private pointers for each registered subsystem */
 	struct cgroup_subsys_state __rcu *subsys[CGROUP_SUBSYS_COUNT];
 
-	struct cgroupfs_root *root;
+	struct cgroup_root *root;
 
 	/*
 	 * List of cgrp_cset_links pointing at css_sets with tasks in this
@@ -208,7 +211,7 @@ struct cgroup {
 
 #define MAX_CGROUP_ROOT_NAMELEN 64
 
-/* cgroupfs_root->flags */
+/* cgroup_root->flags */
 enum {
 	/*
 	 * Unfortunately, cgroup core and various controllers are riddled
@@ -247,6 +250,9 @@ enum {
 	 *
 	 * - "cgroup.clone_children" is removed.
 	 *
+	 * - If mount is requested with sane_behavior but without any
+	 *   subsystem, the default unified hierarchy is mounted.
+	 *
 	 * - cpuset: tasks will be kept in empty cpusets when hotplug happens
 	 *   and take masks of ancestors with non-empty cpus/mems, instead of
 	 *   being moved to an ancestor.
@@ -269,21 +275,18 @@ enum {
 };
 
 /*
- * A cgroupfs_root represents the root of a cgroup hierarchy, and may be
+ * A cgroup_root represents the root of a cgroup hierarchy, and may be
  * associated with a kernfs_root to form an active hierarchy.  This is
  * internal to cgroup core.  Don't access directly from controllers.
  */
-struct cgroupfs_root {
+struct cgroup_root {
 	struct kernfs_root *kf_root;
-
-	/* The bitmask of subsystems attached to this hierarchy */
-	unsigned long subsys_mask;
 
 	/* Unique id for this hierarchy. */
 	int hierarchy_id;
 
 	/* The root cgroup.  Root is destroyed on its release. */
-	struct cgroup top_cgroup;
+	struct cgroup cgrp;
 
 	/* Number of cgroups in the hierarchy, used only for /proc/cgroups */
 	atomic_t nr_cgrps;
@@ -381,6 +384,7 @@ enum {
 	CFTYPE_NOT_ON_ROOT	= (1 << 1),	/* don't create on root cgrp */
 	CFTYPE_INSANE		= (1 << 2),	/* don't create if sane_behavior */
 	CFTYPE_NO_PREFIX	= (1 << 3),	/* (DON'T USE FOR NEW FILES) no subsys prefix */
+	CFTYPE_ONLY_ON_DFL	= (1 << 4),	/* only on default hierarchy */
 };
 
 #define MAX_CFTYPE_NAME		64
@@ -454,7 +458,7 @@ struct cftype {
 	 * Returns 0 or -ve error code.
 	 */
 	int (*write_string)(struct cgroup_subsys_state *css, struct cftype *cft,
-			    const char *buffer);
+			    char *buffer);
 	/*
 	 * trigger() callback can be used to get some kick from the
 	 * userspace, when the actual string written is not important
@@ -467,6 +471,13 @@ struct cftype {
 	struct lock_class_key	lockdep_key;
 #endif
 };
+
+extern struct cgroup_root cgrp_dfl_root;
+
+static inline bool cgroup_on_dfl(const struct cgroup *cgrp)
+{
+	return cgrp->root == &cgrp_dfl_root;
+}
 
 /*
  * See the comment above CGRP_ROOT_SANE_BEHAVIOR for details.  This
@@ -508,39 +519,23 @@ struct cgroup_subsys_state *seq_css(struct seq_file *seq);
 
 static inline int cgroup_name(struct cgroup *cgrp, char *buf, size_t buflen)
 {
-	/* dummy_top doesn't have a kn associated */
-	if (cgrp->kn)
-		return kernfs_name(cgrp->kn, buf, buflen);
-	else
-		return strlcpy(buf, "/", buflen);
+	return kernfs_name(cgrp->kn, buf, buflen);
 }
 
 static inline char * __must_check cgroup_path(struct cgroup *cgrp, char *buf,
 					      size_t buflen)
 {
-	/* dummy_top doesn't have a kn associated */
-	if (cgrp->kn)
-		return kernfs_path(cgrp->kn, buf, buflen);
-	strlcpy(buf, "/", buflen);
-	return (buflen <= 2) ? NULL : buf;
+	return kernfs_path(cgrp->kn, buf, buflen);
 }
 
 static inline void pr_cont_cgroup_name(struct cgroup *cgrp)
 {
-	/* dummy_top doesn't have a kn associated */
-	if (cgrp->kn)
-		pr_cont_kernfs_name(cgrp->kn);
-	else
-		pr_cont("/");
+	pr_cont_kernfs_name(cgrp->kn);
 }
 
 static inline void pr_cont_cgroup_path(struct cgroup *cgrp)
 {
-	/* dummy_top doesn't have a kn associated */
-	if (cgrp->kn)
-		pr_cont_kernfs_path(cgrp->kn);
-	else
-		pr_cont("/");
+	pr_cont_kernfs_path(cgrp->kn);
 }
 
 char *task_cgroup_path(struct task_struct *task, char *buf, size_t buflen);
@@ -614,7 +609,7 @@ struct cgroup_subsys {
 	const char *name;
 
 	/* link to parent, protected by cgroup_lock() */
-	struct cgroupfs_root *root;
+	struct cgroup_root *root;
 
 	/*
 	 * List of cftypes.  Each entry is the first entry of an array
