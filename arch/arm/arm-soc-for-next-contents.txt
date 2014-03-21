@@ -13,6 +13,8 @@ next/fixes-non-critical
 		ARM: mmp: allow platform devices with modular USB
 	samsung/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/samsung-fixes
+	randconfig-fixes
+		git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc.git randconfig-fixes
 
 next/cleanup
 	cleanup/timex-removal
@@ -46,6 +48,8 @@ next/cleanup
 		git://github.com/at91linux/linux-at91 tags/at91-cleanup
 	patch
 		ARM: prima2: build reset code standalone
+		ARM: hisi: select HAVE_ARM_SCU only for SMP
+		ARM: efm32: allow uncompress debug output
 
 next/soc
 	qcom/soc
@@ -100,6 +104,8 @@ next/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-tf
 	tegra/soc
 		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-soc
+	patch
+		ARM: mvebu: don't select CONFIG_NEON
 
 next/boards
 	renesas/boards
