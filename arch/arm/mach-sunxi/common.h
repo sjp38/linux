@@ -13,7 +13,6 @@
 #ifndef __ARCH_SUNXI_COMMON_H_
 #define __ARCH_SUNXI_COMMON_H_
 
-void sun6i_secondary_startup(void);
 extern struct smp_operations sun6i_smp_ops;
 
 #endif /* __ARCH_SUNXI_COMMON_H_ */
