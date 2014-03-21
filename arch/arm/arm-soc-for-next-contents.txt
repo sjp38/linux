@@ -3,10 +3,16 @@ next/fixes-non-critical
 		irqchip: gic: use dmb ishst instead of dsb when raising a softirq
 		ARM: clps711x: autcpu12: Fix incorrect NAND CLE GPIO
 		MAINTAINERS: ARM: clps711x: Use regex patterns to involve all CLPS711X drivers
-		CNS3xxx: Fix PCIe early iotable_init
-		CNS3xxx: Fix a WARN() related to IRQ allocation.
 	omap/fixes
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/fixes-for-merge-window
+		contains depends/irqchip-mvebu-fixes
+	patch
+		CNS3xxx: Fix a WARN() related to IRQ allocation.
+		CNS3xxx: Fix PCIe early iotable_init().
+		ARM: ixp4xx: Make dma_set_coherent_mask common, correct implementation
+		ARM: mmp: allow platform devices with modular USB
+	samsung/fixes
+		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung tags/samsung-fixes
 
 next/cleanup
 	cleanup/timex-removal
@@ -37,7 +43,7 @@ next/cleanup
 	bcm2835/move
 		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-rpi tags/bcm2835-for-3.15-soc
 	at91/cleanup
-		git://github.com/at91linux/linux-at91.git tags/at91-cleanup
+		git://github.com/at91linux/linux-at91 tags/at91-cleanup
 	patch
 		ARM: prima2: build reset code standalone
 
@@ -74,20 +80,26 @@ next/soc
 	renesas/soc3
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-soc3-for-v3.15
 	mvebu/soc2
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3.15-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15-2
 	mvebu/soc3
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-soc-3.15-3
+		git://git.infradead.org/linux-mvebu tags/mvebu-soc-3.15-3
 	sunxi/soc
-		https://github.com/mripard/linux.git tags/sunxi-core-for-3.15
+		https://github.com/mripard/linux tags/sunxi-core-for-3.15
+	bcm/cleanup
+		Merge branch 'bcm/cleanup' into next/soc
 	bcm/soc2
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/soc-3
 	patch
 		MAINTAINERS: Update ARM STi maintainers
-		ARM: davinci: tnetv107x removal
+		ARM: davinci: remove tnetv107x support
 	davinci/soc
-		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci.git tags/davinci-for-v3.15/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/nsekhar/linux-davinci tags/davinci-for-v3.15/soc
 	bcm/soc3
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/soc-4
+	tegra/tf
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-tf
+	tegra/soc
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-soc
 
 next/boards
 	renesas/boards
@@ -111,11 +123,15 @@ next/boards
 	renesas/defconfig3
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-defconfig3-for-v3.15
 	mvebu/defconfig2
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-defconfig-3.15-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-defconfig-3.15-2
+	patch
+		ARM: fix duplicate symbols in multi_v5_defconfig
 	sunxi/defconfig
-		https://github.com/mripard/linux.git tags/sunxi-defconfig-for-3.15
+		https://github.com/mripard/linux tags/sunxi-defconfig-for-3.15
 	patch
 		ARM: add Marvell Dove and some drivers to multi_v7 defconfig
+	tegra/defconfig
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-defconfig
 
 next/dt
 	renesas/dt
@@ -164,26 +180,39 @@ next/dt
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt3-for-v3.15
 	renesas/dt4
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-dt4-for-v3.15
+	efm32/cleanup
+		Merge branch 'efm32/cleanup' into next/dt
+		contains cleanup/timex-removal
 	efm32/dt
-		git://git.pengutronix.de/git/ukl/linux.git tags/efm32-next
+		git://git.pengutronix.de/git/ukl/linux tags/efm32-next
 	mvebu/dt3
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-3
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15-3
+	mvebu/soc3
+		Merge branch 'mvebu/soc3' into next/dt
+		contains mvebu/soc
+		contains mvebu/soc-3xx
+		contains mvebu/soc2
 	mvebu/dt4
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-4
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15-4
 	mvebu/dt5
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-dt-3.15-5
+		git://git.infradead.org/linux-mvebu tags/mvebu-dt-3.15-5
 	at91/dt
-		git://github.com/at91linux/linux-at91.git tags/at91-dt
-	sunxi/dt
-		https://github.com/mripard/linux.git tags/sunxi-dt-for-3.15-2
+		git://github.com/at91linux/linux-at91 tags/at91-dt
+	sunxi/dt2
+		https://github.com/mripard/linux tags/sunxi-dt-for-3.15-2
 	omap/dt3
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-part3
 	omap/overo
 		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.15/dt-overo-signed
+		contains depends/irqchip-mvebu-fixes
 	bcm/dt2
 		git://github.com/broadcom/mach-bcm tags/armsoc/for-3.15/dt-2
 	sti/dt
-		git://git.stlinux.com/devel/kernel/linux-sti.git tags/DT-for-v3.15-part-1-v2
+		git://git.stlinux.com/devel/kernel/linux-sti tags/DT-for-v3.15-part-1-v2
+	tegra/dt
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-dt
+	patch
+		ARM: tegra: fix Dalmore pinctrl configuration
 
 next/drivers
 	renesas/soc
@@ -220,12 +249,17 @@ next/drivers
 	renesas/soc-clocks4
 		git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas tags/renesas-clock4-for-v3.15
 	socfpga/drivers
-		git://git.rocketboards.org/linux-socfpga-next.git tags/socfpga_updates_for_3.15_v2
+		git://git.rocketboards.org/linux-socfpga-next tags/socfpga_updates_for_3.15_v2
 	mvebu/drivers2
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-drivers-3.15
-		git://git.infradead.org/linux-mvebu.git tags/mvebu-drivers-3.15-2
+		git://git.infradead.org/linux-mvebu tags/mvebu-drivers-3.15-2
+	sti/dt
+		Merge branch 'sti/dt' into next/drivers
 	sti/reset
-		git://git.stlinux.com/devel/kernel/linux-sti.git tags/sti-reset-for-v3.15
+		git://git.stlinux.com/devel/kernel/linux-sti tags/sti-reset-for-v3.15
+	cleanup/kconfig
+		Merge branch 'cleanup/kconfig' into next/drivers
+	tegra/drivers
+		git://git.kernel.org/pub/scm/linux/kernel/git/tegra/linux tags/tegra-for-3.15-drivers
 
 next/sh
 	renesas/sh-intc
@@ -238,17 +272,6 @@ next/cleanup2
 		git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-integrator tags/integrator-for-v3.15-2
 
 fixes
-	<no branch> (4b41636878ee32d4c45a49de7749abca9721bd6a)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-rc4
-	patch
-		ARM: tegra: add LED options back into tegra_defconfig
-	<no branch> (40dd8f3b900cac1d925605a9d3199368c4af0a40)
-		https://github.com/mripard/linux tags/sunxi-fixes-for-3.14
-	<no branch> (735ea23c4868bf3123a4c79184e9206e0cc60211)
-		git://github.com/broadcom/bcm11351 tags/bcm-for-3.14-pinctrl-reduced-rename
-		contains depends/irqchip-mvebu-fixes
-	<no branch> (ae41a3030ce8901853b3cfd5e118a4b0288aa068)
-		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-for-v3.14/fixes-dt-rc4
 	patch
 		MAINTAINERS: update IMX kernel git tree
 		ARM: at91: fix network interface ordering for sama5d36
