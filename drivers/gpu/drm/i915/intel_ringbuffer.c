@@ -581,11 +581,11 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 	/* Required for the hardware to program scanline values for waiting */
 	if (INTEL_INFO(dev)->gen == 6)
 		I915_WRITE(GFX_MODE,
-			   _MASKED_BIT_ENABLE(GFX_TLB_INVALIDATE_ALWAYS));
+			   _MASKED_BIT_ENABLE(GFX_TLB_INVALIDATE_EXPLICIT));
 
 	if (IS_GEN7(dev))
 		I915_WRITE(GFX_MODE_GEN7,
-			   _MASKED_BIT_DISABLE(GFX_TLB_INVALIDATE_ALWAYS) |
+			   _MASKED_BIT_DISABLE(GFX_TLB_INVALIDATE_EXPLICIT) |
 			   _MASKED_BIT_ENABLE(GFX_REPLAY_MODE));
 
 	if (INTEL_INFO(dev)->gen >= 5) {
@@ -608,7 +608,7 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 		 * TODO: consider explicitly setting the bit for GEN5
 		 */
 		ring->itlb_before_ctx_switch =
-			!!(I915_READ(GFX_MODE) & GFX_TLB_INVALIDATE_ALWAYS);
+			!!(I915_READ(GFX_MODE) & GFX_TLB_INVALIDATE_EXPLICIT);
 	}
 
 	if (INTEL_INFO(dev)->gen >= 6)
