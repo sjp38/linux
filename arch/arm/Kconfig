@@ -422,6 +422,7 @@ config ARCH_EFM32
 	bool "Energy Micro efm32"
 	depends on !MMU
 	select ARCH_REQUIRE_GPIOLIB
+	select AUTO_ZRELADDR
 	select ARM_NVIC
 	select CLKSRC_OF
 	select COMMON_CLK
@@ -695,6 +696,7 @@ config ARCH_RPC
 	select ARCH_MAY_HAVE_PC_FDC
 	select ARCH_SPARSEMEM_ENABLE
 	select ARCH_USES_GETTIMEOFFSET
+	select CPU_SA110
 	select FIQ
 	select HAVE_IDE
 	select HAVE_PATA_PLATFORM
@@ -729,6 +731,7 @@ config ARCH_S3C24XX
 	bool "Samsung S3C24XX SoCs"
 	select ARCH_HAS_CPUFREQ
 	select ARCH_REQUIRE_GPIOLIB
+	select ATAGS
 	select CLKDEV_LOOKUP
 	select CLKSRC_SAMSUNG_PWM
 	select GENERIC_CLOCKEVENTS
@@ -751,6 +754,7 @@ config ARCH_S3C64XX
 	select ARCH_REQUIRE_GPIOLIB
 	select ARM_AMBA
 	select ARM_VIC
+	select ATAGS
 	select CLKDEV_LOOKUP
 	select CLKSRC_SAMSUNG_PWM
 	select COMMON_CLK
@@ -762,7 +766,7 @@ config ARCH_S3C64XX
 	select HAVE_TCM
 	select NO_IOPORT
 	select PLAT_SAMSUNG
-	select PM_GENERIC_DOMAINS
+	select PM_GENERIC_DOMAINS if PM
 	select S3C_DEV_NAND
 	select S3C_GPIO_TRACK
 	select SAMSUNG_ATAGS
@@ -774,6 +778,7 @@ config ARCH_S3C64XX
 
 config ARCH_S5P64X0
 	bool "Samsung S5P6440 S5P6450"
+	select ATAGS
 	select CLKDEV_LOOKUP
 	select CLKSRC_SAMSUNG_PWM
 	select CPU_V6
@@ -792,6 +797,7 @@ config ARCH_S5P64X0
 config ARCH_S5PC100
 	bool "Samsung S5PC100"
 	select ARCH_REQUIRE_GPIOLIB
+	select ATAGS
 	select CLKDEV_LOOKUP
 	select CLKSRC_SAMSUNG_PWM
 	select CPU_V7
@@ -811,6 +817,7 @@ config ARCH_S5PV210
 	select ARCH_HAS_CPUFREQ
 	select ARCH_HAS_HOLES_MEMORYMODEL
 	select ARCH_SPARSEMEM_ENABLE
+	select ATAGS
 	select CLKDEV_LOOKUP
 	select CLKSRC_SAMSUNG_PWM
 	select CPU_V7
