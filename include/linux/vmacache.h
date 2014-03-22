@@ -1,21 +1,19 @@
 #ifndef __LINUX_VMACACHE_H
 #define __LINUX_VMACACHE_H
 
+#include <linux/sched.h>
 #include <linux/mm.h>
 
-#define VMACACHE_BITS 2
-#define VMACACHE_SIZE (1U << VMACACHE_BITS)
-#define VMACACHE_MASK (VMACACHE_SIZE - 1)
 /*
  * Hash based on the page number. Provides a good hit rate for
  * workloads with good locality and those with random accesses as well.
  */
 #define VMACACHE_HASH(addr) ((addr >> PAGE_SHIFT) & VMACACHE_MASK)
 
-#define vmacache_flush(tsk)					 \
-	do {							 \
-		memset(tsk->vmacache, 0, sizeof(tsk->vmacache)); \
-	} while (0)
+static inline void vmacache_flush(struct task_struct *tsk)
+{
+	memset(tsk->vmacache, 0, sizeof(tsk->vmacache));
+}
 
 extern void vmacache_flush_all(struct mm_struct *mm);
 extern void vmacache_update(unsigned long addr, struct vm_area_struct *newvma);
