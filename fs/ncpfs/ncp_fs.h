@@ -22,7 +22,7 @@
 
 #define ncp_dbg(level, fmt, ...)				\
 do {								\
-	if (level >= DEBUG_NCP)					\
+	if (level < DEBUG_NCP)					\
 		pr_debug(fmt, ##__VA_ARGS__);			\
 } while (0)
 
