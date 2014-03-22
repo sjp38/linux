@@ -1085,6 +1085,12 @@ EXPORT_SYMBOL(vm_unmap_ram);
  * @node: prefer to allocate data structures on this node
  * @prot: memory protection to use. PAGE_KERNEL for regular RAM
  *
+ * If you use this function for below VMAP_MAX_ALLOC pages, it could be faster
+ * than vmap so it's good. But if you mix long-life and short-life object
+ * with vm_map_ram, it could consume lots of address space by fragmentation
+ * (expecially, 32bit machine). You could see failure in the end.
+ * Please use this function for short-life object.
+ *
  * Returns: a pointer to the address that has been mapped, or %NULL on failure
  */
 void *vm_map_ram(struct page **pages, unsigned int count, int node, pgprot_t prot)
