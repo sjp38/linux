@@ -551,15 +551,25 @@ static int zram_bvec_rw(struct zram *zram, struct bio_vec *bvec, u32 index,
 	return ret;
 }
 
+/*
+ * zram_bio_discard - handler on discard request
+ * @index: physical block index by PAGE_SIZE unit
+ * @offset: offset within physical block
+ */
 static void zram_bio_discard(struct zram *zram, u32 index,
 			     int offset, struct bio *bio)
 {
 	size_t n = bio->bi_iter.bi_size;
 
 	/*
-	 * On some arch, logical block (4096) aligned request couldn't be
-	 * aligned to PAGE_SIZE, since their PAGE_SIZE aren't 4096.
-	 * Therefore we should handle this misaligned case here.
+	 * zram manages data by physical block size unit. Because logical block
+	 * size isn't identical with physical block size on some arch, we
+	 * could get discard request pointing to specific offset within certain
+	 * physical block. Although we can handle this request by reading that
+	 * physiclal block and decompressing and partially zeroing and
+	 * re-compressing and then re-storing it, it isn't reasonable because
+	 * our intention of handling discard request is to save memory.
+	 * So skipping this logical block is approriate here.
 	 */
 	if (offset) {
 		if (n < offset)
@@ -570,6 +580,11 @@ static void zram_bio_discard(struct zram *zram, u32 index,
 	}
 
 	while (n >= PAGE_SIZE) {
+		/*
+		 * discard request can be too large so that the zram can
+		 * be stucked for a long time if we handle the request
+		 * at once. So handle the request by PAGE_SIZE unit at a time.
+		 */
 		write_lock(&zram->meta->tb_lock);
 		zram_free_page(zram, index);
 		write_unlock(&zram->meta->tb_lock);
@@ -891,8 +906,11 @@ static int create_device(struct zram *zram, int device_id)
 	zram->disk->queue->limits.discard_granularity = PAGE_SIZE;
 	zram->disk->queue->limits.max_discard_sectors = UINT_MAX;
 	/*
-	 * We will skip to discard mis-aligned range, so we can't ensure
-	 * whether discarded region is zero or not.
+	 * zram_bio_discard() will clear all logical blocks if logical block
+	 * size is identical with physical block size(PAGE_SIZE). But if it is
+	 * different, we will skip to discard some parts of logical blocks in
+	 * whole request range which isn't aligned to physical block size.
+	 * So we can't ensure that some discarded logical block is zeroed.
 	 */
 	if (ZRAM_LOGICAL_BLOCK_SIZE == PAGE_SIZE)
 		zram->disk->queue->limits.discard_zeroes_data = 1;
