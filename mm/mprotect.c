@@ -46,6 +46,17 @@ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 	unsigned long pages = 0;
 
 	pte = pte_offset_map_lock(mm, pmd, addr, &ptl);
+
+	/*
+	 * For a prot_numa update we only hold mmap_sem for read so there is a
+	 * potential race with faulting where a pmd was temporarily none so
+	 * recheck it under the lock and bail if we race
+	 */
+	if (prot_numa && unlikely(pmd_trans_huge(*pmd))) {
+		pte_unmap_unlock(pte, ptl);
+		return 0;
+	}
+
 	arch_enter_lazy_mmu_mode();
 	do {
 		oldpte = *pte;
@@ -132,12 +143,13 @@ static inline unsigned long change_pmd_range(struct vm_area_struct *vma,
 						pages += HPAGE_PMD_NR;
 						nr_huge_updates++;
 					}
+
+					/* huge pmd was handled */
 					continue;
 				}
 			}
 			/* fall through, the trans huge pmd just split */
 		}
-		VM_BUG_ON(pmd_trans_huge(*pmd));
 		this_pages = change_pte_range(vma, pmd, addr, next, newprot,
 				 dirty_accountable, prot_numa);
 		pages += this_pages;
