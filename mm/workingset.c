@@ -273,6 +273,7 @@ static unsigned long count_shadow_nodes(struct shrinker *shrinker,
 	unsigned long max_nodes;
 	unsigned long pages;
 
+	/* list_lru lock nests inside IRQ-safe mapping->tree_lock */
 	local_irq_disable();
 	shadow_nodes = list_lru_count_node(&workingset_shadow_nodes, sc->nid);
 	local_irq_enable();
@@ -373,6 +374,7 @@ static unsigned long scan_shadow_nodes(struct shrinker *shrinker,
 {
 	unsigned long ret;
 
+	/* list_lru lock nests inside IRQ-safe mapping->tree_lock */
 	local_irq_disable();
 	ret =  list_lru_walk_node(&workingset_shadow_nodes, sc->nid,
 				  shadow_lru_isolate, NULL, &sc->nr_to_scan);
