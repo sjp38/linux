@@ -3318,7 +3318,21 @@ static int __do_fault(struct vm_area_struct *vma, unsigned long address,
 	return ret;
 }
 
-
+/**
+ * do_set_pte - setup new PTE entry for given page and add reverse page mapping.
+ *
+ * @vma: virtual memory area
+ * @address: user virtual address
+ * @page: page to map
+ * @pte: pointer to target page table entry
+ * @write: true, if new entry is writable
+ * @anon: true, if it's anonymous page
+ *
+ * Caller must hold page table lock relevant for @pte.
+ *
+ * Target users are page handler itself and implementations of
+ * vm_ops->map_pages.
+ */
 void do_set_pte(struct vm_area_struct *vma, unsigned long address,
 		struct page *page, pte_t *pte, bool write, bool anon)
 {
