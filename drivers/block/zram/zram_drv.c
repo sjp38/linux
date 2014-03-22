@@ -127,26 +127,28 @@ static ssize_t max_comp_streams_store(struct device *dev,
 {
 	int num;
 	struct zram *zram = dev_to_zram(dev);
+	int ret;
 
-	if (kstrtoint(buf, 0, &num))
-		goto out;
+	ret = kstrtoint(buf, 0, &num);
+	if (ret < 0)
+		return ret;
 	if (num < 1)
-		goto out;
+		return -EINVAL;
 
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {
 		if (!zcomp_set_max_streams(zram->comp, num)) {
 			pr_info("Cannot change max compression streams\n");
-			goto out_unlock;
+			ret = -EINVAL;
+			goto out;
 		}
 	}
 
 	zram->max_comp_streams = num;
-	return len;
-out_unlock:
-	up_write(&zram->init_lock);
+	ret = len;
 out:
-	return -EINVAL;
+	up_write(&zram->init_lock);
+	return ret;
 }
 
 static ssize_t comp_algorithm_show(struct device *dev,
