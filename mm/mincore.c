@@ -72,7 +72,7 @@ static unsigned char mincore_page(struct address_space *mapping, pgoff_t pgoff)
 	 */
 #ifdef CONFIG_SWAP
 	if (shmem_mapping(mapping)) {
-		page = __find_get_page(mapping, pgoff);
+		page = find_get_entry(mapping, pgoff);
 		/*
 		 * shmem/tmpfs may return swap: account for swapcache
 		 * page too.
