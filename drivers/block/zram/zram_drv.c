@@ -553,8 +553,8 @@ static int zram_bvec_rw(struct zram *zram, struct bio_vec *bvec, u32 index,
 
 /*
  * zram_bio_discard - handler on discard request
- * @index: physical block index by PAGE_SIZE unit
- * @offset: offset within physical block
+ * @index: physical block index in PAGE_SIZE units
+ * @offset: byte offset within physical block
  */
 static void zram_bio_discard(struct zram *zram, u32 index,
 			     int offset, struct bio *bio)
@@ -562,14 +562,14 @@ static void zram_bio_discard(struct zram *zram, u32 index,
 	size_t n = bio->bi_iter.bi_size;
 
 	/*
-	 * zram manages data by physical block size unit. Because logical block
+	 * zram manages data in physical block size units. Because logical block
 	 * size isn't identical with physical block size on some arch, we
-	 * could get discard request pointing to specific offset within certain
-	 * physical block. Although we can handle this request by reading that
-	 * physiclal block and decompressing and partially zeroing and
-	 * re-compressing and then re-storing it, it isn't reasonable because
-	 * our intention of handling discard request is to save memory.
-	 * So skipping this logical block is approriate here.
+	 * could get a discard request pointing to a specific offset within a
+	 * certain physical block.  Although we can handle this request by
+	 * reading that physiclal block and decompressing and partially zeroing
+	 * and re-compressing and then re-storing it, this isn't reasonable
+	 * because our intent with a discard request is to save memory.  So
+	 * skipping this logical block is appropriate here.
 	 */
 	if (offset) {
 		if (n < offset)
@@ -581,9 +581,8 @@ static void zram_bio_discard(struct zram *zram, u32 index,
 
 	while (n >= PAGE_SIZE) {
 		/*
-		 * discard request can be too large so that the zram can
-		 * be stucked for a long time if we handle the request
-		 * at once. So handle the request by PAGE_SIZE unit at a time.
+		 * Discard request can be large so the lock hold times could be
+		 * lengthy.  So take the lock once per page.
 		 */
 		write_lock(&zram->meta->tb_lock);
 		zram_free_page(zram, index);
@@ -908,9 +907,10 @@ static int create_device(struct zram *zram, int device_id)
 	/*
 	 * zram_bio_discard() will clear all logical blocks if logical block
 	 * size is identical with physical block size(PAGE_SIZE). But if it is
-	 * different, we will skip to discard some parts of logical blocks in
-	 * whole request range which isn't aligned to physical block size.
-	 * So we can't ensure that some discarded logical block is zeroed.
+	 * different, we will skip discarding some parts of logical blocks in
+	 * the part of the request range which isn't aligned to physical block
+	 * size.  So we can't ensure that all discarded logical blocks are
+	 * zeroed.
 	 */
 	if (ZRAM_LOGICAL_BLOCK_SIZE == PAGE_SIZE)
 		zram->disk->queue->limits.discard_zeroes_data = 1;
