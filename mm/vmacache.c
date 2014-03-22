@@ -31,6 +31,15 @@ void vmacache_flush_all(struct mm_struct *mm)
 	rcu_read_unlock();
 }
 
+/*
+ * This task may be accessing a foreign mm via (for example)
+ * get_user_pages()->find_vma().  The vmacache is task-local and this
+ * task's vmacache pertains to a different mm (ie, its own).  There is
+ * nothing we can do here.
+ *
+ * Also handle the case where a kernel thread has adopted this mm via use_mm().
+ * That kernel thread's vmacache is not applicable to this mm.
+ */
 static bool vmacache_valid_mm(struct mm_struct *mm)
 {
 	return current->mm == mm && !(current->flags & PF_KTHREAD);
@@ -46,12 +55,6 @@ static bool vmacache_valid(struct mm_struct *mm)
 {
 	struct task_struct *curr;
 
-	/*
-	 * This task may be accessing a foreign mm via (for example)
-	 * get_user_pages()->find_vma().  The vmacache is task-local and this
-	 * task's vmacache pertains to a different mm (ie, its own).  There is
-	 * nothing we can do here.
-	 */
 	if (!vmacache_valid_mm(mm))
 		return false;
 
