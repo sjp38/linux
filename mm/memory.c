@@ -2612,6 +2612,7 @@ static int do_page_mkwrite(struct vm_area_struct *vma, struct page *page,
 			unlock_page(page);
 			return 0; /* retry */
 		}
+		ret |= VM_FAULT_LOCKED;
 	} else
 		VM_BUG_ON_PAGE(!PageLocked(page), page);
 	return ret;
