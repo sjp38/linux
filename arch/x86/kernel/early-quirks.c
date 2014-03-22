@@ -208,7 +208,7 @@ static void __init intel_remapping_check(int num, int slot, int func)
 	 * and should be flagged as broken.  Additionally revisions 0x12
 	 * and 0x22 of device id 0x3405 has this problem.
 	 */
-	if (revision == 0x13)
+	if (revision < 0x13)
 		set_irq_remapping_broken();
 	else if ((device == 0x3405) &&
 	    ((revision == 0x12) ||
