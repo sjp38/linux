@@ -235,7 +235,7 @@ static void zcomp_strm_single_release(struct zcomp *comp,
 static bool zcomp_strm_single_set_max_streams(struct zcomp *comp, int num_strm)
 {
 	/* zcomp_strm_single support only max_comp_streams == 1 */
-	return 0;
+	return false;
 }
 
 static void zcomp_strm_single_destroy(struct zcomp *comp)
