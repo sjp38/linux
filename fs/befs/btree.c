@@ -263,7 +263,7 @@ befs_btree_find(struct super_block *sb, befs_data_stream * ds,
 	this_node = kmalloc(sizeof (befs_btree_node),
 						GFP_NOFS);
 	if (!this_node) {
-		befs_error(sb, "befs_btree_find() failed to allocate %u "
+		befs_error(sb, "befs_btree_find() failed to allocate %zu "
 			   "bytes of memory", sizeof (befs_btree_node));
 		goto error;
 	}
@@ -437,7 +437,7 @@ befs_btree_read(struct super_block *sb, befs_data_stream * ds,
 	}
 
 	if ((this_node = kmalloc(sizeof (befs_btree_node), GFP_NOFS)) == NULL) {
-		befs_error(sb, "befs_btree_read() failed to allocate %u "
+		befs_error(sb, "befs_btree_read() failed to allocate %zu "
 			   "bytes of memory", sizeof (befs_btree_node));
 		goto error;
 	}
@@ -498,7 +498,7 @@ befs_btree_read(struct super_block *sb, befs_data_stream * ds,
 		   (int)keylen);
 
 	if (bufsize < keylen + 1) {
-		befs_error(sb, "%s keybuf too small (%u) "
+		befs_error(sb, "%s keybuf too small (%zu) "
 			   "for key of size %d", __func__, bufsize, keylen);
 		brelse(this_node->bh);
 		goto error_alloc;
