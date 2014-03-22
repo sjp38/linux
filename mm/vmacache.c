@@ -31,15 +31,20 @@ void vmacache_flush_all(struct mm_struct *mm)
 	rcu_read_unlock();
 }
 
+static bool vmacache_valid_mm(struct mm_struct *mm)
+{
+	return current->mm == mm && !(current->flags & PF_KTHREAD);
+}
+
 void vmacache_update(unsigned long addr, struct vm_area_struct *newvma)
 {
-	int idx = VMACACHE_HASH(addr);
-	current->vmacache[idx] = newvma;
+	if (vmacache_valid_mm(newvma->vm_mm))
+		current->vmacache[VMACACHE_HASH(addr)] = newvma;
 }
 
 static bool vmacache_valid(struct mm_struct *mm)
 {
-	struct task_struct *curr = current;
+	struct task_struct *curr;
 
 	/*
 	 * This task may be accessing a foreign mm via (for example)
@@ -47,9 +52,10 @@ static bool vmacache_valid(struct mm_struct *mm)
 	 * task's vmacache pertains to a different mm (ie, its own).  There is
 	 * nothing we can do here.
 	 */
-	if (mm != curr->mm)
-		return false;
+	if (!vmacache_valid_mm(mm))
+ 		return false;
 
+	curr = current;
 	if (mm->vmacache_seqnum != curr->vmacache_seqnum) {
 		/*
 		 * First attempt will always be invalid, initialize
