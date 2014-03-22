@@ -44,7 +44,8 @@ objects to be reported as orphan.
 Memory scanning parameters can be modified at run-time by writing to the
 /sys/kernel/debug/kmemleak file. The following parameters are supported:
 
-  off		- disable kmemleak (irreversible)
+  off		- disable kmemleak, or free all kmemleak objects if kmemleak
+		  has been disabled due to fatal errors. (irreversible).
   stack=on	- enable the task stacks scanning (default)
   stack=off	- disable the tasks stacks scanning
   scan=on	- start the automatic memory scanning thread (default)
@@ -119,6 +120,17 @@ To test a critical section on demand with a clean kmemleak do:
 Then as usual to get your report with:
 
   # cat /sys/kernel/debug/kmemleak
+
+Freeing kmemleak internal objects
+---------------------------------
+
+To allow access to previously found memory leaks even when an error fatal
+to kmemleak happens, internal kmemleak objects won't be freed in this case.
+Those objects may occupy a large part of physical memory.
+
+You can reclaim memory from those objects with:
+
+  # echo off > /sys/kernel/debug/kmemleak
 
 Kmemleak API
 ------------

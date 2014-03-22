@@ -1616,9 +1616,6 @@ static ssize_t kmemleak_write(struct file *file, const char __user *user_buf,
 	int buf_size;
 	int ret;
 
-	if (!atomic_read(&kmemleak_enabled))
-		return -EBUSY;
-
 	buf_size = min(size, (sizeof(buf) - 1));
 	if (strncpy_from_user(buf, user_buf, buf_size) < 0)
 		return -EFAULT;
@@ -1628,9 +1625,18 @@ static ssize_t kmemleak_write(struct file *file, const char __user *user_buf,
 	if (ret < 0)
 		return ret;
 
-	if (strncmp(buf, "off", 3) == 0)
+	if (strncmp(buf, "off", 3) == 0) {
+		stop_scan_thread();
 		kmemleak_disable();
-	else if (strncmp(buf, "stack=on", 8) == 0)
+		goto out;
+	}
+
+	if (!atomic_read(&kmemleak_enabled)) {
+		ret = -EBUSY;
+		goto out;
+	}
+
+	if (strncmp(buf, "stack=on", 8) == 0)
 		kmemleak_stack_scan = 1;
 	else if (strncmp(buf, "stack=off", 9) == 0)
 		kmemleak_stack_scan = 0;
@@ -1695,6 +1701,11 @@ static void kmemleak_do_cleanup(struct work_struct *work)
 		list_for_each_entry_rcu(object, &object_list, object_list)
 			delete_object_full(object->pointer);
 		rcu_read_unlock();
+	} else {
+		pr_info("Disable kmemleak without freeing internal objects, "
+			"so you may still check information on memory leak. "
+			"You may reclaim memory by writing \"off\" to "
+			"/sys/kernel/debug/kmemleak\n");
 	}
 	mutex_unlock(&scan_mutex);
 }
