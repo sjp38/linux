@@ -2189,6 +2189,7 @@ static bool too_many_discard_blocks(sector_t discard_block_size,
 static sector_t calculate_discard_block_size(sector_t cache_block_size,
 					     sector_t origin_size)
 {
+#if 0
 	sector_t discard_block_size;
 
 	discard_block_size = roundup_pow_of_two(cache_block_size);
@@ -2198,6 +2199,13 @@ static sector_t calculate_discard_block_size(sector_t cache_block_size,
 			discard_block_size *= 2;
 
 	return discard_block_size;
+#else
+	/*
+	 * FIXME: stop-gap workaround for corruption that is
+	 * induced by discard_block_size > cache_block_size.
+	 */
+	return cache_block_size;
+#endif
 }
 
 #define DEFAULT_MIGRATION_THRESHOLD 2048
@@ -3120,7 +3128,7 @@ static void set_discard_limits(struct cache *cache, struct queue_limits *limits)
 	/*
 	 * FIXME: these limits may be incompatible with the cache device
 	 */
-	limits->max_discard_sectors = cache->discard_block_size * 1024;
+	limits->max_discard_sectors = cache->discard_block_size;
 	limits->discard_granularity = cache->discard_block_size << SECTOR_SHIFT;
 }
 
