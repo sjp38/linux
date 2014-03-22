@@ -53,7 +53,7 @@ static bool vmacache_valid(struct mm_struct *mm)
 	 * nothing we can do here.
 	 */
 	if (!vmacache_valid_mm(mm))
- 		return false;
+		return false;
 
 	curr = current;
 	if (mm->vmacache_seqnum != curr->vmacache_seqnum) {
