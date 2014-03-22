@@ -16,7 +16,6 @@
 #include <linux/types.h>
 #include <linux/string.h>
 #include <linux/init.h>
-
 #include <linux/printk.h>
 
 #ifndef CONFIG_DECOMPRESS_GZIP
@@ -63,7 +62,7 @@ decompress_fn __init decompress_method(const unsigned char *inbuf, int len,
 	if (len < 2)
 		return NULL;	/* Need at least this much... */
 
-	printk(KERN_DEBUG "Compressed data magic: %#.2x %#.2x\n", inbuf[0], inbuf[1]);
+	pr_debug("Compressed data magic: %#.2x %#.2x\n", inbuf[0], inbuf[1]);
 
 	for (cf = compressed_formats; cf->name; cf++) {
 		if (!memcmp(inbuf, cf->magic, 2))
