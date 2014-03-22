@@ -2258,8 +2258,7 @@ sub process {
 		}
 
 # check for missing blank lines after declarations
-		if ($realfile =~ m@^(drivers/net/|net/)@ &&
-		    $prevline =~ /^\+\s+$Declare\s+$Ident/ &&
+		if ($prevline =~ /^\+\s+$Declare\s+$Ident/ &&
 		    !($prevline =~ /(?:$Compare|$Assignment|$Operators)\s*$/ ||
 		      $prevline =~ /(?:\{\s*|\\)$/) &&		#extended lines
 		    $sline =~ /^\+\s+/ &&			#Not at char 1
@@ -2269,7 +2268,7 @@ sub process {
 		      $sline =~ /^\+\s+(?:$|[\{\}\.\#\"\?\:\(])/ ||
 		      $sline =~ /^\+\s+\(?\s*(?:$Compare|$Assignment|$Operators)/)) {
 			WARN("SPACING",
-			     "networking uses a blank line after declarations\n" . $hereprev);
+			     "Missing a blank line after declarations\n" . $hereprev);
 		}
 
 # check for spaces at the beginning of a line.
