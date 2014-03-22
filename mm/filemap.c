@@ -2083,6 +2083,8 @@ void filemap_map_pages(struct vm_area_struct *vma, struct vm_fault *vmf)
 			break;
 repeat:
 		page = radix_tree_deref_slot(slot);
+		if (unlikely(!page))
+			goto next;
 		if (radix_tree_exception(page)) {
 			if (radix_tree_deref_retry(page))
 				break;
@@ -2128,7 +2130,7 @@ unlock:
 skip:
 		page_cache_release(page);
 next:
-		if (page->index == vmf->max_pgoff)
+		if (iter.index == vmf->max_pgoff)
 			break;
 	}
 	rcu_read_unlock();
