@@ -429,7 +429,6 @@ config SPI_SH_MSIOF
 	tristate "SuperH MSIOF SPI controller"
 	depends on HAVE_CLK
 	depends on SUPERH || ARCH_SHMOBILE || COMPILE_TEST
-	select SPI_BITBANG
 	help
 	  SPI driver for SuperH and SH Mobile MSIOF blocks.
 
@@ -458,6 +457,19 @@ config SPI_SIRF
 	select SPI_BITBANG
 	help
 	  SPI driver for CSR SiRFprimaII SoCs
+
+config SPI_SUN4I
+	tristate "Allwinner A10 SoCs SPI controller"
+	depends on ARCH_SUNXI || COMPILE_TEST
+	help
+	  SPI driver for Allwinner sun4i, sun5i and sun7i SoCs
+
+config SPI_SUN6I
+	tristate "Allwinner A31 SPI controller"
+	depends on ARCH_SUNXI || COMPILE_TEST
+	depends on RESET_CONTROLLER
+	help
+	  This enables using the SPI controller on the Allwinner A31 SoCs.
 
 config SPI_MXS
 	tristate "Freescale MXS SPI controller"
