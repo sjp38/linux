@@ -23,7 +23,6 @@
 #include <linux/interrupt.h>
 #include <linux/bitops.h>
 #include <linux/time.h>
-#include <linux/timex.h>
 #include <linux/clocksource.h>
 #include <linux/clockchips.h>
 #include <linux/io.h>
@@ -31,6 +30,7 @@
 #include <linux/gpio.h>
 #include <linux/cpu.h>
 #include <linux/sched_clock.h>
+#include <linux/pci.h>
 
 #include <mach/udc.h>
 #include <mach/hardware.h>
@@ -44,6 +44,17 @@
 #include <asm/mach/map.h>
 #include <asm/mach/irq.h>
 #include <asm/mach/time.h>
+
+#define IXP4XX_TIMER_FREQ 66666000
+
+/*
+ * The timer register doesn't allow to specify the two least significant bits of
+ * the timeout value and assumes them being zero. So make sure IXP4XX_LATCH is
+ * the best value with the two least significant bits unset.
+ */
+#define IXP4XX_LATCH DIV_ROUND_CLOSEST(IXP4XX_TIMER_FREQ, \
+				       (IXP4XX_OST_RELOAD_MASK + 1) * HZ) * \
+			(IXP4XX_OST_RELOAD_MASK + 1)
 
 static void __init ixp4xx_clocksource_init(void);
 static void __init ixp4xx_clockevent_init(void);
@@ -99,7 +110,7 @@ void __init ixp4xx_map_io(void)
 #define IXP4XX_GPIO_CLK_0		14
 #define IXP4XX_GPIO_CLK_1		15
 
-static void gpio_line_config(u8 line, u32 direction)
+void gpio_line_config(u8 line, u32 direction)
 {
 	if (direction == IXP4XX_GPIO_IN)
 		*IXP4XX_GPIO_GPOER |= (1 << line);
@@ -107,12 +118,12 @@ static void gpio_line_config(u8 line, u32 direction)
 		*IXP4XX_GPIO_GPOER &= ~(1 << line);
 }
 
-static void gpio_line_get(u8 line, int *value)
+void gpio_line_get(u8 line, int *value)
 {
 	*value = (*IXP4XX_GPIO_GPINR >> line) & 0x1;
 }
 
-static void gpio_line_set(u8 line, int value)
+void gpio_line_set(u8 line, int value)
 {
 	if (value == IXP4XX_GPIO_HIGH)
 	    *IXP4XX_GPIO_GPOUTR |= (1 << line);
@@ -520,7 +531,7 @@ static void ixp4xx_set_mode(enum clock_event_mode mode,
 
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
-		osrt = LATCH & ~IXP4XX_OST_RELOAD_MASK;
+		osrt = IXP4XX_LATCH & ~IXP4XX_OST_RELOAD_MASK;
  		opts = IXP4XX_OST_ENABLE;
 		break;
 	case CLOCK_EVT_MODE_ONESHOT:
@@ -577,6 +588,17 @@ void ixp4xx_restart(enum reboot_mode mode, const char *cmd)
 		*IXP4XX_OSWE = IXP4XX_WDT_RESET_ENABLE | IXP4XX_WDT_COUNT_ENABLE;
 	}
 }
+
+int dma_set_coherent_mask(struct device *dev, u64 mask)
+{
+	if (dev_is_pci(dev) && mask >= SZ_64M)
+		return -EIO;
+
+	dev->coherent_dma_mask = mask;
+
+	return 0;
+}
+EXPORT_SYMBOL(dma_set_coherent_mask);
 
 #ifdef CONFIG_IXP4XX_INDIRECT_PCI
 /*

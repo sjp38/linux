@@ -20,6 +20,7 @@
 #include <clocksource/samsung_pwm.h>
 #include <linux/sched.h>
 #include <linux/serial_core.h>
+#include <linux/serial_s3c.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_irq.h>
@@ -40,7 +41,6 @@
 
 #include <plat/cpu.h>
 #include <plat/pm.h>
-#include <plat/regs-serial.h>
 
 #include "common.h"
 #include "regs-pmu.h"
@@ -404,8 +404,10 @@ static int __init exynos4_l2x0_cache_init(void)
 	if (ret)
 		return ret;
 
-	l2x0_regs_phys = virt_to_phys(&l2x0_saved_regs);
-	clean_dcache_area(&l2x0_regs_phys, sizeof(unsigned long));
+	if (IS_ENABLED(CONFIG_S5P_SLEEP)) {
+		l2x0_regs_phys = virt_to_phys(&l2x0_saved_regs);
+		clean_dcache_area(&l2x0_regs_phys, sizeof(unsigned long));
+	}
 	return 0;
 }
 early_initcall(exynos4_l2x0_cache_init);
