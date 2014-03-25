@@ -497,13 +497,14 @@ static struct blk_mq_reg virtio_mq_reg = {
 };
 module_param_named(queue_depth, virtio_mq_reg.queue_depth, uint, 0444);
 
-static void virtblk_init_vbr(void *data, struct blk_mq_hw_ctx *hctx,
+static int virtblk_init_vbr(void *data, struct blk_mq_hw_ctx *hctx,
 			     struct request *rq, unsigned int nr)
 {
 	struct virtio_blk *vblk = data;
 	struct virtblk_req *vbr = rq->special;
 
 	sg_init_table(vbr->sg, vblk->sg_elems);
+	return 0;
 }
 
 static int virtblk_probe(struct virtio_device *vdev)
