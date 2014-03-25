@@ -142,7 +142,7 @@ mwifiex_del_rx_reorder_entry(struct mwifiex_private *priv,
 	mwifiex_11n_dispatch_pkt(priv, tbl, (tbl->start_win + tbl->win_size) &
 					    (MAX_TID_VALUE - 1));
 
-	del_timer(&tbl->timer_context.timer);
+	del_timer_sync(&tbl->timer_context.timer);
 
 	spin_lock_irqsave(&priv->rx_reorder_tbl_lock, flags);
 	list_del(&tbl->list);
@@ -279,6 +279,8 @@ mwifiex_11n_create_rx_reorder_tbl(struct mwifiex_private *priv, u8 *ta,
 	new_node->tid = tid;
 	memcpy(new_node->ta, ta, ETH_ALEN);
 	new_node->start_win = seq_num;
+	new_node->init_win = seq_num;
+	new_node->flags = 0;
 
 	if (mwifiex_queuing_ra_based(priv)) {
 		dev_dbg(priv->adapter->dev,
@@ -290,15 +292,20 @@ mwifiex_11n_create_rx_reorder_tbl(struct mwifiex_private *priv, u8 *ta,
 				last_seq = node->rx_seq[tid];
 		}
 	} else {
-		last_seq = priv->rx_seq[tid];
+		node = mwifiex_get_sta_entry(priv, ta);
+		if (node)
+			last_seq = node->rx_seq[tid];
+		else
+			last_seq = priv->rx_seq[tid];
 	}
 
 	if (last_seq != MWIFIEX_DEF_11N_RX_SEQ_NUM &&
-	    last_seq >= new_node->start_win)
+	    last_seq >= new_node->start_win) {
 		new_node->start_win = last_seq + 1;
+		new_node->flags |= RXREOR_INIT_WINDOW_SHIFT;
+	}
 
 	new_node->win_size = win_size;
-	new_node->flags = 0;
 
 	new_node->rx_reorder_ptr = kzalloc(sizeof(void *) * win_size,
 					GFP_KERNEL);
@@ -358,9 +365,27 @@ int mwifiex_cmd_11n_addba_rsp_gen(struct mwifiex_private *priv,
 				  *cmd_addba_req)
 {
 	struct host_cmd_ds_11n_addba_rsp *add_ba_rsp = &cmd->params.add_ba_rsp;
+	struct mwifiex_sta_node *sta_ptr;
+	u32 rx_win_size = priv->add_ba_param.rx_win_size;
 	u8 tid;
 	int win_size;
 	uint16_t block_ack_param_set;
+
+	if ((GET_BSS_ROLE(priv) == MWIFIEX_BSS_ROLE_STA) &&
+	    ISSUPP_TDLS_ENABLED(priv->adapter->fw_cap_info) &&
+	    priv->adapter->is_hw_11ac_capable &&
+	    memcmp(priv->cfg_bssid, cmd_addba_req->peer_mac_addr, ETH_ALEN)) {
+		sta_ptr = mwifiex_get_sta_entry(priv,
+						cmd_addba_req->peer_mac_addr);
+		if (!sta_ptr) {
+			dev_warn(priv->adapter->dev,
+				 "BA setup with unknown TDLS peer %pM!\n",
+				 cmd_addba_req->peer_mac_addr);
+			return -1;
+		}
+		if (sta_ptr->is_11ac_enabled)
+			rx_win_size = MWIFIEX_11AC_STA_AMPDU_DEF_RXWINSIZE;
+	}
 
 	cmd->command = cpu_to_le16(HostCmd_CMD_11N_ADDBA_RSP);
 	cmd->size = cpu_to_le16(sizeof(*add_ba_rsp) + S_DS_GEN);
@@ -378,8 +403,7 @@ int mwifiex_cmd_11n_addba_rsp_gen(struct mwifiex_private *priv,
 	block_ack_param_set &= ~IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK;
 	/* We donot support AMSDU inside AMPDU, hence reset the bit */
 	block_ack_param_set &= ~BLOCKACKPARAM_AMSDU_SUPP_MASK;
-	block_ack_param_set |= (priv->add_ba_param.rx_win_size <<
-					     BLOCKACKPARAM_WINSIZE_POS);
+	block_ack_param_set |= rx_win_size << BLOCKACKPARAM_WINSIZE_POS;
 	add_ba_rsp->block_ack_param_set = cpu_to_le16(block_ack_param_set);
 	win_size = (le16_to_cpu(add_ba_rsp->block_ack_param_set)
 					& IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK)
@@ -431,6 +455,7 @@ int mwifiex_11n_rx_reorder_pkt(struct mwifiex_private *priv,
 	struct mwifiex_rx_reorder_tbl *tbl;
 	int start_win, end_win, win_size;
 	u16 pkt_index;
+	bool init_window_shift = false;
 
 	tbl = mwifiex_11n_get_rx_reorder_tbl(priv, tid, ta);
 	if (!tbl) {
@@ -445,19 +470,29 @@ int mwifiex_11n_rx_reorder_pkt(struct mwifiex_private *priv,
 	start_win = tbl->start_win;
 	win_size = tbl->win_size;
 	end_win = ((start_win + win_size) - 1) & (MAX_TID_VALUE - 1);
-	del_timer(&tbl->timer_context.timer);
+	if (tbl->flags & RXREOR_INIT_WINDOW_SHIFT) {
+		init_window_shift = true;
+		tbl->flags &= ~RXREOR_INIT_WINDOW_SHIFT;
+	}
 	mod_timer(&tbl->timer_context.timer,
 		  jiffies + msecs_to_jiffies(MIN_FLUSH_TIMER_MS * win_size));
 
-	/*
-	 * If seq_num is less then starting win then ignore and drop the
-	 * packet
-	 */
 	if (tbl->flags & RXREOR_FORCE_NO_DROP) {
 		dev_dbg(priv->adapter->dev,
 			"RXREOR_FORCE_NO_DROP when HS is activated\n");
 		tbl->flags &= ~RXREOR_FORCE_NO_DROP;
+	} else if (init_window_shift && seq_num < start_win &&
+		   seq_num >= tbl->init_win) {
+		dev_dbg(priv->adapter->dev,
+			"Sender TID sequence number reset %d->%d for SSN %d\n",
+			start_win, seq_num, tbl->init_win);
+		tbl->start_win = start_win = seq_num;
+		end_win = ((start_win + win_size) - 1) & (MAX_TID_VALUE - 1);
 	} else {
+		/*
+		 * If seq_num is less then starting win then ignore and drop
+		 * the packet
+		 */
 		if ((start_win + TWOPOW11) > (MAX_TID_VALUE - 1)) {
 			if (seq_num >= ((start_win + TWOPOW11) &
 					(MAX_TID_VALUE - 1)) &&
@@ -615,7 +650,7 @@ void mwifiex_11n_ba_stream_timeout(struct mwifiex_private *priv,
 	delba.del_ba_param_set |= cpu_to_le16(
 		(u16) event->origninator << DELBA_INITIATOR_POS);
 	delba.reason_code = cpu_to_le16(WLAN_REASON_QSTA_TIMEOUT);
-	mwifiex_send_cmd_async(priv, HostCmd_CMD_11N_DELBA, 0, 0, &delba);
+	mwifiex_send_cmd(priv, HostCmd_CMD_11N_DELBA, 0, 0, &delba, false);
 }
 
 /*

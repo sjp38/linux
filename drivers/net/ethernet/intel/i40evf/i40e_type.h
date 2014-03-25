@@ -1,7 +1,7 @@
 /*******************************************************************************
  *
  * Intel Ethernet Controller XL710 Family Linux Virtual Function Driver
- * Copyright(c) 2013 Intel Corporation.
+ * Copyright(c) 2013 - 2014 Intel Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -63,8 +63,6 @@
 /* forward declaration */
 struct i40e_hw;
 typedef void (*I40E_ADMINQ_CALLBACK)(struct i40e_hw *, struct i40e_aq_desc *);
-
-#define ETH_ALEN	6
 
 /* Data type manipulation macros. */
 
@@ -466,6 +464,10 @@ union i40e_32byte_rx_desc {
 			union {
 				__le32 rss; /* RSS Hash */
 				__le32 fcoe_param; /* FCoE DDP Context id */
+				/* Flow director filter id in case of
+				 * Programming status desc WB
+				 */
+				__le32 fd_id;
 			} hi_dword;
 		} qword0;
 		struct {
@@ -706,7 +708,7 @@ enum i40e_rx_prog_status_desc_prog_id_masks {
 enum i40e_rx_prog_status_desc_error_bits {
 	/* Note: These are predefined bit offsets */
 	I40E_RX_PROG_STATUS_DESC_FD_TBL_FULL_SHIFT	= 0,
-	I40E_RX_PROG_STATUS_DESC_NO_FD_QUOTA_SHIFT	= 1,
+	I40E_RX_PROG_STATUS_DESC_NO_FD_ENTRY_SHIFT	= 1,
 	I40E_RX_PROG_STATUS_DESC_FCOE_TBL_FULL_SHIFT	= 2,
 	I40E_RX_PROG_STATUS_DESC_FCOE_CONFLICT_SHIFT	= 3
 };
@@ -1018,6 +1020,11 @@ struct i40e_hw_port_stats {
 	u64 tx_size_big;		/* ptc9522 */
 	u64 mac_short_packet_dropped;	/* mspdc */
 	u64 checksum_error;		/* xec */
+	/* EEE LPI */
+	bool tx_lpi_status;
+	bool rx_lpi_status;
+	u64 tx_lpi_count;		/* etlpic */
+	u64 rx_lpi_count;		/* erlpic */
 };
 
 /* Checksum and Shadow RAM pointers */

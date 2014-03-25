@@ -80,7 +80,7 @@ static void ath9k_beacon_setup(struct ath_softc *sc, struct ieee80211_vif *vif,
 	u8 chainmask = ah->txchainmask;
 	u8 rate = 0;
 
-	sband = &sc->sbands[common->hw->conf.chandef.chan->band];
+	sband = &common->sbands[common->hw->conf.chandef.chan->band];
 	rate = sband->bitrates[rateidx].hw_value;
 	if (vif->bss_conf.use_short_preamble)
 		rate |= sband->bitrates[rateidx].hw_value_short;
@@ -292,11 +292,8 @@ static void ath9k_set_tsfadjust(struct ath_softc *sc, struct ieee80211_vif *vif)
 		(unsigned long long)tsfadjust, avp->av_bslot);
 }
 
-bool ath9k_csa_is_finished(struct ath_softc *sc)
+bool ath9k_csa_is_finished(struct ath_softc *sc, struct ieee80211_vif *vif)
 {
-	struct ieee80211_vif *vif;
-
-	vif = sc->csa_vif;
 	if (!vif || !vif->csa_active)
 		return false;
 
@@ -304,9 +301,21 @@ bool ath9k_csa_is_finished(struct ath_softc *sc)
 		return false;
 
 	ieee80211_csa_finish(vif);
-
-	sc->csa_vif = NULL;
 	return true;
+}
+
+static void ath9k_csa_update_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct ath_softc *sc = data;
+	ath9k_csa_is_finished(sc, vif);
+}
+
+void ath9k_csa_update(struct ath_softc *sc)
+{
+	ieee80211_iterate_active_interfaces(sc->hw,
+					    IEEE80211_IFACE_ITER_NORMAL,
+					    ath9k_csa_update_vif,
+					    sc);
 }
 
 void ath9k_beacon_tasklet(unsigned long data)
@@ -362,12 +371,12 @@ void ath9k_beacon_tasklet(unsigned long data)
 		return;
 	}
 
-	/* EDMA devices check that in the tx completion function. */
-	if (!edma && ath9k_csa_is_finished(sc))
-		return;
-
 	slot = ath9k_beacon_choose_slot(sc);
 	vif = sc->beacon.bslot[slot];
+
+	/* EDMA devices check that in the tx completion function. */
+	if (!edma && ath9k_csa_is_finished(sc, vif))
+		return;
 
 	if (!vif || !vif->bss_conf.enable_beacon)
 		return;
@@ -510,7 +519,7 @@ static void ath9k_beacon_config_sta(struct ath_softc *sc,
 	struct ath_hw *ah = sc->sc_ah;
 	struct ath_common *common = ath9k_hw_common(ah);
 	struct ath9k_beacon_state bs;
-	int dtim_intval, sleepduration;
+	int dtim_intval;
 	u32 nexttbtt = 0, intval;
 	u64 tsf;
 
@@ -529,7 +538,6 @@ static void ath9k_beacon_config_sta(struct ath_softc *sc,
 	 * last beacon we received (which may be none).
 	 */
 	dtim_intval = intval * conf->dtim_period;
-	sleepduration = conf->listen_interval * intval;
 
 	/*
 	 * Pull nexttbtt forward to reflect the current
@@ -551,16 +559,11 @@ static void ath9k_beacon_config_sta(struct ath_softc *sc,
 	 * need calculate based	on the beacon interval.  Note that we clamp the
 	 * result to at most 15 beacons.
 	 */
-	if (sleepduration > intval) {
-		bs.bs_bmissthreshold = conf->listen_interval *
-			ATH_DEFAULT_BMISS_LIMIT / 2;
-	} else {
-		bs.bs_bmissthreshold = DIV_ROUND_UP(conf->bmiss_timeout, intval);
-		if (bs.bs_bmissthreshold > 15)
-			bs.bs_bmissthreshold = 15;
-		else if (bs.bs_bmissthreshold <= 0)
-			bs.bs_bmissthreshold = 1;
-	}
+	bs.bs_bmissthreshold = DIV_ROUND_UP(conf->bmiss_timeout, intval);
+	if (bs.bs_bmissthreshold > 15)
+		bs.bs_bmissthreshold = 15;
+	else if (bs.bs_bmissthreshold <= 0)
+		bs.bs_bmissthreshold = 1;
 
 	/*
 	 * Calculate sleep duration. The configuration is given in ms.
@@ -572,7 +575,7 @@ static void ath9k_beacon_config_sta(struct ath_softc *sc,
 	 */
 
 	bs.bs_sleepduration = TU_TO_USEC(roundup(IEEE80211_MS_TO_TU(100),
-						 sleepduration));
+						 intval));
 	if (bs.bs_sleepduration > bs.bs_dtimperiod)
 		bs.bs_sleepduration = bs.bs_dtimperiod;
 
@@ -668,7 +671,6 @@ static void ath9k_cache_beacon_config(struct ath_softc *sc,
 
 	cur_conf->beacon_interval = bss_conf->beacon_int;
 	cur_conf->dtim_period = bss_conf->dtim_period;
-	cur_conf->listen_interval = 1;
 	cur_conf->dtim_count = 1;
 	cur_conf->ibss_creator = bss_conf->ibss_creator;
 	cur_conf->bmiss_timeout =
