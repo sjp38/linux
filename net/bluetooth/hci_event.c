@@ -199,6 +199,8 @@ static void hci_cc_reset(struct hci_dev *hdev, struct sk_buff *skb)
 	memset(hdev->scan_rsp_data, 0, sizeof(hdev->scan_rsp_data));
 	hdev->scan_rsp_data_len = 0;
 
+	hdev->le_scan_type = LE_SCAN_PASSIVE;
+
 	hdev->ssp_debug_mode = 0;
 }
 
@@ -997,6 +999,25 @@ static void hci_cc_le_set_adv_enable(struct hci_dev *hdev, struct sk_buff *skb)
 	hci_dev_unlock(hdev);
 }
 
+static void hci_cc_le_set_scan_param(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	struct hci_cp_le_set_scan_param *cp;
+	__u8 status = *((__u8 *) skb->data);
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, status);
+
+	cp = hci_sent_cmd_data(hdev, HCI_OP_LE_SET_SCAN_PARAM);
+	if (!cp)
+		return;
+
+	hci_dev_lock(hdev);
+
+	if (!status)
+		hdev->le_scan_type = cp->type;
+
+	hci_dev_unlock(hdev);
+}
+
 static void hci_cc_le_set_scan_enable(struct hci_dev *hdev,
 				      struct sk_buff *skb)
 {
@@ -1699,6 +1720,36 @@ static void hci_cs_le_create_conn(struct hci_dev *hdev, u8 status)
 		queue_delayed_work(conn->hdev->workqueue,
 				   &conn->le_conn_timeout,
 				   HCI_LE_CONN_TIMEOUT);
+
+unlock:
+	hci_dev_unlock(hdev);
+}
+
+static void hci_cs_le_start_enc(struct hci_dev *hdev, u8 status)
+{
+	struct hci_cp_le_start_enc *cp;
+	struct hci_conn *conn;
+
+	BT_DBG("%s status 0x%2.2x", hdev->name, status);
+
+	if (!status)
+		return;
+
+	hci_dev_lock(hdev);
+
+	cp = hci_sent_cmd_data(hdev, HCI_OP_LE_START_ENC);
+	if (!cp)
+		goto unlock;
+
+	conn = hci_conn_hash_lookup_handle(hdev, __le16_to_cpu(cp->handle));
+	if (!conn)
+		goto unlock;
+
+	if (conn->state != BT_CONNECTED)
+		goto unlock;
+
+	hci_disconnect(conn, HCI_ERROR_AUTH_FAILURE);
+	hci_conn_drop(conn);
 
 unlock:
 	hci_dev_unlock(hdev);
@@ -2488,6 +2539,10 @@ static void hci_cmd_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 		hci_cc_le_set_adv_enable(hdev, skb);
 		break;
 
+	case HCI_OP_LE_SET_SCAN_PARAM:
+		hci_cc_le_set_scan_param(hdev, skb);
+		break;
+
 	case HCI_OP_LE_SET_SCAN_ENABLE:
 		hci_cc_le_set_scan_enable(hdev, skb);
 		break;
@@ -2609,6 +2664,10 @@ static void hci_cmd_status_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_OP_LE_CREATE_CONN:
 		hci_cs_le_create_conn(hdev, ev->status);
+		break;
+
+	case HCI_OP_LE_START_ENC:
+		hci_cs_le_start_enc(hdev, ev->status);
 		break;
 
 	default:
@@ -3459,8 +3518,8 @@ static void hci_user_confirm_request_evt(struct hci_dev *hdev,
 	}
 
 confirm:
-	mgmt_user_confirm_request(hdev, &ev->bdaddr, ACL_LINK, 0, ev->passkey,
-				  confirm_hint);
+	mgmt_user_confirm_request(hdev, &ev->bdaddr, ACL_LINK, 0,
+				  le32_to_cpu(ev->passkey), confirm_hint);
 
 unlock:
 	hci_dev_unlock(hdev);
@@ -3781,17 +3840,6 @@ static void hci_le_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 
 		conn->dst_type = ev->bdaddr_type;
 
-		/* The advertising parameters for own address type
-		 * define which source address and source address
-		 * type this connections has.
-		 */
-		if (bacmp(&conn->src, BDADDR_ANY)) {
-			conn->src_type = ADDR_LE_DEV_PUBLIC;
-		} else {
-			bacpy(&conn->src, &hdev->static_addr);
-			conn->src_type = ADDR_LE_DEV_RANDOM;
-		}
-
 		if (ev->role == LE_CONN_ROLE_MASTER) {
 			conn->out = true;
 			conn->link_mode |= HCI_LM_MASTER;
@@ -3816,27 +3864,24 @@ static void hci_le_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *skb)
 							  &conn->init_addr,
 							  &conn->init_addr_type);
 			}
-		} else {
-			/* Set the responder (our side) address type based on
-			 * the advertising address type.
-			 */
-			conn->resp_addr_type = hdev->adv_addr_type;
-			if (hdev->adv_addr_type == ADDR_LE_DEV_RANDOM)
-				bacpy(&conn->resp_addr, &hdev->random_addr);
-			else
-				bacpy(&conn->resp_addr, &hdev->bdaddr);
-
-			conn->init_addr_type = ev->bdaddr_type;
-			bacpy(&conn->init_addr, &ev->bdaddr);
 		}
 	} else {
 		cancel_delayed_work(&conn->le_conn_timeout);
 	}
 
-	/* Ensure that the hci_conn contains the identity address type
-	 * regardless of which address the connection was made with.
-	 */
-	hci_copy_identity_address(hdev, &conn->src, &conn->src_type);
+	if (!conn->out) {
+		/* Set the responder (our side) address type based on
+		 * the advertising address type.
+		 */
+		conn->resp_addr_type = hdev->adv_addr_type;
+		if (hdev->adv_addr_type == ADDR_LE_DEV_RANDOM)
+			bacpy(&conn->resp_addr, &hdev->random_addr);
+		else
+			bacpy(&conn->resp_addr, &hdev->bdaddr);
+
+		conn->init_addr_type = ev->bdaddr_type;
+		bacpy(&conn->init_addr, &ev->bdaddr);
+	}
 
 	/* Lookup the identity address from the stored connection
 	 * address and address type.
@@ -3916,25 +3961,30 @@ static void check_pending_le_conn(struct hci_dev *hdev, bdaddr_t *addr,
 	}
 }
 
+static void process_adv_report(struct hci_dev *hdev, u8 type, bdaddr_t *bdaddr,
+			       u8 bdaddr_type, s8 rssi, u8 *data, u8 len)
+{
+	if (type == LE_ADV_IND || type == LE_ADV_DIRECT_IND)
+		check_pending_le_conn(hdev, bdaddr, bdaddr_type);
+
+	mgmt_device_found(hdev, bdaddr, LE_LINK, bdaddr_type, NULL, rssi, 0, 1,
+			  data, len);
+}
+
 static void hci_le_adv_report_evt(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	u8 num_reports = skb->data[0];
 	void *ptr = &skb->data[1];
-	s8 rssi;
 
 	hci_dev_lock(hdev);
 
 	while (num_reports--) {
 		struct hci_ev_le_advertising_info *ev = ptr;
-
-		if (ev->evt_type == LE_ADV_IND ||
-		    ev->evt_type == LE_ADV_DIRECT_IND)
-			check_pending_le_conn(hdev, &ev->bdaddr,
-					      ev->bdaddr_type);
+		s8 rssi;
 
 		rssi = ev->data[ev->length];
-		mgmt_device_found(hdev, &ev->bdaddr, LE_LINK, ev->bdaddr_type,
-				  NULL, rssi, 0, 1, ev->data, ev->length);
+		process_adv_report(hdev, ev->evt_type, &ev->bdaddr,
+				   ev->bdaddr_type, rssi, ev->data, ev->length);
 
 		ptr += sizeof(*ev) + ev->length + 1;
 	}
