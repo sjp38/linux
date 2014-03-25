@@ -412,7 +412,7 @@ dtb-$(CONFIG_MACH_DOVE) += dove-cm-a510.dtb \
 	dove-dove-db.dtb
 dtb-$(CONFIG_MACH_KIRKWOOD) += $(kirkwood)
 
-targets += dtbs
+targets += dtbs dtbs_install
 targets += $(dtb-y)
 endif
 
@@ -422,3 +422,5 @@ dtbs: $(addprefix $(obj)/, $(dtb-y))
 	$(Q)rm -f $(obj)/../*.dtb
 
 clean-files := *.dtb
+
+dtbs_install: $(addsuffix _dtbinst_, $(dtb-y))
