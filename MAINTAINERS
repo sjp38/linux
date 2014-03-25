@@ -1343,6 +1343,7 @@ M:	Linus Walleij <linus.walleij@linaro.org>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Supported
 F:	arch/arm/mach-u300/
+F:	drivers/clocksource/timer-u300.c
 F:	drivers/i2c/busses/i2c-stu300.c
 F:	drivers/rtc/rtc-coh901331.c
 F:	drivers/watchdog/coh901327_wdt.c
@@ -7878,13 +7879,6 @@ S:	Supported
 F:	Documentation/ia64/serial.txt
 F:	drivers/tty/serial/ioc?_serial.c
 F:	include/linux/ioc?.h
-
-SGI VISUAL WORKSTATION 320 AND 540
-M:	Andrey Panin <pazke@donpac.ru>
-L:	linux-visws-devel@lists.sf.net
-W:	http://linux-visws.sf.net
-S:	Maintained for 2.6.
-F:	Documentation/sgi-visws.txt
 
 SGI XP/XPC/XPNET DRIVER
 M:	Cliff Whickman <cpw@sgi.com>

@@ -479,7 +479,7 @@ struct psb_mmu_driver *psb_mmu_driver_init(struct drm_device *dev,
 	driver->has_clflush = 0;
 
 #if defined(CONFIG_X86)
-	if (boot_cpu_has(X86_FEATURE_CLFLSH)) {
+	if (boot_cpu_has(X86_FEATURE_CLFLUSH)) {
 		uint32_t tfms, misc, cap0, cap4, clflush_size;
 
 		/*

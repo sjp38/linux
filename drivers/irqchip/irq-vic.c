@@ -240,7 +240,7 @@ static void vic_handle_irq_cascaded(unsigned int irq, struct irq_desc *desc)
  * Keep iterating over all registered VIC's until there are no pending
  * interrupts.
  */
-static asmlinkage void __exception_irq_entry vic_handle_irq(struct pt_regs *regs)
+static void __exception_irq_entry vic_handle_irq(struct pt_regs *regs)
 {
 	int i, handled;
 
