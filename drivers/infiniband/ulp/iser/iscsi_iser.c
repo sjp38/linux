@@ -82,6 +82,8 @@ static unsigned int iscsi_max_lun = 512;
 module_param_named(max_lun, iscsi_max_lun, uint, S_IRUGO);
 
 int iser_debug_level = 0;
+bool iser_pi_enable = false;
+int iser_pi_guard = 0;
 
 MODULE_DESCRIPTION("iSER (iSCSI Extensions for RDMA) Datamover");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -90,6 +92,12 @@ MODULE_VERSION(DRV_VER);
 
 module_param_named(debug_level, iser_debug_level, int, 0644);
 MODULE_PARM_DESC(debug_level, "Enable debug tracing if > 0 (default:disabled)");
+
+module_param_named(pi_enable, iser_pi_enable, bool, 0644);
+MODULE_PARM_DESC(pi_enable, "Enable T10-PI offload support (default:disabled)");
+
+module_param_named(pi_guard, iser_pi_guard, int, 0644);
+MODULE_PARM_DESC(pi_guard, "T10-PI guard_type, 0:CRC|1:IP_CSUM (default:CRC)");
 
 struct iser_global ig;
 
@@ -176,6 +184,8 @@ iscsi_iser_task_init(struct iscsi_task *task)
 
 	iser_task->command_sent = 0;
 	iser_task_rdma_init(iser_task);
+	iser_task->sc = task->sc;
+
 	return 0;
 }
 
@@ -296,6 +306,18 @@ static void iscsi_iser_cleanup_task(struct iscsi_task *task)
 	}
 }
 
+static u8 iscsi_iser_check_protection(struct iscsi_task *task, sector_t *sector)
+{
+	struct iscsi_iser_task *iser_task = task->dd_data;
+
+	if (iser_task->dir[ISER_DIR_IN])
+		return iser_check_task_pi_status(iser_task, ISER_DIR_IN,
+						 sector);
+	else
+		return iser_check_task_pi_status(iser_task, ISER_DIR_OUT,
+						 sector);
+}
+
 static struct iscsi_cls_conn *
 iscsi_iser_conn_create(struct iscsi_cls_session *cls_session, uint32_t conn_idx)
 {
@@ -413,6 +435,17 @@ static void iscsi_iser_session_destroy(struct iscsi_cls_session *cls_session)
 	iscsi_host_free(shost);
 }
 
+static inline unsigned int
+iser_dif_prot_caps(int prot_caps)
+{
+	return ((prot_caps & IB_PROT_T10DIF_TYPE_1) ? SHOST_DIF_TYPE1_PROTECTION |
+						      SHOST_DIX_TYPE1_PROTECTION : 0) |
+	       ((prot_caps & IB_PROT_T10DIF_TYPE_2) ? SHOST_DIF_TYPE2_PROTECTION |
+						      SHOST_DIX_TYPE2_PROTECTION : 0) |
+	       ((prot_caps & IB_PROT_T10DIF_TYPE_3) ? SHOST_DIF_TYPE3_PROTECTION |
+						      SHOST_DIX_TYPE3_PROTECTION : 0);
+}
+
 static struct iscsi_cls_session *
 iscsi_iser_session_create(struct iscsi_endpoint *ep,
 			  uint16_t cmds_max, uint16_t qdepth,
@@ -437,8 +470,18 @@ iscsi_iser_session_create(struct iscsi_endpoint *ep,
 	 * older userspace tools (before 2.0-870) did not pass us
 	 * the leading conn's ep so this will be NULL;
 	 */
-	if (ep)
+	if (ep) {
 		ib_conn = ep->dd_data;
+		if (ib_conn->pi_support) {
+			u32 sig_caps = ib_conn->device->dev_attr.sig_prot_cap;
+
+			scsi_host_set_prot(shost, iser_dif_prot_caps(sig_caps));
+			if (iser_pi_guard)
+				scsi_host_set_guard(shost, SHOST_DIX_GUARD_IP);
+			else
+				scsi_host_set_guard(shost, SHOST_DIX_GUARD_CRC);
+		}
+	}
 
 	if (iscsi_host_add(shost,
 			   ep ? ib_conn->device->ib_device->dma_device : NULL))
@@ -732,6 +775,7 @@ static struct iscsi_transport iscsi_iser_transport = {
 	.xmit_task		= iscsi_iser_task_xmit,
 	.cleanup_task		= iscsi_iser_cleanup_task,
 	.alloc_pdu		= iscsi_iser_pdu_alloc,
+	.check_protection	= iscsi_iser_check_protection,
 	/* recovery */
 	.session_recovery_timedout = iscsi_session_recovery_timedout,
 
