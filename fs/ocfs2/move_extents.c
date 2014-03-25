@@ -151,6 +151,7 @@ static int __ocfs2_move_extent(handle_t *handle,
 							old_blkno, len);
 	}
 
+	ocfs2_update_inode_fsync_trans(handle, inode, 0);
 out:
 	ocfs2_free_path(path);
 	return ret;
@@ -681,17 +682,14 @@ static int ocfs2_move_extent(struct ocfs2_move_extents_context *context,
 	}
 
 	gd = (struct ocfs2_group_desc *)gd_bh->b_data;
-	ret = ocfs2_alloc_dinode_update_counts(gb_inode, handle, gb_bh, len,
-					       le16_to_cpu(gd->bg_chain));
+	ret = ocfs2_alloc_dinode_update_bitmap(handle,
+				gb_inode, gb_bh, gd, gb_bh,
+				le16_to_cpu(gd->bg_chain),
+				goal_bit, len);
 	if (ret) {
 		mlog_errno(ret);
 		goto out_commit;
 	}
-
-	ret = ocfs2_block_group_set_bits(handle, gb_inode, gd, gd_bh,
-					 goal_bit, len);
-	if (ret)
-		mlog_errno(ret);
 
 	/*
 	 * Here we should write the new page out first if we are
@@ -957,6 +955,7 @@ static int ocfs2_move_extents(struct ocfs2_move_extents_context *context)
 	inode->i_ctime = CURRENT_TIME;
 	di->i_ctime = cpu_to_le64(inode->i_ctime.tv_sec);
 	di->i_ctime_nsec = cpu_to_le32(inode->i_ctime.tv_nsec);
+	ocfs2_update_inode_fsync_trans(handle, inode, 0);
 
 	ocfs2_journal_dirty(handle, di_bh);
 

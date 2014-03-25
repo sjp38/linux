@@ -153,7 +153,7 @@ ext4_file_dio_write(struct kiocb *iocb, const struct iovec *iov,
 		ssize_t err;
 
 		err = generic_write_sync(file, iocb->ki_pos - ret, ret);
-		if (err < 0 && ret > 0)
+		if (err < 0)
 			ret = err;
 	}
 	blk_finish_plug(&plug);
@@ -200,6 +200,7 @@ ext4_file_write(struct kiocb *iocb, const struct iovec *iov,
 
 static const struct vm_operations_struct ext4_file_vm_ops = {
 	.fault		= filemap_fault,
+	.map_pages	= filemap_map_pages,
 	.page_mkwrite   = ext4_page_mkwrite,
 	.remap_pages	= generic_file_remap_pages,
 };
