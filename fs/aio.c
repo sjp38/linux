@@ -241,8 +241,10 @@ static void put_aio_ring_file(struct kioctx *ctx)
 
 static void aio_free_ring(struct kioctx *ctx)
 {
+	unsigned long flags;
 	int i;
 
+	spin_lock_irqsave(&ctx->completion_lock, flags);
 	for (i = 0; i < ctx->nr_pages; i++) {
 		struct page *page;
 		pr_debug("pid(%d) [%d] page->count=%d\n", current->pid, i,
@@ -253,6 +255,7 @@ static void aio_free_ring(struct kioctx *ctx)
 		ctx->ring_pages[i] = NULL;
 		put_page(page);
 	}
+	spin_unlock_irqrestore(&ctx->completion_lock, flags);
 
 	put_aio_ring_file(ctx);
 
@@ -287,9 +290,20 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 
 	rc = 0;
 
-	/* Make sure the old page hasn't already been changed */
+	/* Get a reference on the ioctx so we can take the ring_lock mutex. */
 	spin_lock(&mapping->private_lock);
 	ctx = mapping->private_data;
+	if (ctx)
+		percpu_ref_get(&ctx->users);
+	spin_unlock(&mapping->private_lock);
+
+	if (!ctx)
+		return -EINVAL;
+
+	mutex_lock(&ctx->ring_lock);
+
+	/* Make sure the old page hasn't already been changed */
+	spin_lock(&mapping->private_lock);
 	if (ctx) {
 		pgoff_t idx;
 		spin_lock_irqsave(&ctx->completion_lock, flags);
@@ -305,7 +319,7 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 	spin_unlock(&mapping->private_lock);
 
 	if (rc != 0)
-		return rc;
+		goto out_unlock;
 
 	/* Writeback must be complete */
 	BUG_ON(PageWriteback(old));
@@ -314,7 +328,7 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 	rc = migrate_page_move_mapping(mapping, new, old, NULL, mode, 1);
 	if (rc != MIGRATEPAGE_SUCCESS) {
 		put_page(new);
-		return rc;
+		goto out_unlock;
 	}
 
 	/* We can potentially race against kioctx teardown here.  Use the
@@ -346,6 +360,9 @@ static int aio_migratepage(struct address_space *mapping, struct page *new,
 	else
 		put_page(new);
 
+out_unlock:
+	mutex_unlock(&ctx->ring_lock);
+	percpu_ref_put(&ctx->users);
 	return rc;
 }
 #endif
@@ -556,9 +573,17 @@ static int ioctx_add_table(struct kioctx *ctx, struct mm_struct *mm)
 					rcu_read_unlock();
 					spin_unlock(&mm->ioctx_lock);
 
+					/*
+					 * Accessing ring pages must be done
+					 * holding ctx->completion_lock to
+					 * prevent aio ring page migration
+					 * procedure from migrating ring pages.
+					 */
+					spin_lock_irq(&ctx->completion_lock);
 					ring = kmap_atomic(ctx->ring_pages[0]);
 					ring->id = ctx->id;
 					kunmap_atomic(ring);
+					spin_unlock_irq(&ctx->completion_lock);
 					return 0;
 				}
 
@@ -657,7 +682,13 @@ static struct kioctx *ioctx_alloc(unsigned nr_events)
 	if (!ctx->cpu)
 		goto err;
 
-	if (aio_setup_ring(ctx) < 0)
+	/* Prevent races with page migration in aio_setup_ring() by holding
+	 * the ring_lock mutex.
+	 */
+	mutex_lock(&ctx->ring_lock);
+	err = aio_setup_ring(ctx);
+	mutex_unlock(&ctx->ring_lock);
+	if (err < 0)
 		goto err;
 
 	atomic_set(&ctx->reqs_available, ctx->nr_events - 1);
@@ -1024,6 +1055,7 @@ static long aio_read_events_ring(struct kioctx *ctx,
 
 	mutex_lock(&ctx->ring_lock);
 
+	/* Access to ->ring_pages here is protected by ctx->ring_lock. */
 	ring = kmap_atomic(ctx->ring_pages[0]);
 	head = ring->head;
 	tail = ring->tail;
