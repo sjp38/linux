@@ -440,15 +440,17 @@ static int init_ring_common(struct intel_ring_buffer *ring)
 
 	gen6_gt_force_wake_get(dev_priv, FORCEWAKE_ALL);
 
-	if (I915_NEED_GFX_HWS(dev))
-		intel_ring_setup_status_page(ring);
-	else
-		ring_setup_phys_status_page(ring);
-
 	/* Stop the ring if it's running. */
 	I915_WRITE_CTL(ring, 0);
 	I915_WRITE_HEAD(ring, 0);
 	ring->write_tail(ring, 0);
+	if (wait_for_atomic((I915_READ_MODE(ring) & MODE_IDLE) != 0, 1000))
+		DRM_ERROR("%s :timed out trying to stop ring\n", ring->name);
+
+	if (I915_NEED_GFX_HWS(dev))
+		intel_ring_setup_status_page(ring);
+	else
+		ring_setup_phys_status_page(ring);
 
 	head = I915_READ_HEAD(ring) & HEAD_ADDR;
 
@@ -579,11 +581,11 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 	/* Required for the hardware to program scanline values for waiting */
 	if (INTEL_INFO(dev)->gen == 6)
 		I915_WRITE(GFX_MODE,
-			   _MASKED_BIT_ENABLE(GFX_TLB_INVALIDATE_ALWAYS));
+			   _MASKED_BIT_ENABLE(GFX_TLB_INVALIDATE_EXPLICIT));
 
 	if (IS_GEN7(dev))
 		I915_WRITE(GFX_MODE_GEN7,
-			   _MASKED_BIT_DISABLE(GFX_TLB_INVALIDATE_ALWAYS) |
+			   _MASKED_BIT_DISABLE(GFX_TLB_INVALIDATE_EXPLICIT) |
 			   _MASKED_BIT_ENABLE(GFX_REPLAY_MODE));
 
 	if (INTEL_INFO(dev)->gen >= 5) {
@@ -606,7 +608,7 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 		 * TODO: consider explicitly setting the bit for GEN5
 		 */
 		ring->itlb_before_ctx_switch =
-			!!(I915_READ(GFX_MODE) & GFX_TLB_INVALIDATE_ALWAYS);
+			!!(I915_READ(GFX_MODE) & GFX_TLB_INVALIDATE_EXPLICIT);
 	}
 
 	if (INTEL_INFO(dev)->gen >= 6)
@@ -979,9 +981,19 @@ void intel_ring_setup_status_page(struct intel_ring_buffer *ring)
 	I915_WRITE(mmio, (u32)ring->status_page.gfx_addr);
 	POSTING_READ(mmio);
 
-	/* Flush the TLB for this page */
-	if (INTEL_INFO(dev)->gen >= 6) {
+	/*
+	 * Flush the TLB for this page
+	 *
+	 * FIXME: These two bits have disappeared on gen8, so a question
+	 * arises: do we still need this and if so how should we go about
+	 * invalidating the TLB?
+	 */
+	if (INTEL_INFO(dev)->gen >= 6 && INTEL_INFO(dev)->gen < 8) {
 		u32 reg = RING_INSTPM(ring->mmio_base);
+
+		/* ring should be idle before issuing a sync flush*/
+		WARN_ON((I915_READ_MODE(ring) & MODE_IDLE) == 0);
+
 		I915_WRITE(reg,
 			   _MASKED_BIT_ENABLE(INSTPM_TLB_INVALIDATE |
 					      INSTPM_SYNC_FLUSH));
