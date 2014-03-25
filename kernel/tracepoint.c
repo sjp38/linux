@@ -62,6 +62,7 @@ struct tracepoint_entry {
 	struct hlist_node hlist;
 	struct tracepoint_func *funcs;
 	int refcount;	/* Number of times armed. 0 if disarmed. */
+	int enabled;	/* Tracepoint enabled */
 	char name[0];
 };
 
@@ -237,6 +238,7 @@ static struct tracepoint_entry *add_tracepoint(const char *name)
 	memcpy(&e->name[0], name, name_len);
 	e->funcs = NULL;
 	e->refcount = 0;
+	e->enabled = 0;
 	hlist_add_head(&e->hlist, head);
 	return e;
 }
@@ -316,6 +318,7 @@ static void tracepoint_update_probe_range(struct tracepoint * const *begin,
 		if (mark_entry) {
 			set_tracepoint(&mark_entry, *iter,
 					!!mark_entry->refcount);
+			mark_entry->enabled = !!mark_entry->refcount;
 		} else {
 			disable_tracepoint(*iter);
 		}
@@ -373,13 +376,26 @@ tracepoint_add_probe(const char *name, void *probe, void *data)
  * tracepoint_probe_register -  Connect a probe to a tracepoint
  * @name: tracepoint name
  * @probe: probe handler
+ * @data: probe private data
  *
- * Returns 0 if ok, error value on error.
+ * Returns:
+ * - 0 if the probe was successfully registered, and tracepoint
+ *   callsites are currently loaded for that probe,
+ * - -ENODEV if the probe was successfully registered, but no tracepoint
+ *   callsite is currently loaded for that probe,
+ * - other negative error value on error.
+ *
+ * When tracepoint_probe_register() returns either 0 or -ENODEV,
+ * parameters @name, @probe, and @data may be used by the tracepoint
+ * infrastructure until the probe is unregistered.
+ *
  * The probe address must at least be aligned on the architecture pointer size.
  */
 int tracepoint_probe_register(const char *name, void *probe, void *data)
 {
 	struct tracepoint_func *old;
+	struct tracepoint_entry *entry;
+	int ret = 0;
 
 	mutex_lock(&tracepoints_mutex);
 	old = tracepoint_add_probe(name, probe, data);
@@ -388,9 +404,13 @@ int tracepoint_probe_register(const char *name, void *probe, void *data)
 		return PTR_ERR(old);
 	}
 	tracepoint_update_probes();		/* may update entry */
+	entry = get_tracepoint(name);
+	/* Make sure the entry was enabled */
+	if (!entry || !entry->enabled)
+		ret = -ENODEV;
 	mutex_unlock(&tracepoints_mutex);
 	release_probes(old);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(tracepoint_probe_register);
 
@@ -415,6 +435,7 @@ tracepoint_remove_probe(const char *name, void *probe, void *data)
  * tracepoint_probe_unregister -  Disconnect a probe from a tracepoint
  * @name: tracepoint name
  * @probe: probe function pointer
+ * @data: probe private data
  *
  * We do not need to call a synchronize_sched to make sure the probes have
  * finished running before doing a module unload, because the module unload
@@ -455,6 +476,7 @@ static void tracepoint_add_old_probes(void *old)
  * tracepoint_probe_register_noupdate -  register a probe but not connect
  * @name: tracepoint name
  * @probe: probe handler
+ * @data: probe private data
  *
  * caller must call tracepoint_probe_update_all()
  */
@@ -479,6 +501,7 @@ EXPORT_SYMBOL_GPL(tracepoint_probe_register_noupdate);
  * tracepoint_probe_unregister_noupdate -  remove a probe but not disconnect
  * @name: tracepoint name
  * @probe: probe function pointer
+ * @data: probe private data
  *
  * caller must call tracepoint_probe_update_all()
  */
@@ -642,6 +665,9 @@ static int tracepoint_module_coming(struct module *mod)
 	struct tp_module *tp_mod, *iter;
 	int ret = 0;
 
+	if (!mod->num_tracepoints)
+		return 0;
+
 	/*
 	 * We skip modules that taint the kernel, especially those with different
 	 * module headers (for forced load), to make sure we don't cause a crash.
@@ -684,6 +710,9 @@ end:
 static int tracepoint_module_going(struct module *mod)
 {
 	struct tp_module *pos;
+
+	if (!mod->num_tracepoints)
+		return 0;
 
 	mutex_lock(&tracepoints_mutex);
 	tracepoint_update_probe_range(mod->tracepoints_ptrs,
