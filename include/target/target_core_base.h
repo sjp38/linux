@@ -162,7 +162,7 @@ enum se_cmd_flags_table {
 	SCF_SENT_CHECK_CONDITION	= 0x00000800,
 	SCF_OVERFLOW_BIT		= 0x00001000,
 	SCF_UNDERFLOW_BIT		= 0x00002000,
-	SCF_SENT_DELAYED_TAS		= 0x00004000,
+	SCF_SEND_DELAYED_TAS		= 0x00004000,
 	SCF_ALUA_NON_OPTIMIZED		= 0x00008000,
 	SCF_PASSTHROUGH_SG_TO_MEM_NOALLOC = 0x00020000,
 	SCF_ACK_KREF			= 0x00040000,
@@ -451,16 +451,17 @@ enum target_prot_op {
 	TARGET_PROT_DOUT_PASS,
 };
 
-enum target_prot_ho {
-	PROT_SEPERATED,
-	PROT_INTERLEAVED,
-};
-
 enum target_prot_type {
 	TARGET_DIF_TYPE0_PROT,
 	TARGET_DIF_TYPE1_PROT,
 	TARGET_DIF_TYPE2_PROT,
 	TARGET_DIF_TYPE3_PROT,
+};
+
+enum target_core_dif_check {
+	TARGET_DIF_CHECK_GUARD  = 0x1 << 0,
+	TARGET_DIF_CHECK_APPTAG = 0x1 << 1,
+	TARGET_DIF_CHECK_REFTAG = 0x1 << 2,
 };
 
 struct se_dif_v1_tuple {
@@ -556,13 +557,14 @@ struct se_cmd {
 	/* DIF related members */
 	enum target_prot_op	prot_op;
 	enum target_prot_type	prot_type;
+	u8			prot_checks;
 	u32			prot_length;
 	u32			reftag_seed;
 	struct scatterlist	*t_prot_sg;
 	unsigned int		t_prot_nents;
-	enum target_prot_ho	prot_handover;
 	sense_reason_t		pi_err;
 	sector_t		bad_sector;
+	bool			prot_pto;
 };
 
 struct se_ua {
