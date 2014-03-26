@@ -7455,7 +7455,7 @@ clean_up:
 
 static void hpsa_put_ctlr_into_performant_mode(struct ctlr_info *h)
 {
-	u32 trans_support;
+	u32 trans_support = readl(&(h->cfgtable->TransportSupport));
 	unsigned long transMethod = CFGTBL_Trans_Performant |
 					CFGTBL_Trans_use_short_tags;
 	int i;
@@ -7479,7 +7479,6 @@ static void hpsa_put_ctlr_into_performant_mode(struct ctlr_info *h)
 	}
 
 	/* TODO, check that this next line h->nreply_queues is correct */
-	trans_support = readl(&(h->cfgtable->TransportSupport));
 	if (!(trans_support & PERFORMANT_MODE))
 		return;
 
