@@ -2178,6 +2178,8 @@ static int create_cache_policy(struct cache *cache, struct cache_args *ca,
  */
 #define MAX_DISCARD_BLOCKS (1 << 14)
 
+#if 0
+/* FIXME: remove if 0 macro after stop-gap workaround solved */
 static bool too_many_discard_blocks(sector_t discard_block_size,
 				    sector_t origin_size)
 {
@@ -2185,6 +2187,7 @@ static bool too_many_discard_blocks(sector_t discard_block_size,
 
 	return origin_size > MAX_DISCARD_BLOCKS;
 }
+#endif
 
 static sector_t calculate_discard_block_size(sector_t cache_block_size,
 					     sector_t origin_size)
