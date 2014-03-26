@@ -119,7 +119,9 @@ static void if_scan_init(void);
 
 static int bypass_proc_create_dev_sd(struct bpctl_dev *pbp_device_block);
 static int bypass_proc_remove_dev_sd(struct bpctl_dev *pbp_device_block);
+#ifdef BP_PROC_SUPPORT
 static int bp_proc_create(void);
+#endif
 
 static int is_bypass_fn(struct bpctl_dev *pbpctl_dev);
 static int get_dev_idx_bsf(int bus, int slot, int func);
@@ -6783,6 +6785,7 @@ EXPORT_SYMBOL(bp_if_scan_sd);
 
 static struct proc_dir_entry *bp_procfs_dir;
 
+#ifdef BP_PROC_SUPPORT
 static int bp_proc_create(void)
 {
 	bp_procfs_dir = proc_mkdir(BP_PROC_DIR, init_net.proc_net);
@@ -6794,6 +6797,7 @@ static int bp_proc_create(void)
 	}
 	return 0;
 }
+#endif
 
 static int procfs_add(char *proc_name, const struct file_operations *fops,
 		      struct bpctl_dev *dev)
