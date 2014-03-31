@@ -321,6 +321,7 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 	pr_debug("%s(): returned %p\n", __func__, page);
 	return page;
 }
+EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 
 /**
  * dma_release_from_contiguous() - release allocated pages
@@ -357,3 +358,4 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(dma_release_from_contiguous);
