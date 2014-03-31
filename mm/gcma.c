@@ -193,7 +193,7 @@ bool gcma_release_contig(int id, struct page *pages, int count)
 	atomic_sub(count * PAGE_SIZE, &alloced_size);
 	return true;
 }
-
+EXPORT_SYMBOL_GPL(gcma_release_contig);
 
 /**********************************
 * frontswap backend
