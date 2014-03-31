@@ -151,6 +151,7 @@ struct page *gcma_alloc_contig(int id, int count)
 
 	return pfn_to_page(cma_pfns[id] + next_zero_area);
 }
+EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
 /**
  * gcma_release_contig() - release pages from contiguous area
