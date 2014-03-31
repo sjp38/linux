@@ -26,6 +26,7 @@
 #include <linux/module.h>
 #include <linux/gcma.h>
 #include <linux/mm.h>
+#include <linux/dma-contiguous.h>
 
 /*********************************
 * tunables
@@ -41,6 +42,92 @@ extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
 		struct page *page);
 extern void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset);
 extern void gcma_frontswap_invalidate_area(unsigned type);
+
+/**
+ * returns 0 if fail
+ */
+static unsigned long measure_gcma(void)
+{
+	struct page *page;
+	struct timespec start, end;
+	getnstimeofday(&start);
+	page = gcma_alloc_contig(0, 10);
+	if (!page)
+		return 0;
+	getnstimeofday(&end);
+	gcma_release_contig(0, page, 10);
+
+	return end.tv_sec * 1000000000 + end.tv_nsec
+		- (start.tv_sec * 1000000000 + start.tv_nsec);
+}
+
+/**
+ * returns 0 if fail
+ */
+static unsigned long measure_cma(void)
+{
+	struct page *page;
+	struct timespec start, end;
+	getnstimeofday(&start);
+	page = dma_alloc_from_contiguous(NULL, 10, 1);
+	if (!page)
+		return 0;
+	getnstimeofday(&end);
+	dma_release_from_contiguous(NULL, page, 10);
+
+	return end.tv_sec * 1000000000 + end.tv_nsec
+		- (start.tv_sec * 1000000000 + start.tv_nsec);
+}
+
+static unsigned long min_of(unsigned long prev_min, unsigned long new_val)
+{
+	if (prev_min == 0 || prev_min > new_val)
+		return new_val;
+	return prev_min;
+}
+
+static unsigned long max_of(unsigned long prev_max, unsigned long new_val)
+{
+	if (prev_max == 0 || prev_max < new_val)
+		return new_val;
+	return prev_max;
+}
+
+static int measure_time_alloc(void)
+{
+	unsigned long nr_gcma_fail = 0, nr_cma_fail = 0;
+	unsigned long gcma_time, gcma_min = 0, gcma_max = 0, gcma_avg;
+	unsigned long cma_time, cma_min = 0, cma_max = 0, cma_avg = 0;
+	unsigned long gcma_sum = 0, cma_sum = 0;
+	int measure_count = 500, i;
+
+	for (i = 0; i < measure_count; i++) {
+		cma_time = measure_cma();
+		gcma_time = measure_gcma();
+
+		if (!cma_time)
+			nr_cma_fail++;
+		if (!gcma_time)
+			nr_gcma_fail++;
+
+		gcma_min = min_of(gcma_min, gcma_time);
+		gcma_max = max_of(gcma_max, gcma_time);
+		gcma_sum += gcma_time;
+
+		cma_min = min_of(cma_min, cma_time);
+		cma_max = max_of(cma_max, cma_time);
+		cma_sum += cma_time;
+	}
+	gcma_avg = gcma_sum / measure_count;
+	cma_avg = cma_sum / measure_count;
+
+	pr_info("gcma\tfail: %ld\tmin: %ld\tmax: %ld\tavg: %ld\n",
+			nr_gcma_fail, gcma_min, gcma_max, gcma_avg);
+	pr_info("cma\tfail: %ld\tmin: %ld\tmax: %ld\tavg: %ld\n",
+			nr_cma_fail, cma_min, cma_max, cma_avg);
+
+	return 0;
+}
 
 static int test_frontswap(void)
 {
@@ -147,6 +234,7 @@ static int __init init_gcma(void)
 
 	do_test(test_alloc_release_contig);
 	do_test(test_frontswap);
+	do_test(measure_time_alloc);
 
 	return 0;
 }
