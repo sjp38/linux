@@ -459,6 +459,23 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 	spin_unlock(&tree->lock);
 }
 
+static void gcma_frontswap_cleanup_area(unsigned type)
+{
+	struct frontswap_tree *tree = frontswap_trees[type];
+	struct frontswap_entry *entry, *n;
+
+	if (!tree) {
+		pr_warn("failed to get frontswap tree for type %d\n", type);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode)
+		frontswap_free_entry(entry);
+	tree->rbroot = RB_ROOT;
+	spin_unlock(&tree->lock);
+}
+
 #if !TEST_FRONTSWAP
 static
 #endif
@@ -489,8 +506,8 @@ static void cleanup_frontswap(void)
 	spin_lock(&cleanup_lock);
 	for (i = 0; i < MAX_SWAPFILES; i++) {
 		if (frontswap_trees[i]) {
-			pr_debug("cleanup %d type\n", i);
-			gcma_frontswap_invalidate_area(i);
+			pr_debug("cleanup %d type!!!!\n", i);
+			gcma_frontswap_cleanup_area(i);
 		}
 	}
 	spin_unlock(&cleanup_lock);
