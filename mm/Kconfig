@@ -555,6 +555,14 @@ config GCMA
 	  This is marked experimental because it is a new feature that
 	  interacts heavily with memory reclaim.
 
+config EVAL_GCMA
+	tristate "Evaluate guaranteed contiguous memory allocator"
+	depends on GCMA
+	default m
+	help
+	  A module that evaluate gcma.
+
+
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
 	depends on CHECKPOINT_RESTORE && HAVE_ARCH_SOFT_DIRTY && PROC_FS
