@@ -64,7 +64,7 @@ static atomic_t total_size = ATOMIC_INIT(0);
 static atomic_t alloced_size = ATOMIC_INIT(0);
 
 /**
- * gcma_reserve_cma() - Reserve contiguous memory area
+ * gcma_reserve_cma - Reserve contiguous memory area
  * @size: Size of the reserved area (in bytes), 0 for default size
  *
  * This function reserves memory from early allocator, memblock. It can be
