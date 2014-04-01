@@ -154,7 +154,7 @@ struct page *gcma_alloc_contig(int id, int count)
 EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
 /**
- * gcma_release_contig() - release pages from contiguous area
+ * gcma_release_contig - release pages from contiguous area
  * @id: Identifier of contiguous memory area which the releasing be done.
  * @count: Requested number of pages.
  *
