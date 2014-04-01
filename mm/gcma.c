@@ -111,7 +111,7 @@ int __init gcma_reserve_cma(phys_addr_t size)
 static void cleanup_frontswap(void);
 
 /**
- * gcma_alloc_contig() - allocate pages from contiguous area
+ * gcma_alloc_contig - allocate pages from contiguous area
  * @id: Identifier of contiguous memory area which the allocation be done.
  * @count: Requested number of pages.
  *
