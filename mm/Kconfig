@@ -543,7 +543,7 @@ config ZSWAP
 
 config GCMA
 	bool "Guaranteed contiguous memory allocator (EXPERIMENTAL)"
-	depends on FRONTSWAP
+	depends on FRONTSWAP && CLEANCACHE
 	default n
 	help
 	  A contiguous memory allocator which guarantees success and max wait
