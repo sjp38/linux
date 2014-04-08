@@ -14,6 +14,7 @@
 #include <linux/memblock.h>
 #include <linux/frontswap.h>
 #include <linux/highmem.h>
+#include <linux/cleancache.h>
 
 /*********************************
 * tunables
@@ -501,6 +502,61 @@ static struct frontswap_ops gcma_frontswap_ops = {
 	.invalidate_area = gcma_frontswap_invalidate_area
 };
 
+/*********************************
+ * cleancache backend
+ *********************************/
+
+static int gcma_cleancache_init_fs(size_t pagesize)
+{
+	return -1;
+}
+
+static int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+{
+	return -1;
+}
+
+static int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
+					pgoff_t index, struct page *page)
+{
+	return -1;
+}
+
+static void gcma_cleancache_put_page(int pool_id,
+					struct cleancache_filekey key,
+					pgoff_t index, struct page *page)
+{
+	return;
+}
+
+static void gcma_cleancache_invalidate_page(int pool_id,
+						struct cleancache_filekey key,
+						pgoff_t index)
+{
+	return;
+}
+
+static void gcma_cleancache_invalidate_inode(int pool_id,
+						struct cleancache_filekey key)
+{
+	return;
+}
+
+static void gcma_cleancache_invalidate_fs(int pool_id)
+{
+	return;
+}
+
+static struct cleancache_ops gcma_cleancache_ops = {
+	.init_fs = gcma_cleancache_init_fs,
+	.init_shared_fs = gcma_cleancache_init_shared_fs,
+	.put_page = gcma_cleancache_put_page,
+	.get_page = gcma_cleancache_get_page,
+	.invalidate_page = gcma_cleancache_invalidate_page,
+	.invalidate_inode = gcma_cleancache_invalidate_inode,
+	.invalidate_fs = gcma_cleancache_invalidate_fs
+};
+
 static int __init init_gcma(void)
 {
 	int i;
@@ -540,6 +596,7 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	cleancache_register_ops(&gcma_cleancache_ops);
 	return 0;
 }
 
