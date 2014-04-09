@@ -195,6 +195,7 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 
 	return cma_alloc(dev_get_cma_area(dev), count, align);
 }
+EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 
 /**
  * dma_release_from_contiguous() - release allocated pages
