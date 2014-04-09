@@ -37,6 +37,7 @@ obj-$(CONFIG_FRONTSWAP)	+= frontswap.o
 obj-$(CONFIG_ZSWAP)	+= zswap.o
 obj-$(CONFIG_GCMA)	+= gcma.o
 obj-$(CONFIG_GCMA)	+= test_gcma.o
+obj-$(CONFIG_EVAL_GCMA)	+= eval_gcma.o
 obj-$(CONFIG_HAS_DMA)	+= dmapool.o
 obj-$(CONFIG_HUGETLBFS)	+= hugetlb.o
 obj-$(CONFIG_NUMA) 	+= mempolicy.o
