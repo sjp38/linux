@@ -555,6 +555,12 @@ config GCMA
 	  This is marked experimental because it is a new feature that
 	  interacts heavily with memory reclaim.
 
+config EVAL_GCMA
+	tristate "Evaluate Guaranteed Contiguous Memory Allocator"
+	depends on GCMA
+	default m
+	help
+	  A module for gcma evaluation.
 
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
