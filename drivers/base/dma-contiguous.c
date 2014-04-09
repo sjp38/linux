@@ -358,3 +358,4 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(dma_release_from_contiguous);
