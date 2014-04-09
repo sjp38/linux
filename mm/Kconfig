@@ -543,6 +543,7 @@ config ZSWAP
 
 config GCMA
 	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
+	depends on FRONTSWAP
 	default n
 	help
 	  A contiguous memory allocator which guarantees success and
