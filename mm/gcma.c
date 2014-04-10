@@ -459,47 +459,410 @@ static struct frontswap_ops gcma_frontswap_ops = {
 };
 
 /*********************************
- * cleancache backend
+ * gcma tmem
  *********************************/
 
-static int gcma_cleancache_init_fs(size_t pagesize)
+/* 16 comes from zcache. */
+#define MAX_CLEANCACHE_FS 16
+
+struct tmem_handle {
+	union {
+		int pool_id;
+		char filekey[sizeof(struct cleancache_filekey)]; /* 0 for frontswap */
+		pgoff_t index;
+	} u;
+};
+
+struct tmem_entry {
+	struct rb_root rbroot;
+	struct rb_node rbnode;
+	struct tmem_handle handle;
+	unsigned int gcma_id;
+	struct page *page;
+	int refcount;
+	spinlock_t lock;
+};
+
+struct tmem_tree {
+	struct rb_root rbroot;
+	spinlock_t lock;
+};
+
+typedef int (*compare_func)(struct tmem_handle *lhandle,
+				struct tmem_handle *rhandle);
+
+static struct kmem_cache *tmem_entry_cache;
+
+/*
+ * Stolen from zswap.
+ * In the case that a entry with the same offset is found, a pointer to
+ * the existing entry is stored in dupentry and the function returns -EEXIST
+ */
+static int tmem_rb_insert(struct rb_root *root,
+		struct tmem_entry *entry,
+		struct tmem_entry **dupentry,
+		compare_func compare)
 {
-	return -1;
+	struct rb_node **link = &root->rb_node, *parent = NULL;
+	struct tmem_entry *ientry;
+	int compared;
+
+	while (*link) {
+		parent = *link;
+		ientry = rb_entry(parent, struct tmem_entry, rbnode);
+		compared = compare(&ientry->handle, &entry->handle);
+		if (compared > 0)
+			link = &(*link)->rb_left;
+		else if (compared < 0)
+			link = &(*link)->rb_right;
+		else {
+			*dupentry = ientry;
+			return -EEXIST;
+		}
+	}
+	rb_link_node(&entry->rbnode, parent, link);
+	rb_insert_color(&entry->rbnode, root);
+	return 0;
 }
 
-static int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+/*
+ * Stolen from zswap.
+ */
+static void tmem_rb_erase(struct rb_root *root, struct tmem_entry *entry)
 {
-	return -1;
+	if (!RB_EMPTY_NODE(&entry->rbnode)) {
+		rb_erase(&entry->rbnode, root);
+		RB_CLEAR_NODE(&entry->rbnode);
+	}
 }
 
-static int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
-					pgoff_t index, struct page *page)
+/*
+ * Stolen from zswap.
+ */
+static struct tmem_entry *tmem_rb_search(struct rb_root *root,
+		struct tmem_handle *handle, compare_func compare)
 {
-	return -1;
+	struct rb_node *node = root->rb_node;
+	struct tmem_entry *entry;
+	int compared;
+
+	while (node) {
+		entry = rb_entry(node, struct tmem_entry, rbnode);
+		compared = compare(&entry->handle, handle);
+		if (compared > 0)
+			node = node->rb_left;
+		else if (compared < 0)
+			node = node->rb_right;
+		else
+			return entry;
+	}
+	return NULL;
 }
 
-static void gcma_cleancache_put_page(int pool_id,
+static void tmem_free_entry(struct tmem_entry *entry)
+{
+	if (entry->page != NULL)
+		gcma_release_contig(entry->gcma_id, entry->page, 1);
+	kmem_cache_free(tmem_entry_cache, entry);
+}
+
+/*
+ * Caller should hold frontswap tree spinlock
+ */
+static void tmem_get_entry(struct tmem_entry *entry)
+{
+	entry->refcount++;
+}
+
+/*
+ * Stolen from zswap.
+ * Caller should hold frontswap tree spinlock
+ * remove from the tree and free it, if nobody reference the entry
+ */
+static void tmem_put_entry(struct rb_root *root,
+		struct tmem_entry *entry)
+{
+	int refcount = --entry->refcount;
+
+	BUG_ON(refcount < 0);
+	if (refcount == 0) {
+		tmem_rb_erase(root, entry);
+		tmem_free_entry(entry);
+	}
+}
+
+/*
+ * Caller should hold frontswap tree spinlock
+ */
+static struct tmem_entry *tmem_rb_find_get(struct rb_root *root,
+			struct tmem_handle *handle, compare_func compare)
+{
+	struct tmem_entry *entry = tmem_rb_search(root, handle, compare);
+	if (entry)
+		tmem_get_entry(entry);
+	return entry;
+}
+
+static int compare_filekeys(struct tmem_handle *lhandle,
+				struct tmem_handle *rhandle)
+{
+	return memcmp(&lhandle->u.filekey, &rhandle->u.filekey,
+			sizeof(lhandle->u.filekey));
+}
+
+static int compare_index(struct tmem_handle *lhandle,
+				struct tmem_handle *rhandle)
+{
+	return lhandle->u.index - rhandle->u.index;
+}
+
+/*********************************************
+ * cleancache backend
+ *********************************************/
+static struct tmem_tree *cleancache_pools[MAX_CLEANCACHE_FS];
+static atomic_t nr_cleancache_pool = ATOMIC_INIT(0);
+
+int gcma_cleancache_init_fs(size_t pagesize)
+{
+	int nr_pool;
+	struct tmem_tree *tree;
+
+	BUG_ON(pagesize != PAGE_SIZE);
+
+	pr_info("%s called", __func__);
+	tree = kzalloc(sizeof(struct tmem_tree), GFP_KERNEL);
+	if (!tree) {
+		pr_err("failed to alloc tmem_tree from %s failed\n", __func__);
+		return -1;
+	}
+
+	tree->rbroot = RB_ROOT;
+	spin_lock_init(&tree->lock);
+
+	nr_pool = atomic_add_return(1, &nr_cleancache_pool) - 1;
+	cleancache_pools[nr_pool] = tree;
+
+	return nr_pool;
+}
+
+int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+{
+	return gcma_cleancache_init_fs(pagesize);
+}
+
+/**
+ * should not be called from irq
+ */
+void gcma_cleancache_put_page(int pool_id,
 					struct cleancache_filekey key,
 					pgoff_t index, struct page *page)
 {
-	return;
+	struct tmem_entry *entry, *dupentry, *file;
+	struct page *cma_page = NULL;
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_handle *file_handle;
+	u8 *src, *dst;
+	int i, ret;
+	int max_gcma = atomic_read(&reserved_gcma);
+
+	if (!tree) {
+		pr_warn("cleancache pool for id %d is not exist\n", pool_id);
+		return;
+	}
+
+	file_handle = (struct tmem_handle *)&key;
+
+	entry = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
+	if (!entry) {
+		pr_warn("failed to get tmem entry for cleancache\n");
+		return;
+	}
+	spin_lock(&tree->lock);
+	file = tmem_rb_find_get(&tree->rbroot, file_handle, compare_filekeys);
+	if (!file) {
+		file = entry;
+		entry = NULL;
+		file->rbroot = RB_ROOT;
+		file->handle = *file_handle;
+		file->refcount = 1;
+		file->page = NULL;
+		RB_CLEAR_NODE(&file->rbnode);
+		spin_lock_init(&file->lock);
+
+		BUG_ON(tmem_rb_insert(&tree->rbroot, file, &dupentry,
+					compare_index) == -EEXIST);
+	} else
+		tmem_put_entry(&tree->rbroot, file);
+	spin_unlock(&tree->lock);
+
+	for (i = 0; i < max_gcma; i++) {
+		cma_page = gcma_alloc_contig(i, 1);
+		if (cma_page != NULL)
+			break;
+	}
+
+	if (cma_page == NULL) {
+		pr_warn("failed to get 1 page from gcma\n");
+		return;
+	}
+
+	if (!entry) {
+		entry = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
+	}
+	if (!entry) {
+		pr_warn("failed to get tmem entry for cleancache from cache\n");
+		gcma_release_contig(i, cma_page, 1);
+		return;
+	}
+	entry->page = cma_page;
+	entry->refcount = 1;
+	RB_CLEAR_NODE(&entry->rbnode);
+
+	src = kmap_atomic(page);
+	dst = kmap_atomic(cma_page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	entry->handle.u.index = index;
+	entry->gcma_id = i;
+
+	spin_lock(&file->lock);
+	do {
+		ret = tmem_rb_insert(&file->rbroot, entry, &dupentry,
+					compare_index);
+		if (ret == -EEXIST)
+			tmem_rb_erase(&file->rbroot, dupentry);
+	} while (ret == -EEXIST);
+	spin_unlock(&file->lock);
 }
 
-static void gcma_cleancache_invalidate_page(int pool_id,
+int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
+					pgoff_t index, struct page *page)
+{
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_entry *file, *entry;
+	u8 *src, *dst;
+
+	if (!tree) {
+		pr_warn("tree for pool id %d not exist\n", pool_id);
+		return -1;
+	}
+	spin_lock(&tree->lock);
+	file = tmem_rb_find_get(&tree->rbroot, (struct tmem_handle *)&key, compare_filekeys);
+	spin_unlock(&tree->lock);
+	if (!file) {
+		pr_debug("couldn't find the file from cleancache tree. pool id: %d\n", pool_id);
+		return -1;
+	}
+
+	spin_lock(&file->lock);
+	entry = tmem_rb_find_get(&file->rbroot, (struct tmem_handle *)&index, compare_index);
+	spin_unlock(&file->lock);
+	if (!entry) {
+		pr_warn("couldn't fine the entry from cleancache file\n");
+		return -1;
+	}
+
+	src = kmap_atomic(entry->page);
+	dst = kmap_atomic(page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	spin_lock(&file->lock);
+	tmem_put_entry(&file->rbroot, entry);
+	spin_unlock(&file->lock);
+
+	spin_lock(&tree->lock);
+	tmem_put_entry(&tree->rbroot, file);
+	spin_unlock(&tree->lock);
+
+	return 0;
+}
+
+void gcma_cleancache_invalidate_page(int pool_id,
 						struct cleancache_filekey key,
 						pgoff_t index)
 {
-	return;
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_entry *entry, *file;
+
+	spin_lock(&tree->lock);
+	file = tmem_rb_search(&tree->rbroot, (struct tmem_handle *)&key, compare_filekeys);
+	if (!file) {
+		pr_warn("failed to get file from %s\n", __func__);
+		spin_unlock(&tree->lock);
+		return;
+	}
+	spin_lock(&file->lock);
+	entry = tmem_rb_search(&file->rbroot, (struct tmem_handle *)&index, compare_index);
+	if (!entry) {
+		pr_warn("failed to get entry from %s\n", __func__);
+		spin_unlock(&file->lock);
+		spin_unlock(&tree->lock);
+		return;
+	}
+	tmem_rb_erase(&file->rbroot, entry);
+	tmem_put_entry(&file->rbroot, entry);
+
+	/* TODO: free file when it's child is empty, too */
+
+	spin_unlock(&file->lock);
+	spin_unlock(&tree->lock);
 }
 
-static void gcma_cleancache_invalidate_inode(int pool_id,
+void gcma_cleancache_invalidate_inode(int pool_id,
 						struct cleancache_filekey key)
 {
-	return;
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_entry *entry, *file, *n;
+
+	spin_lock(&tree->lock);
+	file = tmem_rb_search(&tree->rbroot, (struct tmem_handle *)&key, compare_filekeys);
+	if (!file) {
+		pr_warn("failed to get file from %s\n", __func__);
+		spin_unlock(&tree->lock);
+		return;
+	}
+	spin_lock(&file->lock);
+	rbtree_postorder_for_each_entry_safe(entry, n, &file->rbroot, rbnode)
+		tmem_free_entry(entry);
+	file->rbroot = RB_ROOT;
+	spin_unlock(&file->lock);
+
+	tmem_rb_erase(&tree->rbroot, file);
+	tmem_put_entry(&tree->rbroot, file);
+
+	spin_unlock(&tree->lock);
 }
 
-static void gcma_cleancache_invalidate_fs(int pool_id)
+void gcma_cleancache_invalidate_fs(int pool_id)
 {
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_entry *entry, *file, *n, *m;
+
+	if (!tree) {
+		pr_warn("can not get the tmem tree for pool id %d\n", pool_id);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(file, n, &tree->rbroot, rbnode) {
+		pr_info("invalidate file %p. rbroot: %p\n", file, &tree->rbroot);
+		spin_lock(&file->lock);
+		rbtree_postorder_for_each_entry_safe(entry, m, &file->rbroot, rbnode) {
+			tmem_free_entry(entry);
+		}
+		pr_info("gotcha...\n");
+		spin_unlock(&file->lock);
+		tmem_free_entry(file);
+	}
+	tree->rbroot = RB_ROOT;
+	spin_unlock(&tree->lock);
+
+	kfree(tree);
+	cleancache_pools[pool_id] = NULL;
 	return;
 }
 
@@ -551,6 +914,11 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	tmem_entry_cache = KMEM_CACHE(tmem_entry, 0);
+	if (tmem_entry_cache == NULL) {
+		pr_warn("failed to create tmem cache\n");
+		return -ENOMEM;
+	}
 	cleancache_register_ops(&gcma_cleancache_ops);
 	return 0;
 }
