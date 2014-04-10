@@ -43,7 +43,7 @@ struct gcma_info {
 };
 
 static struct gcma_info ginfo[MAX_GCMA];
-static int reserved_gcma;
+static atomic_t reserved_gcma = ATOMIC_INIT(0);
 
 /**
  * gcma_reserve - Reserve contiguous memory area
@@ -61,7 +61,9 @@ int __init gcma_reserve(unsigned long long size)
 	struct gcma_info *info;
 	phys_addr_t addr;
 
-	if (reserved_gcma == MAX_GCMA) {
+	gcma_id = atomic_inc_return(&reserved_gcma);
+	if (gcma_id > MAX_GCMA) {
+		atomic_dec(&reserved_gcma);
 		pr_warn("There is no more space in GCMA.\n");
 		return -ENOMEM;
 	}
@@ -75,17 +77,15 @@ int __init gcma_reserve(unsigned long long size)
 				MEMBLOCK_ALLOC_ACCESSIBLE);
 	if (!addr) {
 		pr_warn("failed to reserveg cma\n");
+		atomic_dec(&reserved_gcma);
 		return -ENOMEM;
 	}
 
+	gcma_id -= 1;
 	pr_debug("%llu bytes gcma reserved\n", size);
 
-	gcma_id = reserved_gcma++;
 	info = &ginfo[gcma_id];
 
-	/*
-	 * TODO: protect race by concurrent call of gcma_reserve
-	 */
 	info->size = size >> PAGE_SHIFT;
 	info->base_pfn = PFN_DOWN(addr);
 
@@ -102,12 +102,14 @@ int __init gcma_reserve(unsigned long long size)
  */
 struct page *gcma_alloc_contig(int gcma_id, int pages)
 {
+	int max_gcma;
 	int id = gcma_id;
 	unsigned long *bitmap, next_zero_area;
 	struct gcma_info *info;
 
-	if (id >= reserved_gcma) {
-		pr_warn("invalid gcma_id %d [%d]\n", id, reserved_gcma);
+	max_gcma = atomic_read(&reserved_gcma);
+	if (id >= max_gcma) {
+		pr_warn("invalid gcma_id %d [%d]\n", id, max_gcma);
 		return NULL;
 	}
 
@@ -145,9 +147,10 @@ void gcma_release_contig(int gcma_id, struct page *page, int pages)
 	unsigned long next_zero_bit;
 	struct gcma_info *info;
 	int id = gcma_id;
+	int max_gcma = atomic_read(&reserved_gcma);
 
-	if (id >= reserved_gcma) {
-		pr_warn("invalid gcma_id %d [%d]\n", id, reserved_gcma);
+	if (id >= max_gcma) {
+		pr_warn("invalid gcma_id %d [%d]\n", id, max_gcma);
 		return;
 	}
 
@@ -318,6 +321,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	u8 *src, *dst;
 	int i, ret;
+	int max_gcma = atomic_read(&reserved_gcma);
 
 	if (!tree) {
 		pr_warn("frontswap tree for type %d is not exist\n",
@@ -330,7 +334,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	 * always consumed compared to others. Maybe we should
 	 * do round-robin in future.
 	 */
-	for (i = 0; i < reserved_gcma; i++) {
+	for (i = 0; i < max_gcma; i++) {
 		cma_page = gcma_alloc_contig(i, 1);
 		if (cma_page != NULL)
 			break;
@@ -457,13 +461,15 @@ static int __init init_gcma(void)
 {
 	int i;
 	unsigned long bitmap_bytes;
+	int max_gcma;
 
 	if (!gcma_enabled)
 		return 0;
 
 	pr_info("loading gcma\n");
+	max_gcma = atomic_read(&reserved_gcma);
 
-	for (i = 0; i < reserved_gcma; i++) {
+	for (i = 0; i < max_gcma; i++) {
 		spin_lock_init(&ginfo[i].lock);
 		bitmap_bytes = ginfo[i].size / sizeof(*ginfo[i].bitmap);
 		if (ginfo[i].size % sizeof(*ginfo[i].bitmap))
