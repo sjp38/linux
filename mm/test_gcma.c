@@ -27,6 +27,7 @@
 #include <linux/gcma.h>
 #include <linux/mm.h>
 #include <linux/dma-contiguous.h>
+#include <linux/cleancache.h>
 
 /*********************************
 * tunables
@@ -128,6 +129,80 @@ static int measure_time_alloc(void)
 
 	return 0;
 }
+extern int gcma_cleancache_init_fs(size_t pagesize);
+extern int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize);
+extern int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
+		pgoff_t index, struct page *page);
+extern void gcma_cleancache_put_page(int pool_id,
+		struct cleancache_filekey key,
+		pgoff_t index, struct page *page);
+extern void gcma_cleancache_invalidate_page(int pool_id,
+		struct cleancache_filekey key,
+		pgoff_t index);
+extern void gcma_cleancache_invalidate_inode(int pool_id,
+		struct cleancache_filekey key);
+extern void gcma_cleancache_invalidate_fs(int pool_id);
+
+static int test_cleancache(void)
+{
+	struct page *store_page, *load_page;
+	void *store_page_va, *load_page_va;
+	int pool_id;
+	struct cleancache_filekey key;
+
+	pool_id = gcma_cleancache_init_fs(PAGE_SIZE);
+	store_page = alloc_page(GFP_KERNEL);
+	if (!store_page) {
+		pr_info("alloc_page failed\n");
+		return -1;
+	}
+
+	store_page_va = page_address(store_page);
+	memset(store_page_va, 1, PAGE_SIZE);
+
+	memset(&key, 2, sizeof(struct cleancache_filekey));
+
+	gcma_cleancache_put_page(pool_id, key, 17, store_page);
+
+	load_page = alloc_page(GFP_KERNEL);
+	if (!load_page) {
+		pr_info("alloc_page for frontswap load op check failed\n");
+		return -1;
+	}
+	if (gcma_cleancache_get_page(pool_id, key, 17, load_page)) {
+		pr_info("failed gcma_frontswap_load call\n");
+		return -1;
+	}
+
+	load_page_va = page_address(load_page);
+	if (memcmp(store_page_va, load_page_va, PAGE_SIZE)) {
+		pr_info("data corrupted\n");
+		return -1;
+	}
+
+	gcma_cleancache_invalidate_page(pool_id, key, 17);
+	if (!gcma_cleancache_get_page(pool_id, key, 17, load_page)) {
+		pr_info("invalidated page still alive. test fail\n");
+		return -1;
+	}
+
+	gcma_cleancache_invalidate_inode(pool_id, key);
+	if (!gcma_cleancache_get_page(pool_id, key, 19, load_page)) {
+		pr_info("invalidated file still alive. test fail\n");
+		return -1;
+	}
+
+	gcma_cleancache_invalidate_fs(pool_id);
+	memset(&key, 1, sizeof(struct cleancache_filekey));
+	if (!gcma_cleancache_get_page(pool_id, key, 13, load_page)) {
+		pr_info("invalidated fs still alive. test fail\n");
+		return -1;
+	}
+
+	free_page((unsigned long)store_page_va);
+	free_page((unsigned long)load_page_va);
+	return 0;
+}
 
 static int test_frontswap(void)
 {
@@ -226,6 +301,7 @@ static int __init init_gcma(void)
 
 	do_test(test_alloc_release_contig);
 	do_test(test_frontswap);
+	do_test(test_cleancache);
 	do_test(measure_time_alloc);
 
 	return 0;
