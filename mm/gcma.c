@@ -97,6 +97,7 @@ int __init gcma_reserve(unsigned long long size)
 }
 
 static void cleanup_frontswap(void);
+static void cleanup_cleancache(void);
 
 /**
  * gcma_alloc_contig - allocate pages from contiguous area
@@ -141,6 +142,7 @@ struct page *gcma_alloc_contig(int gcma_id, int pages)
 	/* Trigger frontswap cleanup if 80% of contiguous memory is full */
 	if (atomic_read(&alloced_size) >= (atomic_read(&total_size) / 5) * 4) {
 		pr_debug("trigger cleancache / frontswap cleanup\n");
+		cleanup_cleancache();
 		cleanup_frontswap();
 	}
 
@@ -951,6 +953,40 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 	kfree(tree);
 	cleancache_pools[pool_id] = NULL;
 	return;
+}
+
+void cleanup_cleancache_pool(int pool_id)
+{
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	struct tmem_entry *entry, *file, *n, *m;
+
+	if (!tree) {
+		pr_debug("can not get the tmem tree for pool id %d\n", pool_id);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(file, n, &tree->rbroot, rbnode) {
+		spin_lock(&file->lock);
+		rbtree_postorder_for_each_entry_safe(entry, m, &file->rbroot,
+				rbnode) {
+			tmem_free_entry(entry);
+		}
+		spin_unlock(&file->lock);
+	}
+	spin_unlock(&tree->lock);
+}
+
+static void cleanup_cleancache(void)
+{
+	int i;
+	int nr_pool = atomic_read(&nr_cleancache_pool);
+
+	spin_lock(&cleanup_lock);
+	for (i = 0; i < nr_pool; i++) {
+		cleanup_cleancache_pool(i);
+	}
+	spin_unlock(&cleanup_lock);
 }
 
 static struct cleancache_ops gcma_cleancache_ops = {
