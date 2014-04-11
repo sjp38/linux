@@ -660,40 +660,6 @@ static int compare_index(struct tmem_handle *lhandle,
 	return lhandle->u.index - rhandle->u.index;
 }
 
-/*********************************************
- * cleancache backend
- *********************************************/
-static struct tmem_tree *cleancache_pools[MAX_CLEANCACHE_FS];
-static atomic_t nr_cleancache_pool = ATOMIC_INIT(0);
-
-int gcma_cleancache_init_fs(size_t pagesize)
-{
-	int nr_pool;
-	struct tmem_tree *pool;
-
-	BUG_ON(pagesize != PAGE_SIZE);
-
-	pr_debug("%s called", __func__);
-	pool = kzalloc(sizeof(struct tmem_tree), GFP_KERNEL);
-	if (!pool) {
-		pr_err("failed to alloc tmem_tree from %s failed\n", __func__);
-		return -1;
-	}
-
-	pool->rbroot = RB_ROOT;
-	spin_lock_init(&pool->lock);
-
-	nr_pool = atomic_add_return(1, &nr_cleancache_pool) - 1;
-	cleancache_pools[nr_pool] = pool;
-
-	return nr_pool;
-}
-
-int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
-{
-	return gcma_cleancache_init_fs(pagesize);
-}
-
 static struct tmem_entry *tmem_put_file(struct tmem_tree *tree,
 					struct tmem_handle *handle)
 {
@@ -786,6 +752,40 @@ static void tmem_insert_page(struct rb_root *root, struct tmem_entry *entry)
 		if (res == -EEXIST)
 			tmem_rb_erase(root, dupentry);
 	} while (res == -EEXIST);
+}
+
+/*********************************************
+ * cleancache backend
+ *********************************************/
+static struct tmem_tree *cleancache_pools[MAX_CLEANCACHE_FS];
+static atomic_t nr_cleancache_pool = ATOMIC_INIT(0);
+
+int gcma_cleancache_init_fs(size_t pagesize)
+{
+	int nr_pool;
+	struct tmem_tree *pool;
+
+	BUG_ON(pagesize != PAGE_SIZE);
+
+	pr_debug("%s called", __func__);
+	pool = kzalloc(sizeof(struct tmem_tree), GFP_KERNEL);
+	if (!pool) {
+		pr_err("failed to alloc tmem_tree from %s failed\n", __func__);
+		return -1;
+	}
+
+	pool->rbroot = RB_ROOT;
+	spin_lock_init(&pool->lock);
+
+	nr_pool = atomic_add_return(1, &nr_cleancache_pool) - 1;
+	cleancache_pools[nr_pool] = pool;
+
+	return nr_pool;
+}
+
+int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+{
+	return gcma_cleancache_init_fs(pagesize);
 }
 
 /**
