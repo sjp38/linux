@@ -650,39 +650,24 @@ int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
 	return gcma_cleancache_init_fs(pagesize);
 }
 
-/**
- * should not be called from irq
- */
-void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
-				pgoff_t index, struct page *page)
+static struct tmem_entry *tmem_put_file(struct tmem_tree *tree,
+					struct tmem_handle *handle)
 {
-	struct tmem_entry *entry, *dupentry, *file;
-	struct page *cma_page = NULL;
-	struct tmem_tree *tree = cleancache_pools[pool_id];
-	struct tmem_handle *file_handle;
-	u8 *src, *dst;
-	int i, ret;
-	int max_gcma = atomic_read(&reserved_gcma);
+	struct tmem_entry *file, *prepared, *dupentry;
 
-	if (!tree) {
-		pr_warn("cleancache pool for id %d is not exist\n", pool_id);
-		return;
+	prepared = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
+	if (!prepared) {
+		pr_warn("failed to alloc tmem file entry\n");
+		return NULL;
 	}
 
-	file_handle = (struct tmem_handle *)&key;
-
-	entry = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
-	if (!entry) {
-		pr_warn("failed to get tmem entry for cleancache\n");
-		return;
-	}
 	spin_lock(&tree->lock);
-	file = tmem_rb_find_get(&tree->rbroot, file_handle, compare_filekeys);
+	file = tmem_rb_find_get(&tree->rbroot, handle, compare_filekeys);
 	if (!file) {
-		file = entry;
-		entry = NULL;
+		file = prepared;
+		prepared = NULL;
 		file->rbroot = RB_ROOT;
-		file->handle = *file_handle;
+		file->handle = *handle;
 		file->refcount = 1;
 		file->page = NULL;
 		RB_CLEAR_NODE(&file->rbnode);
@@ -694,43 +679,95 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 		tmem_put_entry(&tree->rbroot, file);
 	spin_unlock(&tree->lock);
 
-	/* TODO: do roundroabin i starting point */
+	if (prepared != NULL)
+		kmem_cache_free(tmem_entry_cache, prepared);
+	return file;
+}
+
+static int alloc_page_for_tmem(struct page **ret)
+{
+	int max_gcma = atomic_read(&reserved_gcma);
+	int i;
+	/* TODO: do round-robin i starting point */
 	for (i = 0; i < max_gcma; i++) {
-		cma_page = gcma_alloc_contig(i, 1);
-		if (cma_page != NULL)
+		*ret = gcma_alloc_contig(i, 1);
+		if (*ret != NULL)
 			break;
 	}
-	if (cma_page == NULL) {
-		pr_warn("failed to get 1 page from gcma\n");
-		return;
-	}
+	return i;
+}
 
-	if (!entry)
-		entry = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
-	if (!entry) {
-		pr_warn("failed to get tmem entry for cleancache from cache\n");
-		return;
+static struct tmem_entry *tmem_make_copy_page(pgoff_t index,
+						struct page *src_page,
+						struct page *dst_page,
+						unsigned long gcma_id)
+{
+	struct tmem_entry *entry;
+	u8 *src, *dst;
+	entry = kmem_cache_alloc(tmem_entry_cache, GFP_KERNEL);
+	if (entry == NULL) {
+		pr_warn("failed to alloc page entry\n");
+		return entry;
 	}
-	entry->page = cma_page;
+	entry->page = dst_page;
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	src = kmap_atomic(page);
-	dst = kmap_atomic(cma_page);
+	src = kmap_atomic(src_page);
+	dst = kmap_atomic(dst_page);
 	memcpy(dst, src, PAGE_SIZE);
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
 	entry->handle.u.index = index;
-	entry->gcma_id = i;
+	entry->gcma_id = gcma_id;
+
+	return entry;
+}
+
+/**
+ * Should be called with root's lock grabbed
+ */
+static void tmem_insert_page(struct rb_root *root, struct tmem_entry *entry)
+{
+	struct tmem_entry *dupentry;
+	int res;
+	do {
+		res = tmem_rb_insert(root, entry, &dupentry,
+					compare_index);
+		if (res == -EEXIST)
+			tmem_rb_erase(root, dupentry);
+	} while (res == -EEXIST);
+}
+
+/**
+ * should not be called from irq
+ */
+void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
+				pgoff_t index, struct page *page)
+{
+	struct tmem_entry *entry, *file;
+	struct page *cma_page = NULL;
+	struct tmem_tree *tree = cleancache_pools[pool_id];
+	int gcma_id;
+
+	if (!tree) {
+		pr_warn("cleancache pool for id %d is not exist\n", pool_id);
+		return;
+	}
+
+	file = tmem_put_file(tree, (struct tmem_handle *)&key);
+	if (file == NULL)
+		return;
+
+	gcma_id = alloc_page_for_tmem(&cma_page);
+
+	entry = tmem_make_copy_page(index, page, cma_page, gcma_id);
+	if (entry == NULL)
+		gcma_release_contig(gcma_id, cma_page, 1);
 
 	spin_lock(&file->lock);
-	do {
-		ret = tmem_rb_insert(&file->rbroot, entry, &dupentry,
-					compare_index);
-		if (ret == -EEXIST)
-			tmem_rb_erase(&file->rbroot, dupentry);
-	} while (ret == -EEXIST);
+	tmem_insert_page(&file->rbroot, entry);
 	spin_unlock(&file->lock);
 }
 
