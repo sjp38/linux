@@ -684,12 +684,16 @@ static struct tmem_entry *tmem_put_file(struct tmem_tree *tree,
 	return file;
 }
 
-static int alloc_page_for_tmem(struct page **ret)
+static int tmem_alloc_page(struct page **ret)
 {
 	int max_gcma = atomic_read(&reserved_gcma);
-	int i;
-	/* TODO: do round-robin i starting point */
-	for (i = 0; i < max_gcma; i++) {
+	static int seek_start;
+	int count, i;
+
+	i = seek_start++;
+	for (count = 0; count < max_gcma; count++, i++) {
+		if (i >= max_gcma)
+			i = 0;
 		*ret = gcma_alloc_contig(i, 1);
 		if (*ret != NULL)
 			break;
@@ -760,7 +764,7 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	if (file == NULL)
 		return;
 
-	gcma_id = alloc_page_for_tmem(&cma_page);
+	gcma_id = tmem_alloc_page(&cma_page);
 
 	entry = tmem_make_copy_page(index, page, cma_page, gcma_id);
 	if (entry == NULL)
