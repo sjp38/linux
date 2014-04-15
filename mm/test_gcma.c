@@ -166,11 +166,11 @@ static int test_cleancache(void)
 
 	load_page = alloc_page(GFP_KERNEL);
 	if (!load_page) {
-		pr_info("alloc_page for frontswap load op check failed\n");
+		pr_info("alloc_page for cleancache load op check failed\n");
 		return -1;
 	}
 	if (gcma_cleancache_get_page(pool_id, key, 17, load_page)) {
-		pr_info("failed gcma_frontswap_load call\n");
+		pr_info("failed gcma_cleancache_get_page call\n");
 		return -1;
 	}
 
