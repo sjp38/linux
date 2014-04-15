@@ -518,20 +518,9 @@ static struct frontswap_ops gcma_frontswap_ops = {
 /* comes from zcache. */
 #define MAX_CLEANCACHE_FS 16
 
-/*
- * Handle for entry in gcma_rb
- * Use pgoffset for page, filekey for file.
- */
-struct gcma_rb_handle {
-	union {
-		char filekey[sizeof(struct cleancache_filekey)];
-		pgoff_t pgoffset;
-	} u;
-};
-
 struct gcma_rb_entry {
 	struct rb_node rbnode;
-	struct gcma_rb_handle handle;
+	void *handle;
 	int refcount;
 };
 
@@ -540,8 +529,7 @@ struct gcma_rb_tree {
 	spinlock_t lock;
 };
 
-typedef int (*compare_func)(struct gcma_rb_handle *lhandle,
-				struct gcma_rb_handle *rhandle);
+typedef int (*compare_func)(void *lhandle, void *rhandle);
 
 /*
  * Stolen from zswap, modified little bit.
@@ -560,7 +548,7 @@ static int gcma_rb_insert(struct rb_root *root,
 	while (*link) {
 		parent = *link;
 		ientry = rb_entry(parent, struct gcma_rb_entry, rbnode);
-		compared = compare(&entry->handle, &ientry->handle);
+		compared = compare(entry->handle, ientry->handle);
 		if (compared < 0)
 			link = &(*link)->rb_left;
 		else if (compared > 0)
@@ -590,7 +578,7 @@ static void gcma_rb_erase(struct rb_root *root, struct gcma_rb_entry *entry)
  * Stolen from zswap, modified little bit.
  */
 static struct gcma_rb_entry *gcma_rb_search(struct rb_root *root,
-		struct gcma_rb_handle *handle, compare_func compare)
+		void *handle, compare_func compare)
 {
 	struct rb_node *node = root->rb_node;
 	struct gcma_rb_entry *entry;
@@ -598,7 +586,7 @@ static struct gcma_rb_entry *gcma_rb_search(struct rb_root *root,
 
 	while (node) {
 		entry = rb_entry(node, struct gcma_rb_entry, rbnode);
-		compared = compare(&entry->handle, handle);
+		compared = compare(entry->handle, handle);
 		if (compared > 0)
 			node = node->rb_left;
 		else if (compared < 0)
@@ -612,10 +600,19 @@ static struct gcma_rb_entry *gcma_rb_search(struct rb_root *root,
 /*****************************************
  * frontswap / cleancache backend helper
  *****************************************/
+#define FILEKEY_LEN sizeof(struct cleancache_filekey)
+
+struct gcma_rb_file_handle {
+	char filekey[FILEKEY_LEN];
+};
+
+struct gcma_rb_page_handle {
+	pgoff_t pgoffset;
+};
 
 struct gcma_rb_file_entry {
 	struct rb_node rbnode;
-	struct gcma_rb_handle handle;
+	void *handle;
 	int refcount;
 	struct rb_root rbroot;
 	spinlock_t lock;
@@ -623,26 +620,25 @@ struct gcma_rb_file_entry {
 
 struct gcma_rb_page_entry {
 	struct rb_node rbnode;
-	struct gcma_rb_handle handle;
+	void *handle;
 	int refcount;
 	unsigned int gcma_id;
 	struct page *page;
 };
 
 static struct kmem_cache *rb_file_entry_cache;
+static struct kmem_cache *rb_file_handle_cache;
 static struct kmem_cache *rb_page_entry_cache;
+static struct kmem_cache *rb_page_handle_cache;
 
-static int compare_filekeys(struct gcma_rb_handle *lhandle,
-				struct gcma_rb_handle *rhandle)
+static int compare_filekeys(void *lhandle, void *rhandle)
 {
-	return memcmp(&lhandle->u.filekey, &rhandle->u.filekey,
-			sizeof(lhandle->u.filekey));
+	return memcmp(lhandle, rhandle, FILEKEY_LEN);
 }
 
-static int compare_pgoffset(struct gcma_rb_handle *lhandle,
-				struct gcma_rb_handle *rhandle)
+static int compare_pgoffset(void *lhandle, void *rhandle)
 {
-	return lhandle->u.pgoffset - rhandle->u.pgoffset;
+	return *(pgoff_t *)lhandle - *(pgoff_t *)rhandle;
 }
 
 static void gcma_rb_free_entry(struct gcma_rb_entry *entry,
@@ -653,7 +649,10 @@ static void gcma_rb_free_entry(struct gcma_rb_entry *entry,
 			(struct gcma_rb_page_entry *)entry;
 		if (pentry->page != NULL)
 			gcma_release_contig(pentry->gcma_id, pentry->page, 1);
-	}
+		kmem_cache_free(rb_page_handle_cache, pentry->handle);
+	} else
+		kmem_cache_free(rb_file_handle_cache, entry->handle);
+
 	kmem_cache_free(kcache, entry);
 }
 
@@ -687,7 +686,7 @@ static void gcma_rb_put_entry(struct rb_root *root,
  * Caller should hold root of tree's spinlock
  */
 static struct gcma_rb_entry *gcma_rb_find_get(struct rb_root *root,
-			struct gcma_rb_handle *handle, compare_func compare)
+			void *handle, compare_func compare)
 {
 	struct gcma_rb_entry *entry = gcma_rb_search(root, handle, compare);
 	if (entry)
@@ -696,15 +695,23 @@ static struct gcma_rb_entry *gcma_rb_find_get(struct rb_root *root,
 }
 
 static struct gcma_rb_file_entry *gcma_rb_insert_file(struct gcma_rb_tree *tree,
-					struct gcma_rb_handle *handle)
+					void *handle)
 {
 	struct gcma_rb_file_entry *file, *prepared, *dupentry;
+	struct gcma_rb_file_handle *prepared_handle;
 
 	prepared = kmem_cache_alloc(rb_file_entry_cache, GFP_KERNEL);
 	if (!prepared) {
 		pr_warn("failed to alloc gcma_rb file entry\n");
 		return NULL;
 	}
+	prepared_handle = kmem_cache_alloc(rb_file_handle_cache, GFP_KERNEL);
+	if (!prepared_handle) {
+		pr_warn("failed to alloc gcma_rb file handle\n");
+		kmem_cache_free(rb_file_entry_cache, prepared);
+		return NULL;
+	}
+	memcpy(prepared_handle, handle, FILEKEY_LEN);
 
 	spin_lock(&tree->lock);
 	file = (struct gcma_rb_file_entry *)gcma_rb_find_get(&tree->rbroot,
@@ -714,7 +721,7 @@ static struct gcma_rb_file_entry *gcma_rb_insert_file(struct gcma_rb_tree *tree,
 		file = prepared;
 		prepared = NULL;
 		file->rbroot = RB_ROOT;
-		file->handle = *handle;
+		file->handle = (void *)prepared_handle;
 		file->refcount = 1;
 		RB_CLEAR_NODE(&file->rbnode);
 		spin_lock_init(&file->lock);
@@ -728,12 +735,14 @@ static struct gcma_rb_file_entry *gcma_rb_insert_file(struct gcma_rb_tree *tree,
 				rb_file_entry_cache);
 	spin_unlock(&tree->lock);
 
-	if (prepared != NULL)
+	if (prepared != NULL) {
 		kmem_cache_free(rb_file_entry_cache, prepared);
+		kmem_cache_free(rb_file_handle_cache, prepared_handle);
+	}
 	return file;
 }
 
-static int gcma_rb_alloc_page(struct page **ret)
+static int gcma_rb_alloc_page_from_cma(struct page **ret)
 {
 	int max_gcma = atomic_read(&reserved_gcma);
 	static int seek_start;
@@ -756,12 +765,22 @@ static struct gcma_rb_page_entry *gcma_rb_copy_page(pgoff_t pgoffset,
 						unsigned long gcma_id)
 {
 	struct gcma_rb_page_entry *entry;
+	struct gcma_rb_page_handle *handle;
 	u8 *src, *dst;
+
 	entry = kmem_cache_alloc(rb_page_entry_cache, GFP_KERNEL);
 	if (entry == NULL) {
 		pr_warn("failed to alloc page entry\n");
 		return entry;
 	}
+	handle = kmem_cache_alloc(rb_page_handle_cache, GFP_KERNEL);
+	if (handle == NULL) {
+		pr_warn("failed to alloc page handl\n");
+		kmem_cache_free(rb_page_entry_cache, entry);
+		return NULL;
+	}
+	handle->pgoffset = pgoffset;
+
 	entry->page = dst_page;
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
@@ -772,7 +791,7 @@ static struct gcma_rb_page_entry *gcma_rb_copy_page(pgoff_t pgoffset,
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
-	entry->handle.u.pgoffset = pgoffset;
+	entry->handle = (void *)handle;
 	entry->gcma_id = gcma_id;
 
 	return entry;
@@ -845,11 +864,12 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 		return;
 	}
 
-	file = gcma_rb_insert_file(tree, (struct gcma_rb_handle *)&key);
+	file = gcma_rb_insert_file(tree, (void *)&key);
+
 	if (file == NULL)
 		return;
 
-	gcma_id = gcma_rb_alloc_page(&cma_page);
+	gcma_id = gcma_rb_alloc_page_from_cma(&cma_page);
 
 	entry = gcma_rb_copy_page(pgoffset, page, cma_page, gcma_id);
 	if (entry == NULL) {
@@ -874,9 +894,10 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 		pr_warn("tree for pool id %d not exist\n", pool_id);
 		return -1;
 	}
+
 	spin_lock(&tree->lock);
 	file = (struct gcma_rb_file_entry *)gcma_rb_find_get(&tree->rbroot,
-			(struct gcma_rb_handle *)&key, compare_filekeys);
+			(void *)&key, compare_filekeys);
 	spin_unlock(&tree->lock);
 	if (!file) {
 		pr_debug("couldn't find the file from %s. pool id: %d\n",
@@ -886,11 +907,11 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 
 	spin_lock(&file->lock);
 	entry = (struct gcma_rb_page_entry *)gcma_rb_find_get(&file->rbroot,
-			(struct gcma_rb_handle *)&pgoffset,
+			(void *)&pgoffset,
 			compare_pgoffset);
 	spin_unlock(&file->lock);
 	if (!entry) {
-		pr_warn("couldn't fine the entry from cleancache file\n");
+		pr_warn("couldn't find the entry from cleancache file\n");
 		return -1;
 	}
 
@@ -923,7 +944,7 @@ void gcma_cleancache_invalidate_page(int pool_id,
 
 	spin_lock(&tree->lock);
 	file = (struct gcma_rb_file_entry *)gcma_rb_search(&tree->rbroot,
-			(struct gcma_rb_handle *)&key, compare_filekeys);
+			(void *)&key, compare_filekeys);
 	if (!file) {
 		pr_warn("failed to get file from %s\n", __func__);
 		spin_unlock(&tree->lock);
@@ -931,7 +952,7 @@ void gcma_cleancache_invalidate_page(int pool_id,
 	}
 	spin_lock(&file->lock);
 	entry = (struct gcma_rb_page_entry *)gcma_rb_search(&file->rbroot,
-			(struct gcma_rb_handle *)&pgoffset,
+			(void *)&pgoffset,
 			compare_pgoffset);
 	if (!entry) {
 		pr_warn("failed to get entry from %s\n", __func__);
@@ -958,7 +979,7 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 
 	spin_lock(&tree->lock);
 	file = (struct gcma_rb_file_entry *)gcma_rb_search(&tree->rbroot,
-			(struct gcma_rb_handle *)&key,
+			(void *)&key,
 			compare_filekeys);
 	if (!file) {
 		pr_warn("failed to get file from %s\n", __func__);
@@ -1098,13 +1119,13 @@ static int __init init_gcma(void)
 	frontswap_register_ops(&gcma_frontswap_ops);
 
 	rb_file_entry_cache = KMEM_CACHE(gcma_rb_file_entry, 0);
-	if (rb_file_entry_cache == NULL) {
-		pr_warn("failed to create gcma_rb file cache\n");
-		return -ENOMEM;
-	}
 	rb_page_entry_cache = KMEM_CACHE(gcma_rb_page_entry, 0);
-	if (rb_page_entry_cache == NULL) {
-		pr_warn("failed to create gcma_rb page cache\n");
+	rb_file_handle_cache = KMEM_CACHE(gcma_rb_file_handle, 0);
+	rb_page_handle_cache = KMEM_CACHE(gcma_rb_page_handle, 0);
+	if (rb_file_entry_cache == NULL || rb_file_handle_cache == NULL ||
+			rb_file_handle_cache == NULL ||
+			rb_page_handle_cache == NULL) {
+		pr_warn("failed to create gcma_rb page / file cache\n");
 		return -ENOMEM;
 	}
 
