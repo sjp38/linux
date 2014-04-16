@@ -626,7 +626,7 @@ struct gcma_rb_page_entry {
 	struct rb_node rbnode;
 	void *handle;
 	int refcount;
-	unsigned int gcma_id;
+	unsigned int gid;
 	struct page *page;
 };
 
@@ -652,7 +652,7 @@ static void gcma_rb_free_entry(struct gcma_rb_entry *entry,
 		struct gcma_rb_page_entry *pentry =
 			(struct gcma_rb_page_entry *)entry;
 		if (pentry->page != NULL)
-			gcma_release_contig(pentry->gcma_id, pentry->page, 1);
+			gcma_release_contig(pentry->gid, pentry->page, 1);
 		kmem_cache_free(rb_page_handle_cache, pentry->handle);
 	} else
 		kmem_cache_free(rb_file_handle_cache, entry->handle);
@@ -766,7 +766,7 @@ static int gcma_rb_alloc_page_from_cma(struct page **ret)
 static struct gcma_rb_page_entry *gcma_rb_copy_page(pgoff_t pgoffset,
 						struct page *src_page,
 						struct page *dst_page,
-						unsigned long gcma_id)
+						unsigned long gid)
 {
 	struct gcma_rb_page_entry *entry;
 	struct gcma_rb_page_handle *handle;
@@ -796,7 +796,7 @@ static struct gcma_rb_page_entry *gcma_rb_copy_page(pgoff_t pgoffset,
 	kunmap_atomic(dst);
 
 	entry->handle = (void *)handle;
-	entry->gcma_id = gcma_id;
+	entry->gid = gid;
 
 	return entry;
 }
@@ -861,7 +861,7 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	struct gcma_rb_file_entry *file;
 	struct page *cma_page = NULL;
 	struct gcma_rb_tree *tree = cleancache_pools[pool_id];
-	int gcma_id;
+	int gid;
 
 	if (!tree) {
 		pr_warn("cleancache pool for id %d is not exist\n", pool_id);
@@ -873,11 +873,11 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	if (file == NULL)
 		return;
 
-	gcma_id = gcma_rb_alloc_page_from_cma(&cma_page);
+	gid = gcma_rb_alloc_page_from_cma(&cma_page);
 
-	entry = gcma_rb_copy_page(pgoffset, page, cma_page, gcma_id);
+	entry = gcma_rb_copy_page(pgoffset, page, cma_page, gid);
 	if (entry == NULL) {
-		gcma_release_contig(gcma_id, cma_page, 1);
+		gcma_release_contig(gid, cma_page, 1);
 		return;
 	}
 
