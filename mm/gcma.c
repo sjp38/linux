@@ -189,11 +189,15 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 }
 EXPORT_SYMBOL_GPL(gcma_release_contig);
 
+struct cma_page {
+	struct page *page;
+	unsigned int gid;
+};
+
 struct swap_slot_entry {
 	struct rb_node rbnode;
 	pgoff_t offset;
-	unsigned int gid;
-	struct page *page;
+	struct cma_page cma_page;
 	int refcount;
 };
 
@@ -270,7 +274,7 @@ static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 
 static void frontswap_free_entry(struct swap_slot_entry *entry)
 {
-	gcma_release_contig(entry->gid, entry->page, 1);
+	gcma_release_contig(entry->cma_page.gid, entry->cma_page.page, 1);
 	kmem_cache_free(swap_slot_entry_cache, entry);
 }
 
@@ -363,7 +367,8 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		pr_warn("failed to get frontswap entry from cache\n");
 		return -ENOMEM;
 	}
-	entry->page = cma_page;
+	entry->cma_page.page = cma_page;
+	entry->cma_page.gid = i;
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
 
@@ -374,7 +379,6 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	kunmap_atomic(dst);
 
 	entry->offset = offset;
-	entry->gid = i;
 
 	spin_lock(&tree->lock);
 	do {
@@ -411,7 +415,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 		return -1;
 	}
 
-	src = kmap_atomic(entry->page);
+	src = kmap_atomic(entry->cma_page.page);
 	dst = kmap_atomic(page);
 	memcpy(dst, src, PAGE_SIZE);
 	kunmap_atomic(src);
