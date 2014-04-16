@@ -733,7 +733,7 @@ static struct gcma_rb_file_entry *gcma_rb_insert_file(struct gcma_rb_tree *tree,
 		BUG_ON(gcma_rb_insert(&tree->rbroot,
 					(struct gcma_rb_entry *)file,
 					(struct gcma_rb_entry **)&dupentry,
-					compare_pgoffset) == -EEXIST);
+					compare_filekeys) == -EEXIST);
 	} else
 		gcma_rb_put_entry(&tree->rbroot, (struct gcma_rb_entry *)file,
 				rb_file_entry_cache);
@@ -916,6 +916,8 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 	spin_unlock(&file->lock);
 	if (!entry) {
 		pr_warn("couldn't find the entry from cleancache file\n");
+		gcma_rb_put_entry(&tree->rbroot, (struct gcma_rb_entry *)file,
+				rb_file_entry_cache);
 		return -1;
 	}
 
@@ -1130,6 +1132,10 @@ static int __init init_gcma(void)
 			rb_file_handle_cache == NULL ||
 			rb_page_handle_cache == NULL) {
 		pr_warn("failed to create gcma_rb page / file cache\n");
+		kmem_cache_destroy(rb_file_entry_cache);
+		kmem_cache_destroy(rb_page_entry_cache);
+		kmem_cache_destroy(rb_file_handle_cache);
+		kmem_cache_destroy(rb_page_handle_cache);
 		return -ENOMEM;
 	}
 
