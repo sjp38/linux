@@ -59,12 +59,12 @@ static atomic_t alloced_size = ATOMIC_INIT(0);
  */
 int __init gcma_reserve(unsigned long long size)
 {
-	int gcma_id;
+	int gid;
 	struct gcma_info *info;
 	phys_addr_t addr;
 
-	gcma_id = atomic_inc_return(&reserved_gcma);
-	if (gcma_id > MAX_GCMA) {
+	gid = atomic_inc_return(&reserved_gcma);
+	if (gid > MAX_GCMA) {
 		atomic_dec(&reserved_gcma);
 		pr_warn("There is no more space in GCMA.\n");
 		return -ENOMEM;
@@ -83,16 +83,16 @@ int __init gcma_reserve(unsigned long long size)
 		return -ENOMEM;
 	}
 
-	gcma_id -= 1;
+	gid -= 1;
 	pr_debug("%llu bytes gcma reserved\n", size);
 
-	info = &ginfo[gcma_id];
+	info = &ginfo[gid];
 
 	info->size = size >> PAGE_SHIFT;
 	info->base_pfn = PFN_DOWN(addr);
 
 	atomic_add(size, &total_size);
-	return gcma_id;
+	return gid;
 }
 
 static void cleanup_frontswap(void);
@@ -105,16 +105,16 @@ static void cleanup_frontswap(void);
  * Returns NULL if failed to allocate,
  * Returns struct page of start address of allocated memory
  */
-struct page *gcma_alloc_contig(int gcma_id, int pages)
+struct page *gcma_alloc_contig(int gid, int pages)
 {
 	int max_gcma;
-	int id = gcma_id;
+	int id = gid;
 	unsigned long *bitmap, next_zero_area;
 	struct gcma_info *info;
 
 	max_gcma = atomic_read(&reserved_gcma);
 	if (id >= max_gcma) {
-		pr_warn("invalid gcma_id %d [%d]\n", id, max_gcma);
+		pr_warn("invalid gid %d [%d]\n", id, max_gcma);
 		return NULL;
 	}
 
@@ -149,20 +149,20 @@ EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
 /**
  * gcma_release_contig - release pages from contiguous area
- * @gcma_id: id of contiguous memory area
+ * @gid: id of contiguous memory area
  * @pages: Requested number of pages.
  */
-void gcma_release_contig(int gcma_id, struct page *page, int pages)
+void gcma_release_contig(int gid, struct page *page, int pages)
 {
 	unsigned long pfn, offset;
 	unsigned long *bitmap;
 	unsigned long next_zero_bit;
 	struct gcma_info *info;
-	int id = gcma_id;
+	int id = gid;
 	int max_gcma = atomic_read(&reserved_gcma);
 
 	if (id >= max_gcma) {
-		pr_warn("invalid gcma_id %d [%d]\n", id, max_gcma);
+		pr_warn("invalid gid %d [%d]\n", id, max_gcma);
 		return;
 	}
 
@@ -189,10 +189,10 @@ void gcma_release_contig(int gcma_id, struct page *page, int pages)
 }
 EXPORT_SYMBOL_GPL(gcma_release_contig);
 
-struct frontswap_entry {
+struct swap_slot_entry {
 	struct rb_node rbnode;
 	pgoff_t offset;
-	unsigned int gcma_id;
+	unsigned int gid;
 	struct page *page;
 	int refcount;
 };
@@ -203,7 +203,7 @@ struct frontswap_tree {
 };
 
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
-static struct kmem_cache *frontswap_entry_cache;
+static struct kmem_cache *swap_slot_entry_cache;
 static spinlock_t cleanup_lock;
 
 /*
@@ -212,15 +212,15 @@ static spinlock_t cleanup_lock;
  * the existing entry is stored in dupentry and the function returns -EEXIST
  */
 static int frontswap_rb_insert(struct rb_root *root,
-		struct frontswap_entry *entry,
-		struct frontswap_entry **dupentry)
+		struct swap_slot_entry *entry,
+		struct swap_slot_entry **dupentry)
 {
 	struct rb_node **link = &root->rb_node, *parent = NULL;
-	struct frontswap_entry *myentry;
+	struct swap_slot_entry *myentry;
 
 	while (*link) {
 		parent = *link;
-		myentry = rb_entry(parent, struct frontswap_entry, rbnode);
+		myentry = rb_entry(parent, struct swap_slot_entry, rbnode);
 		if (myentry->offset > entry->offset)
 			link = &(*link)->rb_left;
 		else if (myentry->offset < entry->offset)
@@ -239,7 +239,7 @@ static int frontswap_rb_insert(struct rb_root *root,
  * Stolen from zswap.
  */
 static void frontswap_rb_erase(struct rb_root *root,
-		struct frontswap_entry *entry)
+		struct swap_slot_entry *entry)
 {
 	if (!RB_EMPTY_NODE(&entry->rbnode)) {
 		rb_erase(&entry->rbnode, root);
@@ -250,14 +250,14 @@ static void frontswap_rb_erase(struct rb_root *root,
 /*
  * Stolen from zswap.
  */
-static struct frontswap_entry *frontswap_rb_search(struct rb_root *root,
+static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 		pgoff_t offset)
 {
 	struct rb_node *node = root->rb_node;
-	struct frontswap_entry *entry;
+	struct swap_slot_entry *entry;
 
 	while (node) {
-		entry = rb_entry(node, struct frontswap_entry, rbnode);
+		entry = rb_entry(node, struct swap_slot_entry, rbnode);
 		if (entry->offset > offset)
 			node = node->rb_left;
 		else if (entry->offset < offset)
@@ -268,16 +268,16 @@ static struct frontswap_entry *frontswap_rb_search(struct rb_root *root,
 	return NULL;
 }
 
-static void frontswap_free_entry(struct frontswap_entry *entry)
+static void frontswap_free_entry(struct swap_slot_entry *entry)
 {
-	gcma_release_contig(entry->gcma_id, entry->page, 1);
-	kmem_cache_free(frontswap_entry_cache, entry);
+	gcma_release_contig(entry->gid, entry->page, 1);
+	kmem_cache_free(swap_slot_entry_cache, entry);
 }
 
 /*
  * Caller should hold frontswap tree spinlock
  */
-static void frontswap_entry_get(struct frontswap_entry *entry)
+static void swap_slot_entry_get(struct swap_slot_entry *entry)
 {
 	entry->refcount++;
 }
@@ -287,8 +287,8 @@ static void frontswap_entry_get(struct frontswap_entry *entry)
  * Caller should hold frontswap tree spinlock
  * remove from the tree and free it, if nobody reference the entry
  */
-static void frontswap_entry_put(struct frontswap_tree *tree,
-		struct frontswap_entry *entry)
+static void swap_slot_entry_put(struct frontswap_tree *tree,
+		struct swap_slot_entry *entry)
 {
 	int refcount = --entry->refcount;
 
@@ -302,12 +302,12 @@ static void frontswap_entry_put(struct frontswap_tree *tree,
 /*
  * Caller should hold frontswap tree spinlock
  */
-static struct frontswap_entry *frontswap_rb_find_get(struct rb_root *root,
+static struct swap_slot_entry *frontswap_rb_find_get(struct rb_root *root,
 			pgoff_t offset)
 {
-	struct frontswap_entry *entry = frontswap_rb_search(root, offset);
+	struct swap_slot_entry *entry = frontswap_rb_search(root, offset);
 	if (entry)
-		frontswap_entry_get(entry);
+		swap_slot_entry_get(entry);
 	return entry;
 }
 
@@ -329,7 +329,7 @@ void gcma_frontswap_init(unsigned type)
 int gcma_frontswap_store(unsigned type, pgoff_t offset,
 				struct page *page)
 {
-	struct frontswap_entry *entry, *dupentry;
+	struct swap_slot_entry *entry, *dupentry;
 	struct page *cma_page = NULL;
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	u8 *src, *dst;
@@ -358,7 +358,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		return -ENOMEM;
 	}
 
-	entry = kmem_cache_alloc(frontswap_entry_cache, GFP_KERNEL);
+	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
 	if (!entry) {
 		pr_warn("failed to get frontswap entry from cache\n");
 		return -ENOMEM;
@@ -374,7 +374,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	kunmap_atomic(dst);
 
 	entry->offset = offset;
-	entry->gcma_id = i;
+	entry->gid = i;
 
 	spin_lock(&tree->lock);
 	do {
@@ -395,7 +395,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 			       struct page *page)
 {
 	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct frontswap_entry *entry;
+	struct swap_slot_entry *entry;
 	u8 *src, *dst;
 
 	if (!tree) {
@@ -418,7 +418,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	kunmap_atomic(dst);
 
 	spin_lock(&tree->lock);
-	frontswap_entry_put(tree, entry);
+	swap_slot_entry_put(tree, entry);
 	spin_unlock(&tree->lock);
 
 	return 0;
@@ -427,7 +427,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 {
 	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct frontswap_entry *entry;
+	struct swap_slot_entry *entry;
 
 	spin_lock(&tree->lock);
 	entry = frontswap_rb_search(&tree->rbroot, offset);
@@ -437,7 +437,7 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 		return;
 	}
 	frontswap_rb_erase(&tree->rbroot, entry);
-	frontswap_entry_put(tree, entry);
+	swap_slot_entry_put(tree, entry);
 
 	spin_unlock(&tree->lock);
 }
@@ -445,7 +445,7 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 static void gcma_frontswap_cleanup_area(unsigned type)
 {
 	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct frontswap_entry *entry, *n;
+	struct swap_slot_entry *entry, *n;
 
 	if (!tree) {
 		pr_warn("failed to get frontswap tree for type %d\n", type);
@@ -462,7 +462,7 @@ static void gcma_frontswap_cleanup_area(unsigned type)
 void gcma_frontswap_invalidate_area(unsigned type)
 {
 	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct frontswap_entry *entry, *n;
+	struct swap_slot_entry *entry, *n;
 
 	if (!tree) {
 		pr_warn("failed to get frontswap tree for type %d\n", type);
@@ -526,8 +526,8 @@ static int __init init_gcma(void)
 	}
 
 	spin_lock_init(&cleanup_lock);
-	frontswap_entry_cache = KMEM_CACHE(frontswap_entry, 0);
-	if (frontswap_entry_cache == NULL) {
+	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
+	if (swap_slot_entry_cache == NULL) {
 		pr_warn("failed to create frontswap cache\n");
 		/* TODO : free allocated memory */
 		return -ENOMEM;
