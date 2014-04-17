@@ -694,6 +694,9 @@ static void free_inode_entry(struct inode_entry *entry)
 
 static void free_page_entry(struct page_entry *entry)
 {
+	if (entry->cma_page.page != NULL)
+		gcma_release_contig(entry->cma_page.gid,
+				entry->cma_page.page, 1);
 	kmem_cache_free(page_entry_cache, entry);
 }
 
