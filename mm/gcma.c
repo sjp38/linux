@@ -47,6 +47,7 @@ static struct gcma_info ginfo[MAX_GCMA];
 static atomic_t reserved_gcma = ATOMIC_INIT(0);
 static atomic_t total_size = ATOMIC_INIT(0);
 static atomic_t alloced_size = ATOMIC_INIT(0);
+static atomic_t page_access_ts = ATOMIC_INIT(0);
 
 /**
  * gcma_reserve - Reserve contiguous memory area
@@ -97,7 +98,7 @@ int __init gcma_reserve(unsigned long long size)
 }
 
 static void cleanup_frontswap(void);
-static void cleanup_cleancache(void);
+static void cleanup_cleancache(int limit_ts);
 
 /**
  * gcma_alloc_contig - allocate pages from contiguous area
@@ -142,7 +143,9 @@ struct page *gcma_alloc_contig(int gid, int pages)
 	/* Trigger frontswap cleanup if 80% of contiguous memory is full */
 	if (atomic_read(&alloced_size) >= (atomic_read(&total_size) / 5) * 4) {
 		pr_debug("trigger cleancache / frontswap cleanup\n");
-		cleanup_cleancache();
+		/* TODO: Think more about cleancache cleanup amount */
+		cleanup_cleancache(atomic_read(&page_access_ts) -
+					2 * (atomic_read(&total_size) / 5));
 		cleanup_frontswap();
 	}
 
@@ -537,6 +540,7 @@ struct page_entry {
 	pgoff_t pgoffset;
 	int refcount;
 	struct cma_page cma_page;
+	int access_ts;	/* last accessed timestamp */
 };
 
 struct cleancache_tree {
@@ -973,6 +977,8 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 		return -1;
 	}
 
+	pentry->access_ts = atomic_add_return(1, &page_access_ts);
+
 	src = kmap_atomic(pentry->cma_page.page);
 	dst = kmap_atomic(page);
 	memcpy(dst, src, PAGE_SIZE);
@@ -1079,7 +1085,7 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 	return;
 }
 
-void cleanup_cleancache_pool(int pool_id)
+void cleanup_cleancache_pool(int pool_id, int limit_ts)
 {
 	struct cleancache_tree *pool = cleancache_pools[pool_id];
 	struct inode_entry *ientry, *n;
@@ -1096,23 +1102,26 @@ void cleanup_cleancache_pool(int pool_id)
 						rbnode) {
 		spin_lock(&ientry->pages_lock);
 		rbtree_postorder_for_each_entry_safe(pentry, m,
-						&ientry->page_root, rbnode) {
-			erase_page_entry(&ientry->page_root, pentry);
-			put_page_entry(&ientry->page_root, pentry);
-		}
+						&ientry->page_root, rbnode)
+			if (pentry->access_ts < limit_ts ||
+					(limit_ts < 0 &&
+					 pentry->access_ts > 0)) {
+				erase_page_entry(&ientry->page_root, pentry);
+				put_page_entry(&ientry->page_root, pentry);
+			}
 		spin_unlock(&ientry->pages_lock);
 	}
 	spin_unlock(&pool->lock);
 }
 
-static void cleanup_cleancache(void)
+static void cleanup_cleancache(int limit_ts)
 {
 	int i;
 	int nr_pool = atomic_read(&nr_cleancache_pool);
 
 	spin_lock(&cleanup_lock);
 	for (i = 0; i < nr_pool; i++)
-		cleanup_cleancache_pool(i);
+		cleanup_cleancache_pool(i, limit_ts);
 
 	spin_unlock(&cleanup_lock);
 }
