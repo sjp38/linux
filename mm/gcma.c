@@ -1096,8 +1096,10 @@ void cleanup_cleancache_pool(int pool_id)
 						rbnode) {
 		spin_lock(&ientry->pages_lock);
 		rbtree_postorder_for_each_entry_safe(pentry, m,
-						&ientry->page_root, rbnode)
-			free_page_entry(pentry);
+						&ientry->page_root, rbnode) {
+			erase_page_entry(&ientry->page_root, pentry);
+			put_page_entry(&ientry->page_root, pentry);
+		}
 		spin_unlock(&ientry->pages_lock);
 	}
 	spin_unlock(&pool->lock);
