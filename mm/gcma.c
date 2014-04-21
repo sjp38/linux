@@ -26,6 +26,8 @@ struct swap_slot_entry {
 	pgoff_t offset;
 	struct gcma_page gpage;
 	int refcount;
+	struct list_head lru_list;
+	struct frontswap_tree *tree;
 };
 
 struct frontswap_tree {
@@ -33,6 +35,8 @@ struct frontswap_tree {
 	spinlock_t lock;
 };
 
+static struct list_head swap_lru_list;
+static spinlock_t swap_lru_lock;
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
 
@@ -65,6 +69,21 @@ struct gcma_info {
 
 static struct gcma_info ginfo[MAX_GCMA];
 static atomic_t reserved_gcma = ATOMIC_INIT(0);
+
+static int evict_frontswap_pages(int gid, int pages);
+
+/**
+ * evict_pages - Evict pages used for frontswap / cleancache backend
+ * @gid: Identifier for cma to evict
+ * @pages: Number of pages requested to be evicted
+ *
+ * returns number of pages evicted
+ * returns negative number if eviction failed
+ */
+static int evict_pages(int gid, int pages)
+{
+	return evict_frontswap_pages(gid, pages);
+}
 
 /**
  * gcma_reserve - Reserve contiguous memory area
@@ -137,17 +156,22 @@ struct page *gcma_alloc_contig(int gid, int pages)
 	info = &ginfo[id];
 	bitmap = info->bitmap;
 	spin_lock(&info->lock);
-
-	/*
-	 * TODO : we should respect mask for dma allocation instead of 0
-	 */
-	next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
+	do {
+		/*
+		 * TODO : we should respect mask for dma allocation instead of 0
+		 */
+		next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
 				0, pages, 0);
-	if (next_zero_area >= info->size) {
-		pr_warn("failed to alloc pages count %d\n", pages);
-		spin_unlock(&info->lock);
-		return NULL;
-	}
+		if (next_zero_area >= info->size) {
+			spin_unlock(&info->lock);
+			pr_warn("failed to alloc pages count %d\n", pages);
+			if (evict_pages(gid, pages) < 0) {
+				pr_warn("failed to evict pages\n");
+				return NULL;
+			}
+			spin_lock(&info->lock);
+		}
+	} while (next_zero_area >= info->size);
 
 	bitmap_set(bitmap, next_zero_area, pages);
 	spin_unlock(&info->lock);
@@ -357,9 +381,11 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry->gpage.page = cma_page;
 	entry->gpage.gid = i;
+	entry->tree = tree;
 
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
+	INIT_LIST_HEAD(&entry->lru_list);
 
 	src = kmap_atomic(page);
 	dst = kmap_atomic(cma_page);
@@ -377,6 +403,9 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	} while (ret == -EEXIST);
 	spin_unlock(&tree->lock);
 
+	spin_lock(&swap_lru_lock);
+	list_add(&entry->lru_list, &swap_lru_list);
+	spin_unlock(&swap_lru_lock);
 	return ret;
 }
 
@@ -414,6 +443,11 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	swap_slot_entry_put(tree, entry);
 	spin_unlock(&tree->lock);
 
+	spin_lock(&swap_lru_lock);
+	list_del_init(&entry->lru_list);
+	list_add(&entry->lru_list, &swap_lru_list);
+	spin_unlock(&swap_lru_lock);
+
 	return 0;
 }
 
@@ -429,6 +463,11 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 		spin_unlock(&tree->lock);
 		return;
 	}
+
+	spin_lock(&swap_lru_lock);
+	list_del(&entry->lru_list);
+	spin_unlock(&swap_lru_lock);
+
 	frontswap_rb_erase(&tree->rbroot, entry);
 	swap_slot_entry_put(tree, entry);
 
@@ -446,13 +485,43 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	}
 
 	spin_lock(&tree->lock);
-	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode)
+	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
+		spin_lock(&swap_lru_lock);
+		list_del(&entry->lru_list);
+		spin_unlock(&swap_lru_lock);
+
 		frontswap_free_entry(entry);
+	}
 	tree->rbroot = RB_ROOT;
 	spin_unlock(&tree->lock);
 
 	kfree(tree);
 	gcma_swap_trees[type] = NULL;
+}
+
+static int evict_frontswap_pages(int gid, int pages)
+{
+	struct frontswap_tree *tree;
+	struct swap_slot_entry *entry, *n;
+	int evicted = 0;
+
+	spin_lock(&swap_lru_lock);
+	list_for_each_entry_safe_reverse(entry, n, &swap_lru_list, lru_list) {
+		if (entry->gpage.gid != gid)
+			continue;
+		list_del(&entry->lru_list);
+
+		tree = entry->tree;
+		spin_lock(&tree->lock);
+		frontswap_free_entry(entry);
+		spin_unlock(&tree->lock);
+
+		if (++evicted >= pages)
+			goto out;
+	}
+out:
+	spin_unlock(&swap_lru_lock);
+	return evicted;
 }
 
 static struct frontswap_ops gcma_frontswap_ops = {
@@ -1067,6 +1136,8 @@ static int __init init_gcma(void)
 		}
 	}
 
+	spin_lock_init(&swap_lru_lock);
+	INIT_LIST_HEAD(&swap_lru_list);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
 	if (swap_slot_entry_cache == NULL) {
 		pr_warn("failed to create frontswap cache\n");
