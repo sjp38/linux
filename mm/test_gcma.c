@@ -104,6 +104,11 @@ static int measure_time_alloc(void)
 	int measure_sizes[] = {1,10,50,100,200,300};
 
 	for (i = 0; i < sizeof(measure_sizes) / sizeof(int); i++) {
+		nr_gcma_fail = nr_cma_fail = 0;
+		gcma_min = gcma_max = 0;
+		cma_min = cma_max = 0;
+		gcma_sum = cma_sum = 0;
+
 		for (j = 0; j < measure_count; j++) {
 			cma_time = measure_cma(measure_sizes[i]);
 			gcma_time = measure_gcma(measure_sizes[i]);
