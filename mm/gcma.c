@@ -1160,9 +1160,8 @@ static int evict_cleancache_pages(int gid, int pages)
 		spin_unlock(&ientry->pages_lock);
 
 		if (++evicted >= pages)
-			goto out;
+			break;
 	}
-out:
 	spin_unlock(&page_lru_lock);
 	return evicted;
 }
