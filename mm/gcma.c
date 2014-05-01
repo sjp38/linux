@@ -491,6 +491,7 @@ void gcma_frontswap_invalidate_area(unsigned type)
 
 	spin_lock(&tree->lock);
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
+		/* We could optimize this frequent locking in future */
 		spin_lock(&swap_lru_lock);
 		list_del(&entry->gpage.page->lru);
 		spin_unlock(&swap_lru_lock);
