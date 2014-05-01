@@ -511,23 +511,28 @@ static int evict_frontswap_pages(int gid, int pages)
 	struct swap_slot_entry *entry;
 	struct page *page, *n;
 	int evicted = 0;
+	LIST_HEAD(free_pages);
 
 	spin_lock(&swap_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
 		entry = (struct swap_slot_entry *)page->freelist;
 		if (entry->gpage.gid != gid)
 			continue;
-		list_del(&page->lru);
-
-		tree = (struct frontswap_tree *)page->s_mem;
-		spin_lock(&tree->lock);
-		frontswap_free_entry(entry);
-		spin_unlock(&tree->lock);
+		list_move(&page->lru, &free_pages);
 
 		if (++evicted >= pages)
 			break;
 	}
 	spin_unlock(&swap_lru_lock);
+
+	list_for_each_entry_safe_reverse(page, n, &free_pages, lru) {
+		tree = (struct frontswap_tree *)page->s_mem;
+		entry = (struct swap_slot_entry *)page->freelist;
+
+		spin_lock(&tree->lock);
+		frontswap_free_entry(entry);
+		spin_unlock(&tree->lock);
+	}
 	return evicted;
 }
 
