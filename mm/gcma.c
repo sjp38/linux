@@ -1096,6 +1096,7 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	spin_lock(&ientry->pages_lock);
 	rbtree_postorder_for_each_entry_safe(pentry, n, &ientry->page_root,
 						rbnode) {
+		/* We could optimize this frequent locking in future */
 		spin_lock(&page_lru_lock);
 		list_del(&pentry->gpage.page->lru);
 		spin_unlock(&page_lru_lock);
@@ -1128,6 +1129,7 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 		spin_lock(&ientry->pages_lock);
 		rbtree_postorder_for_each_entry_safe(pentry, m,
 						&ientry->page_root, rbnode) {
+			/* We could optimize this frequent locking in future */
 			spin_lock(&page_lru_lock);
 			list_del(&pentry->gpage.page->lru);
 			spin_unlock(&page_lru_lock);
