@@ -573,8 +573,6 @@ struct page_entry {
 	pgoff_t pgoffset;
 	int refcount;
 	struct gcma_page gpage;
-	struct list_head lru_list;
-	struct inode_entry *inode;
 };
 
 struct cleancache_tree {
@@ -963,6 +961,9 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	if (pentry == NULL)
 		goto out;
 
+	pentry->gpage.page->s_mem = (void *)ientry;
+	pentry->gpage.page->freelist = (void *)pentry;
+
 	spin_lock(&ientry->pages_lock);
 	do {
 		res = insert_page_entry(&ientry->page_root, pentry,
@@ -973,7 +974,7 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	spin_unlock(&ientry->pages_lock);
 
 	spin_lock(&page_lru_lock);
-	list_add(&pentry->lru_list, &page_lru_list);
+	list_add(&pentry->gpage.page->lru, &page_lru_list);
 	spin_unlock(&page_lru_lock);
 
 out:
@@ -1035,7 +1036,7 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 	 * cleancache is ephemeral
 	 */
 	spin_lock(&page_lru_lock);
-	list_del_init(&pentry->lru_list);
+	list_del_init(&pentry->gpage.page->lru);
 	spin_unlock(&page_lru_lock);
 
 	return 0;
@@ -1065,7 +1066,7 @@ void gcma_cleancache_invalidate_page(int pool_id,
 	}
 
 	spin_lock(&page_lru_lock);
-	list_del(&pentry->lru_list);
+	list_del(&pentry->gpage.page->lru);
 	spin_unlock(&page_lru_lock);
 
 	erase_page_entry(&ientry->page_root, pentry);
@@ -1096,7 +1097,7 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	rbtree_postorder_for_each_entry_safe(pentry, n, &ientry->page_root,
 						rbnode) {
 		spin_lock(&page_lru_lock);
-		list_del(&pentry->lru_list);
+		list_del(&pentry->gpage.page->lru);
 		spin_unlock(&page_lru_lock);
 
 		free_page_entry(pentry);
@@ -1128,7 +1129,7 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 		rbtree_postorder_for_each_entry_safe(pentry, m,
 						&ientry->page_root, rbnode) {
 			spin_lock(&page_lru_lock);
-			list_del(&pentry->lru_list);
+			list_del(&pentry->gpage.page->lru);
 			spin_unlock(&page_lru_lock);
 
 			free_page_entry(pentry);
@@ -1147,16 +1148,18 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 static int evict_cleancache_pages(int gid, int pages)
 {
 	struct inode_entry *ientry;
-	struct page_entry *pentry, *n;
+	struct page_entry *pentry;
+	struct page *page, *n;
 	int evicted = 0;
 
 	spin_lock(&page_lru_lock);
-	list_for_each_entry_safe_reverse(pentry, n, &page_lru_list, lru_list) {
+	list_for_each_entry_safe_reverse(page, n, &page_lru_list, lru) {
+		pentry = (struct page_entry *)page->freelist;
 		if (pentry->gpage.gid != gid)
 			continue;
-		list_del(&pentry->lru_list);
+		list_del(&page->lru);
 
-		ientry = pentry->inode;
+		ientry = (struct inode_entry *)page->s_mem;
 		spin_lock(&ientry->pages_lock);
 		erase_page_entry(&ientry->page_root, pentry);
 		put_page_entry(&ientry->page_root, pentry);
