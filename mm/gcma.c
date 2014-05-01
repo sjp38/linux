@@ -162,9 +162,9 @@ struct page *gcma_alloc_contig(int gid, int pages)
 				0, pages, 0);
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
-			pr_warn("failed to alloc pages count %d\n", pages);
+			pr_debug("failed to alloc pages count %d\n", pages);
 			if (evict_pages(gid, pages) < 0) {
-				pr_warn("failed to evict pages\n");
+				pr_debug("failed to evict pages\n");
 				return NULL;
 			}
 			spin_lock(&info->lock);
