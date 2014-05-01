@@ -382,7 +382,6 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	INIT_LIST_HEAD(&cma_page->lru);
 	cma_page->s_mem = (void *)tree;
 	cma_page->freelist = (void *)entry;
 
