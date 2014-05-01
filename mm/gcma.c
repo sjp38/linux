@@ -525,9 +525,8 @@ static int evict_frontswap_pages(int gid, int pages)
 		spin_unlock(&tree->lock);
 
 		if (++evicted >= pages)
-			goto out;
+			break;
 	}
-out:
 	spin_unlock(&swap_lru_lock);
 	return evicted;
 }
