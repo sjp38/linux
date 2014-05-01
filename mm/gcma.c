@@ -582,7 +582,7 @@ struct cleancache_tree {
 	spinlock_t lock;
 };
 
-static struct list_head page_lru_list;
+static LIST_HEAD(page_lru_list);
 static spinlock_t page_lru_lock;
 static struct kmem_cache *inode_entry_cache;
 static struct kmem_cache *page_entry_cache;
@@ -1220,7 +1220,6 @@ static int __init init_gcma(void)
 	frontswap_register_ops(&gcma_frontswap_ops);
 
 	spin_lock_init(&page_lru_lock);
-	INIT_LIST_HEAD(&page_lru_list);
 	inode_entry_cache = KMEM_CACHE(inode_entry, 0);
 	if (inode_entry_cache == NULL) {
 		pr_warn("failed to create inode cache\n");
