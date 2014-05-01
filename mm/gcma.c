@@ -26,8 +26,6 @@ struct swap_slot_entry {
 	pgoff_t offset;
 	struct gcma_page gpage;
 	int refcount;
-	struct list_head lru_list;
-	struct frontswap_tree *tree;
 };
 
 struct frontswap_tree {
@@ -381,11 +379,12 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry->gpage.page = cma_page;
 	entry->gpage.gid = i;
-	entry->tree = tree;
-
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
-	INIT_LIST_HEAD(&entry->lru_list);
+
+	INIT_LIST_HEAD(&cma_page->lru);
+	cma_page->s_mem = (void *)tree;
+	cma_page->freelist = (void *)entry;
 
 	src = kmap_atomic(page);
 	dst = kmap_atomic(cma_page);
@@ -404,7 +403,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	spin_unlock(&tree->lock);
 
 	spin_lock(&swap_lru_lock);
-	list_add(&entry->lru_list, &swap_lru_list);
+	list_add(&cma_page->lru, &swap_lru_list);
 	spin_unlock(&swap_lru_lock);
 	return ret;
 }
@@ -444,8 +443,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	spin_unlock(&tree->lock);
 
 	spin_lock(&swap_lru_lock);
-	list_del_init(&entry->lru_list);
-	list_add(&entry->lru_list, &swap_lru_list);
+	list_move(&entry->gpage.page->lru, &swap_lru_list);
 	spin_unlock(&swap_lru_lock);
 
 	return 0;
@@ -465,7 +463,7 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 	}
 
 	spin_lock(&swap_lru_lock);
-	list_del(&entry->lru_list);
+	list_del(&entry->gpage.page->lru);
 	spin_unlock(&swap_lru_lock);
 
 	frontswap_rb_erase(&tree->rbroot, entry);
@@ -487,7 +485,7 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	spin_lock(&tree->lock);
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
 		spin_lock(&swap_lru_lock);
-		list_del(&entry->lru_list);
+		list_del(&entry->gpage.page->lru);
 		spin_unlock(&swap_lru_lock);
 
 		frontswap_free_entry(entry);
@@ -502,16 +500,18 @@ void gcma_frontswap_invalidate_area(unsigned type)
 static int evict_frontswap_pages(int gid, int pages)
 {
 	struct frontswap_tree *tree;
-	struct swap_slot_entry *entry, *n;
+	struct swap_slot_entry *entry;
+	struct page *page, *n;
 	int evicted = 0;
 
 	spin_lock(&swap_lru_lock);
-	list_for_each_entry_safe_reverse(entry, n, &swap_lru_list, lru_list) {
+	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
+		entry = (struct swap_slot_entry *)page->freelist;
 		if (entry->gpage.gid != gid)
 			continue;
-		list_del(&entry->lru_list);
+		list_del(&page->lru);
 
-		tree = entry->tree;
+		tree = (struct frontswap_tree *)page->s_mem;
 		spin_lock(&tree->lock);
 		frontswap_free_entry(entry);
 		spin_unlock(&tree->lock);
