@@ -35,7 +35,7 @@ struct frontswap_tree {
 	spinlock_t lock;
 };
 
-static struct list_head swap_lru_list;
+static LIST_HEAD(swap_lru_list);
 static spinlock_t swap_lru_lock;
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
@@ -1201,7 +1201,6 @@ static int __init init_gcma(void)
 	}
 
 	spin_lock_init(&swap_lru_lock);
-	INIT_LIST_HEAD(&swap_lru_list);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
 	if (swap_slot_entry_cache == NULL) {
 		pr_warn("failed to create frontswap cache\n");
