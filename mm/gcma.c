@@ -547,7 +547,7 @@ static int evict_frontswap_pages(int gid, int pages)
 	}
 	spin_unlock(&swap_lru_lock);
 
-	list_for_each_entry_safe_reverse(page, n, &free_pages, lru) {
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
 		tree = (struct frontswap_tree *)root_of(page);
 		entry = (struct swap_slot_entry *)entry_of(page);
 
