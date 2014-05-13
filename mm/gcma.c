@@ -68,6 +68,8 @@ struct gcma_info {
 static struct gcma_info ginfo[MAX_GCMA];
 static atomic_t reserved_gcma = ATOMIC_INIT(0);
 
+static int evict_cleancache_pages(int gid, int pages);
+
 static int evict_frontswap_pages(int gid, int pages);
 
 static void *root_of(struct page *page)
@@ -90,6 +92,25 @@ static void set_entry(struct page *page, void *entry)
 	page->index = (pgoff_t)entry;
 }
 
+
+/**
+ * evict_pages - Evict pages used for frontswap / cleancache backend
+ * @gid: Identifier for cma to evict
+ * @pages: Number of pages requested to be evicted
+ *
+ * returns number of pages evicted
+ * returns negative number if eviction failed
+ */
+static int evict_pages(int gid, int pages)
+{
+	int evicted;
+
+	evicted = evict_cleancache_pages(gid, pages);
+	if (evicted < pages)
+		evicted += evict_frontswap_pages(gid, pages - evicted);
+
+	return evicted;
+}
 
 /**
  * gcma_reserve - Reserve contiguous memory area
@@ -171,7 +192,7 @@ struct page *gcma_alloc_contig(int gid, int pages)
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
 			pr_debug("failed to alloc pages count %d\n", pages);
-			if (evict_frontswap_pages(gid, pages) < 0) {
+			if (evict_pages(gid, pages) < 0) {
 				pr_debug("failed to evict pages\n");
 				return NULL;
 			}
@@ -581,6 +602,8 @@ struct cleancache_tree {
 	spinlock_t lock;
 };
 
+static LIST_HEAD(cc_lru_list); /* lru list for cleancache backend */
+static spinlock_t page_lru_lock;
 static struct kmem_cache *inode_entry_cache;
 static struct kmem_cache *page_entry_cache;
 
@@ -960,6 +983,9 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	if (pentry == NULL)
 		goto out;
 
+	set_root(pentry->gpage.page, (void *)ientry);
+	set_entry(pentry->gpage.page, (void *)pentry);
+
 	spin_lock(&ientry->pages_lock);
 	do {
 		res = insert_page_entry(&ientry->page_root, pentry,
@@ -968,6 +994,10 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 			erase_page_entry(&ientry->page_root, dupentry);
 	} while (res == -EEXIST);
 	spin_unlock(&ientry->pages_lock);
+
+	spin_lock(&page_lru_lock);
+	list_add(&pentry->gpage.page->lru, &cc_lru_list);
+	spin_unlock(&page_lru_lock);
 
 out:
 	spin_lock(&pool->lock);
@@ -1015,7 +1045,17 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
+	/*
+	 * Because cleancache is ephemeral and the page client got would be
+	 * cached in client, remove the page from it's root.
+	 */
 	spin_lock(&ientry->pages_lock);
+
+	spin_lock(&page_lru_lock);
+	list_del(&pentry->gpage.page->lru);
+	spin_unlock(&page_lru_lock);
+
+	erase_page_entry(&ientry->page_root, pentry);
 	put_page_entry(&ientry->page_root, pentry);
 	spin_unlock(&ientry->pages_lock);
 
@@ -1048,6 +1088,11 @@ void gcma_cleancache_invalidate_page(int pool_id,
 		pr_warn("failed to get entry from %s\n", __func__);
 		goto out;
 	}
+
+	spin_lock(&page_lru_lock);
+	list_del(&pentry->gpage.page->lru);
+	spin_unlock(&page_lru_lock);
+
 	erase_page_entry(&ientry->page_root, pentry);
 	put_page_entry(&ientry->page_root, pentry);
 
@@ -1074,8 +1119,14 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	}
 	spin_lock(&ientry->pages_lock);
 	rbtree_postorder_for_each_entry_safe(pentry, n, &ientry->page_root,
-						rbnode)
+						rbnode) {
+		/* We could optimize this frequent locking in future */
+		spin_lock(&page_lru_lock);
+		list_del(&pentry->gpage.page->lru);
+		spin_unlock(&page_lru_lock);
+
 		free_page_entry(pentry);
+	}
 	ientry->page_root = RB_ROOT;
 	spin_unlock(&ientry->pages_lock);
 
@@ -1102,6 +1153,11 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 		spin_lock(&ientry->pages_lock);
 		rbtree_postorder_for_each_entry_safe(pentry, m,
 						&ientry->page_root, rbnode) {
+			/* We could optimize this frequent locking in future */
+			spin_lock(&page_lru_lock);
+			list_del(&pentry->gpage.page->lru);
+			spin_unlock(&page_lru_lock);
+
 			free_page_entry(pentry);
 		}
 		spin_unlock(&ientry->pages_lock);
@@ -1113,6 +1169,37 @@ void gcma_cleancache_invalidate_fs(int pool_id)
 	kfree(pool);
 	cleancache_pools[pool_id] = NULL;
 	return;
+}
+
+static int evict_cleancache_pages(int gid, int pages)
+{
+	struct inode_entry *ientry;
+	struct page_entry *pentry;
+	struct page *page, *n;
+	int evicted = 0;
+	LIST_HEAD(free_pages);
+
+	spin_lock(&page_lru_lock);
+	list_for_each_entry_safe_reverse(page, n, &cc_lru_list, lru) {
+		pentry = (struct page_entry *)entry_of(page);
+		if (pentry->gpage.gid != gid)
+			continue;
+		list_move(&page->lru, &free_pages);
+		if (++evicted >= pages)
+			break;
+	}
+	spin_unlock(&page_lru_lock);
+
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
+		ientry = (struct inode_entry *)root_of(page);
+		pentry = (struct page_entry *)entry_of(page);
+
+		spin_lock(&ientry->pages_lock);
+		erase_page_entry(&ientry->page_root, pentry);
+		put_page_entry(&ientry->page_root, pentry);
+		spin_unlock(&ientry->pages_lock);
+	}
+	return evicted;
 }
 
 static struct cleancache_ops gcma_cleancache_ops = {
@@ -1164,6 +1251,7 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	spin_lock_init(&page_lru_lock);
 	inode_entry_cache = KMEM_CACHE(inode_entry, 0);
 	if (inode_entry_cache == NULL) {
 		pr_warn("failed to create inode cache\n");
