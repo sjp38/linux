@@ -46,16 +46,16 @@ extern void gcma_frontswap_invalidate_area(unsigned type);
 /**
  * returns 0 if fail
  */
-static unsigned long measure_gcma(void)
+static unsigned long measure_gcma(int nr_pages)
 {
 	struct page *page;
 	struct timespec start, end;
 	getnstimeofday(&start);
-	page = gcma_alloc_contig(0, 10);
+	page = gcma_alloc_contig(0, nr_pages);
 	if (!page)
 		return 0;
 	getnstimeofday(&end);
-	gcma_release_contig(0, page, 10);
+	gcma_release_contig(0, page, nr_pages);
 
 	return end.tv_sec * 1000000000 + end.tv_nsec
 		- (start.tv_sec * 1000000000 + start.tv_nsec);
@@ -64,16 +64,16 @@ static unsigned long measure_gcma(void)
 /**
  * returns 0 if fail
  */
-static unsigned long measure_cma(void)
+static unsigned long measure_cma(int nr_pages)
 {
 	struct page *page;
 	struct timespec start, end;
 	getnstimeofday(&start);
-	page = dma_alloc_from_contiguous(NULL, 10, 1);
+	page = dma_alloc_from_contiguous(NULL, nr_pages, 1);
 	if (!page)
 		return 0;
 	getnstimeofday(&end);
-	dma_release_from_contiguous(NULL, page, 10);
+	dma_release_from_contiguous(NULL, page, nr_pages);
 
 	return end.tv_sec * 1000000000 + end.tv_nsec
 		- (start.tv_sec * 1000000000 + start.tv_nsec);
@@ -99,32 +99,42 @@ static int measure_time_alloc(void)
 	unsigned long gcma_time, gcma_min = 0, gcma_max = 0, gcma_avg;
 	unsigned long cma_time, cma_min = 0, cma_max = 0, cma_avg = 0;
 	unsigned long gcma_sum = 0, cma_sum = 0;
-	int measure_count = 500, i;
+	int measure_count = 500, i, j;
+	int measure_sizes[] = {1,10,50,100,200,300};
 
-	for (i = 0; i < measure_count; i++) {
-		cma_time = measure_cma();
-		gcma_time = measure_gcma();
+	for (i = 0; i < sizeof(measure_sizes) / sizeof(int); i++) {
+		nr_gcma_fail = nr_cma_fail = 0;
+		gcma_min = gcma_max = 0;
+		cma_min = cma_max = 0;
+		gcma_sum = cma_sum = 0;
 
-		if (!cma_time)
-			nr_cma_fail++;
-		if (!gcma_time)
-			nr_gcma_fail++;
+		for (j = 0; j < measure_count; j++) {
+			cma_time = measure_cma(measure_sizes[i]);
+			gcma_time = measure_gcma(measure_sizes[i]);
 
-		gcma_min = min_of(gcma_min, gcma_time);
-		gcma_max = max_of(gcma_max, gcma_time);
-		gcma_sum += gcma_time;
+			if (!cma_time)
+				nr_cma_fail++;
+			if (!gcma_time)
+				nr_gcma_fail++;
 
-		cma_min = min_of(cma_min, cma_time);
-		cma_max = max_of(cma_max, cma_time);
-		cma_sum += cma_time;
+			gcma_min = min_of(gcma_min, gcma_time);
+			gcma_max = max_of(gcma_max, gcma_time);
+			gcma_sum += gcma_time;
+
+			cma_min = min_of(cma_min, cma_time);
+			cma_max = max_of(cma_max, cma_time);
+			cma_sum += cma_time;
+		}
+		gcma_avg = gcma_sum / measure_count;
+		cma_avg = cma_sum / measure_count;
+
+		pr_info("gcma\t,%d,pages\t,fail:,%ld\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
+				measure_sizes[i], nr_gcma_fail,
+				gcma_min, gcma_max, gcma_avg);
+		pr_info("cma\t,%d,pages\t,fail:,%ld\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
+				measure_sizes[i], nr_cma_fail,
+				cma_min, cma_max, cma_avg);
 	}
-	gcma_avg = gcma_sum / measure_count;
-	cma_avg = cma_sum / measure_count;
-
-	pr_info("gcma\tfail: %ld\tmin: %ld\tmax: %ld\tavg: %ld\n",
-			nr_gcma_fail, gcma_min, gcma_max, gcma_avg);
-	pr_info("cma\tfail: %ld\tmin: %ld\tmax: %ld\tavg: %ld\n",
-			nr_cma_fail, cma_min, cma_max, cma_avg);
 
 	return 0;
 }
