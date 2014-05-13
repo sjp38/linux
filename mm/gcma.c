@@ -71,19 +71,6 @@ static atomic_t reserved_gcma = ATOMIC_INIT(0);
 static int evict_frontswap_pages(int gid, int pages);
 
 /**
- * evict_pages - Evict pages used for frontswap / cleancache backend
- * @gid: Identifier for cma to evict
- * @pages: Number of pages requested to be evicted
- *
- * returns number of pages evicted
- * returns negative number if eviction failed
- */
-static int evict_pages(int gid, int pages)
-{
-	return evict_frontswap_pages(gid, pages);
-}
-
-/**
  * gcma_reserve - Reserve contiguous memory area
  * @size: Size of the reserved area (in bytes), 0 for default size
  *
@@ -163,7 +150,7 @@ struct page *gcma_alloc_contig(int gid, int pages)
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
 			pr_debug("failed to alloc pages count %d\n", pages);
-			if (evict_pages(gid, pages) < 0) {
+			if (evict_frontswap_pages(gid, pages) < 0) {
 				pr_debug("failed to evict pages\n");
 				return NULL;
 			}
