@@ -983,8 +983,8 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	if (pentry == NULL)
 		goto out;
 
-	pentry->gpage.page->s_mem = (void *)ientry;
-	pentry->gpage.page->freelist = (void *)pentry;
+	set_root(pentry->gpage.page, (void *)ientry);
+	set_entry(pentry->gpage.page, (void *)pentry);
 
 	spin_lock(&ientry->pages_lock);
 	do {
@@ -1179,7 +1179,7 @@ static int evict_cleancache_pages(int gid, int pages)
 
 	spin_lock(&page_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &page_lru_list, lru) {
-		pentry = (struct page_entry *)page->freelist;
+		pentry = (struct page_entry *)entry_of(page);
 		if (pentry->gpage.gid != gid)
 			continue;
 		list_move(&page->lru, &free_pages);
@@ -1189,8 +1189,8 @@ static int evict_cleancache_pages(int gid, int pages)
 	spin_unlock(&page_lru_lock);
 
 	list_for_each_entry_safe_reverse(page, n, &free_pages, lru) {
-		ientry = (struct inode_entry *)page->s_mem;
-		pentry = (struct page_entry *)page->freelist;
+		ientry = (struct inode_entry *)root_of(page);
+		pentry = (struct page_entry *)entry_of(page);
 
 		spin_lock(&ientry->pages_lock);
 		erase_page_entry(&ientry->page_root, pentry);
