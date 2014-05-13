@@ -72,6 +72,27 @@ static int evict_cleancache_pages(int gid, int pages);
 
 static int evict_frontswap_pages(int gid, int pages);
 
+static void *root_of(struct page *page)
+{
+	return page->s_mem;
+}
+
+static void set_root(struct page *page, void *root)
+{
+	page->s_mem = root;
+}
+
+static void *entry_of(struct page *page)
+{
+	return page->freelist;
+}
+
+static void set_entry(struct page *page, void *entry)
+{
+	page->freelist = entry;
+}
+
+
 /**
  * evict_pages - Evict pages used for frontswap / cleancache backend
  * @gid: Identifier for cma to evict
@@ -391,8 +412,8 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	cma_page->s_mem = (void *)tree;
-	cma_page->freelist = (void *)entry;
+	set_root(cma_page, (void *)tree);
+	set_entry(cma_page, (void *)entry);
 
 	src = kmap_atomic(page);
 	dst = kmap_atomic(cma_page);
@@ -516,7 +537,7 @@ static int evict_frontswap_pages(int gid, int pages)
 
 	spin_lock(&swap_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
-		entry = (struct swap_slot_entry *)page->freelist;
+		entry = (struct swap_slot_entry *)entry_of(page);
 		if (entry->gpage.gid != gid)
 			continue;
 		list_move(&page->lru, &free_pages);
@@ -527,8 +548,8 @@ static int evict_frontswap_pages(int gid, int pages)
 	spin_unlock(&swap_lru_lock);
 
 	list_for_each_entry_safe_reverse(page, n, &free_pages, lru) {
-		tree = (struct frontswap_tree *)page->s_mem;
-		entry = (struct swap_slot_entry *)page->freelist;
+		tree = (struct frontswap_tree *)root_of(page);
+		entry = (struct swap_slot_entry *)entry_of(page);
 
 		spin_lock(&tree->lock);
 		frontswap_free_entry(entry);
