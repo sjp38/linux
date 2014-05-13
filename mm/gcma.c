@@ -1045,21 +1045,23 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
+	/*
+	 * Because cleancache is ephemeral and the page client got would be
+	 * cached in client, remove the page from it's root.
+	 */
 	spin_lock(&ientry->pages_lock);
+
+	spin_lock(&page_lru_lock);
+	list_del(&pentry->gpage.page->lru);
+	spin_unlock(&page_lru_lock);
+
+	erase_page_entry(&ientry->page_root, pentry);
 	put_page_entry(&ientry->page_root, pentry);
 	spin_unlock(&ientry->pages_lock);
 
 	spin_lock(&pool->lock);
 	put_inode_entry(&pool->inodes_root, ientry);
 	spin_unlock(&pool->lock);
-
-	/*
-	 * Unlike frontswap, we can remove this entry from LRU because
-	 * cleancache is ephemeral
-	 */
-	spin_lock(&page_lru_lock);
-	list_del_init(&pentry->gpage.page->lru);
-	spin_unlock(&page_lru_lock);
 
 	return 0;
 }
