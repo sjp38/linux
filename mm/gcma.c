@@ -602,7 +602,7 @@ struct cleancache_tree {
 	spinlock_t lock;
 };
 
-static LIST_HEAD(page_lru_list);
+static LIST_HEAD(cc_lru_list); /* lru list for cleancache backend */
 static spinlock_t page_lru_lock;
 static struct kmem_cache *inode_entry_cache;
 static struct kmem_cache *page_entry_cache;
@@ -996,7 +996,7 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
 	spin_unlock(&ientry->pages_lock);
 
 	spin_lock(&page_lru_lock);
-	list_add(&pentry->gpage.page->lru, &page_lru_list);
+	list_add(&pentry->gpage.page->lru, &cc_lru_list);
 	spin_unlock(&page_lru_lock);
 
 out:
@@ -1178,7 +1178,7 @@ static int evict_cleancache_pages(int gid, int pages)
 	LIST_HEAD(free_pages);
 
 	spin_lock(&page_lru_lock);
-	list_for_each_entry_safe_reverse(page, n, &page_lru_list, lru) {
+	list_for_each_entry_safe_reverse(page, n, &cc_lru_list, lru) {
 		pentry = (struct page_entry *)entry_of(page);
 		if (pentry->gpage.gid != gid)
 			continue;
