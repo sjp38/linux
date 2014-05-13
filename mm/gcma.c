@@ -72,22 +72,22 @@ static int evict_frontswap_pages(int gid, int pages);
 
 static void *root_of(struct page *page)
 {
-	return page->s_mem;
+	return (void *)page->mapping;
 }
 
 static void set_root(struct page *page, void *root)
 {
-	page->s_mem = root;
+	page->mapping = (struct address_space *)root;
 }
 
 static void *entry_of(struct page *page)
 {
-	return page->freelist;
+	return (void *)page->index;
 }
 
 static void set_entry(struct page *page, void *entry)
 {
-	page->freelist = entry;
+	page->index = (pgoff_t)entry;
 }
 
 
