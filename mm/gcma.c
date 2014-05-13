@@ -1188,7 +1188,7 @@ static int evict_cleancache_pages(int gid, int pages)
 	}
 	spin_unlock(&page_lru_lock);
 
-	list_for_each_entry_safe_reverse(page, n, &free_pages, lru) {
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
 		ientry = (struct inode_entry *)root_of(page);
 		pentry = (struct page_entry *)entry_of(page);
 
