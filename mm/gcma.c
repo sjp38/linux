@@ -366,6 +366,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry->gpage.page = cma_page;
 	entry->gpage.gid = i;
+
 	entry->refcount = 1;
 	RB_CLEAR_NODE(&entry->rbnode);
 
