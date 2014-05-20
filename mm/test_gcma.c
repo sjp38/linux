@@ -37,8 +37,11 @@
 * tunables
 **********************************/
 /* Enable/disable gcma (disabled by default, fixed at boot for now) */
-static bool enabled __read_mostly;
-module_param_named(enabled, enabled, bool, 0);
+static bool test_enabled __read_mostly;
+module_param_named(enabled, test_enabled, bool, 0);
+
+static bool eval_enabled __read_mostly;
+module_param_named(eval_enabled, eval_enabled, bool, 0);
 
 extern void gcma_frontswap_init(unsigned type);
 extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
@@ -443,21 +446,22 @@ static int __init debugfs_init(void)
 **********************************/
 static int __init init_gcma(void)
 {
-	if (!enabled)
-		return 0;
-	pr_info("test gcma\n");
+	if (test_enabled) {
+		pr_info("test gcma\n");
 
-	eval_history_cache = KMEM_CACHE(eval_history, 0);
-	if (eval_history_cache == NULL) {
-		pr_warn("failed to create evaluation history cache\n");
-		return -ENOMEM;
+		do_test(test_alloc_release_contig);
+		do_test(test_frontswap);
+		do_test(measure_time_alloc);
 	}
 
-	debugfs_init();
-
-	do_test(test_alloc_release_contig);
-	do_test(test_frontswap);
-	do_test(measure_time_alloc);
+	if (eval_enabled) {
+		eval_history_cache = KMEM_CACHE(eval_history, 0);
+		if (eval_history_cache == NULL) {
+			pr_warn("failed to create evaluation history cache\n");
+			return -ENOMEM;
+		}
+		debugfs_init();
+	}
 
 	return 0;
 }
