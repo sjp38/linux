@@ -415,11 +415,13 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 	gcma_res->avg = gcma_sum / opt->nr_trials;
 	cma_res->avg = cma_sum / opt->nr_trials;
 
-	pr_info("gcma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-			opt->nr_pages, gcma_res->succ, gcma_res->fail,
-			gcma_res->min, gcma_res->max, gcma_res->avg);
-	pr_info("cma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-			opt->nr_pages, cma_res->succ, cma_res->fail,
+	pr_info("%d pages\n"
+		"[gcma] succ/fail:%ld/%ld\tmin:%ld\tmax:%ld\tavg:%ld\n"
+		"[cma] succ/fail:%ld/%ld\tmin:%ld\tmax:%ld\tavg:%ld\n",
+			opt->nr_pages,
+			gcma_res->succ, gcma_res->fail,
+			gcma_res->min, gcma_res->max, gcma_res->avg,
+			cma_res->succ, cma_res->fail,
 			cma_res->min, cma_res->max, cma_res->avg);
 
 	list_add_tail(&history->node, &eval_history_list);
@@ -454,17 +456,20 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 		gcma_res = &history->gcma_result;
 		cma_res = &history->cma_result;
 
-		pr_info("gcma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				opt->nr_pages, gcma_res->succ, gcma_res->fail,
-				gcma_res->min, gcma_res->max, gcma_res->avg);
-		pr_info("cma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				opt->nr_pages, cma_res->succ, cma_res->fail,
+		pr_info("%d pages\n"
+			"[gcma] succ/fail:%ld/%ld\tmin:%ld\tmax:%ld\tavg:%ld\n"
+			"[cma]  succ/fail:%ld/%ld\tmin:%ld\tmax:%ld\tavg:%ld\n",
+				opt->nr_pages,
+				gcma_res->succ, gcma_res->fail,
+				gcma_res->min, gcma_res->max, gcma_res->avg,
+				cma_res->succ, cma_res->fail,
 				cma_res->min, cma_res->max, cma_res->avg);
 
-		sprintf(kbuf, "%d,%ld,%ld,%ld,%ld,%ld\n,%d,%ld,%ld,%ld,%ld,%ld\n",
-				opt->nr_pages, gcma_res->succ, gcma_res->fail,
+		sprintf(kbuf, "%d,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
+				opt->nr_pages,
+				gcma_res->succ, gcma_res->fail,
 				gcma_res->min, gcma_res->max, gcma_res->avg,
-				opt->nr_pages, cma_res->succ, cma_res->fail,
+				cma_res->succ, cma_res->fail,
 				cma_res->min, cma_res->max, cma_res->avg);
 
 		cursor = kbuf;
