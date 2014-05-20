@@ -45,6 +45,9 @@ static struct kmem_cache *swap_slot_entry_cache;
 static bool gcma_enabled __read_mostly;
 module_param_named(enabled, gcma_enabled, bool, 0);
 
+static bool gcma_cc_enabled __read_mostly;
+module_param_named(cc_enabled, gcma_cc_enabled, bool, 1);
+
 /* Default size of contiguous memory area : 100M */
 static unsigned long long def_gcma_bytes __read_mostly = (100 << 20);
 
@@ -105,7 +108,10 @@ static int evict_pages(int gid, int pages)
 {
 	int evicted;
 
-	evicted = evict_cleancache_pages(gid, pages);
+	evicted = 0;
+
+	if (gcma_cc_enabled)
+		evicted = evict_cleancache_pages(gid, pages);
 	if (evicted < pages)
 		evicted += evict_frontswap_pages(gid, pages - evicted);
 
@@ -1265,7 +1271,8 @@ static int __init init_gcma(void)
 		return -ENOMEM;
 	}
 
-	cleancache_register_ops(&gcma_cleancache_ops);
+	if (gcma_cc_enabled)
+		cleancache_register_ops(&gcma_cleancache_ops);
 	return 0;
 }
 
