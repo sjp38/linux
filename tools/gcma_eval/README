@@ -1,0 +1,45 @@
+Evaluate gcma from user space
+
+This directory contains source files and scripts for gcma evaluation from
+user space.
+
+Currently available evaluations(currently, only one...) are as following:
+
+Success rate / latency
+----------------------
+
+1. Memory stress
+Stress memory by randomly read / write 8MiB from every ramdomly selected
+position of 2GiB file using 14 concurrent threads.
+
+2. Success rate / latency evaluation
+While `Memory stress` running in background, request 10 ~ 10000 contiguous
+pages allocation and then release the pages using cma and gcma, compare their
+success / fail count, time spend for allocation / failed allocation / release.
+Do the allocation / release 10 times for each requesting size, compute average,
+minimum, maximum times. Each allocation have term between them 1 seconds to
+warm up memory.
+
+Build
+=====
+
+Just do the command following:
+$ make
+
+Usage
+=====
+
+Ensure the debugfs is mounted
+Start evaluation using following command:
+$ ./eval.sh
+
+You can see the result using following command:
+$ cat /sys/kernel/debugfs/gcma_eval/res
+
+TODO
+====
+
+Add more workloads, benchmarks
+First of all, make linux build works with gcma enabled environment, measure the
+performance.
+
