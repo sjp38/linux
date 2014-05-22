@@ -878,7 +878,7 @@ static struct page_entry *create_page_entry(pgoff_t pgoffset,
 	struct page_entry *entry;
 	u8 *src, *dst;
 
-	entry = kmem_cache_alloc(page_entry_cache, GFP_KERNEL);
+	entry = kmem_cache_alloc(page_entry_cache, GFP_ATOMIC);
 	if (entry == NULL)
 		return entry;
 
