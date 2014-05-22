@@ -1046,6 +1046,8 @@ void gcma_cleancache_invalidate_page(int pool_id,
 	struct inode_entry *ientry;
 	struct page_entry *pentry;
 
+	BUG_ON(!irqs_disabled());
+
 	spin_lock(&pool->lock);
 	ientry = search_inode_entry(&pool->inodes_root, (void *)&key);
 	if (!ientry) {
@@ -1078,11 +1080,14 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	struct cleancache_tree *pool = cleancache_pools[pool_id];
 	struct inode_entry *ientry;
 	struct page_entry *pentry, *n;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	spin_lock(&pool->lock);
 	ientry = search_inode_entry(&pool->inodes_root, (void *)&key);
 	if (!ientry) {
 		spin_unlock(&pool->lock);
+		local_irq_restore(flags);
 		return;
 	}
 	spin_lock(&ientry->pages_lock);
@@ -1101,6 +1106,7 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	erase_inode_entry(&pool->inodes_root, ientry);
 	put_inode_entry(&pool->inodes_root, ientry);
 	spin_unlock(&pool->lock);
+	local_irq_restore(flags);
 }
 
 void gcma_cleancache_invalidate_fs(int pool_id)
