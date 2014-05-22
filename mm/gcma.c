@@ -50,7 +50,7 @@ static unsigned long long def_gcma_bytes __read_mostly = (100 << 20);
 
 static int __init early_gcma(char *p)
 {
-	pr_debug("set %s as default cma size\n", p);
+	pr_info("set %s as default cma size\n", p);
 	def_gcma_bytes = memparse(p, &p);
 	return 0;
 }
@@ -131,7 +131,6 @@ int __init gcma_reserve(unsigned long long size)
 	gid = atomic_inc_return(&reserved_gcma);
 	if (gid > MAX_GCMA) {
 		atomic_dec(&reserved_gcma);
-		pr_warn("There is no more space in GCMA.\n");
 		return -ENOMEM;
 	}
 
@@ -143,13 +142,12 @@ int __init gcma_reserve(unsigned long long size)
 	addr = __memblock_alloc_base((phys_addr_t)size, PAGE_SIZE,
 				MEMBLOCK_ALLOC_ACCESSIBLE);
 	if (!addr) {
-		pr_warn("failed to reserveg cma\n");
 		atomic_dec(&reserved_gcma);
 		return -ENOMEM;
 	}
 
 	gid -= 1;
-	pr_debug("%llu bytes gcma reserved\n", size);
+	pr_info("%llu bytes gcma reserved\n", size);
 
 	info = &ginfo[gid];
 
@@ -191,11 +189,8 @@ struct page *gcma_alloc_contig(int gid, int pages)
 				0, pages, 0);
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
-			pr_debug("failed to alloc pages count %d\n", pages);
-			if (evict_pages(gid, pages) < 0) {
-				pr_debug("failed to evict pages\n");
+			if (evict_pages(gid, pages) < 0)
 				return NULL;
-			}
 			spin_lock(&info->lock);
 		}
 	} while (next_zero_area >= info->size);
@@ -228,9 +223,6 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 	info = &ginfo[gid];
 	pfn = page_to_pfn(page);
 	offset = pfn - info->base_pfn;
-
-	pr_debug("pfn: %ld, gcma start: %ld, offset: %ld\n",
-			pfn, info->base_pfn, offset);
 
 	bitmap = info->bitmap;
 	spin_lock(&info->lock);
@@ -359,7 +351,7 @@ void gcma_frontswap_init(unsigned type)
 
 	tree = kzalloc(sizeof(struct frontswap_tree), GFP_KERNEL);
 	if (!tree) {
-		pr_err("front swap tree for type %d failed\n", type);
+		pr_warn("front swap tree for type %d failed\n", type);
 		return;
 	}
 
@@ -395,16 +387,12 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 			break;
 	}
 
-	if (cma_page == NULL) {
-		pr_warn("failed to get 1 page from gcma\n");
+	if (cma_page == NULL)
 		return -ENOMEM;
-	}
 
 	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
-	if (!entry) {
-		pr_warn("failed to get frontswap entry from cache\n");
+	if (!entry)
 		return -ENOMEM;
-	}
 
 	entry->gpage.page = cma_page;
 	entry->gpage.gid = i;
@@ -456,7 +444,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	entry = frontswap_rb_find_get(&tree->rbroot, offset);
 	spin_unlock(&tree->lock);
 	if (!entry) {
-		pr_warn("couldn't find the page(type %d, offset %ld) from frontswap tree\n",
+		pr_debug("couldn't find the page(type %d, offset %ld) from frontswap tree\n",
 				type, offset);
 		return -1;
 	}
@@ -486,7 +474,6 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 	spin_lock(&tree->lock);
 	entry = frontswap_rb_search(&tree->rbroot, offset);
 	if (!entry) {
-		pr_warn("failed to get entry\n");
 		spin_unlock(&tree->lock);
 		return;
 	}
@@ -506,10 +493,8 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	struct swap_slot_entry *entry, *n;
 
-	if (!tree) {
-		pr_warn("failed to get frontswap tree for type %d\n", type);
+	if (!tree)
 		return;
-	}
 
 	spin_lock(&tree->lock);
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
@@ -843,10 +828,9 @@ static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
 	struct inode_entry *entry, *dupentry;
 
 	entry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
-	if (entry == NULL) {
-		pr_warn("failed to alloc inode from %s\b", __func__);
+	if (entry == NULL)
 		return NULL;
-	}
+
 	entry->page_root = RB_ROOT;
 	memcpy(entry->filekey, filekey, FILEKEY_LEN);
 	entry->refcount = 1;
@@ -879,10 +863,8 @@ static bool alloc_cma_page(struct gcma_page *gpage)
 		if (page != NULL)
 			break;
 	}
-	if (count == max_gcma) {
-		pr_warn("failed to alloc cma for page\n");
+	if (count == max_gcma)
 		return false;
-	}
 
 	gpage->page = page;
 	gpage->gid = i;
@@ -897,13 +879,11 @@ static struct page_entry *create_page_entry(pgoff_t pgoffset,
 	u8 *src, *dst;
 
 	entry = kmem_cache_alloc(page_entry_cache, GFP_KERNEL);
-	if (entry == NULL) {
-		pr_warn("failed to alloc page entry\n");
+	if (entry == NULL)
 		return entry;
-	}
+
 	entry->pgoffset = pgoffset;
 	if (alloc_cma_page(&entry->gpage) == false) {
-		pr_warn("failed to alloc page from cma\n");
 		kmem_cache_free(page_entry_cache, entry);
 		return NULL;
 	}
@@ -929,13 +909,9 @@ int gcma_cleancache_init_fs(size_t pagesize)
 	int nr_pool;
 	struct cleancache_tree *pool;
 
-	pr_debug("%s called", __func__);
 	pool = kzalloc(sizeof(struct cleancache_tree), GFP_KERNEL);
-	if (!pool) {
-		pr_err("failed to alloc cleancache_tree from %s failed\n",
-				__func__);
+	if (!pool)
 		return -1;
-	}
 
 	pool->inodes_root = RB_ROOT;
 	spin_lock_init(&pool->lock);
@@ -1022,17 +998,13 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
 	spin_lock(&pool->lock);
 	ientry = find_get_inode_entry(&pool->inodes_root, (void *)&key);
 	spin_unlock(&pool->lock);
-	if (!ientry) {
-		pr_debug("couldn't find the inode from %s. pool id: %d\n",
-				__func__, pool_id);
+	if (!ientry)
 		return -1;
-	}
 
 	spin_lock(&ientry->pages_lock);
 	pentry = find_get_page_entry(&ientry->page_root, pgoffset);
 	spin_unlock(&ientry->pages_lock);
 	if (!pentry) {
-		pr_warn("couldn't find the page entry from cleancache file\n");
 		spin_lock(&pool->lock);
 		put_inode_entry(&pool->inodes_root, ientry);
 		spin_unlock(&pool->lock);
@@ -1077,17 +1049,14 @@ void gcma_cleancache_invalidate_page(int pool_id,
 	spin_lock(&pool->lock);
 	ientry = search_inode_entry(&pool->inodes_root, (void *)&key);
 	if (!ientry) {
-		pr_warn("failed to search inode from %s\n", __func__);
 		spin_unlock(&pool->lock);
 		return;
 	}
 
 	spin_lock(&ientry->pages_lock);
 	pentry = search_page_entry(&ientry->page_root, pgoffset);
-	if (!pentry) {
-		pr_warn("failed to get entry from %s\n", __func__);
+	if (!pentry)
 		goto out;
-	}
 
 	spin_lock(&page_lru_lock);
 	list_del(&pentry->gpage.page->lru);
@@ -1113,7 +1082,6 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 	spin_lock(&pool->lock);
 	ientry = search_inode_entry(&pool->inodes_root, (void *)&key);
 	if (!ientry) {
-		pr_warn("failed to search inode from %s\n", __func__);
 		spin_unlock(&pool->lock);
 		return;
 	}
@@ -1230,16 +1198,13 @@ static int __init init_gcma(void)
 		if (ginfo[i].size % sizeof(*ginfo[i].bitmap))
 			bitmap_bytes += 1;
 		ginfo[i].bitmap = kzalloc(bitmap_bytes, GFP_KERNEL);
-		if (!ginfo[i].bitmap) {
-			pr_debug("failed to alloc bitmap\n");
+		if (!ginfo[i].bitmap)
 			return -ENOMEM;
-		}
 	}
 
 	spin_lock_init(&swap_lru_lock);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
 	if (swap_slot_entry_cache == NULL) {
-		pr_warn("failed to create frontswap cache\n");
 		/* TODO : free allocated memory */
 		return -ENOMEM;
 	}
@@ -1254,13 +1219,11 @@ static int __init init_gcma(void)
 	spin_lock_init(&page_lru_lock);
 	inode_entry_cache = KMEM_CACHE(inode_entry, 0);
 	if (inode_entry_cache == NULL) {
-		pr_warn("failed to create inode cache\n");
 		return -ENOMEM;
 	}
 
 	page_entry_cache = KMEM_CACHE(page_entry, 0);
 	if (page_entry_cache == NULL) {
-		pr_warn("failed to create page cache\n");
 		kmem_cache_destroy(inode_entry_cache);
 		return -ENOMEM;
 	}
