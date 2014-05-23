@@ -34,6 +34,9 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 
+#define FS_IMPLEMENTED 1
+#define CC_IMPLEMENTED 0
+
 /*********************************
 * tunables
 **********************************/
@@ -44,6 +47,7 @@ module_param_named(enabled, test_enabled, bool, 0);
 static bool eval_enabled __read_mostly;
 module_param_named(eval_enabled, eval_enabled, bool, 0);
 
+#if FS_IMPLEMENTED
 extern void gcma_frontswap_init(unsigned type);
 extern int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		struct page *page);
@@ -51,7 +55,9 @@ extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
 		struct page *page);
 extern void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset);
 extern void gcma_frontswap_invalidate_area(unsigned type);
+#endif
 
+#if CC_IMPLEMENTED
 extern int gcma_cleancache_init_fs(size_t pagesize);
 extern int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize);
 extern int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
@@ -65,9 +71,13 @@ extern void gcma_cleancache_invalidate_page(int pool_id,
 extern void gcma_cleancache_invalidate_inode(int pool_id,
 		struct cleancache_filekey key);
 extern void gcma_cleancache_invalidate_fs(int pool_id);
+#endif
 
 static int test_cleancache(void)
 {
+#if !CC_IMPLEMENTED
+	return 0;
+#endif
 	struct page *store_page, *load_page;
 	void *store_page_va, *load_page_va;
 	int pool_id;
@@ -129,6 +139,9 @@ static int test_cleancache(void)
 
 static int test_frontswap(void)
 {
+#if !FS_IMPLEMENTED
+	return 0;
+#endif
 	struct page *store_page, *load_page;
 	void *store_page_va, *load_page_va;
 
