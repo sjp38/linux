@@ -24,7 +24,7 @@ struct swap_slot_entry {
 	struct rb_node rbnode;
 	pgoff_t offset;
 	struct gcma_page gpage;
-	int refcount;
+	atomic_t refcount;
 };
 
 struct frontswap_tree {
@@ -295,7 +295,7 @@ static void frontswap_free_entry(struct swap_slot_entry *entry)
  */
 static void swap_slot_entry_get(struct swap_slot_entry *entry)
 {
-	entry->refcount++;
+	atomic_inc(&entry->refcount);
 }
 
 /*
@@ -306,7 +306,7 @@ static void swap_slot_entry_get(struct swap_slot_entry *entry)
 static void swap_slot_entry_put(struct frontswap_tree *tree,
 		struct swap_slot_entry *entry)
 {
-	int refcount = --entry->refcount;
+	int refcount = atomic_dec_return(&entry->refcount);
 
 	BUG_ON(refcount < 0);
 	if (refcount == 0) {
@@ -417,7 +417,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	entry->gpage.page = cma_page;
 	entry->gpage.gid = i;
 	entry->offset = offset;
-	entry->refcount = 1;
+	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
 	set_root(cma_page, (void *)tree);
 	set_entry(cma_page, (void *)entry);
