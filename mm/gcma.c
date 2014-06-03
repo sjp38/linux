@@ -169,7 +169,6 @@ struct page *gcma_alloc_contig(int gid, int pages)
 				0, pages, 0);
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
-			pr_debug("failed to alloc pages count %d\n", pages);
 			if (evict_frontswap_pages(gid, pages) < 0) {
 				pr_debug("failed to evict pages\n");
 				return NULL;
@@ -207,8 +206,10 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 	pfn = page_to_pfn(page);
 	offset = pfn - info->base_pfn;
 
+	/*
 	pr_debug("pfn: %ld, gcma start: %ld, offset: %ld\n",
 			pfn, info->base_pfn, offset);
+	*/
 
 	bitmap = info->bitmap;
 	spin_lock(&info->lock);
@@ -343,6 +344,9 @@ void gcma_frontswap_init(unsigned type)
 
 	tree->rbroot = RB_ROOT;
 	spin_lock_init(&tree->lock);
+	/*
+	BUG_ON(gcma_swap_trees[type] != NULL);
+	*/
 	gcma_swap_trees[type] = tree;
 }
 
@@ -355,6 +359,10 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	u8 *src, *dst;
 	int i, ret;
 	int max_gcma = atomic_read(&reserved_gcma);
+
+	static int called;
+	if (called++ % 1000 == 0)
+		pr_info("%s called %d times\n", __func__, called);
 
 	if (!tree) {
 		pr_warn("frontswap tree for type %d is not exist\n",
@@ -425,6 +433,11 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	struct swap_slot_entry *entry;
 	u8 *src, *dst;
+
+	static int called = 0;
+
+	if (called++ % 1000 == 0)
+		pr_info("%s called %d times\n", __func__, called);
 
 	if (!tree) {
 		pr_warn("tree for type %d not exist\n", type);
@@ -512,6 +525,10 @@ static int evict_frontswap_pages(int gid, int pages)
 	struct page *page, *n;
 	int evicted = 0;
 	LIST_HEAD(free_pages);
+
+	static int called;
+	if (called++ % 100 == 0)
+		pr_info("%s called %d times\n", __func__, called);
 
 	spin_lock(&swap_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
