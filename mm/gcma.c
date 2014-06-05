@@ -412,6 +412,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
 	if (!entry) {
+		gcma_release_contig(i, cma_page, 1);
 		return -ENOMEM;
 	}
 
