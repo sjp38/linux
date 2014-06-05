@@ -306,10 +306,11 @@ static void swap_slot_entry_get(struct swap_slot_entry *entry)
 static void swap_slot_entry_put(struct frontswap_tree *tree,
 		struct swap_slot_entry *entry)
 {
-	int refcount = atomic_dec_return(&entry->refcount);
+	assert_spin_locked(&tree->lock);
 
-	BUG_ON(refcount < 0);
-	if (refcount == 0) {
+	if (atomic_dec_and_test(&entry->refcount)) {
+		struct page *page;
+		page = entry->gpage.page;
 		frontswap_rb_erase(&tree->rbroot, entry);
 		frontswap_free_entry(entry);
 	}
