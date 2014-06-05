@@ -326,8 +326,15 @@ static int evict_frontswap_pages(int gid, int pages)
 	spin_lock(&swap_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
 		entry = (struct swap_slot_entry *)entry_of(page);
+		if (!atomic_inc_not_zero(&entry->refcount))
+			continue;
+		/*
+		 * We increased refcount so the entry never destroy under us.
+		 */
 		tree = (struct frontswap_tree *)root_of(page);
 		if (entry->gpage.gid != gid) {
+			/* decrease temporally increased refcount */
+			swap_slot_entry_put(tree, entry, 1);
 			continue;
 		}
 
@@ -342,7 +349,9 @@ static int evict_frontswap_pages(int gid, int pages)
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
 		tree = (struct frontswap_tree *)root_of(page);
 		entry = (struct swap_slot_entry *)entry_of(page);
-
+		/* drop refcount increased by above loop */
+		swap_slot_entry_put(tree, entry, 0);
+		/* free entry */
 		swap_slot_entry_put(tree, entry, 0);
 	}
 
