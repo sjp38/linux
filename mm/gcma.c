@@ -449,9 +449,15 @@ retry:
 
 	spin_lock(&tree->lock);
 	do {
+		/*
+		 * If there is race in the swap layer, it could happen.
+		 * I will write down in detail in future.
+		 */
 		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
-		if (ret == -EEXIST)
+		if (ret == -EEXIST) {
 			frontswap_rb_erase(&tree->rbroot, dupentry);
+			swap_slot_entry_put(tree, dupentry, 0);
+		}
 	} while (ret == -EEXIST);
 	spin_unlock(&tree->lock);
 
