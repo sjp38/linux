@@ -536,6 +536,7 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	spin_lock(&tree->lock);
 	/* We could optimize this frequent locking in future */
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
+		frontswap_rb_erase(&tree->rbroot, entry);
 		swap_slot_entry_put(tree, entry, 0);
 	}
 	tree->rbroot = RB_ROOT;
