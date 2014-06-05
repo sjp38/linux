@@ -29,12 +29,10 @@ struct swap_slot_entry {
 
 struct frontswap_tree {
 	struct rb_root rbroot;
-	unsigned int gid;
+	struct list_head lru;
 	spinlock_t lock;
 };
 
-static LIST_HEAD(swap_lru_list);
-static spinlock_t swap_lru_lock;
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
 
@@ -294,7 +292,7 @@ static void swap_slot_entry_get(struct swap_slot_entry *entry)
  * remove from the tree and free it, if nobody reference the entry
  */
 static void swap_slot_entry_put(struct frontswap_tree *tree,
-		struct swap_slot_entry *entry, bool locked)
+		struct swap_slot_entry *entry)
 {
 	int refcount = --entry->refcount;
 	assert_spin_locked(&tree->lock);
@@ -304,49 +302,47 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 		page = entry->gpage.page;
 
 		frontswap_rb_erase(&tree->rbroot, entry);
-		if (!locked)
-			spin_lock(&swap_lru_lock);
 		list_del(&page->lru);
-		if (!locked)
-			spin_unlock(&swap_lru_lock);
 		frontswap_free_entry(entry);
 	}
 }
 
-/*
- * Caller should hold a tree lock for gid.
- */
 static int evict_frontswap_pages(int gid, int pages)
 {
 	struct frontswap_tree *tree;
 	struct swap_slot_entry *entry;
 	struct page *page, *n;
 	int evicted = 0;
-	LIST_HEAD(free_pages);
+	static int last_evicted_tree = -1;
+	int i = ++last_evicted_tree;
+	int nr_iterated = 0;
 
-	spin_lock(&swap_lru_lock);
-	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
-		entry = (struct swap_slot_entry *)entry_of(page);
-		tree = (struct frontswap_tree *)root_of(page);
-		if (entry->gpage.gid != gid) {
+	while (nr_iterated < MAX_SWAPFILES) {
+		nr_iterated++;
+		if (i >= MAX_SWAPFILES)
+			i = 0;
+		tree = gcma_swap_trees[i++];
+		if (tree == NULL)
 			continue;
+
+		spin_lock(&tree->lock);
+		list_for_each_entry_safe_reverse(page, n, &tree->lru, lru) {
+			entry = (struct swap_slot_entry *)entry_of(page);
+			tree = (struct frontswap_tree *)root_of(page);
+			if (entry->gpage.gid != gid)
+				continue;
+
+			swap_slot_entry_put(tree, entry);
+			if (++evicted >= pages) {
+				spin_unlock(&tree->lock);
+				goto out;
+			}
 		}
-
-		/* Caller should hold a tree lock for @gid */
-		assert_spin_locked(&tree->lock);
-		list_move(&page->lru, &free_pages);
-		if (++evicted >= pages)
-			break;
-	}
-	spin_unlock(&swap_lru_lock);
-
-	list_for_each_entry_safe(page, n, &free_pages, lru) {
-		tree = (struct frontswap_tree *)root_of(page);
-		entry = (struct swap_slot_entry *)entry_of(page);
-
-		swap_slot_entry_put(tree, entry, 0);
+		spin_unlock(&tree->lock);
 	}
 
+out:
+	last_evicted_tree = i - 1;
 	return evicted;
 }
 
@@ -377,8 +373,7 @@ void gcma_frontswap_init(unsigned type)
 	}
 
 	tree->rbroot = RB_ROOT;
-	/* Forcefully set to 0 */
-	tree->gid = 0;
+	INIT_LIST_HEAD(&tree->lru);
 	spin_lock_init(&tree->lock);
 	gcma_swap_trees[type] = tree;
 }
@@ -390,6 +385,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	struct page *cma_page = NULL;
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	u8 *src, *dst;
+	static int last_evicted_gid = -1;
 	int gid, ret;
 	bool retried = false;
 
@@ -399,20 +395,22 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		return -ENODEV;
 	}
 
-	gid = tree->gid;
+	gid = ++last_evicted_gid;
+	if (gid >= atomic_read(&reserved_gcma))
+		gid = 0;
+
 retry:
+
 	cma_page = gcma_alloc_contig(gid, 1);
 	if (!cma_page) {
 		if (retried)
 			return -ENOMEM;
 
-		spin_lock(&tree->lock);
 		/*
 		 * SWAP_CLUSTER_MAX is totally magic value we need
 		 * meanignful golden value.
 		 */
 		evict_frontswap_pages(gid, SWAP_CLUSTER_MAX);
-		spin_unlock(&tree->lock);
 		retried = true;
 		goto retry;
 	}
@@ -445,11 +443,8 @@ retry:
 		if (ret == -EEXIST)
 			frontswap_rb_erase(&tree->rbroot, dupentry);
 	} while (ret == -EEXIST);
+	list_add(&cma_page->lru, &tree->lru);
 	spin_unlock(&tree->lock);
-
-	spin_lock(&swap_lru_lock);
-	list_add(&cma_page->lru, &swap_lru_list);
-	spin_unlock(&swap_lru_lock);
 
 	return ret;
 }
@@ -483,11 +478,9 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	kunmap_atomic(dst);
 
 	spin_lock(&tree->lock);
-	spin_lock(&swap_lru_lock);
 	/* move recent referenced page into head of LRU */
-	list_move(&entry->gpage.page->lru, &swap_lru_list);
-	spin_unlock(&swap_lru_lock);
-	swap_slot_entry_put(tree, entry, 0);
+	list_move(&entry->gpage.page->lru, &tree->lru);
+	swap_slot_entry_put(tree, entry);
 	spin_unlock(&tree->lock);
 
 	return 0;
@@ -505,7 +498,7 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 		return;
 	}
 
-	swap_slot_entry_put(tree, entry, 0);
+	swap_slot_entry_put(tree, entry);
 	spin_unlock(&tree->lock);
 }
 
@@ -522,7 +515,7 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	spin_lock(&tree->lock);
 	/* We could optimize this frequent locking in future */
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
-		swap_slot_entry_put(tree, entry, 0);
+		swap_slot_entry_put(tree, entry);
 	}
 	tree->rbroot = RB_ROOT;
 	spin_unlock(&tree->lock);
@@ -563,7 +556,6 @@ static int __init init_gcma(void)
 		}
 	}
 
-	spin_lock_init(&swap_lru_lock);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
 	if (swap_slot_entry_cache == NULL) {
 		pr_warn("failed to create frontswap cache\n");
