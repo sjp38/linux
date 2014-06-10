@@ -137,14 +137,15 @@ int __init gcma_reserve(unsigned long long size)
 }
 
 /**
- * gcma_alloc_contig - allocate pages from contiguous area
+ * __gcma_alloc_contig - allocate pages from contiguous area
  * @gmca_id: Identifier of contiguous memory area which the allocation be done
  * @pages: number of pages
+ * @can_fail: whether this allocation could be fail
  *
  * Returns NULL if failed to allocate,
  * Returns struct page of start address of allocated memory
  */
-struct page *gcma_alloc_contig(int gid, int pages)
+struct page *__gcma_alloc_contig(int gid, int pages, bool can_fail)
 {
 	int max_gcma;
 	int id = gid;
@@ -161,18 +162,39 @@ struct page *gcma_alloc_contig(int gid, int pages)
 	info = &ginfo[id];
 	bitmap = info->bitmap;
 	spin_lock(&info->lock);
-	/*
-	 * TODO : we should respect mask for dma allocation instead of 0
-	 */
-	next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
-			0, pages, 0);
-	if (next_zero_area < info->size) {
-		bitmap_set(bitmap, next_zero_area, pages);
-		page = pfn_to_page(info->base_pfn + next_zero_area);
-	}
+	do {
+		/*
+		 * TODO : we should respect mask for dma allocation instead of 0
+		 */
+		next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
+				0, pages, 0);
+		if (next_zero_area >= info->size) {
+			spin_unlock(&info->lock);
+			if (can_fail || evict_frontswap_pages(gid, pages) <= 0)
+				goto out;
+			spin_lock(&info->lock);
+		}
+	} while (next_zero_area >= info->size);
+
+	bitmap_set(bitmap, next_zero_area, pages);
 	spin_unlock(&info->lock);
+
+	page = pfn_to_page(info->base_pfn + next_zero_area);
 out:
 	return page;
+}
+
+/**
+ * gcma_alloc_contig - allocate pages from contiguous area
+ * @gmca_id: Identifier of contiguous memory area which the allocation be done
+ * @pages: number of pages
+ *
+ * Returns NULL if failed to allocate,
+ * Returns struct page of start address of allocated memory
+ */
+struct page *gcma_alloc_contig(int gid, int pages)
+{
+	return __gcma_alloc_contig(gid, pages, 0);
 }
 EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
@@ -401,7 +423,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 retry:
 
-	cma_page = gcma_alloc_contig(gid, 1);
+	cma_page = __gcma_alloc_contig(gid, 1, 1);
 	if (!cma_page) {
 		if (retried)
 			return -ENOMEM;
