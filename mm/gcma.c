@@ -151,11 +151,12 @@ struct page *gcma_alloc_contig(int gid, int pages)
 	int id = gid;
 	unsigned long *bitmap, next_zero_area;
 	struct gcma_info *info;
+	struct page *page = NULL;
 
 	max_gcma = atomic_read(&reserved_gcma);
 	if (id >= max_gcma) {
-		pr_warn("invalid gcma_id %d [%d]\n", id, max_gcma);
-		return NULL;
+		WARN(1, "invalid gcma_id %d [%d]\n", id, max_gcma);
+		goto out;
 	}
 
 	info = &ginfo[id];
@@ -169,9 +170,7 @@ struct page *gcma_alloc_contig(int gid, int pages)
 				0, pages, 0);
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
-			pr_debug("failed to alloc pages count %d\n", pages);
 			if (evict_frontswap_pages(gid, pages) < 0) {
-				pr_debug("failed to evict pages\n");
 				return NULL;
 			}
 			spin_lock(&info->lock);
@@ -181,7 +180,9 @@ struct page *gcma_alloc_contig(int gid, int pages)
 	bitmap_set(bitmap, next_zero_area, pages);
 	spin_unlock(&info->lock);
 
-	return pfn_to_page(info->base_pfn + next_zero_area);
+	page = pfn_to_page(info->base_pfn + next_zero_area);
+out:
+	return page;
 }
 EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
@@ -199,7 +200,7 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 	int max_gcma = atomic_read(&reserved_gcma);
 
 	if (gid >= max_gcma) {
-		pr_warn("invalid gid %d [%d]\n", gid, max_gcma);
+		WARN(1, "invalid gid %d [%d]\n", gid, max_gcma);
 		return;
 	}
 
@@ -207,19 +208,12 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 	pfn = page_to_pfn(page);
 	offset = pfn - info->base_pfn;
 
-	pr_debug("pfn: %ld, gcma start: %ld, offset: %ld\n",
-			pfn, info->base_pfn, offset);
-
 	bitmap = info->bitmap;
 	spin_lock(&info->lock);
 
-	/* TODO: Let's do this in only debug mode */
 	next_zero_bit = find_next_zero_bit(bitmap, offset + pages, offset);
-	if (next_zero_bit < offset + pages - 1) {
-		pr_err("freeing free area. free page: %ld\n", next_zero_bit);
-		spin_unlock(&info->lock);
-		return;
-	}
+	if (next_zero_bit < offset + pages - 1)
+		BUG();
 
 	bitmap_clear(bitmap, offset, pages);
 	spin_unlock(&info->lock);
@@ -319,192 +313,6 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 	}
 }
 
-/*
- * Caller should hold frontswap tree spinlock
- */
-static struct swap_slot_entry *frontswap_rb_find_get(struct rb_root *root,
-			pgoff_t offset)
-{
-	struct swap_slot_entry *entry = frontswap_rb_search(root, offset);
-	if (entry)
-		swap_slot_entry_get(entry);
-	return entry;
-}
-
-void gcma_frontswap_init(unsigned type)
-{
-	struct frontswap_tree *tree;
-
-	tree = kzalloc(sizeof(struct frontswap_tree), GFP_KERNEL);
-	if (!tree) {
-		pr_err("front swap tree for type %d failed\n", type);
-		return;
-	}
-
-	tree->rbroot = RB_ROOT;
-	spin_lock_init(&tree->lock);
-	gcma_swap_trees[type] = tree;
-}
-
-int gcma_frontswap_store(unsigned type, pgoff_t offset,
-				struct page *page)
-{
-	struct swap_slot_entry *entry, *dupentry;
-	struct page *cma_page = NULL;
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	u8 *src, *dst;
-	int i, ret;
-	int max_gcma = atomic_read(&reserved_gcma);
-
-	if (!tree) {
-		pr_warn("frontswap tree for type %d is not exist\n",
-				type);
-		return -ENODEV;
-	}
-
-	/*
-	 * TODO: It's unfair because first-id reserved area is
-	 * always consumed compared to others. Maybe we should
-	 * do round-robin in future.
-	 */
-	for (i = 0; i < max_gcma; i++) {
-		cma_page = gcma_alloc_contig(i, 1);
-		if (cma_page != NULL)
-			break;
-	}
-
-	if (cma_page == NULL) {
-		pr_warn("failed to get 1 page from gcma\n");
-		return -ENOMEM;
-	}
-
-	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
-	if (!entry) {
-		pr_warn("failed to get frontswap entry from cache\n");
-		return -ENOMEM;
-	}
-
-	entry->gpage.page = cma_page;
-	entry->gpage.gid = i;
-
-	entry->refcount = 1;
-	RB_CLEAR_NODE(&entry->rbnode);
-
-	set_root(cma_page, (void *)tree);
-	set_entry(cma_page, (void *)entry);
-
-	src = kmap_atomic(page);
-	dst = kmap_atomic(cma_page);
-	memcpy(dst, src, PAGE_SIZE);
-	kunmap_atomic(src);
-	kunmap_atomic(dst);
-
-	entry->offset = offset;
-
-	spin_lock(&tree->lock);
-	do {
-		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
-		if (ret == -EEXIST)
-			frontswap_rb_erase(&tree->rbroot, dupentry);
-	} while (ret == -EEXIST);
-	spin_unlock(&tree->lock);
-
-	spin_lock(&swap_lru_lock);
-	list_add(&cma_page->lru, &swap_lru_list);
-	spin_unlock(&swap_lru_lock);
-	return ret;
-}
-
-/*
- * returns 0 if success
- * returns non-zero if failed
- */
-int gcma_frontswap_load(unsigned type, pgoff_t offset,
-			       struct page *page)
-{
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry;
-	u8 *src, *dst;
-
-	if (!tree) {
-		pr_warn("tree for type %d not exist\n", type);
-		return -1;
-	}
-	spin_lock(&tree->lock);
-	entry = frontswap_rb_find_get(&tree->rbroot, offset);
-	spin_unlock(&tree->lock);
-	if (!entry) {
-		pr_warn("couldn't find the page(type %d, offset %ld) from frontswap tree\n",
-				type, offset);
-		return -1;
-	}
-
-	src = kmap_atomic(entry->gpage.page);
-	dst = kmap_atomic(page);
-	memcpy(dst, src, PAGE_SIZE);
-	kunmap_atomic(src);
-	kunmap_atomic(dst);
-
-	spin_lock(&tree->lock);
-	swap_slot_entry_put(tree, entry);
-	spin_unlock(&tree->lock);
-
-	spin_lock(&swap_lru_lock);
-	list_move(&entry->gpage.page->lru, &swap_lru_list);
-	spin_unlock(&swap_lru_lock);
-
-	return 0;
-}
-
-void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
-{
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry;
-
-	spin_lock(&tree->lock);
-	entry = frontswap_rb_search(&tree->rbroot, offset);
-	if (!entry) {
-		pr_warn("failed to get entry\n");
-		spin_unlock(&tree->lock);
-		return;
-	}
-
-	spin_lock(&swap_lru_lock);
-	list_del(&entry->gpage.page->lru);
-	spin_unlock(&swap_lru_lock);
-
-	frontswap_rb_erase(&tree->rbroot, entry);
-	swap_slot_entry_put(tree, entry);
-
-	spin_unlock(&tree->lock);
-}
-
-void gcma_frontswap_invalidate_area(unsigned type)
-{
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry, *n;
-
-	if (!tree) {
-		pr_warn("failed to get frontswap tree for type %d\n", type);
-		return;
-	}
-
-	spin_lock(&tree->lock);
-	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
-		/* We could optimize this frequent locking in future */
-		spin_lock(&swap_lru_lock);
-		list_del(&entry->gpage.page->lru);
-		spin_unlock(&swap_lru_lock);
-
-		frontswap_free_entry(entry);
-	}
-	tree->rbroot = RB_ROOT;
-	spin_unlock(&tree->lock);
-
-	kfree(tree);
-	gcma_swap_trees[type] = NULL;
-}
-
 static int evict_frontswap_pages(int gid, int pages)
 {
 	struct frontswap_tree *tree;
@@ -534,6 +342,191 @@ static int evict_frontswap_pages(int gid, int pages)
 		spin_unlock(&tree->lock);
 	}
 	return evicted;
+}
+
+/*
+ * Caller should hold frontswap tree spinlock
+ */
+static struct swap_slot_entry *frontswap_find_get(struct frontswap_tree *tree,
+						pgoff_t offset)
+{
+	struct swap_slot_entry *entry;
+	struct rb_root *root = &tree->rbroot;
+	assert_spin_locked(&tree->lock);
+	entry = frontswap_rb_search(root, offset);
+	if (entry)
+		swap_slot_entry_get(entry);
+
+	return entry;
+}
+
+void gcma_frontswap_init(unsigned type)
+{
+	struct frontswap_tree *tree;
+
+	tree = kzalloc(sizeof(struct frontswap_tree), GFP_KERNEL);
+	if (!tree) {
+		pr_err("front swap tree for type %d failed\n", type);
+		return;
+	}
+
+	tree->rbroot = RB_ROOT;
+	spin_lock_init(&tree->lock);
+	gcma_swap_trees[type] = tree;
+}
+
+int gcma_frontswap_store(unsigned type, pgoff_t offset,
+				struct page *page)
+{
+	struct swap_slot_entry *entry, *dupentry;
+	struct page *cma_page = NULL;
+	struct frontswap_tree *tree = gcma_swap_trees[type];
+	u8 *src, *dst;
+	int i, ret;
+	int max_gcma = atomic_read(&reserved_gcma);
+
+	if (!tree) {
+		WARN(1, "frontswap tree for type %d is not exist\n",
+				type);
+		return -ENODEV;
+	}
+
+	/*
+	 * TODO: It's unfair because first-id reserved area is
+	 * always consumed compared to others. Maybe we should
+	 * do round-robin in future.
+	 */
+	for (i = 0; i < max_gcma; i++) {
+		cma_page = gcma_alloc_contig(i, 1);
+		if (cma_page != NULL)
+			break;
+	}
+
+	if (cma_page == NULL) {
+		pr_warn("failed to get 1 page from gcma\n");
+		return -ENOMEM;
+	}
+
+	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
+	if (!entry) {
+		return -ENOMEM;
+	}
+
+	entry->gpage.page = cma_page;
+	entry->gpage.gid = i;
+	entry->offset = offset;
+	entry->refcount = 1;
+	RB_CLEAR_NODE(&entry->rbnode);
+	set_root(cma_page, (void *)tree);
+	set_entry(cma_page, (void *)entry);
+
+	/* copy from orig data to gcma-page */
+	src = kmap_atomic(page);
+	dst = kmap_atomic(cma_page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	spin_lock(&tree->lock);
+	do {
+		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
+		if (ret == -EEXIST)
+			frontswap_rb_erase(&tree->rbroot, dupentry);
+	} while (ret == -EEXIST);
+	spin_unlock(&tree->lock);
+
+	spin_lock(&swap_lru_lock);
+	list_add(&cma_page->lru, &swap_lru_list);
+	spin_unlock(&swap_lru_lock);
+
+	return ret;
+}
+
+/*
+ * returns 0 if success
+ * returns non-zero if failed
+ */
+int gcma_frontswap_load(unsigned type, pgoff_t offset,
+			       struct page *page)
+{
+	struct frontswap_tree *tree = gcma_swap_trees[type];
+	struct swap_slot_entry *entry;
+	u8 *src, *dst;
+
+	if (!tree) {
+		WARN(1, "tree for type %d not exist\n", type);
+		return -1;
+	}
+
+	spin_lock(&tree->lock);
+	entry = frontswap_find_get(tree, offset);
+	spin_unlock(&tree->lock);
+	if (!entry)
+		return -1;
+
+	src = kmap_atomic(entry->gpage.page);
+	dst = kmap_atomic(page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	spin_lock(&tree->lock);
+	swap_slot_entry_put(tree, entry);
+	spin_unlock(&tree->lock);
+
+	spin_lock(&swap_lru_lock);
+	list_move(&entry->gpage.page->lru, &swap_lru_list);
+	spin_unlock(&swap_lru_lock);
+
+	return 0;
+}
+
+void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
+{
+	struct frontswap_tree *tree = gcma_swap_trees[type];
+	struct swap_slot_entry *entry;
+
+	spin_lock(&tree->lock);
+	entry = frontswap_rb_search(&tree->rbroot, offset);
+	if (!entry) {
+		spin_unlock(&tree->lock);
+		return;
+	}
+
+	spin_lock(&swap_lru_lock);
+	list_del(&entry->gpage.page->lru);
+	spin_unlock(&swap_lru_lock);
+
+	frontswap_rb_erase(&tree->rbroot, entry);
+	swap_slot_entry_put(tree, entry);
+
+	spin_unlock(&tree->lock);
+}
+
+void gcma_frontswap_invalidate_area(unsigned type)
+{
+	struct frontswap_tree *tree = gcma_swap_trees[type];
+	struct swap_slot_entry *entry, *n;
+
+	if (!tree) {
+		WARN(1, "failed to get frontswap tree for type %d\n", type);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
+		/* We could optimize this frequent locking in future */
+		spin_lock(&swap_lru_lock);
+		list_del(&entry->gpage.page->lru);
+		spin_unlock(&swap_lru_lock);
+
+		frontswap_free_entry(entry);
+	}
+	tree->rbroot = RB_ROOT;
+	spin_unlock(&tree->lock);
+
+	kfree(tree);
+	gcma_swap_trees[type] = NULL;
 }
 
 static struct frontswap_ops gcma_frontswap_ops = {
