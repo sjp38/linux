@@ -453,9 +453,17 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	spin_lock(&tree->lock);
 	do {
+		/*
+		 * Though this duplication scenario may happen rarely by
+		 * race of swap layer, we handle this case here rather
+		 * than fix swap layer because handling the possibility of
+		 * duplicates is part of the tmem ABI.
+		 */
 		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
-		if (ret == -EEXIST)
+		if (ret == -EEXIST) {
 			frontswap_rb_erase(&tree->rbroot, dupentry);
+			swap_slot_entry_put(tree, dupentry, 0);
+		}
 	} while (ret == -EEXIST);
 
 	spin_lock(&swap_lru_lock);
