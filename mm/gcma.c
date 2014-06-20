@@ -406,7 +406,8 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	struct page *cma_page = NULL;
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	u8 *src, *dst;
-	int i, ret;
+	static int last_gid;
+	int gid, ret;
 	int max_gcma = atomic_read(&reserved_gcma);
 
 	if (!tree) {
@@ -415,16 +416,15 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		return -ENODEV;
 	}
 
-	/*
-	 * TODO: It's unfair because first-id reserved area is
-	 * always consumed compared to others. Maybe we should
-	 * do round-robin in future.
-	 */
-	for (i = 0; i < max_gcma; i++) {
-		cma_page = gcma_alloc_contig(i, 1);
+	gid = last_gid;
+	while (gid < max_gcma) {
+		cma_page = gcma_alloc_contig(gid++, 1);
 		if (cma_page != NULL)
 			break;
 	}
+	if (gid >= max_gcma)
+		gid = 0;
+	last_gid = gid;
 
 	if (cma_page == NULL) {
 		pr_warn("failed to get 1 page from gcma\n");
@@ -437,7 +437,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	}
 
 	entry->gpage.page = cma_page;
-	entry->gpage.gid = i;
+	entry->gpage.gid = gid;
 	entry->offset = offset;
 	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
