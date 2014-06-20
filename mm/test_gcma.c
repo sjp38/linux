@@ -51,102 +51,6 @@ extern int gcma_frontswap_load(unsigned type, pgoff_t offset,
 extern void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset);
 extern void gcma_frontswap_invalidate_area(unsigned type);
 
-/**
- * returns 0 if fail
- */
-static unsigned long measure_gcma(int nr_pages)
-{
-	struct page *page;
-	struct timespec start, end;
-	getnstimeofday(&start);
-	page = gcma_alloc_contig(0, nr_pages);
-	if (!page)
-		return 0;
-	getnstimeofday(&end);
-	gcma_release_contig(0, page, nr_pages);
-
-	return end.tv_sec * 1000000000 + end.tv_nsec
-		- (start.tv_sec * 1000000000 + start.tv_nsec);
-}
-
-/**
- * returns 0 if fail
- */
-static unsigned long measure_cma(int nr_pages)
-{
-	struct page *page;
-	struct timespec start, end;
-	getnstimeofday(&start);
-	page = dma_alloc_from_contiguous(NULL, nr_pages, 1);
-	if (!page)
-		return 0;
-	getnstimeofday(&end);
-	dma_release_from_contiguous(NULL, page, nr_pages);
-
-	return end.tv_sec * 1000000000 + end.tv_nsec
-		- (start.tv_sec * 1000000000 + start.tv_nsec);
-}
-
-static unsigned long min_of(unsigned long prev_min, unsigned long new_val)
-{
-	if (prev_min == 0 || prev_min > new_val)
-		return new_val;
-	return prev_min;
-}
-
-static unsigned long max_of(unsigned long prev_max, unsigned long new_val)
-{
-	if (prev_max == 0 || prev_max < new_val)
-		return new_val;
-	return prev_max;
-}
-
-static int measure_time_alloc(void)
-{
-	unsigned long nr_gcma_fail = 0, nr_cma_fail = 0;
-	unsigned long gcma_time, gcma_min = 0, gcma_max = 0, gcma_avg;
-	unsigned long cma_time, cma_min = 0, cma_max = 0, cma_avg = 0;
-	unsigned long gcma_sum = 0, cma_sum = 0;
-	int measure_count = 500, i, j;
-	int measure_sizes[] = {1,10,50,100,200,300};
-
-	for (i = 0; i < sizeof(measure_sizes) / sizeof(int); i++) {
-		nr_gcma_fail = nr_cma_fail = 0;
-		gcma_min = gcma_max = 0;
-		cma_min = cma_max = 0;
-		gcma_sum = cma_sum = 0;
-
-		for (j = 0; j < measure_count; j++) {
-			cma_time = measure_cma(measure_sizes[i]);
-			gcma_time = measure_gcma(measure_sizes[i]);
-
-			if (!cma_time)
-				nr_cma_fail++;
-			if (!gcma_time)
-				nr_gcma_fail++;
-
-			gcma_min = min_of(gcma_min, gcma_time);
-			gcma_max = max_of(gcma_max, gcma_time);
-			gcma_sum += gcma_time;
-
-			cma_min = min_of(cma_min, cma_time);
-			cma_max = max_of(cma_max, cma_time);
-			cma_sum += cma_time;
-		}
-		gcma_avg = gcma_sum / measure_count;
-		cma_avg = cma_sum / measure_count;
-
-		pr_info("gcma\t,%d,pages\t,fail:,%ld\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				measure_sizes[i], nr_gcma_fail,
-				gcma_min, gcma_max, gcma_avg);
-		pr_info("cma\t,%d,pages\t,fail:,%ld\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				measure_sizes[i], nr_cma_fail,
-				cma_min, cma_max, cma_avg);
-	}
-
-	return 0;
-}
-
 static int test_frontswap(void)
 {
 	struct page *store_page, *load_page;
@@ -236,23 +140,221 @@ struct eval_option {
 };
 
 struct eval_result {
-	unsigned long succ;
-	unsigned long fail;
 	unsigned long min;
 	unsigned long max;
 	unsigned long avg;
-	unsigned long stddev;
 };
 
 struct eval_history {
 	struct eval_option option;
-	struct eval_result cma_result;
-	struct eval_result gcma_result;
+	unsigned long cma_succ;
+	unsigned long cma_fail;
+	unsigned long gcma_succ;
+	unsigned long gcma_fail;
+	struct eval_result cma_alloc_result;
+	struct eval_result cma_fail_result;
+	struct eval_result cma_release_result;
+	struct eval_result gcma_alloc_result;
+	struct eval_result gcma_fail_result;
+	struct eval_result gcma_release_result;
 	struct list_head node;
 };
 
 static struct kmem_cache *eval_history_cache;
 static LIST_HEAD(eval_history_list);
+
+static unsigned long min_of(unsigned long prev_min, unsigned long new_val)
+{
+	if (prev_min == 0 || prev_min > new_val)
+		return new_val;
+	return prev_min;
+}
+
+static unsigned long max_of(unsigned long prev_max, unsigned long new_val)
+{
+	if (prev_max == 0 || prev_max < new_val)
+		return new_val;
+	return prev_max;
+}
+
+static unsigned long time_diff(struct timespec *start, struct timespec *end)
+{
+	return end->tv_sec * 1000000000 + end->tv_nsec
+		- (start->tv_sec * 1000000000 + start->tv_nsec);
+}
+
+/**
+ * returns 0 if success, non-zero if failed
+ */
+static int measure_gcma(int nr_pages,
+			unsigned long *alloc_time, unsigned long *release_time)
+{
+	struct page *page;
+	struct timespec start, end;
+	getnstimeofday(&start);
+	page = gcma_alloc_contig(0, nr_pages);
+	getnstimeofday(&end);
+	*alloc_time = time_diff(&start, &end);
+	if (!page) {
+		*release_time = 0;
+		return -ENOMEM;
+	}
+
+	getnstimeofday(&start);
+	gcma_release_contig(0, page, nr_pages);
+	getnstimeofday(&end);
+	*release_time = time_diff(&start, &end);
+
+	return 0;
+}
+
+/**
+ * returns 0 if success, non-zero if failed
+ */
+static int measure_cma(int nr_pages,
+			unsigned long *alloc_time, unsigned long *release_time)
+{
+	struct page *page;
+	struct timespec start, end;
+	getnstimeofday(&start);
+	page = dma_alloc_from_contiguous(NULL, nr_pages, 1);
+	getnstimeofday(&end);
+	*alloc_time = time_diff(&start, &end);
+	if (!page) {
+		*release_time = 0;
+		return -ENOMEM;
+	}
+
+	getnstimeofday(&start);
+	dma_release_from_contiguous(NULL, page, nr_pages);
+	getnstimeofday(&end);
+	*release_time = time_diff(&start, &end);
+
+	return 0;
+}
+
+static void set_middle_result(struct eval_result *res, unsigned long time)
+{
+	res->min = min_of(res->min, time);
+	res->max = max_of(res->max, time);
+	res->avg += time;
+}
+
+static void init_eval_result(struct eval_result *res)
+{
+	res->min = res->max = res->avg = 0;
+}
+
+static void notice_result(struct eval_history *history)
+{
+	struct eval_result *gcma_alloc, *gcma_fail, *gcma_release;
+	struct eval_result *cma_alloc, *cma_fail, *cma_release;
+
+	gcma_alloc = &history->gcma_alloc_result;
+	gcma_fail = &history->gcma_fail_result;
+	gcma_release = &history->gcma_release_result;
+
+	cma_alloc = &history->cma_alloc_result;
+	cma_fail = &history->cma_fail_result;
+	cma_release = &history->cma_release_result;
+
+	pr_info("%d page request evaluated.\n"
+		"[gcma] succ/fail:%ld/%ld\n"
+		"  succ alloc min:%ld\tmax:%ld\tavg:%ld\n"
+		"  fail alloc min:%ld\tmax:%ld\tavg:%ld\n"
+		"  release min:%ld\tmax:%ld\tavg:%ld\n"
+		"[cma] succ/fail:%ld/%ld\n"
+		"  succ alloc min:%ld\tmax:%ld\tavg:%ld\n"
+		"  fail alloc min:%ld\tmax:%ld\tavg:%ld\n"
+		"  release min:%ld\tmax:%ld\tavg:%ld\n",
+			history->option.nr_pages,
+			history->gcma_succ, history->gcma_fail,
+			gcma_alloc->min, gcma_alloc->max, gcma_alloc->avg,
+			gcma_fail->min, gcma_fail->max, gcma_fail->avg,
+			gcma_release->min, gcma_release->max, gcma_release->avg,
+
+			history->cma_succ, history->cma_fail,
+			cma_alloc->min, cma_alloc->max, cma_alloc->avg,
+			cma_fail->min, cma_fail->max, cma_fail->avg,
+			cma_release->min, cma_release->max, cma_release->avg);
+}
+
+static void eval_gcma(struct eval_history *history)
+{
+	struct eval_option *opt;
+	struct eval_result *gcma_alloc_res, *gcma_fail_res;
+	struct eval_result *gcma_release_res;
+	struct eval_result *cma_alloc_res, *cma_fail_res;
+	struct eval_result *cma_release_res;
+
+	unsigned long gcma_alloc_time, gcma_release_time;
+	unsigned long cma_alloc_time, cma_release_time;
+
+	int i;
+
+	opt = &history->option;
+
+	history->cma_succ = history->cma_fail = 0;
+	history->gcma_succ = history->gcma_fail = 0;
+
+	cma_alloc_res = &history->cma_alloc_result;
+	cma_fail_res = &history->cma_fail_result;
+	cma_release_res = &history->cma_release_result;
+
+	gcma_alloc_res = &history->gcma_alloc_result;
+	gcma_fail_res = &history->gcma_fail_result;
+	gcma_release_res = &history->gcma_release_result;
+
+	init_eval_result(cma_alloc_res);
+	init_eval_result(cma_fail_res);
+	init_eval_result(cma_release_res);
+
+	init_eval_result(gcma_alloc_res);
+	init_eval_result(gcma_fail_res);
+	init_eval_result(gcma_release_res);
+
+	for (i = 0; i < opt->nr_trials; i++) {
+		if (measure_cma(opt->nr_pages,
+				&cma_alloc_time, &cma_release_time)) {
+			history->cma_fail++;
+			set_middle_result(cma_fail_res, cma_alloc_time);
+		} else {
+			history->cma_succ++;
+			set_middle_result(cma_alloc_res, cma_alloc_time);
+			set_middle_result(cma_release_res, cma_release_time);
+		}
+		msleep(opt->warmup_ms);
+
+		if (measure_gcma(opt->nr_pages,
+				&gcma_alloc_time, &gcma_release_time)) {
+			history->gcma_fail++;
+			set_middle_result(gcma_fail_res, gcma_alloc_time);
+		} else {
+			history->gcma_succ++;
+			set_middle_result(gcma_alloc_res, gcma_alloc_time);
+			set_middle_result(gcma_release_res, gcma_release_time);
+		}
+		msleep(opt->warmup_ms);
+	}
+	if (history->cma_succ > 0) {
+		cma_alloc_res->avg = cma_alloc_res->avg / history->cma_succ;
+		cma_release_res->avg = cma_release_res->avg / history->cma_succ;
+	}
+	if (history->cma_fail > 0)
+		cma_fail_res->avg = cma_fail_res->avg / history->cma_fail;
+
+	if (history->gcma_succ > 0) {
+		gcma_alloc_res->avg = gcma_alloc_res->avg / history->gcma_succ;
+		gcma_release_res->avg = gcma_release_res->avg /
+						history->gcma_succ;
+	}
+	if (history->gcma_fail > 0)
+		gcma_fail_res->avg = gcma_fail_res->avg / history->gcma_fail;
+
+	notice_result(history);
+
+	list_add_tail(&history->node, &eval_history_list);
+}
 
 /**
  * howto_read - just show how to use evaluation feature
@@ -288,12 +390,6 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 {
 	struct eval_history *history;
 	struct eval_option *opt;
-	struct eval_result *cma_res, *gcma_res;
-
-	unsigned long gcma_time, cma_time;
-	unsigned long gcma_sum = 0, cma_sum = 0;
-
-	int i;
 
 	history = kmem_cache_alloc(eval_history_cache, GFP_KERNEL);
 	if (history == NULL) {
@@ -302,52 +398,12 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 	}
 
 	opt = &history->option;
-	cma_res = &history->cma_result;
-	gcma_res = &history->gcma_result;
-
-	cma_res->min = cma_res->max = cma_res->succ = cma_res->fail = 0;
-	gcma_res->min = gcma_res->max = gcma_res->succ = gcma_res->fail = 0;
 
 	sscanf(buf, "%d %d %ld", &opt->nr_pages, &opt->nr_trials,
 			&opt->warmup_ms);
 	pr_info("%s called with %d %d %ld\n", __func__, opt->nr_pages,
 			opt->nr_trials, opt->warmup_ms);
-
-	for (i = 0; i < opt->nr_trials; i++) {
-		cma_time = measure_cma(opt->nr_pages);
-		msleep(opt->warmup_ms);
-
-		gcma_time = measure_gcma(opt->nr_pages);
-		msleep(opt->warmup_ms);
-
-		if (!cma_time)
-			cma_res->fail++;
-		else
-			cma_res->succ++;
-		if (!gcma_time)
-			gcma_res->fail++;
-		else
-			gcma_res->succ++;
-
-		cma_res->min = min_of(cma_res->min, cma_time);
-		cma_res->max = max_of(cma_res->max, cma_time);
-		cma_sum += cma_time;
-
-		gcma_res->min = min_of(gcma_res->min, gcma_time);
-		gcma_res->max = max_of(gcma_res->max, gcma_time);
-		gcma_sum += gcma_time;
-	}
-	gcma_res->avg = gcma_sum / opt->nr_trials;
-	cma_res->avg = cma_sum / opt->nr_trials;
-
-	pr_info("gcma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-			opt->nr_pages, gcma_res->succ, gcma_res->fail,
-			gcma_res->min, gcma_res->max, gcma_res->avg);
-	pr_info("cma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-			opt->nr_pages, cma_res->succ, cma_res->fail,
-			cma_res->min, cma_res->max, cma_res->avg);
-
-	list_add_tail(&history->node, &eval_history_list);
+	eval_gcma(history);
 
 	return length;
 }
@@ -364,7 +420,8 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 {
 	struct eval_history *history;
 	struct eval_option *opt;
-	struct eval_result *gcma_res, *cma_res;
+	struct eval_result *gcma_alloc, *gcma_fail, *gcma_release;
+	struct eval_result *cma_alloc, *cma_fail, *cma_release;
 	char kbuf[256];
 	char *cursor = kbuf;
 	int bytes_read = 0;
@@ -376,21 +433,38 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 
 	list_for_each_entry(history, &eval_history_list, node) {
 		opt = &history->option;
-		gcma_res = &history->gcma_result;
-		cma_res = &history->cma_result;
 
-		pr_info("gcma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				opt->nr_pages, gcma_res->succ, gcma_res->fail,
-				gcma_res->min, gcma_res->max, gcma_res->avg);
-		pr_info("cma\t,%d,pages\t,succ/fail:(,%ld,%ld)\t,min: ,%ld\t,max: ,%ld\t,avg: ,%ld\n",
-				opt->nr_pages, cma_res->succ, cma_res->fail,
-				cma_res->min, cma_res->max, cma_res->avg);
+		gcma_alloc = &history->gcma_alloc_result;
+		gcma_fail = &history->gcma_fail_result;
+		gcma_release = &history->gcma_release_result;
 
-		sprintf(kbuf, "%d,%ld,%ld,%ld,%ld,%ld\n,%d,%ld,%ld,%ld,%ld,%ld\n",
-				opt->nr_pages, gcma_res->succ, gcma_res->fail,
-				gcma_res->min, gcma_res->max, gcma_res->avg,
-				opt->nr_pages, cma_res->succ, cma_res->fail,
-				cma_res->min, cma_res->max, cma_res->avg);
+		cma_alloc = &history->cma_alloc_result;
+		cma_fail = &history->cma_fail_result;
+		cma_release = &history->cma_release_result;
+
+		notice_result(history);
+
+		sprintf(kbuf, "%d,%ld,%ld,"
+				"%ld,%ld,%ld,"
+				"%ld,%ld,%ld,"
+				"%ld,%ld,%ld,"
+				"%ld,%ld,"
+				"%ld,%ld,%ld,"
+				"%ld,%ld,%ld,"
+				"%ld,%ld,%ld\n",
+				opt->nr_pages,
+				history->gcma_succ, history->gcma_fail,
+				gcma_alloc->min, gcma_alloc->max,
+					gcma_alloc->avg,
+				gcma_fail->min, gcma_fail->max, gcma_fail->avg,
+				gcma_release->min, gcma_release->max,
+					gcma_release->avg,
+
+				history->cma_succ, history->cma_fail,
+				cma_alloc->min, cma_alloc->max, cma_alloc->avg,
+				cma_fail->min, cma_fail->max, cma_fail->avg,
+				cma_release->min, cma_release->max,
+					cma_release->avg);
 
 		cursor = kbuf;
 		while (length && *cursor) {
@@ -451,7 +525,6 @@ static int __init init_gcma(void)
 
 		do_test(test_alloc_release_contig);
 		do_test(test_frontswap);
-		do_test(measure_time_alloc);
 	}
 
 	if (eval_enabled) {
