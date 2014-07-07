@@ -586,7 +586,7 @@ static int __init gcma_debugfs_init(void)
 	debugfs_create_atomic_t("loaded_pages", S_IRUGO,
 			gcma_debugfs_root, &gcma_loaded_pages);
 	debugfs_create_atomic_t("evicted_pages", S_IRUGO,
-			gcma_debugfs_root, &gcma_loaded_pages);
+			gcma_debugfs_root, &gcma_evicted_pages);
 	return 0;
 }
 #else
