@@ -162,16 +162,17 @@ err:
 /**
  * gcma_alloc_contig - allocate pages from contiguous area
  * @gmca_id: Identifier of contiguous memory area which the allocation be done
- * @pages: number of pages
+ * @pages: Number of pages
+ * @align: Alignment of pages (in PAGE_SIZE order)
  *
  * Returns NULL if failed to allocate,
  * Returns struct page of start address of allocated memory
  */
-struct page *gcma_alloc_contig(int gid, int pages)
+struct page *gcma_alloc_contig(int gid, int pages, unsigned int align)
 {
 	int max_gcma;
 	int id = gid;
-	unsigned long *bitmap, next_zero_area;
+	unsigned long *bitmap, next_zero_area, mask;
 	struct gcma_info *info;
 	struct page *page = NULL;
 
@@ -183,13 +184,12 @@ struct page *gcma_alloc_contig(int gid, int pages)
 
 	info = &ginfo[id];
 	bitmap = info->bitmap;
+	mask = (1 << align) - 1;
+
 	spin_lock(&info->lock);
 	do {
-		/*
-		 * TODO : we should respect mask for dma allocation instead of 0
-		 */
 		next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
-				0, pages, 0);
+				0, pages, mask);
 		if (next_zero_area >= info->size) {
 			spin_unlock(&info->lock);
 			if (evict_frontswap_pages(gid, pages) < 0) {
@@ -442,7 +442,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	gid = last_gid;
 	while (gid < max_gcma) {
-		cma_page = gcma_alloc_contig(gid++, 1);
+		cma_page = gcma_alloc_contig(gid++, 1, 0);
 		if (cma_page != NULL)
 			break;
 	}
