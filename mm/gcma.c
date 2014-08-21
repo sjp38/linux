@@ -97,6 +97,8 @@ static void set_entry(struct page *page, void *entry)
 /**
  * gcma_reserve - Reserve contiguous memory area
  * @size: Size of the reserved area (in bytes), 0 for default size
+ * @base: Base address of the reserved area, 0 for any
+ * @limit: End address of the reserved memory, 0 for any
  *
  * This function reserves memory from early allocator, memblock.
  * It can be called several times under MAX_GCMA during boot.
@@ -104,11 +106,12 @@ static void set_entry(struct page *page, void *entry)
  * Returns id of reserved contiguous memory area if success,
  * Otherwise, return negative number.
  */
-int __init gcma_reserve(unsigned long long size)
+int __init gcma_reserve(phys_addr_t size, phys_addr_t base, phys_addr_t limit)
 {
 	int gid;
 	struct gcma_info *info;
-	phys_addr_t addr;
+	phys_addr_t align;
+	int ret;
 
 	gid = atomic_inc_return(&reserved_gcma);
 	if (gid > MAX_GCMA) {
@@ -120,14 +123,25 @@ int __init gcma_reserve(unsigned long long size)
 	if (size == 0)
 		size = def_gcma_bytes;
 
-	size = PAGE_ALIGN(size);
-	/* TODO: Why not MEMBLOCK_ALLOC_ANYWHERE? */
-	addr = __memblock_alloc_base((phys_addr_t)size, PAGE_SIZE,
-				MEMBLOCK_ALLOC_ACCESSIBLE);
-	if (!addr) {
-		pr_warn("failed to reserveg cma\n");
-		atomic_dec(&reserved_gcma);
-		return -ENOMEM;
+	align = PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order);
+	base = ALIGN(base, align);
+	size = ALIGN(size, align);
+	limit &= ~(align - 1);
+
+	if (base) {
+		if (memblock_is_region_reserved(base, size) ||
+				memblock_reserve(base, size) < 0) {
+			atomic_dec(&reserved_gcma);
+			ret = -EBUSY;
+			goto err;
+		}
+	} else {
+		base = __memblock_alloc_base(size, align, limit);
+		if (!base) {
+			atomic_dec(&reserved_gcma);
+			ret = -ENOMEM;
+			goto err;
+		}
 	}
 
 	gid -= 1;
@@ -136,9 +150,13 @@ int __init gcma_reserve(unsigned long long size)
 	info = &ginfo[gid];
 
 	info->size = size >> PAGE_SHIFT;
-	info->base_pfn = PFN_DOWN(addr);
+	info->base_pfn = PFN_DOWN(base);
 
 	return gid;
+
+err:
+	pr_warn("failed to reserve cma\n");
+	return ret;
 }
 
 /**
@@ -599,8 +617,10 @@ static int __init gcma_debugfs_init(void)
 static int __init init_gcma(void)
 {
 	int i;
-	unsigned long bitmap_bytes;
+	unsigned j;
+	unsigned long bitmap_bytes, pfn;
 	int max_gcma;
+	struct zone *zone;
 
 	if (!gcma_enabled)
 		return 0;
@@ -618,6 +638,21 @@ static int __init init_gcma(void)
 			pr_debug("failed to alloc bitmap\n");
 			return -ENOMEM;
 		}
+
+		/* contig memory area should belong in one zone.
+		 * stolen from dma-contiguous.c */
+		j = ginfo[i].size >> pageblock_order;
+		pfn = ginfo[i].base_pfn;
+		zone = page_zone(pfn_to_page(pfn));
+
+		do {
+			unsigned k;
+			for (k = pageblock_nr_pages; k; --k, pfn++) {
+				WARN_ON_ONCE(!pfn_valid(pfn));
+				if (page_zone(pfn_to_page(pfn)) != zone)
+					return -EINVAL;
+			}
+		} while (--j);
 	}
 
 	spin_lock_init(&swap_lru_lock);

@@ -1123,7 +1123,7 @@ void __init setup_arch(char **cmdline_p)
 	dma_contiguous_reserve(0);
 
 #ifdef CONFIG_GCMA
-	if (gcma_reserve(0) < 0)
+	if (gcma_reserve(0, 0, 0) < 0)
 		pr_warn("gcma reserving failed\n");
 #endif
 
