@@ -97,6 +97,8 @@ static void set_entry(struct page *page, void *entry)
 /**
  * gcma_reserve - Reserve contiguous memory area
  * @size: Size of the reserved area (in bytes), 0 for default size
+ * @base: Base address of the reserved area, 0 for any
+ * @limit: End address of the reserved memory, 0 for any
  *
  * This function reserves memory from early allocator, memblock.
  * It can be called several times under MAX_GCMA during boot.
@@ -104,11 +106,12 @@ static void set_entry(struct page *page, void *entry)
  * Returns id of reserved contiguous memory area if success,
  * Otherwise, return negative number.
  */
-int __init gcma_reserve(unsigned long long size)
+int __init gcma_reserve(phys_addr_t size, phys_addr_t base, phys_addr_t limit)
 {
 	int gid;
 	struct gcma_info *info;
-	phys_addr_t addr;
+	phys_addr_t align;
+	int ret;
 
 	gid = atomic_inc_return(&reserved_gcma);
 	if (gid > MAX_GCMA) {
@@ -120,14 +123,25 @@ int __init gcma_reserve(unsigned long long size)
 	if (size == 0)
 		size = def_gcma_bytes;
 
-	size = PAGE_ALIGN(size);
-	/* TODO: Why not MEMBLOCK_ALLOC_ANYWHERE? */
-	addr = __memblock_alloc_base((phys_addr_t)size, PAGE_SIZE,
-				MEMBLOCK_ALLOC_ACCESSIBLE);
-	if (!addr) {
-		pr_warn("failed to reserveg cma\n");
-		atomic_dec(&reserved_gcma);
-		return -ENOMEM;
+	align = PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order);
+	base = ALIGN(base, align);
+	size = ALIGN(size, align);
+	limit &= ~(align - 1);
+
+	if (base) {
+		if (memblock_is_region_reserved(base, size) ||
+				memblock_reserve(base, size) < 0) {
+			atomic_dec(&reserved_gcma);
+			ret = -EBUSY;
+			goto err;
+		}
+	} else {
+		base = __memblock_alloc_base(size, align, limit);
+		if (!base) {
+			atomic_dec(&reserved_gcma);
+			ret = -ENOMEM;
+			goto err;
+		}
 	}
 
 	gid -= 1;
@@ -136,9 +150,13 @@ int __init gcma_reserve(unsigned long long size)
 	info = &ginfo[gid];
 
 	info->size = size >> PAGE_SHIFT;
-	info->base_pfn = PFN_DOWN(addr);
+	info->base_pfn = PFN_DOWN(base);
 
 	return gid;
+
+err:
+	pr_warn("failed to reserve cma\n");
+	return ret;
 }
 
 /**
