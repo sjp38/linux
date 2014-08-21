@@ -211,9 +211,13 @@ EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 /**
  * gcma_release_contig - release pages from contiguous area
  * @gid: id of contiguous memory area
+ * @page: Requesting pages to release
  * @pages: Requested number of pages.
+ *
+ * Returns false if @page do not belong to contiguous area
+ * Returns true otherwise.
  */
-void gcma_release_contig(int gid, struct page *page, int pages)
+bool gcma_release_contig(int gid, struct page *page, int pages)
 {
 	unsigned long pfn, offset;
 	unsigned long *bitmap;
@@ -223,7 +227,7 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 
 	if (gid >= max_gcma) {
 		WARN(1, "invalid gid %d [%d]\n", gid, max_gcma);
-		return;
+		return false;
 	}
 
 	info = &ginfo[gid];
@@ -234,11 +238,14 @@ void gcma_release_contig(int gid, struct page *page, int pages)
 	spin_lock(&info->lock);
 
 	next_zero_bit = find_next_zero_bit(bitmap, offset + pages, offset);
-	if (next_zero_bit < offset + pages - 1)
-		BUG();
+	if (next_zero_bit < offset + pages - 1) {
+		WARN(1, "invalid area required to be released");
+		return false;
+	}
 
 	bitmap_clear(bitmap, offset, pages);
 	spin_unlock(&info->lock);
+	return true;
 }
 EXPORT_SYMBOL_GPL(gcma_release_contig);
 
