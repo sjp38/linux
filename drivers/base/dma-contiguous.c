@@ -106,6 +106,9 @@ static inline __maybe_unused phys_addr_t cma_early_percent_memory(void)
  */
 void __init dma_contiguous_reserve(phys_addr_t limit)
 {
+#ifdef CONFIG_GCMA
+	gcma_reserve(0, 0, limit);
+#else
 	phys_addr_t selected_size = 0;
 
 	pr_debug("%s(limit %08lx)\n", __func__, (unsigned long)limit);
@@ -131,6 +134,7 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 		dma_contiguous_reserve_area(selected_size, 0, limit,
 					    &dma_contiguous_default_area);
 	}
+#endif
 };
 
 static DEFINE_MUTEX(cma_mutex);
@@ -275,6 +279,9 @@ err:
 struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 				       unsigned int align)
 {
+#ifdef CONFIG_GCMA
+	return gcma_alloc_contig(dev_get_gcma_id(dev), count, align);
+#else
 	unsigned long mask, pfn, pageno, start = 0;
 	struct cma *cma = dev_get_cma_area(dev);
 	struct page *page = NULL;
@@ -320,6 +327,7 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 	mutex_unlock(&cma_mutex);
 	pr_debug("%s(): returned %p\n", __func__, page);
 	return page;
+#endif
 }
 EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 
@@ -336,6 +344,9 @@ EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count)
 {
+#ifdef CONFIG_GCMA
+	return gcma_release_contig(dev_get_gcma_id(dev), pages, count);
+#else
 	struct cma *cma = dev_get_cma_area(dev);
 	unsigned long pfn;
 
@@ -357,5 +368,6 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 	mutex_unlock(&cma_mutex);
 
 	return true;
+#endif
 }
 EXPORT_SYMBOL_GPL(dma_release_from_contiguous);

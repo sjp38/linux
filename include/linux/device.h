@@ -757,10 +757,15 @@ struct device {
 
 	struct dma_coherent_mem	*dma_mem; /* internal for coherent mem
 					     override */
+#ifndef CONFIG_GCMA
 #ifdef CONFIG_DMA_CMA
 	struct cma *cma_area;		/* contiguous memory area for dma
 					   allocations */
 #endif
+#else
+	unsigned int gcma_id;
+#endif
+
 	/* arch specific additions */
 	struct dev_archdata	archdata;
 

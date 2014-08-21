@@ -1122,11 +1122,6 @@ void __init setup_arch(char **cmdline_p)
 	memblock_set_current_limit(get_max_mapped());
 	dma_contiguous_reserve(0);
 
-#ifdef CONFIG_GCMA
-	if (gcma_reserve(0, 0, 0) < 0)
-		pr_warn("gcma reserving failed\n");
-#endif
-
 	/*
 	 * NOTE: On x86-32, only from this point on, fixmaps are ready for use.
 	 */

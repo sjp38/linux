@@ -55,10 +55,15 @@
 
 #include <linux/device.h>
 
+#ifdef CONFIG_GCMA
+#include <linux/gcma.h>
+#endif
+
 struct cma;
 struct page;
 struct device;
 
+#ifndef CONFIG_GCMA
 #ifdef CONFIG_DMA_CMA
 
 /*
@@ -162,6 +167,42 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 {
 	return false;
 }
+
+#endif
+
+#else /* CONFIG_GCMA */
+
+#define MAX_CMA_AREAS	(0)
+
+static inline struct cma *dev_get_cma_area(struct device *dev)
+{
+	return NULL;
+}
+
+static inline void dev_set_cma_area(struct device *dev, struct cma *cma) { }
+
+static inline void dma_contiguous_set_default(struct cma *cma) { }
+
+void dma_contiguous_reserve(phys_addr_t addr_limit);
+
+int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
+				       phys_addr_t limit, struct cma **res_cma);
+
+static inline int dma_declare_contiguous(struct device *dev, phys_addr_t size,
+					 phys_addr_t base, phys_addr_t limit)
+{
+	unsigned int gid = gcma_reserve(size, base, limit);
+	if (gid < 0)
+		return gid;
+	dev_set_gcma_id(dev, gid);
+	return 0;
+}
+
+struct page *dma_alloc_from_contiguous(struct device *dev, int count,
+				       unsigned int order);
+
+bool dma_release_from_contiguous(struct device *dev, struct page *pages,
+				 int count);
 
 #endif
 
