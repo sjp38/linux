@@ -28,13 +28,19 @@
 #include <linux/dma-contiguous.h>
 #include <linux/cma.h>
 
+#ifdef CONFIG_GCMA
+#include <linux/gcma.h>
+#endif
+
 #ifdef CONFIG_CMA_SIZE_MBYTES
 #define CMA_SIZE_MBYTES CONFIG_CMA_SIZE_MBYTES
 #else
 #define CMA_SIZE_MBYTES 0
 #endif
 
+#ifndef CONFIG_GCMA
 struct cma *dma_contiguous_default_area;
+#endif
 
 /*
  * Default global CMA area size can be defined in kernel's .config.
@@ -131,6 +137,10 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 #endif
 	}
 
+#ifdef CONFIG_GCMA
+	/* TODO: call dma_contiguous_early_fixup */
+	gcma_reserve(selected_size, selected_base, selected_limit);
+#else
 	if (selected_size && !dma_contiguous_default_area) {
 		pr_debug("%s: reserving %ld MiB for global area\n", __func__,
 			 (unsigned long)selected_size / SZ_1M);
@@ -140,6 +150,7 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 					    &dma_contiguous_default_area,
 					    fixed);
 	}
+#endif
 }
 
 /**
@@ -163,6 +174,9 @@ int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
 				       phys_addr_t limit, struct cma **res_cma,
 				       bool fixed)
 {
+#ifdef CONFIG_GCMA
+	return -ENOSYS;
+#else
 	int ret;
 
 	ret = cma_declare_contiguous(base, size, limit, 0, 0, fixed, res_cma);
@@ -174,7 +188,20 @@ int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
 				cma_get_size(*res_cma));
 
 	return 0;
+#endif
 }
+
+#ifdef CONFIG_GCMA
+int dma_declare_contiguous(struct device *dev, phys_addr_t size,
+					 phys_addr_t base, phys_addr_t limit)
+{
+	int gid = gcma_reserve(size, base, limit);
+	if (gid >= 0)
+		dev_set_gcma_id(dev, gid);
+
+	return gid;
+}
+#endif
 
 /**
  * dma_alloc_from_contiguous() - allocate pages from contiguous area
@@ -190,10 +217,14 @@ int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
 struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 				       unsigned int align)
 {
+#ifdef CONFIG_GCMA
+	return gcma_alloc_contig(dev_get_gcma_id(dev), count, align);
+#else
 	if (align > CONFIG_CMA_ALIGNMENT)
 		align = CONFIG_CMA_ALIGNMENT;
 
 	return cma_alloc(dev_get_cma_area(dev), count, align);
+#endif
 }
 EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 
@@ -210,6 +241,10 @@ EXPORT_SYMBOL_GPL(dma_alloc_from_contiguous);
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count)
 {
+#ifdef CONFIG_GCMA
+	return gcma_release_contig(dev_get_gcma_id(dev), pages, count);
+#else
 	return cma_release(dev_get_cma_area(dev), pages, count);
+#endif
 }
 EXPORT_SYMBOL_GPL(dma_release_from_contiguous);

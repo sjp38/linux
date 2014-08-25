@@ -58,6 +58,7 @@
 struct cma;
 struct page;
 
+#ifndef CONFIG_GCMA
 #ifdef CONFIG_DMA_CMA
 
 extern struct cma *dma_contiguous_default_area;
@@ -156,6 +157,40 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 {
 	return false;
 }
+
+#endif
+
+#else /* ifndef CONFIG_GCMA */
+
+static inline int dev_get_gcma_id(struct device *dev)
+{
+	if (dev && dev->gcma_id)
+		return dev->gcma_id;
+	return 0;
+}
+
+static inline void dev_set_gcma_id(struct device *dev, int gid)
+{
+	if (dev)
+		dev->gcma_id = gid;
+}
+
+static inline void dma_contiguous_set_default(struct cma *cma) {}
+
+void dma_contiguous_reserve(phys_addr_t addr_limit);
+
+int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
+				       phys_addr_t limit, struct cma **res_cma,
+				       bool fixed);
+
+int dma_declare_contiguous(struct device *dev, phys_addr_t size,
+					 phys_addr_t base, phys_addr_t limit);
+
+struct page *dma_alloc_from_contiguous(struct device *dev, int count,
+				       unsigned int order);
+bool dma_release_from_contiguous(struct device *dev, struct page *pages,
+				 int count);
+
 
 #endif
 
