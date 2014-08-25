@@ -62,9 +62,6 @@
 #include <linux/hugetlb.h>
 #include <linux/sched/rt.h>
 #include <linux/dma-contiguous.h>
-#ifdef CONFIG_GCMA
-#include <linux/gcma.h>
-#endif
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
@@ -6661,19 +6658,11 @@ static noinline int cma_alloc_test(void)
 	int ret = 1;
 	struct page *page;
 
-#ifndef CONFIG_GCMA
 	page = dma_alloc_from_contiguous(NULL, sysctl_alloc_cma, 0);
-#else
-	page = gcma_alloc_contig(0, sysctl_alloc_cma, 0);
-#endif
 	count_vm_event(TRY_ALLOC_CMA);
 	if (page) {
 		count_vm_event(ALLOC_CMA_SUCCESS);
-#ifndef CONFIG_GCMA
 		dma_release_from_contiguous(NULL, page, sysctl_alloc_cma);
-#else
-		gcma_release_contig(0, page, sysctl_alloc_cma);
-#endif
 		ret = 0;
 	}
 
