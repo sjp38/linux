@@ -6663,7 +6663,7 @@ static noinline int cma_alloc_test(void)
 #ifndef CONFIG_GCMA
 	page = dma_alloc_from_contiguous(NULL, sysctl_alloc_cma, 0);
 #else
-	page = gcma_alloc_contig(0, sysctl_alloc_cma);
+	page = gcma_alloc_contig(0, sysctl_alloc_cma, 0);
 #endif
 	count_vm_event(TRY_ALLOC_CMA);
 	if (page) {
