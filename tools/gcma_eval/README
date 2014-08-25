@@ -1,0 +1,73 @@
+Evaluate gcma from user space
+
+This directory contains source files and scripts for gcma evaluation from
+user space.
+
+Currently available evaluations(currently, only one...) are as following:
+
+Success rate / latency
+----------------------
+
+1. Memory stress
+Stress memory by randomly read / write 8MiB from every ramdomly selected
+position of 2GiB file using 14 concurrent threads.
+
+2. Success rate / latency evaluation
+While `Memory stress` running in background, request 10 ~ 10000 contiguous
+pages allocation and then release the pages using cma and gcma, compare their
+success / fail count, time spend for allocation / failed allocation / release.
+Do the allocation / release 10 times for each requesting size, compute average,
+minimum, maximum times. Each allocation have term between them 1 seconds to
+warm up memory.
+
+Build
+=====
+
+Just do the command following:
+$ make
+
+Usage
+=====
+
+Ensure the debugfs is mounted
+Start evaluation using following command:
+$ ./eval.sh
+
+You can see the result using following command:
+$ cat /sys/kernel/debugfs/gcma_eval/res
+
+It display the result in human readable format by kernel log like following:
+[ 1140.781539] test_gcma: 10 page request evaluated.
+[ 1140.781539] [gcma] succ/fail:10/0
+[ 1140.781539]   succ alloc min:4460    max:153470      avg:24117
+[ 1140.781539]   fail alloc min:0       max:0   avg:0
+[ 1140.781539]   release min:40860      max:102940      avg:52517
+[ 1140.781539] [cma] succ/fail:10/0
+[ 1140.781539]   succ alloc min:466550  max:427562270   avg:52249527
+[ 1140.781539]   fail alloc min:0       max:0   avg:0
+[ 1140.781539]   release min:13310      max:918370      avg:170465
+[ 1140.783208] test_gcma: 50 page request evaluated.
+[ 1140.783208] [gcma] succ/fail:10/0
+[ 1140.783208]   succ alloc min:6050    max:31130       avg:11687
+[ 1140.783208]   fail alloc min:0       max:0   avg:0
+[ 1140.783208]   release min:38730      max:47700       avg:42673
+[ 1140.783208] [cma] succ/fail:10/0
+[ 1140.783208]   succ alloc min:471840  max:359451970   avg:37874298
+[ 1140.783208]   fail alloc min:0       max:0   avg:0
+[ 1140.783208]   release min:22050      max:25250       avg:23087
+
+and then on csv(column seperated value) format like following:
+5000,10,0,8630,22680,11084,0,0,0,41550,406220,81774,0,10,0,0,0,62490,255210,96455,0,0,0
+
+Each column's meaning is as follow:
+page,gcma succ,gcma fail,gcma alloc min,gcma alloc max,gcma alloc avg,gcma fail
+min,gcma fail max,gcma fail avg,gcma free min,gcam free max,gcma free avg,cma
+succ,cma fail,cma alloc min,cma alloc max,cma alloc avg,cma fail min,cma fail
+max,cma fail avg,cma free min,cma free max,cma free avg
+TODO
+====
+
+Add more workloads, benchmarks
+First of all, make linux build works with gcma enabled environment, measure the
+performance.
+
