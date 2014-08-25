@@ -105,17 +105,17 @@ static int test_alloc_release_contig(void)
 {
 	struct page *cma1, *cma2, *cma3;
 
-	cma1 = gcma_alloc_contig(0, 5);
+	cma1 = gcma_alloc_contig(0, 5, 0);
 	if (!cma1) {
 		pr_err("failed to alloc 5 contig pages\n");
 		return -1;
 	}
-	cma2 = gcma_alloc_contig(0, 10);
+	cma2 = gcma_alloc_contig(0, 10, 0);
 	if (!cma2) {
 		pr_err("failed to alloc 10 contig pages\n");
 		return -1;
 	}
-	cma3 = gcma_alloc_contig(0, 16);
+	cma3 = gcma_alloc_contig(0, 16, 0);
 	if (!cma3) {
 		pr_err("failed to alloc 16 contig pages\n");
 		return -1;
@@ -192,7 +192,7 @@ static int measure_gcma(int nr_pages,
 	struct page *page;
 	struct timespec start, end;
 	getnstimeofday(&start);
-	page = gcma_alloc_contig(0, nr_pages);
+	page = gcma_alloc_contig(0, nr_pages, 0);
 	getnstimeofday(&end);
 	*alloc_time = time_diff(&start, &end);
 	if (!page) {
