@@ -157,14 +157,15 @@ EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
 /**
  * gcma_release_contig - release pages from contiguous area
+ * @gid: id of contiguous memory area
+ * @pages: Requested number of pages.
  */
-void gcma_release_contig(struct gcma_page *gpage, int pages)
+void gcma_release_contig(int gid, struct page *page, int pages)
 {
 	unsigned long pfn, offset;
 	unsigned long *bitmap;
 	unsigned long next_zero_bit;
 	struct gcma_info *info;
-	int gid = gpage->gid;
 	int max_gcma = atomic_read(&reserved_gcma);
 
 	if (gid >= max_gcma) {
@@ -173,7 +174,7 @@ void gcma_release_contig(struct gcma_page *gpage, int pages)
 	}
 
 	info = &ginfo[gid];
-	pfn = page_to_pfn(gpage->page);
+	pfn = page_to_pfn(page);
 	offset = pfn - info->base_pfn;
 
 	pr_debug("pfn: %ld, gcma start: %ld, offset: %ld\n",
@@ -259,7 +260,7 @@ static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 
 static void frontswap_free_entry(struct swap_slot_entry *entry)
 {
-	gcma_release_contig(&entry->gpage, 1);
+	gcma_release_contig(entry->gpage.gid, entry->gpage.page, 1);
 	kmem_cache_free(swap_slot_entry_cache, entry);
 }
 
