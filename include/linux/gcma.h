@@ -24,7 +24,7 @@
 #ifndef _LINUX_GCMA_H
 #define _LINUX_GCMA_H
 
-int gcma_reserve(phys_addr_t size);
+int gcma_reserve(phys_addr_t size, phys_addr_t base, phys_addr_t limit);
 
 struct page *gcma_alloc_contig(int gcma_id, int count);
 void gcma_release_contig(int id, struct page *page, int pages);
