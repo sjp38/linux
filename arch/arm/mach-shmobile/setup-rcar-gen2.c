@@ -165,7 +165,11 @@ static int __init rcar_gen2_scan_mem(unsigned long node, const char *uname,
 	return 0;
 }
 
+#ifndef CONFIG_GCMA
 struct cma *rcar_gen2_dma_contiguous;
+#else
+int rcar_gen2_dma_contig_id;
+#endif
 
 void __init rcar_gen2_reserve(void)
 {
@@ -178,7 +182,11 @@ void __init rcar_gen2_reserve(void)
 	of_scan_flat_dt(rcar_gen2_scan_mem, &mrc);
 #ifdef CONFIG_DMA_CMA
 	if (mrc.size)
+#ifndef CONFIG_GCMA
 		dma_contiguous_reserve_area(mrc.size, mrc.base, 0,
 					    &rcar_gen2_dma_contiguous, true);
+#else
+		rcar_gen2_dma_contig_id = gcma_reserve(mrc.size, mrc.base, 0);
+#endif
 #endif
 }
