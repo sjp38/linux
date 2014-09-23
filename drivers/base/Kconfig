@@ -225,7 +225,7 @@ config FENCE_TRACE
 
 config DMA_CMA
 	bool "DMA Contiguous Memory Allocator"
-	depends on HAVE_DMA_CONTIGUOUS && CMA
+	depends on HAVE_DMA_CONTIGUOUS && (CMA || GCMA)
 	help
 	  This enables the Contiguous Memory Allocator which allows drivers
 	  to allocate big physically-contiguous blocks of memory for use with
