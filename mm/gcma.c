@@ -1,7 +1,7 @@
 /*
  * gcma.c - Guaranteed Contiguous Memory Allocator
  *
- * GCMA aims for successful allocation within predictable time limit.
+ * GCMA aims for successful allocation within predictable time
  *
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
  *                     SeongJae Park <sj38.park@gmail.com>
@@ -15,15 +15,31 @@
 #include <linux/frontswap.h>
 #include <linux/highmem.h>
 
-struct gcma_page {
-	struct page *page;
-	unsigned int gid;
+/* TODO: Need to think about this magic value. Maybe knob? */
+#define NR_EVICT_BATCH	32
+
+struct gcma {
+	spinlock_t lock;
+	unsigned long *bitmap;
+	unsigned long base_pfn;
+	unsigned long size;
+	struct list_head list;
+};
+
+struct gcma_info {
+	spinlock_t lock; /* TODO: We may use RCU */
+	struct list_head head;
+};
+
+static struct gcma_info ginfo = {
+	.head = LIST_HEAD_INIT(ginfo.head),
+	.lock = __SPIN_LOCK_UNLOCKED(ginfo.lock),
 };
 
 struct swap_slot_entry {
 	struct rb_node rbnode;
 	pgoff_t offset;
-	struct gcma_page gpage;
+	struct page *page;
 	atomic_t refcount;
 };
 
@@ -48,30 +64,7 @@ static atomic_t gcma_evicted_pages = ATOMIC_INIT(0);
 static bool gcma_enabled __read_mostly;
 module_param_named(enabled, gcma_enabled, bool, 0);
 
-/* Default size of contiguous memory area : 100M */
-static unsigned long long def_gcma_bytes __read_mostly = (100 << 20);
-
-static int __init early_gcma(char *p)
-{
-	pr_debug("set %s as default cma size\n", p);
-	def_gcma_bytes = memparse(p, &p);
-	return 0;
-}
-early_param("gcma.def_cma_bytes", early_gcma);
-
-#define MAX_GCMA	32
-
-struct gcma_info {
-	unsigned long *bitmap;
-	unsigned long base_pfn;
-	unsigned long size; /* PAGE_SIZE unit */
-	spinlock_t lock;
-};
-
-static struct gcma_info ginfo[MAX_GCMA];
-static atomic_t reserved_gcma = ATOMIC_INIT(0);
-
-static int evict_frontswap_pages(int gid, int pages);
+static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 
 static void *root_of(struct page *page)
 {
@@ -93,161 +86,154 @@ static void set_entry(struct page *page, void *entry)
 	page->index = (pgoff_t)entry;
 }
 
-
-/**
- * gcma_reserve - Reserve contiguous memory area
- * @size: Size of the reserved area (in bytes), 0 for default size
- * @base: Base address of the reserved area, 0 for any
- * @limit: End address of the reserved memory, 0 for any
- *
- * This function reserves memory from early allocator, memblock.
- * It can be called several times under MAX_GCMA during boot.
- *
- * Returns id of reserved contiguous memory area if success,
- * Otherwise, return negative number.
- */
-int __init gcma_reserve(phys_addr_t size, phys_addr_t base, phys_addr_t limit)
+/* Protected by swap_lru_lock */
+static void set_page_reclaim(struct page *page)
 {
-	int gid;
-	struct gcma_info *info;
-	phys_addr_t align;
-	int ret;
-
-	gid = atomic_inc_return(&reserved_gcma);
-	if (gid > MAX_GCMA) {
-		atomic_dec(&reserved_gcma);
-		pr_warn("There is no more space in GCMA.\n");
-		return -ENOMEM;
-	}
-
-	if (size == 0)
-		size = def_gcma_bytes;
-
-	align = PAGE_SIZE << max(MAX_ORDER - 1, pageblock_order);
-	base = ALIGN(base, align);
-	size = ALIGN(size, align);
-	limit &= ~(align - 1);
-
-	if (base) {
-		if (memblock_is_region_reserved(base, size) ||
-				memblock_reserve(base, size) < 0) {
-			atomic_dec(&reserved_gcma);
-			ret = -EBUSY;
-			goto err;
-		}
-	} else {
-		base = __memblock_alloc_base(size, align, limit);
-		if (!base) {
-			atomic_dec(&reserved_gcma);
-			ret = -ENOMEM;
-			goto err;
-		}
-	}
-
-	gid -= 1;
-	pr_debug("%llu bytes gcma reserved\n", size);
-
-	info = &ginfo[gid];
-
-	info->size = size >> PAGE_SHIFT;
-	info->base_pfn = PFN_DOWN(base);
-
-	return gid;
-
-err:
-	pr_warn("failed to reserve cma\n");
-	return ret;
+	page->private = 1;
 }
 
-/**
- * gcma_alloc_contig - allocate pages from contiguous area
- * @gmca_id: Identifier of contiguous memory area which the allocation be done
- * @pages: Number of pages
- * @align: Alignment of pages (in PAGE_SIZE order)
- *
- * Returns NULL if failed to allocate,
- * Returns struct page of start address of allocated memory
- */
-struct page *gcma_alloc_contig(int gid, int pages, unsigned int align)
+static int page_reclaim(struct page *page)
 {
-	int max_gcma;
-	int id = gid;
-	unsigned long *bitmap, next_zero_area, mask;
-	struct gcma_info *info;
+	return page->private;
+}
+
+static void clear_page_reclaim(struct page *page)
+{
+	page->private = 0;
+}
+/**
+ * gcma_reserve - Reserve contiguous memory area
+ * @pfn: base pfn of the reserved area
+ * @size: size of the reserved area
+ *
+ */
+int gcma_reserve(unsigned long pfn, unsigned long size)
+{
+	struct gcma *cma;
+	unsigned long cnt;
+
+	cma = kmalloc(sizeof(*cma), GFP_KERNEL);
+	if (!cma)
+		goto out; /* TODO: caller should handle it */
+
+	cma->size = size;
+	cma->base_pfn = pfn;
+	spin_lock_init(&cma->lock);
+
+	cnt = cma->size / sizeof(*cma->bitmap);
+	if (cma->size % sizeof(*cma->bitmap))
+		cnt += 1;
+	cma->bitmap = kzalloc(cnt, GFP_KERNEL);
+	if (!cma->bitmap)
+		goto free_cma;
+
+	spin_lock(&ginfo.lock);
+	list_add(&cma->list, &ginfo.head);
+	spin_unlock(&ginfo.lock);
+
+	pr_info("gcma reserve [%lu, %lu]\n", pfn, pfn + size);
+	return 0;
+
+free_cma:
+	kfree(cma);
+out:
+	return -ENOMEM;
+}
+
+static struct page *__gcma_alloc(struct gcma *cma)
+{
+	unsigned long bit;
+	unsigned long *bitmap = cma->bitmap;
 	struct page *page = NULL;
 
-	max_gcma = atomic_read(&reserved_gcma);
-	if (id >= max_gcma) {
-		WARN(1, "invalid gcma_id %d [%d]\n", id, max_gcma);
+	spin_lock(&cma->lock);
+	/* TODO: should be optimized */
+	bit = bitmap_find_next_zero_area(bitmap, cma->size, 0, 1, 0);
+
+	if (bit >= cma->size) {
+		spin_unlock(&cma->lock);
 		goto out;
 	}
 
-	info = &ginfo[id];
-	bitmap = info->bitmap;
-	mask = (1 << align) - 1;
+	bitmap_set(bitmap, bit, 1);
+	spin_unlock(&cma->lock);
 
-	spin_lock(&info->lock);
-	do {
-		next_zero_area = bitmap_find_next_zero_area(bitmap, info->size,
-				0, pages, mask);
-		if (next_zero_area >= info->size) {
-			spin_unlock(&info->lock);
-			if (evict_frontswap_pages(gid, pages) < 0) {
-				return NULL;
-			}
-			spin_lock(&info->lock);
-		}
-	} while (next_zero_area >= info->size);
-
-	bitmap_set(bitmap, next_zero_area, pages);
-	spin_unlock(&info->lock);
-
-	page = pfn_to_page(info->base_pfn + next_zero_area);
+	page = pfn_to_page(cma->base_pfn + bit);
+	clear_page_reclaim(page);
 out:
 	return page;
 }
-EXPORT_SYMBOL_GPL(gcma_alloc_contig);
 
-/**
- * gcma_release_contig - release pages from contiguous area
- * @gid: id of contiguous memory area
- * @page: Requesting pages to release
- * @pages: Requested number of pages.
- *
- * Returns false if @page do not belong to contiguous area
- * Returns true otherwise.
- */
-bool gcma_release_contig(int gid, struct page *page, int pages)
+static struct page *gcma_alloc(void)
 {
-	unsigned long pfn, offset;
-	unsigned long *bitmap;
-	unsigned long next_zero_bit;
-	struct gcma_info *info;
-	int max_gcma = atomic_read(&reserved_gcma);
+	struct page *page;
+	struct gcma *cma;
 
-	if (gid >= max_gcma) {
-		WARN(1, "invalid gid %d [%d]\n", gid, max_gcma);
-		return false;
+retry:
+	spin_lock(&ginfo.lock);
+	cma = list_first_entry(&ginfo.head, struct gcma, list);
+	/* Do roundrobin */
+	list_move_tail(&cma->list, &ginfo.head);
+	spin_unlock(&ginfo.lock);
+
+	/* CMA area shouldn't destroy once it is activated */
+	page = __gcma_alloc(cma);
+	if (page)
+		goto got;
+
+	/* Find empty slot in all cma areas */
+	spin_lock(&ginfo.lock);
+	list_for_each_entry(cma, &ginfo.head, list) {
+		page = __gcma_alloc(cma);
+		if (page)
+			break;
 	}
+	spin_unlock(&ginfo.lock);
 
-	info = &ginfo[gid];
-	pfn = page_to_pfn(page);
-	offset = pfn - info->base_pfn;
-
-	bitmap = info->bitmap;
-	spin_lock(&info->lock);
-
-	next_zero_bit = find_next_zero_bit(bitmap, offset + pages, offset);
-	if (next_zero_bit < offset + pages - 1) {
-		WARN(1, "invalid area required to be released");
-		return false;
-	}
-
-	bitmap_clear(bitmap, offset, pages);
-	spin_unlock(&info->lock);
-	return true;
+	if (evict_frontswap_pages(NR_EVICT_BATCH))
+		goto retry;
+got:
+	return page;
 }
-EXPORT_SYMBOL_GPL(gcma_release_contig);
+
+static struct gcma *find_gcma(unsigned long pfn)
+{
+	struct gcma *cma = NULL;
+
+	spin_lock(&ginfo.lock);
+	list_for_each_entry(cma, &ginfo.head, list) {
+		if (pfn >= cma->base_pfn && pfn < cma->base_pfn + cma->size)
+			break;
+	}
+	spin_unlock(&ginfo.lock);
+	return cma;
+}
+
+static void gcma_free(struct page *page)
+{
+	struct gcma *cma;
+	unsigned long pfn, offset;
+	bool reclaim = page_reclaim(page);
+
+	pfn = page_to_pfn(page);
+	cma = find_gcma(pfn);
+	if (!cma) {
+		WARN_ON(1);
+		return;
+	}
+
+	offset = pfn - cma->base_pfn;
+
+	spin_lock(&cma->lock);
+	if (likely(!reclaim)) {
+		bitmap_clear(cma->bitmap, offset, 1);
+	} else {
+		/* It will prevent further allocation */
+		bitmap_set(cma->bitmap, offset, 1);
+		clear_page_reclaim(page);
+	}
+	spin_unlock(&cma->lock);
+}
 
 /*
  * Stolen from zswap.
@@ -313,7 +299,7 @@ static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 
 static void frontswap_free_entry(struct swap_slot_entry *entry)
 {
-	gcma_release_contig(entry->gpage.gid, entry->gpage.page, 1);
+	gcma_free(entry->page);
 	kmem_cache_free(swap_slot_entry_cache, entry);
 }
 
@@ -336,9 +322,9 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 	int refcount = atomic_dec_return(&entry->refcount);
 
 	BUG_ON(refcount < 0);
+
 	if (refcount == 0) {
-		struct page *page;
-		page = entry->gpage.page;
+		struct page *page = entry->page;
 
 		frontswap_rb_erase(&tree->rbroot, entry);
 		if (!locked)
@@ -350,18 +336,17 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 	}
 }
 
-static int evict_frontswap_pages(int gid, int pages)
+static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 {
 	struct frontswap_tree *tree;
 	struct swap_slot_entry *entry;
 	struct page *page, *n;
-	int evicted = 0;
+	unsigned long evicted = 0;
 	LIST_HEAD(free_pages);
 
 	spin_lock(&swap_lru_lock);
 	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
 		entry = (struct swap_slot_entry *)entry_of(page);
-
 		/*
 		 * the entry could be free by other thread in the while.
 		 * check whether the situation occurred and avoid others to
@@ -370,15 +355,9 @@ static int evict_frontswap_pages(int gid, int pages)
 		 */
 		if (!atomic_inc_not_zero(&entry->refcount))
 			continue;
-		if (entry->gpage.gid != gid) {
-			tree = (struct frontswap_tree *)root_of(page);
-			swap_slot_entry_put(tree, entry, 1);
-			continue;
-		}
 
 		list_move(&page->lru, &free_pages);
-
-		if (++evicted >= pages)
+		if (++evicted >= nr_pages)
 			break;
 	}
 	spin_unlock(&swap_lru_lock);
@@ -437,41 +416,29 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	struct page *cma_page = NULL;
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	u8 *src, *dst;
-	static int last_gid;
-	int gid, ret;
-	int max_gcma = atomic_read(&reserved_gcma);
+	int ret;
 
 	if (!tree) {
 		WARN(1, "frontswap tree for type %d is not exist\n",
 				type);
 		return -ENODEV;
 	}
-
-	gid = last_gid;
-	while (gid < max_gcma) {
-		cma_page = gcma_alloc_contig(gid++, 1, 0);
-		if (cma_page != NULL)
-			break;
-	}
-	if (gid >= max_gcma)
-		gid = 0;
-	last_gid = gid;
-
-	if (cma_page == NULL) {
-		pr_warn("failed to get 1 page from gcma\n");
+retry:
+	cma_page = gcma_alloc();
+	if (!cma_page)
 		return -ENOMEM;
-	}
 
-	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_KERNEL);
+	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_NOIO);
 	if (!entry) {
+		gcma_free(cma_page);
 		return -ENOMEM;
 	}
 
-	entry->gpage.page = cma_page;
-	entry->gpage.gid = gid;
+	entry->page = cma_page;
 	entry->offset = offset;
 	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
+
 	set_root(cma_page, (void *)tree);
 	set_entry(cma_page, (void *)entry);
 
@@ -498,10 +465,24 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	} while (ret == -EEXIST);
 
 	spin_lock(&swap_lru_lock);
-	list_add(&cma_page->lru, &swap_lru_list);
+	if (likely(!page_reclaim(cma_page))) {
+		list_add(&cma_page->lru, &swap_lru_list);
+	} else {
+		/*
+		 * If there is going reclaim on this page,
+		 * rollback because owner(ex, device) am about to use
+		 * this area soon.
+		 */
+		frontswap_rb_erase(&tree->rbroot, entry);
+		swap_slot_entry_put(tree, entry, 1);
+		spin_unlock(&swap_lru_lock);
+		spin_unlock(&tree->lock);
+		kfree(entry);
+		goto retry;
+	}
 	spin_unlock(&swap_lru_lock);
-
 	spin_unlock(&tree->lock);
+
 	atomic_inc(&gcma_stored_pages);
 	return ret;
 }
@@ -528,7 +509,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	if (!entry)
 		return -1;
 
-	src = kmap_atomic(entry->gpage.page);
+	src = kmap_atomic(entry->page);
 	dst = kmap_atomic(page);
 	memcpy(dst, src, PAGE_SIZE);
 	kunmap_atomic(src);
@@ -536,12 +517,12 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 
 	spin_lock(&tree->lock);
 	spin_lock(&swap_lru_lock);
-	list_move(&entry->gpage.page->lru, &swap_lru_list);
+	list_move(&entry->page->lru, &swap_lru_list);
 	spin_unlock(&swap_lru_lock);
 	swap_slot_entry_put(tree, entry, 0);
 	spin_unlock(&tree->lock);
-	atomic_inc(&gcma_loaded_pages);
 
+	atomic_inc(&gcma_loaded_pages);
 	return 0;
 }
 
@@ -566,13 +547,12 @@ void gcma_frontswap_invalidate_area(unsigned type)
 	struct frontswap_tree *tree = gcma_swap_trees[type];
 	struct swap_slot_entry *entry, *n;
 
-	if (!tree) {
-		WARN(1, "failed to get frontswap tree for type %d\n", type);
+	if (!tree)
 		return;
-	}
 
 	spin_lock(&tree->lock);
 	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
+
 		/* We could optimize this frequent locking in future */
 		frontswap_rb_erase(&tree->rbroot, entry);
 		swap_slot_entry_put(tree, entry, 0);
@@ -591,6 +571,119 @@ static struct frontswap_ops gcma_frontswap_ops = {
 	.invalidate_page = gcma_frontswap_invalidate_page,
 	.invalidate_area = gcma_frontswap_invalidate_area
 };
+
+void validate_bitmap(unsigned long start, unsigned long end)
+{
+	unsigned long offset;
+	struct gcma *cma;
+	unsigned long *bitmap;
+	unsigned long pfn, nr;
+
+	/* TODO : should be enhanced */
+	for (pfn = start; pfn < end; pfn++) {
+		cma = find_gcma(pfn);
+
+		offset = pfn - cma->base_pfn;
+		nr = pfn % sizeof(unsigned long);
+		bitmap = cma->bitmap + offset / sizeof(unsigned long);
+
+		if (!test_bit(nr, bitmap))
+			BUG_ON(1);
+	}
+}
+
+int alloc_contig_range_gcma(unsigned long start, unsigned long end)
+{
+	LIST_HEAD(free_pages);
+	struct page *page, *n;
+	struct gcma *cma;
+	struct swap_slot_entry *entry;
+	unsigned long offset, nr;
+	unsigned long *bitmap;
+	struct frontswap_tree *tree;
+	unsigned long pfn;
+
+	for (pfn = start; pfn < end; pfn++) {
+		cma = find_gcma(pfn);
+		spin_lock(&cma->lock);
+		offset = pfn - cma->base_pfn;
+		nr = pfn % sizeof(unsigned long);
+
+		bitmap = cma->bitmap + offset / sizeof(unsigned long);
+		if (!test_bit(nr, bitmap)) {
+			/* set a bit for prevent allocation */
+			bitmap_set(cma->bitmap, offset, 1);
+			spin_unlock(&cma->lock);
+			continue;
+		}
+		spin_unlock(&cma->lock);
+
+		/* Someone is using the page so it's complicated from now on */
+		page = pfn_to_page(pfn);
+
+		spin_lock(&swap_lru_lock);
+		/*
+		 * If page->lru is empty, it means slot was allocated
+		 * but it's not added into swap_lru_list yet so let's
+		 * mark it as reclaiming so frontswap_store will be
+		 * free it soon.
+		 */
+		if (unlikely(list_empty(&page->lru))) {
+			set_page_reclaim(page);
+			spin_unlock(&swap_lru_lock);
+			continue;
+		}
+
+		entry = (struct swap_slot_entry *)entry_of(page);
+		/*
+		 * the entry could be free by other thread in the while.
+		 * check whether the situation occurred and avoid others to
+		 * free it by compare reference count and increase it
+		 * atomically.
+		 */
+		if (!atomic_inc_not_zero(&entry->refcount))
+			continue;
+
+		set_page_reclaim(page);
+		list_move(&page->lru, &free_pages);
+		spin_unlock(&swap_lru_lock);
+	}
+
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
+		tree = (struct frontswap_tree *)root_of(page);
+		entry = (struct swap_slot_entry *)entry_of(page);
+
+		spin_lock(&tree->lock);
+		/* drop refcount increased by above loop */
+		swap_slot_entry_put(tree, entry, 0);
+		/* free entry */
+		swap_slot_entry_put(tree, entry, 0);
+		spin_unlock(&tree->lock);
+	}
+
+	validate_bitmap(start, end);
+	return 0;
+}
+
+void free_contig_range_gcma(unsigned long start, unsigned long nr_pages)
+{
+	unsigned long free, offset;
+	struct gcma *cma;
+	unsigned long pfn = start;
+
+	while (nr_pages) {
+		cma = find_gcma(pfn);
+		offset = pfn - cma->base_pfn;
+		free = min(nr_pages, cma->size);
+
+		spin_lock(&cma->lock);
+		bitmap_clear(cma->bitmap, offset, free);
+		spin_unlock(&cma->lock);
+
+		nr_pages -= free;
+		pfn += free;
+	}
+}
 
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
@@ -623,35 +716,15 @@ static int __init gcma_debugfs_init(void)
 
 static int __init init_gcma(void)
 {
-	int i;
-	unsigned long bitmap_bytes;
-	int max_gcma;
-
 	if (!gcma_enabled)
 		return 0;
 
 	pr_info("loading gcma\n");
-	max_gcma = atomic_read(&reserved_gcma);
-
-	for (i = 0; i < max_gcma; i++) {
-		spin_lock_init(&ginfo[i].lock);
-		bitmap_bytes = ginfo[i].size / sizeof(*ginfo[i].bitmap);
-		if (ginfo[i].size % sizeof(*ginfo[i].bitmap))
-			bitmap_bytes += 1;
-		ginfo[i].bitmap = kzalloc(bitmap_bytes, GFP_KERNEL);
-		if (!ginfo[i].bitmap) {
-			pr_debug("failed to alloc bitmap\n");
-			return -ENOMEM;
-		}
-	}
 
 	spin_lock_init(&swap_lru_lock);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
-	if (swap_slot_entry_cache == NULL) {
-		pr_warn("failed to create frontswap cache\n");
-		/* TODO : free allocated memory */
+	if (swap_slot_entry_cache == NULL)
 		return -ENOMEM;
-	}
 
 	/*
 	 * By writethough mode, GCMA could discard all of pages in an instant

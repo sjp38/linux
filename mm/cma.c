@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/log2.h>
 #include <linux/cma.h>
+#include <linux/gcma.h>
 
 struct cma {
 	unsigned long	base_pfn;
@@ -83,6 +84,36 @@ static void cma_clear_bitmap(struct cma *cma, unsigned long pfn, int count)
 	mutex_unlock(&cma->lock);
 }
 
+#ifndef CONFIG_GCMA
+static int free_reserved_pages(unsigned long pfn, int count, struct zone *zone)
+{
+	int ret = 0;
+	unsigned long base_pfn;
+
+	do {
+		unsigned j;
+
+		base_pfn = pfn;
+		for (j = pageblock_nr_pages; j; --j, pfn++) {
+			WARN_ON_ONCE(!pfn_valid(pfn));
+			/*
+			 * alloc_contig_range requires the pfn range
+			 * specified to be in the same zone. Make this
+			 * simple by forcing the entire CMA resv range
+			 * to be in the same zone.
+			 */
+			if (page_zone(pfn_to_page(pfn)) != zone) {
+				ret = 1;
+				break;
+			}
+		}
+		init_cma_reserved_pageblock(pfn_to_page(base_pfn));
+	} while (--count);
+
+	return ret;
+}
+#endif
+
 static int __init cma_activate_area(struct cma *cma)
 {
 	int bitmap_size = BITS_TO_LONGS(cma_bitmap_maxno(cma)) * sizeof(long);
@@ -98,30 +129,18 @@ static int __init cma_activate_area(struct cma *cma)
 	WARN_ON_ONCE(!pfn_valid(pfn));
 	zone = page_zone(pfn_to_page(pfn));
 
-	do {
-		unsigned j;
-
-		base_pfn = pfn;
-		for (j = pageblock_nr_pages; j; --j, pfn++) {
-			WARN_ON_ONCE(!pfn_valid(pfn));
-			/*
-			 * alloc_contig_range requires the pfn range
-			 * specified to be in the same zone. Make this
-			 * simple by forcing the entire CMA resv range
-			 * to be in the same zone.
-			 */
-			if (page_zone(pfn_to_page(pfn)) != zone)
-				goto err;
-		}
-		init_cma_reserved_pageblock(pfn_to_page(base_pfn));
-	} while (--i);
-
+#ifdef CONFIG_GCMA
+	/* GCMA shouldn't return reserved pages to buddy */
+	i = 0; /* TODO: Shutup GCC */
+	gcma_reserve(cma->base_pfn, cma->count);
+#else
+	if (free_reserved_pages(pfn, i, zone)) {
+		kfree(cma->bitmap);
+		return -EINVAL;
+	}
+#endif
 	mutex_init(&cma->lock);
 	return 0;
-
-err:
-	kfree(cma->bitmap);
-	return -EINVAL;
 }
 
 static int __init cma_init_reserved_areas(void)
@@ -281,7 +300,11 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
+#ifdef CONFIG_GCMA
+		ret = alloc_contig_range_gcma(pfn, pfn + count);
+#else
 		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
+#endif
 		mutex_unlock(&cma_mutex);
 		if (ret == 0) {
 			page = pfn_to_page(pfn);
@@ -328,7 +351,11 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
+#ifdef CONFIG_GCMA
+	free_contig_range_gcma(pfn, count);
+#else
 	free_contig_range(pfn, count);
+#endif
 	cma_clear_bitmap(cma, pfn, count);
 
 	return true;
