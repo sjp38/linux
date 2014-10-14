@@ -643,11 +643,13 @@ static unsigned long complete_isolation(unsigned long start, unsigned long end)
 	unsigned long *bitmap;
 	unsigned long pfn, ret = 0;
 	struct page *page;
+
+	gcma = find_gcma(start);
+	spin_lock(&gcma->lock);
+
 	for (pfn = start; pfn < end; pfn++) {
 		int set;
-		gcma = find_gcma(pfn);
 
-		spin_lock(&gcma->lock);
 		page = pfn_to_page(pfn);
 		GCMA_BUG_ON_PAGE(!gcma, pfn_to_page(pfn));
 
@@ -657,18 +659,16 @@ static unsigned long complete_isolation(unsigned long start, unsigned long end)
 		set = test_bit(pfn % BITS_PER_LONG, bitmap);
 		if (!set) {
 			ret = pfn;
-			spin_unlock(&gcma->lock);
 			break;
 		}
 
 		if (!page_flag(page, ISOLATED)) {
 			ret = pfn;
-			spin_unlock(&gcma->lock);
 			break;
 		}
 
-		spin_unlock(&gcma->lock);
 	}
+	spin_unlock(&gcma->lock);
 	return ret;
 }
 
