@@ -90,10 +90,13 @@ static void cma_clear_bitmap(struct cma *cma, unsigned long pfn, int count)
  * as movable pages.
  * Return true if it's called successfully, Otherwise, false.
  */
-static bool free_reserved_pages(unsigned long pfn, int count, struct zone *zone)
+static bool free_reserved_pages(unsigned long pfn, int count)
 {
 	bool ret = true;
 	unsigned long base_pfn;
+	struct zone *zone;
+
+	zone = page_zone(pfn_to_page(pfn));
 
 	do {
 		unsigned i;
@@ -123,7 +126,6 @@ static int __init cma_activate_area(struct cma *cma)
 {
 	int bitmap_size = BITS_TO_LONGS(cma_bitmap_maxno(cma)) * sizeof(long);
 	unsigned long base_pfn = cma->base_pfn, pfn = base_pfn;
-	struct zone *zone;
 
 	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
 
@@ -131,13 +133,12 @@ static int __init cma_activate_area(struct cma *cma)
 		return -ENOMEM;
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
-	zone = page_zone(pfn_to_page(pfn));
 
 #ifdef CONFIG_GCMA
 	/* GCMA shouldn't return reserved pages to buddy */
 	gcma_activate_area(cma->base_pfn, cma->count);
 #else
-	if (!free_reserved_pages(pfn, cma->count >> pageblock_order, zone)) {
+	if (!free_reserved_pages(pfn, cma->count >> pageblock_order)) {
 		kfree(cma->bitmap);
 		return -EINVAL;
 	}
