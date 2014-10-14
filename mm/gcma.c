@@ -18,6 +18,7 @@
 /* TODO: Need to think about this magic value. Maybe knob? */
 #define NR_EVICT_BATCH	32
 
+/* TODO: Remove from release code */
 static void __dump_gcma_page(struct page *page, const char *reason)
 {
 	printk(KERN_ALERT
@@ -120,7 +121,7 @@ static void set_entry(struct page *page, void *entry)
 /* protected by gcma->lock */
 #define ISOLATED 0x4 /* page is isolated */
 
-/* Protected by swap_lru_lock and gcma->lock */
+/* Protected by swap_lru_lock or gcma->lock */
 static void set_page_flag(struct page *page, int flag)
 {
 	page->private |= flag;
@@ -365,7 +366,7 @@ static void swap_slot_entry_get(struct swap_slot_entry *entry)
  * remove from the tree and free it, if nobody reference the entry
  */
 static void swap_slot_entry_put(struct frontswap_tree *tree,
-		struct swap_slot_entry *entry, bool locked, int num)
+		struct swap_slot_entry *entry, bool locked)
 {
 	int refcount = atomic_dec_return(&entry->refcount);
 
@@ -433,10 +434,10 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		list_del(&page->lru);
 		spin_lock(&tree->lock);
 		/* drop refcount increased by above loop */
-		swap_slot_entry_put(tree, entry, 0, 1);
+		swap_slot_entry_put(tree, entry, 0);
 		/* free entry if the entry is still in tree */
 		if (frontswap_rb_search(&tree->rbroot, entry->offset))
-			swap_slot_entry_put(tree, entry, 0, 1);
+			swap_slot_entry_put(tree, entry, 0);
 		spin_unlock(&tree->lock);
 	}
 
@@ -530,7 +531,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
 		if (ret == -EEXIST) {
 			frontswap_rb_erase(&tree->rbroot, dupentry);
-			swap_slot_entry_put(tree, dupentry, 0, 2);
+			swap_slot_entry_put(tree, dupentry, 0);
 		}
 	} while (ret == -EEXIST);
 
@@ -578,7 +579,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	spin_lock(&swap_lru_lock);
 	if (likely(page_flag(gcma_page, SWAP_LRU)))
 		list_move(&gcma_page->lru, &swap_lru_list);
-	swap_slot_entry_put(tree, entry, 1, 3);
+	swap_slot_entry_put(tree, entry, 1);
 	spin_unlock(&swap_lru_lock);
 	spin_unlock(&tree->lock);
 
@@ -598,7 +599,7 @@ void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 		return;
 	}
 
-	swap_slot_entry_put(tree, entry, 0, 4);
+	swap_slot_entry_put(tree, entry, 0);
 	spin_unlock(&tree->lock);
 }
 
@@ -615,7 +616,7 @@ void gcma_frontswap_invalidate_area(unsigned type)
 
 		/* We could optimize this frequent locking in future */
 		frontswap_rb_erase(&tree->rbroot, entry);
-		swap_slot_entry_put(tree, entry, 0, 5);
+		swap_slot_entry_put(tree, entry, 0);
 	}
 	tree->rbroot = RB_ROOT;
 	spin_unlock(&tree->lock);
@@ -754,10 +755,10 @@ retry:
 		spin_lock(&tree->lock);
 		list_del_init(&page->lru);
 		/* drop refcount increased by above loop */
-		swap_slot_entry_put(tree, entry, 0, 6);
+		swap_slot_entry_put(tree, entry, 0);
 		/* free entry if the entry is still in tree */
 		if (frontswap_rb_search(&tree->rbroot, entry->offset))
-			swap_slot_entry_put(tree, entry, 0, 6);
+			swap_slot_entry_put(tree, entry, 0);
 		spin_unlock(&tree->lock);
 	}
 
