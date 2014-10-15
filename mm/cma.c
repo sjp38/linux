@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/log2.h>
 #include <linux/cma.h>
+#include <linux/gcma.h>
 
 struct cma {
 	unsigned long	base_pfn;
@@ -133,13 +134,15 @@ static int __init cma_activate_area(struct cma *cma)
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
 
-#ifndef CONFIG_GCMA
+#ifdef CONFIG_GCMA
 	/* GCMA shouldn't return reserved pages to buddy */
+	gcma_activate_area(cma->base_pfn, cma->count);
+#else
 	if (!free_reserved_pages(pfn, cma->count >> pageblock_order)) {
 		kfree(cma->bitmap);
 		return -EINVAL;
 	}
-#endif
+ #endif
 	mutex_init(&cma->lock);
 	return 0;
 }
@@ -268,7 +271,7 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 	unsigned long mask, pfn, start = 0;
 	unsigned long bitmap_maxno, bitmap_no, bitmap_count;
 	struct page *page = NULL;
-	int ret = 0;
+	int ret;
 
 	if (!cma || !cma->count)
 		return NULL;
@@ -301,7 +304,9 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
-#ifndef CONFIG_GCMA
+#ifdef CONFIG_GCMA
+		ret = alloc_contig_range_gcma(pfn, pfn + count);
+#else
 		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
 #endif
 		mutex_unlock(&cma_mutex);
@@ -350,7 +355,9 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
-#ifndef CONFIG_GCMA
+#ifdef CONFIG_GCMA
+	free_contig_range_gcma(pfn, count);
+#else
 	free_contig_range(pfn, count);
 #endif
 	cma_clear_bitmap(cma, pfn, count);
