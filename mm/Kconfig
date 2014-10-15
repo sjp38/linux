@@ -519,6 +519,19 @@ config CMA_AREAS
 
 	  If unsure, leave the default value "7".
 
+config GCMA
+	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
+	default n
+	select CMA
+	help
+	  A contiguous memory allocator which guarantees success and
+	  predictable latency for allocation request.
+	  It carves out large amount of memory and let them be allocated
+	  to the contiguous memory request.
+
+	  This is marked experimental because it is a new feature that
+	  unstable yet.
+
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
 	depends on CHECKPOINT_RESTORE && HAVE_ARCH_SOFT_DIRTY && PROC_FS
