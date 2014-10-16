@@ -2075,6 +2075,9 @@ static inline int in_gate_area(struct mm_struct *mm, unsigned long addr)
 extern int sysctl_drop_caches;
 int drop_caches_sysctl_handler(struct ctl_table *, int,
 					void __user *, size_t *, loff_t *);
+extern int sysctl_alloc_cma;
+int alloc_cma_sysctl_handler(struct ctl_table *, int,
+					void __user *, size_t *, loff_t *);
 #endif
 
 unsigned long shrink_slab(struct shrink_control *shrink,

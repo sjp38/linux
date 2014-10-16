@@ -59,11 +59,17 @@
 #include <linux/page-debug-flags.h>
 #include <linux/hugetlb.h>
 #include <linux/sched/rt.h>
+#include <linux/dma-contiguous.h>
+#ifdef CONFIG_GCMA
+#include <linux/gcma.h>
+#endif
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
+
+int sysctl_alloc_cma;
 
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
@@ -6548,3 +6554,29 @@ bool is_free_buddy_page(struct page *page)
 	return order < MAX_ORDER;
 }
 #endif
+
+static noinline int cma_alloc_test(void)
+{
+	int ret = 1;
+	struct page *page;
+
+	page = dma_alloc_from_contiguous(NULL, sysctl_alloc_cma, 0);
+	count_vm_event(TRY_ALLOC_CMA);
+	if (page) {
+		count_vm_event(ALLOC_CMA_SUCCESS);
+		dma_release_from_contiguous(NULL, page, sysctl_alloc_cma);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+int alloc_cma_sysctl_handler(struct ctl_table *table, int write,
+	void __user *buffer, size_t *length, loff_t *ppos)
+{
+	proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (write)
+		cma_alloc_test();
+
+	return 0;
+}
