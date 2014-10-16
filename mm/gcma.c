@@ -55,6 +55,12 @@ static spinlock_t swap_lru_lock;
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
 
+/* For statistics */
+static atomic_t gcma_stored_pages = ATOMIC_INIT(0);
+static atomic_t gcma_loaded_pages = ATOMIC_INIT(0);
+static atomic_t gcma_evicted_pages = ATOMIC_INIT(0);
+static atomic_t gcma_reclaimed_pages = ATOMIC_INIT(0);
+
 static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 static struct gcma *find_gcma(unsigned long pfn);
 
@@ -645,6 +651,7 @@ int alloc_contig_range_gcma(unsigned long start, unsigned long end)
 	BUG_ON(!gcma);
 retry:
 	for (pfn = start; pfn < end; pfn++) {
+
 		spin_lock(&gcma->lock);
 
 		offset = pfn - gcma->base_pfn;
@@ -736,6 +743,39 @@ void free_contig_range_gcma(unsigned long pfn, unsigned long nr_pages)
 		gcma_free(pfn_to_page(pfn + i));
 }
 
+#ifdef CONFIG_DEBUG_FS
+#include <linux/debugfs.h>
+
+static struct dentry *gcma_debugfs_root;
+
+static int __init gcma_debugfs_init(void)
+{
+	if (!debugfs_initialized())
+		return -ENODEV;
+
+	gcma_debugfs_root = debugfs_create_dir("gcma", NULL);
+	if (!gcma_debugfs_root)
+		return -ENOMEM;
+
+	debugfs_create_atomic_t("stored_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_stored_pages);
+	debugfs_create_atomic_t("loaded_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_loaded_pages);
+	debugfs_create_atomic_t("evicted_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_evicted_pages);
+	debugfs_create_atomic_t("reclaimed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_reclaimed_pages);
+
+	pr_info("gcma debufs init\n");
+	return 0;
+}
+#else
+static int __init gcma_debugfs_init(void)
+{
+	return 0;
+}
+#endif
+
 static int __init init_gcma(void)
 {
 	pr_info("loading gcma\n");
@@ -752,6 +792,7 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	gcma_debugfs_init();
 	return 0;
 }
 
