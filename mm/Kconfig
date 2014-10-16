@@ -522,11 +522,13 @@ config CMA_AREAS
 config GCMA
 	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
 	default n
+	select FRONTSWAP
 	help
 	  A contiguous memory allocator which guarantees success and
 	  predictable latency for allocation request.
 	  It carves out large amount of memory and let them be allocated
-	  to the contiguous memory request.
+	  to the contiguous memory request while it can be used as backend
+	  for frontswap.
 
 	  This is marked experimental because it is a new feature that
 	  interacts heavily with memory reclaim.
