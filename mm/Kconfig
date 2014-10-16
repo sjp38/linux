@@ -523,6 +523,7 @@ config GCMA
 	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
 	default n
 	select FRONTSWAP
+	select CMA
 	help
 	  A contiguous memory allocator which guarantees success and
 	  predictable latency for allocation request.
