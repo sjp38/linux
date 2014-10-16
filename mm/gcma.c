@@ -121,7 +121,7 @@ static void clear_page_flagall(struct page *page)
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_init(unsigned long pfn, unsigned long size)
+bool gcma_init(unsigned long pfn, unsigned long size)
 {
 	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
 	struct gcma *gcma;
@@ -143,12 +143,12 @@ int gcma_init(unsigned long pfn, unsigned long size)
 	spin_unlock(&ginfo.lock);
 
 	pr_info("gcma activate area [%lu, %lu]\n", pfn, pfn + size);
-	return 0;
+	return true;
 
 free_cma:
 	kfree(gcma);
 out:
-	return -ENOMEM;
+	return false;
 }
 
 /* Allocate a page from a gcma and return it */
