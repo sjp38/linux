@@ -24,8 +24,26 @@
 #ifndef _LINUX_GCMA_H
 #define _LINUX_GCMA_H
 
+#ifndef CONFIG_GCMA
+
+inline int gcma_activate_area(unsigned long pfn, unsigned long size)
+{
+	return 0;
+}
+
+inline int alloc_contig_range_gcma(unsigned long start, unsigned long end)
+{
+	return 0;
+}
+
+void free_contig_range_gcma(unsigned long pfn, unsigned long nr_pages) { }
+
+#else
+
 int gcma_activate_area(unsigned long pfn, unsigned long size);
 int alloc_contig_range_gcma(unsigned long start, unsigned long end);
 void free_contig_range_gcma(unsigned long pfn, unsigned long nr_pages);
+
+#endif
 
 #endif /* _LINUX_GCMA_H */
