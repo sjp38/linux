@@ -527,14 +527,6 @@ config EVAL_CMA
 	  using debugfs and easily see the result(min / max / average of
 	  latency).
 
-config EVAL_CMA_AREA_SIZE_MBYTES
-	int "Size of evaluation CMA area in MiB"
-	depends on CMA
-	default 16
-	help
-	  Size of CMA area to be used for EVAL_CMA in MiB unit. Default size is
-	  16 MiB.
-
 config GCMA
 	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
 	default n
