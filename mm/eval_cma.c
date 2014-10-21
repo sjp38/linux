@@ -26,9 +26,10 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/sizes.h>
+#include <linux/dma-contiguous.h>
 
-static bool eval_enabled __read_mostly;
-module_param_named(eval_enabled, eval_enabled, bool, 0);
+static bool eval_disabled __read_mostly;
+module_param_named(eval_disabled, eval_disabled, bool, 0);
 
 struct eval_option {
 	int nr_pages;
@@ -299,7 +300,7 @@ static struct dentry *debugfs_root;
 
 static int __init debugfs_init(void)
 {
-	debugfs_root = debugfs_create_dir("gcma_eval", NULL);
+	debugfs_root = debugfs_create_dir("cma_eval", NULL);
 	if (!debugfs_root) {
 		pr_err("failed to create debugfs\n");
 		return -ENOMEM;
@@ -311,27 +312,25 @@ static int __init debugfs_init(void)
 	return 0;
 }
 
-void __init eval_cma_contiguous_reserve(phys_addr_t limit)
+static int __init init_eval_cma(void)
 {
-	cma_declare_contiguous(0, CONFIG_EVAL_CMA_AREA_SIZE_MBYTES * SZ_1M, 0,
-			0, 0, false, &cma);
-}
-
-static int __init init_eval_gcma(void)
-{
-	if (eval_enabled) {
-		eval_result_cache = KMEM_CACHE(eval_result, 0);
-		if (eval_result_cache == NULL) {
-			pr_warn("failed to create evaluation history cache\n");
-			return -ENOMEM;
-		}
-		debugfs_init();
+	if (eval_disabled) {
+		pr_info("eval_cma is disabled. do nothing...");
+		return 0;
 	}
+
+	cma = dma_contiguous_default_area;
+	eval_result_cache = KMEM_CACHE(eval_result, 0);
+	if (eval_result_cache == NULL) {
+		pr_warn("failed to create evaluation history cache\n");
+		return -ENOMEM;
+	}
+	debugfs_init();
 
 	return 0;
 }
 
-module_init(init_eval_gcma);
+module_init(init_eval_cma);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Minchan Kim <minchan@kernel.org>");
