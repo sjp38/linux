@@ -21,6 +21,7 @@
 #include <linux/gfp.h>
 #include <linux/memblock.h>
 #include <linux/dma-contiguous.h>
+#include <linux/eval_cma.h>
 #include <linux/sizes.h>
 
 #include <asm/cp15.h>
@@ -323,6 +324,13 @@ void __init arm_memblock_init(const struct machine_desc *mdesc)
 	 * must come from DMA area inside low memory
 	 */
 	dma_contiguous_reserve(min(arm_dma_limit, arm_lowmem_limit));
+
+	/*
+	 * reserve memory for CMA evaluation
+	 */
+#ifdef CONFIG_EVAL_CMA
+	eval_cma_contiguous_reserve(min(arm_dma_limit, arm_lowmem_limit));
+#endif
 
 	arm_memblock_steal_permitted = false;
 	memblock_dump_all();
