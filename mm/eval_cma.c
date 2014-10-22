@@ -31,12 +31,6 @@
 static bool eval_disabled __read_mostly;
 module_param_named(eval_disabled, eval_disabled, bool, 0);
 
-struct eval_option {
-	int nr_pages;
-	int nr_trials;
-	unsigned long warmup_ms;
-};
-
 struct cma_latency {
 	unsigned long min;
 	unsigned long max;
@@ -44,8 +38,8 @@ struct cma_latency {
 };
 
 struct eval_result {
-	struct eval_option option;
-	unsigned long nr_succ;
+	unsigned long nr_pages;
+	unsigned long nr_eval;
 	unsigned long nr_fail;
 	struct cma_latency alloc_latency;
 	struct cma_latency fail_latency;
@@ -124,61 +118,68 @@ static void notice_result(struct eval_result *res)
 	fail = &res->fail_latency;
 	release = &res->release_latency;
 
-	pr_info("%d page request evaluated.\n"
+	pr_info("%ld page request evaluated.\n"
 		"  succ/fail:%ld/%ld\n"
 		"  succ alloc min:%ld\tmax:%ld\tavg:%ld\n"
 		"  fail alloc min:%ld\tmax:%ld\tavg:%ld\n"
 		"  release min:%ld\tmax:%ld\tavg:%ld\n",
-			res->option.nr_pages,
-			res->nr_succ, res->nr_fail,
+			res->nr_pages,
+			res->nr_eval, res->nr_fail,
 			alloc->min, alloc->max, alloc->avg,
 			fail->min, fail->max, fail->avg,
 			release->min, release->max, release->avg);
 }
 
+static struct eval_result *get_result(unsigned long nr_pages)
+{
+	struct eval_result *result;
+	list_for_each_entry(result, &eval_result_list, node) {
+		if (result->nr_pages == nr_pages)
+			return result;
+	}
+
+	result = kmem_cache_alloc(eval_result_cache, GFP_KERNEL);
+	if (result == NULL) {
+		pr_warn("failed to alloc eval result\n");
+		goto out;
+	}
+
+	result->nr_eval = 0;
+	result->nr_fail = 0;
+
+	init_cma_latency(&result->alloc_latency);
+	init_cma_latency(&result->fail_latency);
+	init_cma_latency(&result->release_latency);
+
+	list_add_tail(&result->node, &eval_result_list);
+out:
+	return result;
+}
+
 static void eval_cma(struct eval_result *res)
 {
-	struct eval_option *opt;
 	struct cma_latency *alloc_lat, *fail_lat;
 	struct cma_latency *release_lat;
 
 	unsigned long alloc_time, release_time;
-
-	int i;
-
-	opt = &res->option;
-	res->nr_succ = res->nr_fail = 0;
+	unsigned long nr_succ = 0;
 
 	alloc_lat = &res->alloc_latency;
 	fail_lat = &res->fail_latency;
 	release_lat = &res->release_latency;
 
-	init_cma_latency(alloc_lat);
-	init_cma_latency(fail_lat);
-	init_cma_latency(release_lat);
-
-	for (i = 0; i < opt->nr_trials; i++) {
-		if (measure_cma(opt->nr_pages,
-				&alloc_time, &release_time)) {
-			res->nr_fail++;
-			set_middle_result(fail_lat, alloc_time);
-		} else {
-			res->nr_succ++;
-			set_middle_result(alloc_lat, alloc_time);
-			set_middle_result(release_lat, release_time);
-		}
-		msleep(opt->warmup_ms);
-	}
-	if (res->nr_succ > 0) {
-		alloc_lat->avg = alloc_lat->avg / res->nr_succ;
-		release_lat->avg = release_lat->avg / res->nr_succ;
-	}
-	if (res->nr_fail > 0)
+	res->nr_eval++;
+	if (measure_cma(res->nr_pages, &alloc_time, &release_time)) {
+		res->nr_fail++;
+		set_middle_result(fail_lat, alloc_time);
 		fail_lat->avg = fail_lat->avg / res->nr_fail;
-
-	notice_result(res);
-
-	list_add_tail(&res->node, &eval_result_list);
+	} else {
+		set_middle_result(alloc_lat, alloc_time);
+		set_middle_result(release_lat, release_time);
+		nr_succ = res->nr_eval - res->nr_fail;
+		if (nr_succ > 0)
+			alloc_lat->avg = alloc_lat->avg / nr_succ;
+	}
 }
 
 /**
@@ -188,7 +189,7 @@ static ssize_t howto_read(struct file *filp, char __user *buf,
 				size_t length, loff_t *offset)
 {
 	static char *howto_msg = "howto:\n"
-		"\techo '<# of pages> <# of trials> <warmup_ms>' > eval\n";
+		"\techo <# of pages to request> > eval\n";
 	char *cursor = howto_msg + *offset;
 	int bytes_read = 0;
 
@@ -214,22 +215,21 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 				size_t length, loff_t *offset)
 {
 	struct eval_result *result;
-	struct eval_option *opt;
+	unsigned long nr_pages;
 
-	result = kmem_cache_alloc(eval_result_cache, GFP_KERNEL);
-	if (result == NULL) {
-		pr_warn("failed to alloc eval result\n");
-		return length;
-	}
+	sscanf(buf, "%ld", &nr_pages);
+	pr_info("%s called with %ld\n", __func__, nr_pages);
 
-	opt = &result->option;
+	result = get_result(nr_pages);
+	/* warning have been done from get_result() */
+	if (result == NULL)
+		goto out;
 
-	sscanf(buf, "%d %d %ld", &opt->nr_pages, &opt->nr_trials,
-			&opt->warmup_ms);
-	pr_info("%s called with %d %d %ld\n", __func__, opt->nr_pages,
-			opt->nr_trials, opt->warmup_ms);
+	result->nr_pages = nr_pages;
+
 	eval_cma(result);
 
+out:
 	return length;
 }
 
@@ -244,7 +244,6 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 				size_t length, loff_t *offset)
 {
 	struct eval_result *result;
-	struct eval_option *opt;
 	struct cma_latency *alloc_lat, *fail_lat, *release_lat;
 	char kbuf[256];
 	char *cursor = kbuf;
@@ -256,20 +255,18 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 		return 0;
 
 	list_for_each_entry(result, &eval_result_list, node) {
-		opt = &result->option;
-
 		alloc_lat = &result->alloc_latency;
 		fail_lat = &result->fail_latency;
 		release_lat = &result->release_latency;
 
 		notice_result(result);
 
-		sprintf(kbuf, "%d,%ld,%ld,"
+		sprintf(kbuf, "%ld,%ld,%ld,"
 				"%ld,%ld,%ld,"
 				"%ld,%ld,%ld,"
 				"%ld,%ld,%ld\n",
-				opt->nr_pages,
-				result->nr_succ, result->nr_fail,
+				result->nr_pages,
+				result->nr_eval, result->nr_fail,
 				alloc_lat->min, alloc_lat->max, alloc_lat->avg,
 				fail_lat->min, fail_lat->max, fail_lat->avg,
 				release_lat->min, release_lat->max,
