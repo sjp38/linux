@@ -299,6 +299,26 @@ static const struct file_operations eval_fops = {
 	.llseek = no_llseek,
 };
 
+static void sprint_res(struct eval_result *res, char *buffer)
+{
+	struct cma_latency *alloc_lat, *fail_lat, *release_lat;
+
+	alloc_lat = &res->alloc_latency;
+	fail_lat = &res->fail_latency;
+	release_lat = &res->release_latency;
+
+	sprintf(buffer, "%ld,%ld,%ld,"
+			"%ld,%ld,%ld,"
+			"%ld,%ld,%ld,"
+			"%ld,%ld,%ld\n",
+			res->nr_pages,
+			res->nr_eval, res->nr_fail,
+			alloc_lat->min, alloc_lat->max, alloc_lat->avg,
+			fail_lat->min, fail_lat->max, fail_lat->avg,
+			release_lat->min, release_lat->max,
+			release_lat->avg);
+}
+
 static ssize_t eval_res_read(struct file *filp, char __user *buf,
 				size_t length, loff_t *offset)
 {
@@ -320,16 +340,7 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 
 		notice_result(result);
 
-		sprintf(kbuf, "%ld,%ld,%ld,"
-				"%ld,%ld,%ld,"
-				"%ld,%ld,%ld,"
-				"%ld,%ld,%ld\n",
-				result->nr_pages,
-				result->nr_eval, result->nr_fail,
-				alloc_lat->min, alloc_lat->max, alloc_lat->avg,
-				fail_lat->min, fail_lat->max, fail_lat->avg,
-				release_lat->min, release_lat->max,
-					release_lat->avg);
+		sprint_res(result, kbuf);
 
 		cursor = kbuf;
 		while (length && *cursor) {
