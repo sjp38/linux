@@ -37,6 +37,14 @@ struct cma_latency {
 	unsigned long avg;
 };
 
+/* @count requests terminated in larger than (@msecs / 2), equal or
+ * smaller than @msecs milliseconds */
+struct eval_stat {
+	unsigned long msecs;
+	unsigned long count;
+	struct list_head node;
+};
+
 struct eval_result {
 	unsigned long nr_pages;
 	unsigned long nr_eval;
@@ -45,10 +53,17 @@ struct eval_result {
 	struct cma_latency fail_latency;
 	struct cma_latency release_latency;
 	struct list_head node;
+
+	struct list_head alloc_stats;
+	struct list_head fail_stats;
+	struct list_head release_stats;
+
 };
 
 /* Should be initialized during early boot */
 struct cma *cma;
+
+static struct kmem_cache *eval_stat_cache;
 
 static struct kmem_cache *eval_result_cache;
 static LIST_HEAD(eval_result_list);
@@ -130,6 +145,38 @@ static void notice_result(struct eval_result *res)
 			release->min, release->max, release->avg);
 }
 
+static unsigned long get_expon_larger(unsigned long value)
+{
+	unsigned long ret = 1;
+	while (ret < value)
+		ret *= 2;
+
+	return ret;
+}
+
+static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
+{
+	struct eval_stat *ret;
+	list_for_each_entry(ret, list, node) {
+		if (msecs > ret->msecs / 2 && msecs <= ret->msecs)
+			return ret;
+	}
+
+	ret = kmem_cache_alloc(eval_stat_cache, GFP_KERNEL);
+	if (ret == NULL) {
+		pr_warn("failed to alloc eval stat\n");
+		goto out;
+	}
+
+	ret->msecs = get_expon_larger(msecs);
+	ret->count = 0;
+
+	list_add_tail(&ret->node, list);
+
+out:
+	return ret;
+}
+
 static struct eval_result *get_result(unsigned long nr_pages)
 {
 	struct eval_result *result;
@@ -151,6 +198,10 @@ static struct eval_result *get_result(unsigned long nr_pages)
 	init_cma_latency(&result->fail_latency);
 	init_cma_latency(&result->release_latency);
 
+	INIT_LIST_HEAD(&result->alloc_stats);
+	INIT_LIST_HEAD(&result->fail_stats);
+	INIT_LIST_HEAD(&result->release_stats);
+
 	list_add_tail(&result->node, &eval_result_list);
 out:
 	return result;
@@ -160,6 +211,7 @@ static void eval_cma(struct eval_result *res)
 {
 	struct cma_latency *alloc_lat, *fail_lat;
 	struct cma_latency *release_lat;
+	struct eval_stat *stat;
 
 	unsigned long alloc_time, release_time;
 	unsigned long nr_succ = 0;
@@ -173,12 +225,19 @@ static void eval_cma(struct eval_result *res)
 		res->nr_fail++;
 		set_middle_result(fail_lat, alloc_time);
 		fail_lat->avg = fail_lat->avg / res->nr_fail;
+
+		stat = get_stat(alloc_time, &res->fail_stats);
+		stat->count++;
 	} else {
 		set_middle_result(alloc_lat, alloc_time);
 		set_middle_result(release_lat, release_time);
 		nr_succ = res->nr_eval - res->nr_fail;
 		if (nr_succ > 0)
 			alloc_lat->avg = alloc_lat->avg / nr_succ;
+		stat = get_stat(alloc_time, &res->alloc_stats);
+		stat->count++;
+		stat = get_stat(release_time, &res->release_stats);
+		stat->count++;
 	}
 }
 
@@ -322,6 +381,13 @@ static int __init init_eval_cma(void)
 		pr_warn("failed to create evaluation history cache\n");
 		return -ENOMEM;
 	}
+
+	eval_stat_cache = KMEM_CACHE(eval_stat, 0);
+	if (eval_stat_cache == NULL) {
+		pr_warn("failed to create evaluation history cache\n");
+		return -ENOMEM;
+	}
+
 	debugfs_init();
 
 	return 0;
