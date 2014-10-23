@@ -41,7 +41,9 @@ struct cma_latency {
  * smaller than @msecs milliseconds */
 struct eval_stat {
 	unsigned long msecs;
-	unsigned long count;
+	unsigned long nr_succ;
+	unsigned long nr_fail;
+	unsigned long nr_release;
 	struct list_head node;
 };
 
@@ -54,10 +56,7 @@ struct eval_result {
 	struct cma_latency release_latency;
 	struct list_head node;
 
-	struct list_head alloc_stats;
-	struct list_head fail_stats;
-	struct list_head release_stats;
-
+	struct list_head stats;
 };
 
 /* Should be initialized during early boot */
@@ -170,7 +169,7 @@ static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
 	}
 
 	ret->msecs = get_expon_larger(msecs);
-	ret->count = 0;
+	ret->nr_succ = ret->nr_fail = ret->nr_release = 0;
 
 	list_add_tail(&ret->node, list);
 
@@ -199,9 +198,7 @@ static struct eval_result *get_result(unsigned long nr_pages)
 	init_cma_latency(&result->fail_latency);
 	init_cma_latency(&result->release_latency);
 
-	INIT_LIST_HEAD(&result->alloc_stats);
-	INIT_LIST_HEAD(&result->fail_stats);
-	INIT_LIST_HEAD(&result->release_stats);
+	INIT_LIST_HEAD(&result->stats);
 
 	list_add_tail(&result->node, &eval_result_list);
 out:
@@ -226,18 +223,18 @@ static void eval_cma(struct eval_result *res)
 		res->nr_fail++;
 		apply_nth_result(res->nr_fail, alloc_time, fail_lat);
 
-		stat = get_stat(alloc_time, &res->fail_stats);
-		stat->count++;
+		stat = get_stat(alloc_time, &res->stats);
+		stat->nr_fail++;
 	} else {
 		nr_succ = res->nr_eval - res->nr_fail;
 
 		apply_nth_result(nr_succ, alloc_time, alloc_lat);
 		apply_nth_result(nr_succ, release_time, release_lat);
 
-		stat = get_stat(alloc_time, &res->alloc_stats);
-		stat->count++;
-		stat = get_stat(release_time, &res->release_stats);
-		stat->count++;
+		stat = get_stat(alloc_time, &res->stats);
+		stat->nr_succ++;
+		stat = get_stat(release_time, &res->stats);
+		stat->nr_release++;
 	}
 }
 
