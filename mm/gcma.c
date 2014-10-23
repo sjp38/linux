@@ -20,7 +20,7 @@
 
 struct gcma {
 	spinlock_t lock;	/* protect bitmap */
-	unsigned long *bitmap;	/* represents reclaimable pages in cma */
+	unsigned long *bitmap;
 	unsigned long base_pfn;
 	unsigned long size;
 	struct list_head list;
@@ -36,14 +36,15 @@ static struct gcma_info ginfo = {
 	.lock = __SPIN_LOCK_UNLOCKED(ginfo.lock),
 };
 
+/* TODO: remove when final version made */
 #define SWAP_SLOT_SANITY 0xdeaddead
 
 struct swap_slot_entry {
-	struct rb_node rbnode;
-	pgoff_t offset;
-	struct page *page;
+	struct rb_node rbnode;	/* node on frontswap_tree */
+	pgoff_t offset;		/* offset of swap slot */
+	struct page *page;	/* swapped data retain here */
 	atomic_t refcount;
-	int sanity;
+	int sanity;		/* TODO: remove when final version made */
 };
 
 struct frontswap_tree {
@@ -51,8 +52,8 @@ struct frontswap_tree {
 	spinlock_t lock;
 };
 
-static LIST_HEAD(swap_lru_list);
-static spinlock_t swap_lru_lock;
+static LIST_HEAD(slru_list);
+static spinlock_t slru_lock;
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
 
@@ -60,34 +61,34 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 static struct gcma *find_gcma(unsigned long pfn);
 
 /* frontswap_tree */
-static void *root_of(struct page *page)
+static struct frontswap_tree *swap_tree(struct page *page)
 {
-	return (void *)page->mapping;
+	return (struct frontswap_tree *)page->mapping;
 }
 
-static void set_root(struct page *page, void *root)
+static void set_swap_tree(struct page *page, struct frontswap_tree *tree)
 {
-	page->mapping = (struct address_space *)root;
+	page->mapping = (struct address_space *)tree;
 }
 
 /* swap_slot_entry */
-static void *entry_of(struct page *page)
+static struct swap_slot_entry *swap_slot(struct page *page)
 {
-	return (void *)page->index;
+	return (struct swap_slot_entry *)page->index;
 }
 
-static void set_entry(struct page *page, void *entry)
+static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 {
-	page->index = (pgoff_t)entry;
+	page->index = (pgoff_t)slot;
 }
 
-/* protected by swap_lru_lock */
+/* protected by slru_lock */
 #define SWAP_LRU 0x1	/* the page is in LRU */
 #define RECLAIMING 0x2	/* going on the reclaiming process */
 /* protected by gcma->lock */
 #define ISOLATED 0x4	/* page is isolated */
 
-/* Protected by swap_lru_lock for SWAP_LRU and RECLAIMING, gcma->lock for
+/* Protected by slru_lock for SWAP_LRU and RECLAIMING, gcma->lock for
  * ISOLATED */
 static int page_flag(struct page *page, int flag)
 {
@@ -327,13 +328,13 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 
 		frontswap_rb_erase(&tree->rbroot, entry);
 		if (!locked)
-			spin_lock(&swap_lru_lock);
+			spin_lock(&slru_lock);
 		if (page_flag(page, SWAP_LRU))
 			list_del_init(&page->lru);
 
 		frontswap_free_entry(entry);
 		if (!locked)
-			spin_unlock(&swap_lru_lock);
+			spin_unlock(&slru_lock);
 
 	}
 }
@@ -346,9 +347,9 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 	unsigned long evicted = 0;
 	LIST_HEAD(free_pages);
 
-	spin_lock(&swap_lru_lock);
-	list_for_each_entry_safe_reverse(page, n, &swap_lru_list, lru) {
-		entry = (struct swap_slot_entry *)entry_of(page);
+	spin_lock(&slru_lock);
+	list_for_each_entry_safe_reverse(page, n, &slru_list, lru) {
+		entry = swap_slot(page);
 
 		/*
 		 * the entry could be free by other thread in the while.
@@ -364,11 +365,11 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		if (++evicted >= nr_pages)
 			break;
 	}
-	spin_unlock(&swap_lru_lock);
+	spin_unlock(&slru_lock);
 
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
-		tree = (struct frontswap_tree *)root_of(page);
-		entry = (struct swap_slot_entry *)entry_of(page);
+		tree = swap_tree(page);
+		entry = swap_slot(page);
 
 		list_del(&page->lru);
 		spin_lock(&tree->lock);
@@ -437,9 +438,9 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_NOIO);
 	if (!entry) {
-		spin_lock(&swap_lru_lock);
+		spin_lock(&slru_lock);
 		gcma_free(gcma_page);
-		spin_unlock(&swap_lru_lock);
+		spin_unlock(&slru_lock);
 		return -ENOMEM;
 	}
 
@@ -449,8 +450,8 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	entry->sanity = SWAP_SLOT_SANITY;
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	set_root(gcma_page, (void *)tree);
-	set_entry(gcma_page, (void *)entry);
+	set_swap_tree(gcma_page, tree);
+	set_swap_slot(gcma_page, entry);
 
 	/* copy from orig data to gcma-page */
 	src = kmap_atomic(page);
@@ -474,10 +475,10 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		}
 	} while (ret == -EEXIST);
 
-	spin_lock(&swap_lru_lock);
+	spin_lock(&slru_lock);
 	set_page_flag(gcma_page, SWAP_LRU);
-	list_add(&gcma_page->lru, &swap_lru_list);
-	spin_unlock(&swap_lru_lock);
+	list_add(&gcma_page->lru, &slru_list);
+	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
 
 	return ret;
@@ -514,11 +515,11 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	kunmap_atomic(dst);
 
 	spin_lock(&tree->lock);
-	spin_lock(&swap_lru_lock);
+	spin_lock(&slru_lock);
 	if (likely(page_flag(gcma_page, SWAP_LRU)))
-		list_move(&gcma_page->lru, &swap_lru_list);
+		list_move(&gcma_page->lru, &slru_list);
 	swap_slot_entry_put(tree, entry, 1);
-	spin_unlock(&swap_lru_lock);
+	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
 
 	return 0;
@@ -664,7 +665,7 @@ retry:
 
 		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
-		spin_lock(&swap_lru_lock);
+		spin_lock(&slru_lock);
 		/*
 		 * If the page is in LRU, we can get swap_slot_entry from
 		 * the page with no problem.
@@ -673,13 +674,13 @@ retry:
 
 			BUG_ON(page_flag(page, RECLAIMING));
 
-			entry = (struct swap_slot_entry *)entry_of(page);
+			entry = swap_slot(page);
 			if (atomic_inc_not_zero(&entry->refcount)) {
 				BUG_ON(entry->sanity != SWAP_SLOT_SANITY);
 				clear_page_flag(page, SWAP_LRU);
 				set_page_flag(page, RECLAIMING);
 				list_move(&page->lru, &free_pages);
-				spin_unlock(&swap_lru_lock);
+				spin_unlock(&slru_lock);
 				continue;
 			}
 		}
@@ -700,7 +701,7 @@ retry:
 			set_page_flag(page, RECLAIMING);
 		}
 		spin_unlock(&gcma->lock);
-		spin_unlock(&swap_lru_lock);
+		spin_unlock(&slru_lock);
 	}
 
 	/*
@@ -708,8 +709,8 @@ retry:
 	 * swap_slot_entry with safe
 	 */
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
-		tree = (struct frontswap_tree *)root_of(page);
-		entry = (struct swap_slot_entry *)entry_of(page);
+		tree = swap_tree(page);
+		entry = swap_slot(page);
 
 		spin_lock(&tree->lock);
 		list_del_init(&page->lru);
@@ -746,7 +747,7 @@ static int __init init_gcma(void)
 {
 	pr_info("loading gcma\n");
 
-	spin_lock_init(&swap_lru_lock);
+	spin_lock_init(&slru_lock);
 	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
 	if (swap_slot_entry_cache == NULL)
 		return -ENOMEM;
