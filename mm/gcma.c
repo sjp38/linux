@@ -82,14 +82,16 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 	page->index = (pgoff_t)slot;
 }
 
-/* protected by slru_lock */
-#define SWAP_LRU 0x1	/* the page is in LRU */
-#define RECLAIMING 0x2	/* going on the reclaiming process */
-/* protected by gcma->lock */
-#define ISOLATED 0x4	/* page is isolated */
+enum gcma_page_flags {
+	/* flags for status of a page in gcma */
+	SWAP_LRU = 0x1,		/* is in frontswap LRU list */
+	RECLAIMING = 0x2,	/* is being reclaimed for contig alloc */
+	ISOLATED = 0x4,		/* isolated from frontswap backend */
+};
 
 /* Protected by slru_lock for SWAP_LRU and RECLAIMING, gcma->lock for
- * ISOLATED */
+ * ISOLATED
+ */
 static int page_flag(struct page *page, int flag)
 {
 	return page->private & flag;
