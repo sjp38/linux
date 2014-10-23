@@ -360,6 +360,48 @@ static const struct file_operations result_fops = {
 	.llseek = no_llseek,
 };
 
+static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
+				size_t length, loff_t *offset)
+{
+	struct eval_result *result;
+	struct eval_stat *stat;
+	char kbuf[256];
+	char *cursor = kbuf;
+	int bytes_read = 0;
+
+	pr_info("%s called. length: %d, offset: %d\n",
+			__func__, (int)length, (int)*offset);
+	if (*offset > 0)
+		return 0;
+
+	list_for_each_entry(result, &eval_result_list, node) {
+		list_for_each_entry(stat, &result->stats, node) {
+			sprintf(kbuf, "%ld,%ld,%ld,%ld,%ld\n",
+					result->nr_pages, stat->msecs,
+					stat->nr_succ, stat->nr_fail,
+					stat->nr_release);
+
+			cursor = kbuf;
+			while (length && *cursor) {
+				put_user(*(cursor++), buf++);
+
+				length--;
+				bytes_read++;
+			}
+			*offset += bytes_read;
+		}
+	}
+
+	return bytes_read;
+}
+
+static const struct file_operations result_hist_fops = {
+	.owner = THIS_MODULE,
+	.open = nonseekable_open,
+	.read = eval_res_hist_read,
+	.llseek = no_llseek,
+};
+
 static struct dentry *debugfs_root;
 
 static int __init debugfs_init(void)
@@ -373,6 +415,8 @@ static int __init debugfs_init(void)
 	debugfs_create_file("howto", S_IRUSR, debugfs_root, NULL, &howto_fops);
 	debugfs_create_file("eval", S_IWUSR, debugfs_root, NULL, &eval_fops);
 	debugfs_create_file("res", S_IRUSR, debugfs_root, NULL, &result_fops);
+	debugfs_create_file("res.hist", S_IRUSR, debugfs_root, NULL,
+			&result_hist_fops);
 	return 0;
 }
 
