@@ -227,7 +227,10 @@ static void gcma_free(struct page *page)
 	if (likely(!page_flag(page, RECLAIMING))) {
 		bitmap_clear(gcma->bitmap, offset, 1);
 	} else {
-		/* It will prevent further allocation */
+		/* The page should be safe to be used for a thread which
+		 * reclaimed the page.
+		 * To prevent further allocation from other thread, set bitmap
+		 * and mark the page as isolated. */
 		bitmap_set(gcma->bitmap, offset, 1);
 		set_page_flag(page, ISOLATED);
 	}
@@ -235,7 +238,6 @@ static void gcma_free(struct page *page)
 }
 
 /*
- * Stolen from zswap.
  * In the case that a entry with the same offset is found, a pointer to
  * the existing entry is stored in dupentry and the function returns -EEXIST
  */
@@ -263,9 +265,6 @@ static int frontswap_rb_insert(struct rb_root *root,
 	return 0;
 }
 
-/*
- * Stolen from zswap.
- */
 static void frontswap_rb_erase(struct rb_root *root,
 		struct swap_slot_entry *entry)
 {
@@ -275,9 +274,6 @@ static void frontswap_rb_erase(struct rb_root *root,
 	}
 }
 
-/*
- * Stolen from zswap.
- */
 static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 		pgoff_t offset)
 {
@@ -314,7 +310,6 @@ static void swap_slot_entry_get(struct swap_slot_entry *entry)
 }
 
 /*
- * Stolen from zswap.
  * Caller should hold frontswap tree spinlock
  * remove from the tree and free it, if nobody reference the entry
  */
