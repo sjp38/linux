@@ -381,7 +381,6 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 	}
 
 	BUG_ON(!list_empty(&free_pages));
-	atomic_add(evicted, &gcma_evicted_pages);
 	return evicted;
 }
 
@@ -481,7 +480,6 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	spin_unlock(&swap_lru_lock);
 	spin_unlock(&tree->lock);
 
-	atomic_inc(&gcma_stored_pages);
 	return ret;
 }
 
@@ -523,7 +521,6 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	spin_unlock(&swap_lru_lock);
 	spin_unlock(&tree->lock);
 
-	atomic_inc(&gcma_loaded_pages);
 	return 0;
 }
 
@@ -681,7 +678,6 @@ retry:
 				BUG_ON(entry->sanity != SWAP_SLOT_SANITY);
 				clear_page_flag(page, SWAP_LRU);
 				set_page_flag(page, RECLAIMING);
-				atomic_inc(&gcma_reclaimed_pages);
 				list_move(&page->lru, &free_pages);
 				spin_unlock(&swap_lru_lock);
 				continue;
@@ -702,7 +698,6 @@ retry:
 			set_page_flag(page, ISOLATED);
 		} else {
 			set_page_flag(page, RECLAIMING);
-			atomic_inc(&gcma_reclaimed_pages);
 		}
 		spin_unlock(&gcma->lock);
 		spin_unlock(&swap_lru_lock);
