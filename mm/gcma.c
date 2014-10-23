@@ -150,7 +150,7 @@ out:
 }
 
 /* Allocate a page from a gcma and return it */
-static struct page *__gcma_alloc(struct gcma *gcma)
+static struct page *__alloc_reclaimable(struct gcma *gcma)
 {
 	unsigned long bit;
 	unsigned long *bitmap = gcma->bitmap;
@@ -176,7 +176,7 @@ out:
 }
 
 /* Allocate a page from entire gcma and return it */
-static struct page *gcma_alloc(void)
+static struct page *alloc_reclaimable(void)
 {
 	struct page *page;
 	struct gcma *gcma;
@@ -189,14 +189,14 @@ retry:
 	spin_unlock(&ginfo.lock);
 
 	/* CMA area shouldn't be destroyed once it is activated */
-	page = __gcma_alloc(gcma);
+	page = __alloc_reclaimable(gcma);
 	if (page)
 		goto got;
 
 	/* Find empty slot in all gcma areas */
 	spin_lock(&ginfo.lock);
 	list_for_each_entry(gcma, &ginfo.head, list) {
-		page = __gcma_alloc(gcma);
+		page = __alloc_reclaimable(gcma);
 		if (page) {
 			spin_unlock(&ginfo.lock);
 			goto got;
@@ -434,7 +434,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		return -ENODEV;
 	}
 
-	gcma_page = gcma_alloc();
+	gcma_page = alloc_reclaimable();
 	if (!gcma_page)
 		return -ENOMEM;
 
