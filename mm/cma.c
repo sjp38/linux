@@ -135,7 +135,7 @@ static int __init cma_activate_area(struct cma *cma)
 
 	if (cma->is_gcma) {
 		/* GCMA shouldn't return reserved pages to buddy */
-		gcma_activate_area(cma->base_pfn, cma->count);
+		gcma_init(cma->base_pfn, cma->count);
 	} else if (!free_reserved_pages(pfn, cma->count >> pageblock_order)) {
 		kfree(cma->bitmap);
 		return -EINVAL;
@@ -336,7 +336,7 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 		mutex_lock(&cma_mutex);
 
 		if (cma->is_gcma)
-			ret = alloc_contig_range_gcma(pfn, pfn + count);
+			ret = gcma_alloc_contig(pfn, pfn + count);
 		else
 			ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
 		mutex_unlock(&cma_mutex);
@@ -386,7 +386,7 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
 	if (cma->is_gcma)
-		free_contig_range_gcma(pfn, count);
+		gcma_free_contig(pfn, count);
 	else
 		free_contig_range(pfn, count);
 	cma_clear_bitmap(cma, pfn, count);
