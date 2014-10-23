@@ -113,11 +113,12 @@ static int measure_cma(int nr_pages,
 	return 0;
 }
 
-static void set_middle_result(struct cma_latency *lat, unsigned long time)
+static void apply_nth_result(unsigned long nth, unsigned long time,
+				struct cma_latency *lat)
 {
 	lat->min = min_of(lat->min, time);
 	lat->max = max_of(lat->max, time);
-	lat->avg += time;
+	lat->avg += (lat->avg * (nth - 1) + time) / nth;
 }
 
 static void init_cma_latency(struct cma_latency *lat)
@@ -223,17 +224,16 @@ static void eval_cma(struct eval_result *res)
 	res->nr_eval++;
 	if (measure_cma(res->nr_pages, &alloc_time, &release_time)) {
 		res->nr_fail++;
-		set_middle_result(fail_lat, alloc_time);
-		fail_lat->avg = fail_lat->avg / res->nr_fail;
+		apply_nth_result(res->nr_fail, alloc_time, fail_lat);
 
 		stat = get_stat(alloc_time, &res->fail_stats);
 		stat->count++;
 	} else {
-		set_middle_result(alloc_lat, alloc_time);
-		set_middle_result(release_lat, release_time);
 		nr_succ = res->nr_eval - res->nr_fail;
-		if (nr_succ > 0)
-			alloc_lat->avg = alloc_lat->avg / nr_succ;
+
+		apply_nth_result(nr_succ, alloc_time, alloc_lat);
+		apply_nth_result(nr_succ, release_time, release_lat);
+
 		stat = get_stat(alloc_time, &res->alloc_stats);
 		stat->count++;
 		stat = get_stat(release_time, &res->release_stats);
