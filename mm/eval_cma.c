@@ -117,7 +117,7 @@ static void apply_nth_result(unsigned long nth, unsigned long time,
 {
 	lat->min = min_of(lat->min, time);
 	lat->max = max_of(lat->max, time);
-	lat->avg += (lat->avg * (nth - 1) + time) / nth;
+	lat->avg = (lat->avg * (nth - 1) + time) / nth;
 }
 
 static void init_cma_latency(struct cma_latency *lat)
