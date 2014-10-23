@@ -652,7 +652,6 @@ int gcma_alloc_contig(unsigned long start, unsigned long end)
 
 retry:
 	for (pfn = start; pfn < end; pfn++) {
-
 		spin_lock(&gcma->lock);
 
 		offset = pfn - gcma->base_pfn;
