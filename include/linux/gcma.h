@@ -2,8 +2,8 @@
  * gcma.h - guaranteed contiguous memory allocator
  *
  * gcma is a contiguous memory allocator which guarantees success and
- * maximum wait time for allocation request.
- * It secure large amount of memory and let it be allocated to the
+ * fast latency for allocation request.
+ * It reserve large amount of memory and let it be allocated to the
  * contiguous memory request while it can be used as backend for
  * frontswap and cleancache concurrently.
  *
@@ -24,8 +24,8 @@
 #ifndef _LINUX_GCMA_H
 #define _LINUX_GCMA_H
 
-int gcma_activate_area(unsigned long pfn, unsigned long size);
-int alloc_contig_range_gcma(unsigned long start, unsigned long end);
-void free_contig_range_gcma(unsigned long pfn, unsigned long nr_pages);
+int gcma_init(unsigned long pfn, unsigned long size);
+int gcma_alloc_contig(unsigned long start, unsigned long end);
+void gcma_free_contig(unsigned long pfn, unsigned long nr_pages);
 
 #endif /* _LINUX_GCMA_H */
