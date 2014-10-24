@@ -60,30 +60,31 @@ struct page;
 
 #ifdef CONFIG_DMA_CMA
 
-extern struct cma *dma_contiguous_default_area;
+extern unsigned int dma_contiguous_default_area_id;
 
-static inline struct cma *dev_get_cma_area(struct device *dev)
+static inline unsigned int dev_get_cma_id(struct device *dev)
 {
-	if (dev && dev->cma_area)
-		return dev->cma_area;
-	return dma_contiguous_default_area;
+	if (dev && dev->cma_id)
+		return dev->cma_id;
+	return dma_contiguous_default_area_id;
 }
 
-static inline void dev_set_cma_area(struct device *dev, struct cma *cma)
+static inline void dev_set_cma_id(struct device *dev, unsigned int cma_id)
 {
 	if (dev)
-		dev->cma_area = cma;
+		dev->cma_id = cma_id;
 }
 
-static inline void dma_contiguous_set_default(struct cma *cma)
+static inline void dma_contiguous_set_default(unsigned int cma_id)
 {
-	dma_contiguous_default_area = cma;
+	dma_contiguous_default_area_id = cma_id;
 }
 
 void dma_contiguous_reserve(phys_addr_t addr_limit);
 
 int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
-				       phys_addr_t limit, struct cma **res_cma,
+				       phys_addr_t limit,
+				       unsigned int *res_cma_id,
 				       bool fixed);
 
 /**
@@ -102,11 +103,11 @@ int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
 static inline int dma_declare_contiguous(struct device *dev, phys_addr_t size,
 					 phys_addr_t base, phys_addr_t limit)
 {
-	struct cma *cma;
+	unsigned int cma_id;
 	int ret;
-	ret = dma_contiguous_reserve_area(size, base, limit, &cma, true);
+	ret = dma_contiguous_reserve_area(size, base, limit, &cma_id, true);
 	if (ret == 0)
-		dev_set_cma_area(dev, cma);
+		dev_set_cma_id(dev, cma_id);
 
 	return ret;
 }
@@ -130,7 +131,7 @@ static inline void dma_contiguous_set_default(struct cma *cma) { }
 static inline void dma_contiguous_reserve(phys_addr_t limit) { }
 
 static inline int dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
-				       phys_addr_t limit, struct cma **res_cma,
+				       phys_addr_t limit, unsigned int *cma_id,
 				       bool fixed)
 {
 	return -ENOSYS;
