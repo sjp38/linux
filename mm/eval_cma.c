@@ -60,7 +60,7 @@ struct eval_result {
 };
 
 /* Should be initialized during early boot */
-struct cma *cma;
+unsigned int cma_id;
 
 static struct kmem_cache *eval_stat_cache;
 
@@ -96,7 +96,7 @@ static int measure_cma(int nr_pages,
 	struct page *page;
 	struct timespec start, end;
 	getnstimeofday(&start);
-	page = cma_alloc(cma, nr_pages, 1);
+	page = cma_alloc(cma_id, nr_pages, 1);
 	getnstimeofday(&end);
 	*alloc_time = time_diff(&start, &end);
 	if (!page) {
@@ -105,7 +105,7 @@ static int measure_cma(int nr_pages,
 	}
 
 	getnstimeofday(&start);
-	cma_release(cma, page, nr_pages);
+	cma_release(cma_id, page, nr_pages);
 	getnstimeofday(&end);
 	*release_time = time_diff(&start, &end);
 
@@ -427,7 +427,7 @@ static int __init init_eval_cma(void)
 		return 0;
 	}
 
-	cma = dma_contiguous_default_area;
+	cma_id = dma_contiguous_default_area_id;
 	eval_result_cache = KMEM_CACHE(eval_result, 0);
 	if (eval_result_cache == NULL) {
 		pr_warn("failed to create evaluation history cache\n");
