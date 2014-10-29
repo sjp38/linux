@@ -26,7 +26,7 @@
 
 #ifndef CONFIG_GCMA
 
-inline int gcma_init(unsigned long pfn, unsigned long size)
+inline bool gcma_init(unsigned long pfn, unsigned long size)
 {
 	return 0;
 }
@@ -40,7 +40,7 @@ void gcma_free_contig(unsigned long pfn, unsigned long nr_pages) { }
 
 #else
 
-int gcma_init(unsigned long pfn, unsigned long size);
+bool gcma_init(unsigned long pfn, unsigned long size);
 int gcma_alloc_contig(unsigned long start, unsigned long end);
 void gcma_free_contig(unsigned long pfn, unsigned long nr_pages);
 

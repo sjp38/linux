@@ -34,13 +34,19 @@
 #include <linux/cma.h>
 #include <linux/gcma.h>
 
+struct cma_ops {
+	bool (*additional_init)(unsigned long pfn, unsigned long nr_pages);
+	int (*alloc)(unsigned long start, unsigned long end);
+	void (*free)(unsigned long pfn, unsigned long nr_pages);
+};
+
 struct cma {
 	unsigned long	base_pfn;
 	unsigned long	count;
 	unsigned long	*bitmap;
 	unsigned int order_per_bit; /* Order of pages represented by one bit */
-	bool		is_gcma;
 	struct mutex	lock;
+	struct cma_ops ops;
 };
 
 static struct cma cma_areas[MAX_CMA_AREAS];
@@ -90,12 +96,13 @@ static void cma_clear_bitmap(struct cma *cma, unsigned long pfn, int count)
  * as movable pages.
  * Return true if it's called successfully. Otherwise, false.
  */
-static bool free_reserved_pages(unsigned long pfn, int count)
+static bool free_reserved_pages(unsigned long pfn, unsigned long count)
 {
 	bool ret = true;
 	unsigned long base_pfn;
 	struct zone *zone;
 
+	count = count >> pageblock_order;
 	zone = page_zone(pfn_to_page(pfn));
 
 	do {
@@ -133,10 +140,7 @@ static int __init cma_activate_area(struct cma *cma)
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
 
-	if (cma->is_gcma) {
-		/* GCMA shouldn't return reserved pages to buddy */
-		gcma_init(cma->base_pfn, cma->count);
-	} else if (!free_reserved_pages(pfn, cma->count >> pageblock_order)) {
+	if (!cma->ops.additional_init(cma->base_pfn, cma->count)) {
 		kfree(cma->bitmap);
 		return -EINVAL;
 	}
@@ -159,6 +163,16 @@ static int __init cma_init_reserved_areas(void)
 }
 core_initcall(cma_init_reserved_areas);
 
+static void __cma_release(unsigned long pfn, unsigned long count)
+{
+	free_contig_range(pfn, count);
+}
+
+static int __cma_alloc(unsigned long start, unsigned long end)
+{
+	return alloc_contig_range(start, end, MIGRATE_CMA);
+}
+
 /**
  * cma_declare_contiguous() - reserve custom contiguous area
  * @base: Base address of the reserved area optional, use 0 for any
@@ -177,7 +191,7 @@ core_initcall(cma_init_reserved_areas);
  * If @fixed is true, reserve contiguous area at exactly @base.  If false,
  * reserve in range from @base to @limit.
  */
-int __init __cma_declare_contiguous(phys_addr_t base,
+int __init __declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
 			bool fixed, struct cma **res_cma)
@@ -258,16 +272,36 @@ err:
  * gcma_declare_contiguous() - same as cma_declare_contiguous() except result
  * cma's is_gcma field setting.
  */
-int __init __gcma_declare_contiguous(phys_addr_t base,
+int __init gcma_declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
 			bool fixed, struct cma **res_cma)
 {
 	int ret = 0;
-	ret = __cma_declare_contiguous(base, size, limit, alignment,
+	ret = __declare_contiguous(base, size, limit, alignment,
 			order_per_bit, fixed, res_cma);
-	if (ret >= 0)
-		(*res_cma)->is_gcma = true;
+	if (ret >= 0) {
+		(*res_cma)->ops.additional_init = gcma_init;
+		(*res_cma)->ops.alloc = gcma_alloc_contig;
+		(*res_cma)->ops.free = gcma_free_contig;
+	}
+
+	return ret;
+}
+
+int __init __cma_declare_contiguous(phys_addr_t base,
+			phys_addr_t size, phys_addr_t limit,
+			phys_addr_t alignment, unsigned int order_per_bit,
+			bool fixed, struct cma **res_cma)
+{
+	int ret = 0;
+	ret = __declare_contiguous(base, size, limit, alignment,
+			order_per_bit, fixed, res_cma);
+	if (ret >= 0) {
+		(*res_cma)->ops.additional_init = free_reserved_pages;
+		(*res_cma)->ops.alloc = __cma_alloc;
+		(*res_cma)->ops.free = __cma_release;
+	}
 
 	return ret;
 }
@@ -278,7 +312,7 @@ int __init cma_declare_contiguous(phys_addr_t base,
 			bool fixed, struct cma **res_cma)
 {
 #ifdef CONFIG_GCMA_DEFAULT
-	return __gcma_declare_contiguous(base, size, limit, alignment,
+	return gcma_declare_contiguous(base, size, limit, alignment,
 			order_per_bit, fixed, res_cma);
 #else
 	return __cma_declare_contiguous(base, size, limit, alignment,
@@ -335,10 +369,8 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
 
-		if (cma->is_gcma)
-			ret = gcma_alloc_contig(pfn, pfn + count);
-		else
-			ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
+		ret = cma->ops.alloc(pfn, pfn + count);
+
 		mutex_unlock(&cma_mutex);
 		if (ret == 0) {
 			page = pfn_to_page(pfn);
@@ -385,10 +417,7 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
-	if (cma->is_gcma)
-		gcma_free_contig(pfn, count);
-	else
-		free_contig_range(pfn, count);
+	cma->ops.free(pfn, count);
 	cma_clear_bitmap(cma, pfn, count);
 
 	return true;
