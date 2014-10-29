@@ -56,6 +56,8 @@ static struct kmem_cache *swap_slot_entry_cache;
 /* For statistics */
 static atomic_t gcma_stored_pages = ATOMIC_INIT(0);
 static atomic_t gcma_loaded_pages = ATOMIC_INIT(0);
+static atomic_t gcma_evicted_pages = ATOMIC_INIT(0);
+static atomic_t gcma_reclaimed_pages = ATOMIC_INIT(0);
 
 static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 static struct gcma *find_gcma(unsigned long pfn);
@@ -368,6 +370,7 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 	}
 
 	BUG_ON(!list_empty(&free_pages));
+	atomic_add(evicted, &gcma_evicted_pages);
 	return evicted;
 }
 
@@ -664,6 +667,7 @@ retry:
 			if (atomic_inc_not_zero(&entry->refcount)) {
 				clear_page_flag(page, SWAP_LRU);
 				set_page_flag(page, RECLAIMING);
+				atomic_inc(&gcma_reclaimed_pages);
 				list_move(&page->lru, &free_pages);
 				spin_unlock(&slru_lock);
 				continue;
@@ -684,6 +688,7 @@ retry:
 			set_page_flag(page, ISOLATED);
 		} else {
 			set_page_flag(page, RECLAIMING);
+			atomic_inc(&gcma_reclaimed_pages);
 		}
 		spin_unlock(&gcma->lock);
 		spin_unlock(&slru_lock);
@@ -752,6 +757,10 @@ static int __init gcma_debugfs_init(void)
 			gcma_debugfs_root, &gcma_stored_pages);
 	debugfs_create_atomic_t("loaded_pages", S_IRUGO,
 			gcma_debugfs_root, &gcma_loaded_pages);
+	debugfs_create_atomic_t("evicted_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_evicted_pages);
+	debugfs_create_atomic_t("reclaimed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_reclaimed_pages);
 
 	pr_info("gcma debufs init\n");
 	return 0;
