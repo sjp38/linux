@@ -11,6 +11,7 @@
 
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/highmem.h>
 #include <linux/gcma.h>
 
 struct gcma {
@@ -30,6 +31,8 @@ static struct gcma_info ginfo = {
 	.head = LIST_HEAD_INIT(ginfo.head),
 	.lock = __SPIN_LOCK_UNLOCKED(ginfo.lock),
 };
+
+static struct gcma *find_gcma(unsigned long pfn);
 
 /** gcma_init: initializes a contiguous memory area as guaranteed
  *
@@ -68,6 +71,71 @@ out:
 	return -ENOMEM;
 }
 
+/* Allocate a page from a gcma and return it */
+static struct page *__alloc_reclaimable(struct gcma *gcma)
+{
+	unsigned long bit;
+	unsigned long *bitmap = gcma->bitmap;
+	struct page *page = NULL;
+
+	spin_lock(&gcma->lock);
+	/* TODO: should be optimized */
+	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
+
+	if (bit >= gcma->size) {
+		spin_unlock(&gcma->lock);
+		goto out;
+	}
+
+	bitmap_set(bitmap, bit, 1);
+	page = pfn_to_page(gcma->base_pfn + bit);
+	spin_unlock(&gcma->lock);
+
+out:
+	return page;
+}
+
+/* Allocate a page from entire gcma and return it */
+__attribute__((unused))
+static struct page *alloc_reclaimable(void)
+{
+	struct page *page;
+	struct gcma *gcma;
+
+	spin_lock(&ginfo.lock);
+	gcma = list_first_entry(&ginfo.head, struct gcma, list);
+	/* Do roundrobin */
+	list_move_tail(&gcma->list, &ginfo.head);
+
+	/* Find empty slot in all gcma areas */
+	list_for_each_entry(gcma, &ginfo.head, list) {
+		page = __alloc_reclaimable(gcma);
+		if (page)
+			goto got;
+	}
+
+got:
+	spin_unlock(&ginfo.lock);
+	return page;
+}
+
+/* Free a page back to gcma */
+__attribute__((unused))
+static void gcma_free(struct page *page)
+{
+	struct gcma *gcma;
+	unsigned long pfn, offset;
+
+	pfn = page_to_pfn(page);
+	gcma = find_gcma(pfn);
+
+	spin_lock(&gcma->lock);
+	offset = pfn - gcma->base_pfn;
+
+	bitmap_clear(gcma->bitmap, offset, 1);
+	spin_unlock(&gcma->lock);
+}
+
 static struct gcma *find_gcma(unsigned long pfn)
 {
 	struct gcma *cma;
@@ -95,28 +163,25 @@ int gcma_alloc_contig(unsigned long start, unsigned long end)
 {
 	struct gcma *gcma;
 	unsigned long offset;
-	unsigned long *bitmap;
-	unsigned long pfn = start;
+	unsigned long nr_pages;
 
-	gcma = find_gcma(pfn);
+	nr_pages = end - start;
+	gcma = find_gcma(start);
 	if (!gcma)
 		return -EINVAL;
 
-	for (pfn = start; pfn < end; pfn++) {
-		spin_lock(&gcma->lock);
+	spin_lock(&gcma->lock);
+	offset = start - gcma->base_pfn;
 
-		offset = pfn - gcma->base_pfn;
-		bitmap = gcma->bitmap + offset / BITS_PER_LONG;
-
-		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
-			bitmap_set(gcma->bitmap, offset, 1);
-			spin_unlock(&gcma->lock);
-			continue;
-		} else {
-			gcma_free_contig(start, pfn - start);
-			return -ENOMEM;
-		}
+	if (bitmap_find_next_zero_area(gcma->bitmap, gcma->size, offset,
+				nr_pages, 0) != 0) {
+		spin_unlock(&gcma->lock);
+		return -EINVAL;
 	}
+
+	bitmap_set(gcma->bitmap, offset, end - start);
+	spin_unlock(&gcma->lock);
+
 	return 0;
 }
 
@@ -131,10 +196,8 @@ void gcma_free_contig(unsigned long pfn, unsigned long nr_pages)
 	unsigned long offset;
 
 	gcma = find_gcma(pfn);
-	BUG_ON(!gcma);
 
 	spin_lock(&gcma->lock);
-
 	offset = pfn - gcma->base_pfn;
 	bitmap_clear(gcma->bitmap, offset, nr_pages);
 
