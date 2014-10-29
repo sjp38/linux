@@ -73,7 +73,7 @@ out:
 }
 
 /* Allocate a page from a gcma and return it */
-static struct page *__alloc_reclaimable(struct gcma *gcma)
+static struct page *__gcma_alloc_page(struct gcma *gcma)
 {
 	unsigned long bit;
 	unsigned long *bitmap = gcma->bitmap;
@@ -98,7 +98,7 @@ out:
 
 /* Allocate a page from entire gcma and return it */
 __attribute__((unused))
-static struct page *alloc_reclaimable(void)
+static struct page *gcma_alloc_page(void)
 {
 	struct page *page;
 	struct gcma *gcma;
@@ -110,7 +110,7 @@ static struct page *alloc_reclaimable(void)
 
 	/* Find empty slot in all gcma areas */
 	list_for_each_entry(gcma, &ginfo.head, list) {
-		page = __alloc_reclaimable(gcma);
+		page = __gcma_alloc_page(gcma);
 		if (page)
 			goto got;
 	}
