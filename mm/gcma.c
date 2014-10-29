@@ -34,12 +34,13 @@ static struct gcma_info ginfo = {
 
 static struct gcma *find_gcma(unsigned long pfn);
 
-/** gcma_init: initializes a contiguous memory area as guaranteed
+/*
+ * gcma_init - initializes a contiguous memory area as guaranteed
  *
  * @pfn		start pfn of contiguous memory area
  * @size	size of the contiguous memory area
  *
- * Returns 0 if activation success, negative error code if fail
+ * Returns 0 On success, error number otherwise.
  */
 int gcma_init(unsigned long pfn, unsigned long size)
 {
@@ -152,12 +153,13 @@ static struct gcma *find_gcma(unsigned long pfn)
 	return NULL;
 }
 
-/** gcma_alloc_contig: allocates contiguous pages
+/*
+ * gcma_alloc_contig - allocates contiguous pages
  *
  * @pfn		start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
  *
- * Returns 0 if activation success, negative error code if fail
+ * Returns 0 on success, error number otherwise.
  */
 int gcma_alloc_contig(unsigned long start, unsigned long end)
 {
@@ -185,7 +187,8 @@ int gcma_alloc_contig(unsigned long start, unsigned long end)
 	return 0;
 }
 
-/** gcma_free_contig: free allocated contiguous pages
+/*
+ * gcma_free_contig - free allocated contiguous pages
  *
  * @pfn		start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
