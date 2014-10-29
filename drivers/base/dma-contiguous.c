@@ -34,7 +34,7 @@
 #define CMA_SIZE_MBYTES 0
 #endif
 
-struct cma *dma_contiguous_default_area;
+unsigned int dma_contiguous_default_area_id;
 
 /*
  * Default global CMA area size can be defined in kernel's .config.
@@ -131,13 +131,13 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 #endif
 	}
 
-	if (selected_size && !dma_contiguous_default_area) {
+	if (selected_size && dma_contiguous_default_area_id == -1) {
 		pr_debug("%s: reserving %ld MiB for global area\n", __func__,
 			 (unsigned long)selected_size / SZ_1M);
 
 		dma_contiguous_reserve_area(selected_size, selected_base,
 					    selected_limit,
-					    &dma_contiguous_default_area,
+					    &dma_contiguous_default_area_id,
 					    fixed);
 	}
 }
@@ -160,18 +160,18 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
  * reserve in range from @base to @limit.
  */
 int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
-				       phys_addr_t limit, struct cma **res_cma,
-				       bool fixed)
+				       phys_addr_t limit,
+				       unsigned int *res_cma_id, bool fixed)
 {
 	int ret;
 
-	ret = cma_declare_contiguous(base, size, limit, 0, 0, fixed, res_cma);
+	ret = cma_declare_contiguous(base, size, limit, 0, 0, fixed, res_cma_id);
 	if (ret)
 		return ret;
 
 	/* Architecture specific contiguous memory fixup. */
-	dma_contiguous_early_fixup(cma_get_base(*res_cma),
-				cma_get_size(*res_cma));
+	dma_contiguous_early_fixup(cma_get_base(*res_cma_id),
+				cma_get_size(*res_cma_id));
 
 	return 0;
 }
@@ -193,7 +193,7 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 	if (align > CONFIG_CMA_ALIGNMENT)
 		align = CONFIG_CMA_ALIGNMENT;
 
-	return cma_alloc(dev_get_cma_area(dev), count, align);
+	return cma_alloc(dev_get_cma_id(dev), count, align);
 }
 
 /**
@@ -209,5 +209,5 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count)
 {
-	return cma_release(dev_get_cma_area(dev), pages, count);
+	return cma_release(dev_get_cma_id(dev), pages, count);
 }
