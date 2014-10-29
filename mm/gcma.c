@@ -36,7 +36,7 @@ static struct gcma_info ginfo = {
 struct swap_slot_entry {
 	struct rb_node rbnode;	/* node on frontswap_tree */
 	pgoff_t offset;		/* offset of swap slot */
-	struct page *page;	/* swapped data retain here */
+	struct page *page;
 	atomic_t refcount;
 };
 
