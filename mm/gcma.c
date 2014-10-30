@@ -82,6 +82,40 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 	page->index = (pgoff_t)slot;
 }
 
+/* flags for status of a page in gcma
+ *
+ * SWAP_LRU and RECLAIMING be protected by slru_lock,
+ * ISOLATED be protected by gcma->lock
+ */
+enum gcma_page_flags {
+	SWAP_LRU = 0x1,		/* is in frontswap LRU list */
+	RECLAIMING = 0x2,	/* is being reclaimed for contig alloc */
+	ISOLATED = 0x4,		/* isolated from frontswap backend */
+};
+
+/* Protected by slru_lock for SWAP_LRU and RECLAIMING, gcma->lock for
+ * ISOLATED
+ */
+static int page_flag(struct page *page, int flag)
+{
+	return page->private & flag;
+}
+
+static void set_page_flag(struct page *page, int flag)
+{
+	page->private |= flag;
+}
+
+static void clear_page_flag(struct page *page, int flag)
+{
+	page->private &= ~flag;
+}
+
+static void clear_page_flagall(struct page *page)
+{
+	page->private = 0;
+}
+
 /*
  * gcma_init - initializes a contiguous memory area as guaranteed
  *
@@ -143,6 +177,7 @@ static struct page *gcma_alloc_page(struct gcma *gcma)
 	page = pfn_to_page(gcma->base_pfn + bit);
 	INIT_LIST_HEAD(&page->lru);
 	spin_unlock(&gcma->lock);
+	clear_page_flagall(page);
 
 out:
 	return page;
@@ -158,7 +193,16 @@ static void gcma_free_page(struct gcma *gcma, struct page *page)
 	spin_lock(&gcma->lock);
 	offset = pfn - gcma->base_pfn;
 
-	bitmap_clear(gcma->bitmap, offset, 1);
+	if (likely(!page_flag(page, RECLAIMING))) {
+		bitmap_clear(gcma->bitmap, offset, 1);
+	} else {
+		/* The page should be safe to be used for a thread which
+		 * reclaimed the page.
+		 * To prevent further allocation from other thread, set bitmap
+		 * and mark the page as isolated. */
+		bitmap_set(gcma->bitmap, offset, 1);
+		set_page_flag(page, ISOLATED);
+	}
 	spin_unlock(&gcma->lock);
 }
 
@@ -278,7 +322,8 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 		frontswap_rb_erase(&tree->rbroot, entry);
 		if (!locked)
 			spin_lock(&slru_lock);
-		list_del_init(&page->lru);
+		if (page_flag(page, SWAP_LRU))
+			list_del_init(&page->lru);
 
 		frontswap_free_entry(entry);
 		if (!locked)
@@ -314,6 +359,7 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		if (!atomic_inc_not_zero(&entry->refcount))
 			continue;
 
+		clear_page_flag(page, SWAP_LRU);
 		list_move(&page->lru, &free_pages);
 		if (++evicted >= nr_pages)
 			break;
@@ -392,7 +438,9 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 
 	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_NOIO);
 	if (!entry) {
+		spin_lock(&slru_lock);
 		gcma_free_page(gcma, gcma_page);
+		spin_unlock(&slru_lock);
 		return -ENOMEM;
 	}
 
@@ -428,6 +476,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	} while (ret == -EEXIST);
 
 	spin_lock(&slru_lock);
+	set_page_flag(gcma_page, SWAP_LRU);
 	list_add(&gcma_page->lru, &slru_list);
 	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
@@ -467,7 +516,8 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 
 	spin_lock(&tree->lock);
 	spin_lock(&slru_lock);
-	list_move(&gcma_page->lru, &slru_list);
+	if (likely(page_flag(gcma_page, SWAP_LRU)))
+		list_move(&gcma_page->lru, &slru_list);
 	swap_slot_entry_put(tree, entry, 1);
 	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
@@ -521,6 +571,42 @@ static struct frontswap_ops gcma_frontswap_ops = {
 };
 
 /*
+ * Return 0 if [start_pfn, end_pfn] is isolated. Otherwise, return first unisolated pfn
+ */
+static unsigned long complete_isolation(struct gcma *gcma,
+		unsigned long start_pfn, unsigned long end_pfn)
+{
+	unsigned long offset;
+	unsigned long *bitmap;
+	unsigned long pfn, ret = 0;
+	struct page *page;
+
+	spin_lock(&gcma->lock);
+
+	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
+		int set;
+
+		offset = pfn - gcma->base_pfn;
+		bitmap = gcma->bitmap + offset / BITS_PER_LONG;
+
+		set = test_bit(pfn % BITS_PER_LONG, bitmap);
+		if (!set) {
+			ret = pfn;
+			break;
+		}
+
+		page = pfn_to_page(pfn);
+		if (!page_flag(page, ISOLATED)) {
+			ret = pfn;
+			break;
+		}
+
+	}
+	spin_unlock(&gcma->lock);
+	return ret;
+}
+
+/*
  * gcma_alloc_contig - allocates contiguous pages
  *
  * @start_pfn	start pfn of requiring contiguous memory area
@@ -531,22 +617,93 @@ static struct frontswap_ops gcma_frontswap_ops = {
 int gcma_alloc_contig(struct gcma *gcma,
 			unsigned long start_pfn, unsigned long size)
 {
+	LIST_HEAD(free_pages);
+	struct page *page, *n;
+	struct swap_slot_entry *entry;
 	unsigned long offset;
+	unsigned long *bitmap;
+	struct frontswap_tree *tree;
+	unsigned long pfn;
+	unsigned long orig_start = start_pfn;
 
-	spin_lock(&gcma->lock);
-	offset = start_pfn - gcma->base_pfn;
+retry:
+	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
+		spin_lock(&gcma->lock);
 
-	if (bitmap_find_next_zero_area(gcma->bitmap, gcma->size, offset,
-				size, 0) != 0) {
+		offset = pfn - gcma->base_pfn;
+		bitmap = gcma->bitmap + offset / BITS_PER_LONG;
+		page = pfn_to_page(pfn);
+
+		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
+			/* set a bit for prevent allocation for frontswap */
+			bitmap_set(gcma->bitmap, offset, 1);
+			set_page_flag(page, ISOLATED);
+			spin_unlock(&gcma->lock);
+			continue;
+		}
+
+		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
-		pr_warn("already allocated region required: %lu, %lu",
-				start_pfn, size);
-		return -EINVAL;
+		spin_lock(&slru_lock);
+		/*
+		 * If the page is in LRU, we can get swap_slot_entry from
+		 * the page with no problem.
+		 */
+		if (page_flag(page, SWAP_LRU)) {
+			BUG_ON(page_flag(page, RECLAIMING));
+
+			entry = swap_slot(page);
+			if (atomic_inc_not_zero(&entry->refcount)) {
+				clear_page_flag(page, SWAP_LRU);
+				set_page_flag(page, RECLAIMING);
+				list_move(&page->lru, &free_pages);
+				spin_unlock(&slru_lock);
+				continue;
+			}
+		}
+
+		/*
+		 * Someone is allocating the page but it's not yet in LRU
+		 * in case of frontswap_load or it was deleted from LRU
+		 * but not yet from gcma's bitmap in case of
+		 * frontswap_invalidate. Anycase, the race is small so retry
+		 * after a while will see success. Below complete_isolation
+		 * handles it.
+		 */
+		spin_lock(&gcma->lock);
+		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
+			bitmap_set(gcma->bitmap, offset, 1);
+			set_page_flag(page, ISOLATED);
+		} else {
+			set_page_flag(page, RECLAIMING);
+		}
+		spin_unlock(&gcma->lock);
+		spin_unlock(&slru_lock);
 	}
 
-	bitmap_set(gcma->bitmap, offset, size);
-	spin_unlock(&gcma->lock);
+	/*
+	 * Since we increase refcount of the page above, we can access
+	 * swap_slot_entry with safe
+	 */
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
+		tree = swap_tree(page);
+		entry = swap_slot(page);
 
+		spin_lock(&tree->lock);
+		list_del_init(&page->lru);
+		/* drop refcount increased by above loop */
+		swap_slot_entry_put(tree, entry, 0);
+		/* free entry if the entry is still in tree */
+		if (frontswap_rb_search(&tree->rbroot, entry->offset))
+			swap_slot_entry_put(tree, entry, 0);
+		spin_unlock(&tree->lock);
+	}
+
+	start_pfn = complete_isolation(gcma, orig_start, orig_start + size);
+	if (start_pfn)
+		goto retry;
+
+	BUG_ON(!list_empty(&free_pages));
 	return 0;
 }
 
