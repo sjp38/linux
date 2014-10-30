@@ -28,7 +28,8 @@ struct gcma;
 
 #ifndef CONFIG_GCMA
 
-inline int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma)
+inline int gcma_init(unsigned long pfn, unsigned long size,
+		     struct gcma **res_gcma)
 {
 	return 0;
 }

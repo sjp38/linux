@@ -146,6 +146,7 @@ int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma)
 
 	*res_gcma = gcma;
 	pr_info("gcma activate area [%lu, %lu]\n", pfn, pfn + size);
+	*res_gcma = gcma;
 	return 0;
 
 free_cma:
