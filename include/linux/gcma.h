@@ -4,8 +4,7 @@
  * gcma is a contiguous memory allocator which guarantees success and
  * fast latency for allocation request.
  * It reserve large amount of memory and let it be allocated to the
- * contiguous memory request while it can be used as backend for
- * frontswap and cleancache concurrently.
+ * contiguous memory request.
  *
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
  *                     SeongJae Park <sj38.park@gmail.com>
@@ -26,10 +25,11 @@
 
 struct gcma;
 
-int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma);
+int gcma_init(unsigned long start_pfn, unsigned long size,
+	      struct gcma **res_gcma);
 int gcma_alloc_contig(struct gcma *gcma,
-		      unsigned long start, unsigned long end);
+		      unsigned long start_pfn, unsigned long size);
 void gcma_free_contig(struct gcma *gcma,
-		      unsigned long pfn, unsigned long nr_pages);
+		      unsigned long start_pfn, unsigned long size);
 
 #endif /* _LINUX_GCMA_H */
