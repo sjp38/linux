@@ -63,6 +63,9 @@
 #ifdef CONFIG_GCMA
 #include <linux/gcma.h>
 #endif
+#ifdef CONFIG_EVAL_CMA_MIGRATE
+#include <linux/eval_cma.h>
+#endif
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
@@ -6290,12 +6293,24 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
 			break;
 		}
 
+#ifdef CONFIG_EVAL_CMA_MIGRATE
+		/* measure the function time as clean page reclaiming */
+		eval_cma_reclaim_start();
+#endif
 		nr_reclaimed = reclaim_clean_pages_from_list(cc->zone,
 							&cc->migratepages);
 		cc->nr_migratepages -= nr_reclaimed;
+#ifdef CONFIG_EVAL_CMA_MIGRATE
+		eval_cma_reclaim_end(nr_reclaimed);
 
+		/* measure the function time as dirty page writeback */
+		eval_cma_migrate_start();
+#endif
 		ret = migrate_pages(&cc->migratepages, alloc_migrate_target,
 				    NULL, 0, cc->mode, MR_CMA);
+#ifdef CONFIG_EVAL_CMA_MIGRATE
+		eval_cma_migrate_end(ret);
+#endif
 	}
 	if (ret < 0) {
 		putback_movable_pages(&cc->migratepages);
