@@ -36,8 +36,8 @@
 
 struct cma_ops {
 	int (*init)(unsigned long pfn, unsigned long nr_pages);
-	int (*alloc)(unsigned long start, unsigned long end);
-	void (*free)(unsigned long pfn, unsigned long nr_pages);
+	int (*alloc)(int cma_id, unsigned long start, unsigned long end);
+	void (*free)(int cma_id, unsigned long pfn, unsigned long nr_pages);
 };
 
 struct cma {
@@ -53,14 +53,14 @@ static struct cma cma_areas[MAX_CMA_AREAS];
 static unsigned cma_area_count;
 static DEFINE_MUTEX(cma_mutex);
 
-phys_addr_t cma_get_base(struct cma *cma)
+phys_addr_t cma_get_base(int cma_id)
 {
-	return PFN_PHYS(cma->base_pfn);
+	return PFN_PHYS(cma_areas[cma_id].base_pfn);
 }
 
-unsigned long cma_get_size(struct cma *cma)
+unsigned long cma_get_size(int cma_id)
 {
-	return cma->count << PAGE_SHIFT;
+	return cma_areas[cma_id].count << PAGE_SHIFT;
 }
 
 static unsigned long cma_bitmap_aligned_mask(struct cma *cma, int align_order)
@@ -163,12 +163,12 @@ static int __init cma_init_reserved_areas(void)
 }
 core_initcall(cma_init_reserved_areas);
 
-static void __cma_release(unsigned long pfn, unsigned long count)
+static void __cma_release(int cma_id, unsigned long pfn, unsigned long count)
 {
 	free_contig_range(pfn, count);
 }
 
-static int __cma_alloc(unsigned long start, unsigned long end)
+static int __cma_alloc(int cma_id, unsigned long start, unsigned long end)
 {
 	return alloc_contig_range(start, end, MIGRATE_CMA);
 }
@@ -181,7 +181,7 @@ static int __cma_alloc(unsigned long start, unsigned long end)
  * @alignment: Alignment for the CMA area, should be power of 2 or zero
  * @order_per_bit: Order of pages represented by one bit on bitmap.
  * @fixed: hint about where to place the reserved area
- * @res_cma: Pointer to store the created cma region.
+ * @res_cma_id: Pointer to store the created cma region id.
  *
  * This function reserves memory from early allocator. It should be
  * called by arch specific code once the early allocator (memblock or bootmem)
@@ -194,7 +194,7 @@ static int __cma_alloc(unsigned long start, unsigned long end)
 int __init __declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
-			bool fixed, struct cma **res_cma)
+			bool fixed, int *res_cma_id)
 {
 	struct cma *cma;
 	int ret = 0;
@@ -256,7 +256,7 @@ int __init __declare_contiguous(phys_addr_t base,
 	cma->base_pfn = PFN_DOWN(base);
 	cma->count = size >> PAGE_SHIFT;
 	cma->order_per_bit = order_per_bit;
-	*res_cma = cma;
+	*res_cma_id = cma_area_count;
 	cma_area_count++;
 
 	pr_info("Reserved %ld MiB at %08lx\n", (unsigned long)size / SZ_1M,
@@ -275,15 +275,18 @@ err:
 int __init gcma_declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
-			bool fixed, struct cma **res_cma)
+			bool fixed, int *res_cma_id)
 {
 	int ret = 0;
+	struct cma *cma;
+
 	ret = __declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
+			order_per_bit, fixed, res_cma_id);
 	if (ret >= 0) {
-		(*res_cma)->ops.init = gcma_init;
-		(*res_cma)->ops.alloc = gcma_alloc_contig;
-		(*res_cma)->ops.free = gcma_free_contig;
+		cma = &cma_areas[*res_cma_id];
+		cma->ops.init = gcma_init;
+		cma->ops.alloc = gcma_alloc_contig;
+		cma->ops.free = gcma_free_contig;
 	}
 
 	return ret;
@@ -292,15 +295,18 @@ int __init gcma_declare_contiguous(phys_addr_t base,
 int __init __cma_declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
-			bool fixed, struct cma **res_cma)
+			bool fixed, int *res_cma_id)
 {
 	int ret = 0;
+	struct cma *cma;
+
 	ret = __declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
+			order_per_bit, fixed, res_cma_id);
 	if (ret >= 0) {
-		(*res_cma)->ops.init = free_reserved_pages;
-		(*res_cma)->ops.alloc = __cma_alloc;
-		(*res_cma)->ops.free = __cma_release;
+		cma = &cma_areas[*res_cma_id];
+		cma->ops.init = free_reserved_pages;
+		cma->ops.alloc = __cma_alloc;
+		cma->ops.free = __cma_release;
 	}
 
 	return ret;
@@ -309,14 +315,14 @@ int __init __cma_declare_contiguous(phys_addr_t base,
 int __init cma_declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
-			bool fixed, struct cma **res_cma)
+			bool fixed, int *res_cma_id)
 {
 #ifdef CONFIG_GCMA_DEFAULT
 	return gcma_declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
+			order_per_bit, fixed, res_cma_id);
 #else
 	return __cma_declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
+			order_per_bit, fixed, res_cma_id);
 #endif
 
 }
@@ -330,11 +336,12 @@ int __init cma_declare_contiguous(phys_addr_t base,
  * This function allocates part of contiguous memory on specific
  * contiguous memory area.
  */
-struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
+struct page *cma_alloc(int cma_id, int count, unsigned int align)
 {
 	unsigned long mask, pfn, start = 0;
 	unsigned long bitmap_maxno, bitmap_no, bitmap_count;
 	struct page *page = NULL;
+	struct cma *cma = &cma_areas[cma_id];
 	int ret;
 
 	if (!cma || !cma->count)
@@ -369,7 +376,7 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
 
-		ret = cma->ops.alloc(pfn, pfn + count);
+		ret = cma->ops.alloc(cma_id, pfn, pfn + count);
 
 		mutex_unlock(&cma_mutex);
 		if (ret == 0) {
@@ -401,8 +408,9 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
  * It returns false when provided pages do not belong to contiguous area and
  * true otherwise.
  */
-bool cma_release(struct cma *cma, struct page *pages, int count)
+bool cma_release(int cma_id, struct page *pages, int count)
 {
+	struct cma *cma = &cma_areas[cma_id];
 	unsigned long pfn;
 
 	if (!cma || !pages)
@@ -417,7 +425,7 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
-	cma->ops.free(pfn, count);
+	cma->ops.free(cma_id, pfn, count);
 	cma_clear_bitmap(cma, pfn, count);
 
 	return true;

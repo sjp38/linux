@@ -620,7 +620,7 @@ static struct gcma *find_gcma(unsigned long pfn)
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_alloc_contig(unsigned long start, unsigned long end)
+int gcma_alloc_contig(int cma_id, unsigned long start, unsigned long end)
 {
 	LIST_HEAD(free_pages);
 	struct page *page, *n;
@@ -725,7 +725,7 @@ retry:
  * @pfn		start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
  */
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages)
+void gcma_free_contig(int cma_id, unsigned long pfn, unsigned long nr_pages)
 {
 	struct gcma *gcma;
 	unsigned long offset;

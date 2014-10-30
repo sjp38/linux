@@ -31,18 +31,18 @@ inline int gcma_init(unsigned long pfn, unsigned long size)
 	return 0;
 }
 
-inline int gcma_alloc_contig(unsigned long start, unsigned long end)
+inline int gcma_alloc_contig(int cma_id, unsigned long start, unsigned long end)
 {
 	return 0;
 }
 
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages) { }
+void gcma_free_contig(int cma_id, unsigned long pfn, unsigned long nr_pages) { }
 
 #else
 
 int gcma_init(unsigned long pfn, unsigned long size);
-int gcma_alloc_contig(unsigned long start, unsigned long end);
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages);
+int gcma_alloc_contig(int cma_id, unsigned long start, unsigned long end);
+void gcma_free_contig(int cma_id, unsigned long pfn, unsigned long nr_pages);
 
 #endif
 
