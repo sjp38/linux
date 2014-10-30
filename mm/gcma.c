@@ -32,16 +32,15 @@ static struct gcma_info ginfo = {
 	.lock = __SPIN_LOCK_UNLOCKED(ginfo.lock),
 };
 
-static struct gcma *find_gcma(unsigned long pfn);
-
 /** gcma_init: initializes a contiguous memory area as guaranteed
  *
  * @pfn		start pfn of contiguous memory area
  * @size	size of the contiguous memory area
+ * @res_gcma	pointer to store the created gcma region
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_init(unsigned long pfn, unsigned long size)
+int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma)
 {
 	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
 	struct gcma *gcma;
@@ -62,6 +61,7 @@ int gcma_init(unsigned long pfn, unsigned long size)
 	list_add(&gcma->list, &ginfo.head);
 	spin_unlock(&ginfo.lock);
 
+	*res_gcma = gcma;
 	pr_info("gcma activate area [%lu, %lu]\n", pfn, pfn + size);
 	return 0;
 
@@ -121,35 +121,17 @@ got:
 
 /* Free a page back to gcma */
 __attribute__((unused))
-static void gcma_free(struct page *page)
+static void gcma_free(struct gcma *gcma, struct page *page)
 {
-	struct gcma *gcma;
 	unsigned long pfn, offset;
 
 	pfn = page_to_pfn(page);
-	gcma = find_gcma(pfn);
 
 	spin_lock(&gcma->lock);
 	offset = pfn - gcma->base_pfn;
 
 	bitmap_clear(gcma->bitmap, offset, 1);
 	spin_unlock(&gcma->lock);
-}
-
-static struct gcma *find_gcma(unsigned long pfn)
-{
-	struct gcma *cma;
-
-	spin_lock(&ginfo.lock);
-	list_for_each_entry(cma, &ginfo.head, list) {
-		if (pfn >= cma->base_pfn && pfn < cma->base_pfn + cma->size) {
-			spin_unlock(&ginfo.lock);
-			return cma;
-		}
-	}
-
-	spin_unlock(&ginfo.lock);
-	return NULL;
 }
 
 /** gcma_alloc_contig: allocates contiguous pages
@@ -159,16 +141,12 @@ static struct gcma *find_gcma(unsigned long pfn)
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_alloc_contig(unsigned long start, unsigned long end)
+int gcma_alloc_contig(struct gcma *gcma, unsigned long start, unsigned long end)
 {
-	struct gcma *gcma;
 	unsigned long offset;
 	unsigned long nr_pages;
 
 	nr_pages = end - start;
-	gcma = find_gcma(start);
-	if (!gcma)
-		return -EINVAL;
 
 	spin_lock(&gcma->lock);
 	offset = start - gcma->base_pfn;
@@ -190,12 +168,10 @@ int gcma_alloc_contig(unsigned long start, unsigned long end)
  * @pfn		start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
  */
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages)
+void gcma_free_contig(struct gcma *gcma,
+		      unsigned long pfn, unsigned long nr_pages)
 {
-	struct gcma *gcma;
 	unsigned long offset;
-
-	gcma = find_gcma(pfn);
 
 	spin_lock(&gcma->lock);
 	offset = pfn - gcma->base_pfn;

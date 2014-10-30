@@ -24,8 +24,12 @@
 #ifndef _LINUX_GCMA_H
 #define _LINUX_GCMA_H
 
-int gcma_init(unsigned long pfn, unsigned long size);
-int gcma_alloc_contig(unsigned long start, unsigned long end);
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages);
+struct gcma;
+
+int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma);
+int gcma_alloc_contig(struct gcma *gcma,
+		      unsigned long start, unsigned long end);
+void gcma_free_contig(struct gcma *gcma,
+		      unsigned long pfn, unsigned long nr_pages);
 
 #endif /* _LINUX_GCMA_H */
