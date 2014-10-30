@@ -121,7 +121,7 @@ static void clear_page_flagall(struct page *page)
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_init(unsigned long pfn, unsigned long size)
+int gcma_init(unsigned long pfn, unsigned long size, struct gcma **res_gcma)
 {
 	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
 	struct gcma *gcma;
@@ -143,6 +143,7 @@ int gcma_init(unsigned long pfn, unsigned long size)
 	spin_unlock(&ginfo.lock);
 
 	pr_info("gcma activate area [%lu, %lu]\n", pfn, pfn + size);
+	*res_gcma = gcma;
 	return 0;
 
 free_cma:
@@ -620,11 +621,10 @@ static struct gcma *find_gcma(unsigned long pfn)
  *
  * Returns 0 if activation success, negative error code if fail
  */
-int gcma_alloc_contig(unsigned long start, unsigned long end)
+int gcma_alloc_contig(struct gcma *gcma, unsigned long start, unsigned long end)
 {
 	LIST_HEAD(free_pages);
 	struct page *page, *n;
-	struct gcma *gcma;
 	struct swap_slot_entry *entry;
 	unsigned long offset;
 	unsigned long *bitmap;
@@ -725,9 +725,9 @@ retry:
  * @pfn		start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
  */
-void gcma_free_contig(unsigned long pfn, unsigned long nr_pages)
+void gcma_free_contig(struct gcma *gcma,
+			unsigned long pfn, unsigned long nr_pages)
 {
-	struct gcma *gcma;
 	unsigned long offset;
 
 	gcma = find_gcma(pfn);
