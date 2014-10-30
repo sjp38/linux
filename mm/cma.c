@@ -353,7 +353,7 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 		mutex_lock(&cma_mutex);
 
 		if (cma->gcma)
-			ret = gcma_alloc_contig(cma->gcma, pfn, pfn + count);
+			ret = gcma_alloc_contig(cma->gcma, pfn, count);
 		else
 			ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
 
