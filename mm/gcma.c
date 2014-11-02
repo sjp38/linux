@@ -78,7 +78,7 @@ out:
 }
 
 /* Allocates a page from a gcma and returns it */
-static struct page *__gcma_alloc_page(struct gcma *gcma)
+static struct page *gcma_alloc_page(struct gcma *gcma)
 {
 	unsigned long bit;
 	unsigned long *bitmap = gcma->bitmap;
@@ -100,38 +100,7 @@ out:
 	return page;
 }
 
-/*
- * gcma_alloc_page - Allocates a page from entire gcma and returns it 
- *
- * @res_gcma	pointer to store the gcma allocated from
- */
-__attribute__((unused))
-static struct page *gcma_alloc_page(struct gcma **res_gcma)
-{
-	struct page *page;
-	struct gcma *gcma;
-
-	spin_lock(&ginfo.lock);
-	gcma = list_first_entry(&ginfo.head, struct gcma, list);
-	/* Do roundrobin */
-	list_move_tail(&gcma->list, &ginfo.head);
-
-	/* Find empty slot in all gcma areas */
-	list_for_each_entry(gcma, &ginfo.head, list) {
-		page = __gcma_alloc_page(gcma);
-		if (page) {
-			*res_gcma = gcma;
-			goto out;
-		}
-	}
-
-out:
-	spin_unlock(&ginfo.lock);
-	return page;
-}
-
 /* Free a page back to gcma */
-__attribute__((unused))
 static void gcma_free_page(struct gcma *gcma, struct page *page)
 {
 	unsigned long pfn, offset;
