@@ -82,7 +82,11 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 	page->index = (pgoff_t)slot;
 }
 
-/* flags for status of a page in gcma */
+/* flags for status of a page in gcma
+ *
+ * SWAP_LRU and RECLAIMING be protected by slru_lock,
+ * ISOLATED be protected by gcma->lock
+ */
 enum gcma_page_flags {
 	SWAP_LRU = 0x1,		/* is in frontswap LRU list */
 	RECLAIMING = 0x2,	/* is being reclaimed for contig alloc */
