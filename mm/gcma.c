@@ -52,8 +52,9 @@ struct frontswap_tree {
 	spinlock_t lock;
 };
 
-static LIST_HEAD(slru_list);
-static spinlock_t slru_lock;
+static LIST_HEAD(slru_list);	/* store frontswap backend pages in
+				   LRU reverse order */
+static spinlock_t slru_lock;	/* protect slru_list */
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
 
@@ -291,6 +292,13 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 	}
 }
 
+/*
+ * evict_frontswap_pages - evict @nr_pages LRU frontswap backed pages
+ *
+ * @nr_pages	number of LRU pages to be evicted
+ *
+ * Returns number of successfully evicted pages
+ */
 static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 {
 	struct frontswap_tree *tree;
