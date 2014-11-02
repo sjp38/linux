@@ -4,7 +4,7 @@
  * gcma aims for contiguous memory allocation with success and fast
  * latency guarantee.
  * It reserve large amount of memory and let it be allocated to the
- * contiguous memory request.
+ * contiguous memory request and utilize as swap cache using frontswap.
  *
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
  *                     SeongJae Park <sj38.park@gmail.com>
