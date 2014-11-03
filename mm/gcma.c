@@ -236,13 +236,18 @@ static struct page *frontswap_alloc_page(struct gcma **res_gcma)
 	list_for_each_entry(gcma, &ginfo.head, list) {
 		page = gcma_alloc_page(gcma);
 		if (page) {
-			*res_gcma = gcma;
-			goto out;
+			spin_unlock(&ginfo.lock);
+			goto got;
 		}
 	}
-
-out:
 	spin_unlock(&ginfo.lock);
+
+	/* Failed to alloc a page from entire gcma. Evict adequate LRU
+	 * frontswap slots and try allocation again */
+	if (evict_frontswap_pages(NR_EVICT_BATCH))
+		goto retry;
+
+got:
 	*res_gcma = gcma;
 	return page;
 }
