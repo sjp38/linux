@@ -156,10 +156,10 @@ static unsigned long get_expon_larger(unsigned long value)
 
 static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
 {
-	struct eval_stat *ret;
-	list_for_each_entry(ret, list, node) {
-		if (msecs > ret->msecs / 2 && msecs <= ret->msecs)
-			return ret;
+	struct eval_stat *ret, *iter, *next;
+	list_for_each_entry(iter, list, node) {
+		if (msecs > iter->msecs / 2 && msecs <= iter->msecs)
+			return iter;
 	}
 
 	ret = kmem_cache_alloc(eval_stat_cache, GFP_KERNEL);
@@ -171,7 +171,18 @@ static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
 	ret->msecs = get_expon_larger(msecs);
 	ret->nr_succ = ret->nr_fail = ret->nr_release = 0;
 
-	list_add_tail(&ret->node, list);
+	list_for_each_entry(iter, list, node) {
+		if (iter->node.next != NULL) {
+			next = list_entry(iter->node.next, struct eval_stat, node);
+			if (next->msecs > ret->msecs)
+				goto hang;
+		} else {
+			goto hang;
+		}
+	}
+
+hang:
+	list_add(&ret->node, &iter->node);
 
 out:
 	return ret;
