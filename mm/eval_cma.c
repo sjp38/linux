@@ -172,17 +172,12 @@ static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
 	ret->nr_succ = ret->nr_fail = ret->nr_release = 0;
 
 	list_for_each_entry(iter, list, node) {
-		if (iter->node.next != NULL) {
-			next = list_entry(iter->node.next, struct eval_stat, node);
-			if (next->msecs > ret->msecs)
-				goto hang;
-		} else {
+		if (iter->msecs < ret->msecs)
 			goto hang;
-		}
 	}
 
 hang:
-	list_add(&ret->node, &iter->node);
+	list_add(&ret->node, iter->node.prev);
 
 out:
 	return ret;
