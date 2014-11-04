@@ -165,7 +165,7 @@ static int __init cma_init_reserved_areas(void)
 core_initcall(cma_init_reserved_areas);
 
 /**
- * cma_declare_contiguous() - reserve custom contiguous area
+ * __declare_contiguous() - reserve custom contiguous area
  * @base: Base address of the reserved area optional, use 0 for any
  * @size: Size of the reserved area (in bytes),
  * @limit: End address of the reserved memory (optional, 0 for any).
@@ -277,7 +277,7 @@ int __init gcma_declare_contiguous(phys_addr_t base,
 	return ret;
 }
 
-int __init __cma_declare_contiguous(phys_addr_t base,
+int __init cma_declare_contiguous(phys_addr_t base,
 			phys_addr_t size, phys_addr_t limit,
 			phys_addr_t alignment, unsigned int order_per_bit,
 			bool fixed, struct cma **res_cma)
@@ -287,21 +287,6 @@ int __init __cma_declare_contiguous(phys_addr_t base,
 			order_per_bit, fixed, res_cma);
 
 	return ret;
-}
-
-int __init cma_declare_contiguous(phys_addr_t base,
-			phys_addr_t size, phys_addr_t limit,
-			phys_addr_t alignment, unsigned int order_per_bit,
-			bool fixed, struct cma **res_cma)
-{
-#ifdef CONFIG_GCMA_DEFAULT
-	return gcma_declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
-#else
-	return __cma_declare_contiguous(base, size, limit, alignment,
-			order_per_bit, fixed, res_cma);
-#endif
-
 }
 
 /**
