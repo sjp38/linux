@@ -399,7 +399,7 @@ static void sprint_res(struct eval_result *res, char *buffer)
 	reclaim_lat = &res->reclaim_latency;
 	migrate_lat = &res->migrate_latency;
 
-	sprintf(buffer, "%lu,%lu,%lu,%lu,%lu"
+	sprintf(buffer, "%lu,%lu,%lu,%lu,%lu,"
 			"%lu,%lu,%lu,"
 			"%lu,%lu,%lu,"
 			"%lu,%lu,%lu,"
