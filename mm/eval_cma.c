@@ -83,8 +83,9 @@ static unsigned long max_of(unsigned long prev_max, unsigned long new_val)
 
 static unsigned long time_diff(struct timespec *start, struct timespec *end)
 {
-	return end->tv_sec * 1000000000 + end->tv_nsec
-		- (start->tv_sec * 1000000000 + start->tv_nsec);
+	return (end->tv_sec >= start->tv_sec) ?
+		end->tv_nsec - start->tv_nsec :
+		1000000000 - (start->tv_usec - end->tv_nsec);
 }
 
 /**
