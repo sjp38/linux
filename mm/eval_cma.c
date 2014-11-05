@@ -399,11 +399,11 @@ static void sprint_res(struct eval_result *res, char *buffer)
 	reclaim_lat = &res->reclaim_latency;
 	migrate_lat = &res->migrate_latency;
 
-	sprintf(buffer, "%lu,%lu,%lu,%lu,%lu,"
-			"%lu,%lu,%lu,"
-			"%lu,%lu,%lu,"
-			"%lu,%lu,%lu,"
-			"%lu,%lu,%lu,"
+	sprintf(buffer, "%lu,,%lu,%lu,,%lu,%lu,,"
+			"%lu,%lu,%lu,,"
+			"%lu,%lu,%lu,,"
+			"%lu,%lu,%lu,,"
+			"%lu,%lu,%lu,,"
 			"%lu,%lu,%lu\n",
 			res->nr_pages,
 			res->nr_eval, res->nr_fail,
@@ -475,7 +475,7 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 
 	list_for_each_entry(result, &eval_result_list, node) {
 		list_for_each_entry(stat, &result->stats, node) {
-			sprintf(kbuf, "%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
+			sprintf(kbuf, "%lu,%lu,,%lu,%lu,%lu,,%lu,%lu\n",
 					result->nr_pages, stat->usecs,
 					stat->nr_succ, stat->nr_fail,
 					stat->nr_release,
