@@ -138,6 +138,15 @@ static int measure_cma(int nr_pages,
 	return 0;
 }
 
+static void apply_n_result(unsigned long n, unsigned long nth,
+				unsigned long time, struct cma_latency *lat)
+{
+	time = time / n;
+	lat->min = min_of(lat->min, time);
+	lat->max = max_of(lat->max, time);
+	lat->avg = (lat->avg * (nth - 1) + time) / nth;
+}
+
 static void apply_nth_result(unsigned long nth, unsigned long time,
 				struct cma_latency *lat)
 {
@@ -236,7 +245,7 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 	unsigned long time;
 	struct eval_stat *stat;
 
-	if (current_result == NULL)
+	if (current_result == NULL || nr_reclaimed == 0)
 		return
 
 	getnstimeofday(&end_time);
@@ -245,7 +254,7 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 
 	current_result->nr_reclaim += nr_reclaimed;
 
-	apply_nth_result(current_result->nr_reclaim, time,
+	apply_n_result(nr_reclaimed, current_result->nr_reclaim, time,
 			&current_result->reclaim_latency);
 
 	stat = get_stat(time, &current_result->stats);
@@ -267,7 +276,7 @@ void eval_cma_migrate_end(unsigned long nr_migrated)
 	unsigned long time;
 	struct eval_stat *stat;
 
-	if (current_result == NULL)
+	if (current_result == NULL || nr_migrated == 0)
 		return
 
 	getnstimeofday(&end_time);
@@ -276,7 +285,7 @@ void eval_cma_migrate_end(unsigned long nr_migrated)
 
 	current_result->nr_migrate += nr_migrated;
 
-	apply_nth_result(current_result->nr_migrate, time,
+	apply_n_result(nr_migrated, current_result->nr_migrate, time,
 			&current_result->migrate_latency);
 
 	stat = get_stat(time, &current_result->stats);
