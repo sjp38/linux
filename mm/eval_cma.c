@@ -37,10 +37,13 @@ struct cma_latency {
 	unsigned long avg;
 };
 
-/* @count requests terminated in larger than (@msecs / 2), equal or
- * smaller than @msecs milliseconds */
+/*
+ * @nr_succ, @nr_fail and @nr_release allocation success / allocation failure /
+ * release terminated in larger than (@usecs / 2), equal or smaller than @usecs
+ * micro-seconds
+ */
 struct eval_stat {
-	unsigned long msecs;
+	unsigned long usecs;
 	unsigned long nr_succ;
 	unsigned long nr_fail;
 	unsigned long nr_release;
@@ -81,11 +84,16 @@ static unsigned long max_of(unsigned long prev_max, unsigned long new_val)
 	return prev_max;
 }
 
+static unsigned long ns_to_us(unsigned long nsecs)
+{
+	return nsecs / 1000;
+}
+
 static unsigned long time_diff(struct timespec *start, struct timespec *end)
 {
 	return (end->tv_sec >= start->tv_sec) ?
 		end->tv_nsec - start->tv_nsec :
-		1000000000 - (start->tv_usec - end->tv_nsec);
+		1000000000 - (start->tv_nsec - end->tv_nsec);
 }
 
 /**
@@ -99,7 +107,7 @@ static int measure_cma(int nr_pages,
 	getnstimeofday(&start);
 	page = cma_alloc(cma, nr_pages, 1);
 	getnstimeofday(&end);
-	*alloc_time = time_diff(&start, &end);
+	*alloc_time = ns_to_us(time_diff(&start, &end));
 	if (!page) {
 		*release_time = 0;
 		return -ENOMEM;
@@ -108,7 +116,7 @@ static int measure_cma(int nr_pages,
 	getnstimeofday(&start);
 	cma_release(cma, page, nr_pages);
 	getnstimeofday(&end);
-	*release_time = time_diff(&start, &end);
+	*release_time = ns_to_us(time_diff(&start, &end));
 
 	return 0;
 }
@@ -155,11 +163,11 @@ static unsigned long get_expon_larger(unsigned long value)
 	return ret;
 }
 
-static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
+static struct eval_stat *get_stat(unsigned long usecs, struct list_head *list)
 {
-	struct eval_stat *ret, *iter, *next;
+	struct eval_stat *ret, *iter;
 	list_for_each_entry(iter, list, node) {
-		if (msecs > iter->msecs / 2 && msecs <= iter->msecs)
+		if (usecs > iter->usecs / 2 && usecs <= iter->usecs)
 			return iter;
 	}
 
@@ -169,11 +177,11 @@ static struct eval_stat *get_stat(unsigned long msecs, struct list_head *list)
 		goto out;
 	}
 
-	ret->msecs = get_expon_larger(msecs);
+	ret->usecs = get_expon_larger(usecs);
 	ret->nr_succ = ret->nr_fail = ret->nr_release = 0;
 
 	list_for_each_entry(iter, list, node) {
-		if (iter->msecs > ret->msecs)
+		if (iter->usecs > ret->usecs)
 			goto hang;
 	}
 
@@ -384,7 +392,7 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 	list_for_each_entry(result, &eval_result_list, node) {
 		list_for_each_entry(stat, &result->stats, node) {
 			sprintf(kbuf, "%ld,%ld,%ld,%ld,%ld\n",
-					result->nr_pages, stat->msecs,
+					result->nr_pages, stat->usecs,
 					stat->nr_succ, stat->nr_fail,
 					stat->nr_release);
 
