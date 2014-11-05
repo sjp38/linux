@@ -87,6 +87,8 @@ static struct kmem_cache *eval_stat_cache;
 static struct kmem_cache *eval_result_cache;
 static LIST_HEAD(eval_result_list);
 
+static u32 eval_cma_working;
+
 static unsigned long min_of(unsigned long prev_min, unsigned long new_val)
 {
 	if (prev_min == 0 || prev_min > new_val)
@@ -371,11 +373,13 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 
 	result->nr_pages = nr_pages;
 
+	eval_cma_working = 1;
 	current_result = result;
 
 	eval_cma(result);
 
 	current_result = NULL;
+	eval_cma_working = 0;
 
 out:
 	return length;
@@ -517,6 +521,8 @@ static int __init debugfs_init(void)
 	debugfs_create_file("res", S_IRUSR, debugfs_root, NULL, &result_fops);
 	debugfs_create_file("res.hist", S_IRUSR, debugfs_root, NULL,
 			&result_hist_fops);
+	debugfs_create_bool("working", S_IRUGO, debugfs_root,
+			&eval_cma_working);
 	return 0;
 }
 
