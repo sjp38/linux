@@ -151,26 +151,6 @@ static void init_cma_latency(struct cma_latency *lat)
 	lat->min = lat->max = lat->avg = 0;
 }
 
-static void notice_result(struct eval_result *res)
-{
-	struct cma_latency *alloc, *fail, *release;
-
-	alloc = &res->alloc_latency;
-	fail = &res->fail_latency;
-	release = &res->release_latency;
-
-	pr_info("%ld page request evaluated.\n"
-		"  succ/fail:%ld/%ld\n"
-		"  succ alloc min:%ld\tmax:%ld\tavg:%ld\n"
-		"  fail alloc min:%ld\tmax:%ld\tavg:%ld\n"
-		"  release min:%ld\tmax:%ld\tavg:%ld\n",
-			res->nr_pages,
-			res->nr_eval, res->nr_fail,
-			alloc->min, alloc->max, alloc->avg,
-			fail->min, fail->max, fail->avg,
-			release->min, release->max, release->avg);
-}
-
 static unsigned long get_expon_larger(unsigned long value)
 {
 	unsigned long ret = 1;
@@ -432,8 +412,6 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 		alloc_lat = &result->alloc_latency;
 		fail_lat = &result->fail_latency;
 		release_lat = &result->release_latency;
-
-		notice_result(result);
 
 		sprint_res(result, kbuf);
 
