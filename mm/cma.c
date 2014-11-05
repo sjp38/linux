@@ -370,11 +370,16 @@ int __init cma_declare_contiguous(phys_addr_t base,
 			phys_addr_t alignment, unsigned int order_per_bit,
 			bool fixed, struct cma **res_cma)
 {
+#ifdef CONFIG_GCMA_DEFAULT
+	return gcma_declare_contiguous(base, size, limit, alignment,
+			order_per_bit, fixed, res_cma);
+#else
 	int ret = 0;
 	ret = __declare_contiguous(base, size, limit, alignment,
 			order_per_bit, fixed, res_cma);
 
 	return ret;
+#endif
 }
 
 /**

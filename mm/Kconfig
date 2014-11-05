@@ -542,6 +542,14 @@ config GCMA
 	  This is marked experimental because it is a new feature that
 	  interacts heavily with memory reclaim.
 
+config GCMA_DEFAULT
+	bool "Set GCMA as default CMA facility (EXPERIMENTA)"
+	default n
+	depends on GCMA
+	help
+	  Set older CMA interfaces to work as GCMA rather than CMA without any
+	  client code change.
+
 config MEM_SOFT_DIRTY
 	bool "Track memory changes"
 	depends on CHECKPOINT_RESTORE && HAVE_ARCH_SOFT_DIRTY && PROC_FS
