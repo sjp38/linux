@@ -28,6 +28,8 @@
 #include <linux/sizes.h>
 #include <linux/dma-contiguous.h>
 
+#include <linux/eval_cma.h>
+
 static bool eval_disabled __read_mostly;
 module_param_named(eval_disabled, eval_disabled, bool, 0);
 
@@ -47,6 +49,10 @@ struct eval_stat {
 	unsigned long nr_succ;
 	unsigned long nr_fail;
 	unsigned long nr_release;
+
+	unsigned long nr_reclaim;
+	unsigned long nr_migrate;
+
 	struct list_head node;
 };
 
@@ -54,9 +60,17 @@ struct eval_result {
 	unsigned long nr_pages;
 	unsigned long nr_eval;
 	unsigned long nr_fail;
+
+	unsigned long nr_reclaim;
+	unsigned long nr_migrate;
+
 	struct cma_latency alloc_latency;
 	struct cma_latency fail_latency;
 	struct cma_latency release_latency;
+
+	struct cma_latency reclaim_latency;
+	struct cma_latency migrate_latency;
+
 	struct list_head node;
 
 	struct list_head stats;
@@ -64,6 +78,9 @@ struct eval_result {
 
 /* Should be initialized during early boot */
 struct cma *cma;
+
+struct eval_result *current_result;
+struct timespec start_time;
 
 static struct kmem_cache *eval_stat_cache;
 
@@ -179,6 +196,7 @@ static struct eval_stat *get_stat(unsigned long usecs, struct list_head *list)
 
 	ret->usecs = get_expon_larger(usecs);
 	ret->nr_succ = ret->nr_fail = ret->nr_release = 0;
+	ret->nr_reclaim = ret->nr_migrate = 0;
 
 	list_for_each_entry(iter, list, node) {
 		if (iter->usecs > ret->usecs)
@@ -208,10 +226,14 @@ static struct eval_result *get_result(unsigned long nr_pages)
 
 	result->nr_eval = 0;
 	result->nr_fail = 0;
+	result->nr_reclaim = 0;
+	result->nr_migrate = 0;
 
 	init_cma_latency(&result->alloc_latency);
 	init_cma_latency(&result->fail_latency);
 	init_cma_latency(&result->release_latency);
+	init_cma_latency(&result->reclaim_latency);
+	init_cma_latency(&result->migrate_latency);
 
 	INIT_LIST_HEAD(&result->stats);
 
@@ -219,6 +241,56 @@ static struct eval_result *get_result(unsigned long nr_pages)
 out:
 	return result;
 }
+
+void eval_cma_reclaim_start()
+{
+	getnstimeofday(&start_time);
+}
+
+void eval_cma_reclaim_end(unsigned long nr_reclaimed)
+{
+	struct timespec end_time;
+	unsigned long time;
+	struct eval_stat *stat;
+
+	getnstimeofday(&end_time);
+
+	time = ns_to_us(time_diff(&start_time, &end_time));
+
+	current_result->nr_reclaim += nr_reclaimed;
+
+	apply_nth_result(current_result->nr_reclaim, time,
+			&current_result->reclaim_latency);
+
+	stat = get_stat(time, &current_result->stats);
+	stat->nr_reclaim++;
+
+}
+
+void eval_cma_migrate_start()
+{
+	getnstimeofday(&start_time);
+}
+
+void eval_cma_migrate_end(unsigned long nr_migrated)
+{
+	struct timespec end_time;
+	unsigned long time;
+	struct eval_stat *stat;
+
+	getnstimeofday(&end_time);
+
+	time = ns_to_us(time_diff(&start_time, &end_time));
+
+	current_result->nr_migrate += nr_migrated;
+
+	apply_nth_result(current_result->nr_migrate, time,
+			&current_result->migrate_latency);
+
+	stat = get_stat(time, &current_result->stats);
+	stat->nr_migrate++;
+}
+
 
 static void eval_cma(struct eval_result *res)
 {
@@ -298,6 +370,8 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 
 	result->nr_pages = nr_pages;
 
+	current_result = result;
+
 	eval_cma(result);
 
 out:
@@ -314,21 +388,30 @@ static const struct file_operations eval_fops = {
 static void sprint_res(struct eval_result *res, char *buffer)
 {
 	struct cma_latency *alloc_lat, *fail_lat, *release_lat;
+	struct cma_latency *reclaim_lat, *migrate_lat;
 
 	alloc_lat = &res->alloc_latency;
 	fail_lat = &res->fail_latency;
 	release_lat = &res->release_latency;
+	reclaim_lat = &res->reclaim_latency;
+	migrate_lat = &res->migrate_latency;
 
-	sprintf(buffer, "%ld,%ld,%ld,"
+	sprintf(buffer, "%ld,%ld,%ld,%ld,%ld"
+			"%ld,%ld,%ld,"
+			"%ld,%ld,%ld,"
 			"%ld,%ld,%ld,"
 			"%ld,%ld,%ld,"
 			"%ld,%ld,%ld\n",
 			res->nr_pages,
 			res->nr_eval, res->nr_fail,
+			res->nr_reclaim, res->nr_migrate,
 			alloc_lat->min, alloc_lat->max, alloc_lat->avg,
 			fail_lat->min, fail_lat->max, fail_lat->avg,
 			release_lat->min, release_lat->max,
-			release_lat->avg);
+			release_lat->avg,
+			reclaim_lat->min, reclaim_lat->max, reclaim_lat->avg,
+			migrate_lat->min, migrate_lat->max, migrate_lat->avg
+			);
 }
 
 static ssize_t eval_res_read(struct file *filp, char __user *buf,
@@ -391,10 +474,11 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 
 	list_for_each_entry(result, &eval_result_list, node) {
 		list_for_each_entry(stat, &result->stats, node) {
-			sprintf(kbuf, "%ld,%ld,%ld,%ld,%ld\n",
+			sprintf(kbuf, "%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
 					result->nr_pages, stat->usecs,
 					stat->nr_succ, stat->nr_fail,
-					stat->nr_release);
+					stat->nr_release,
+					stat->nr_reclaim, stat->nr_migrate);
 
 			cursor = kbuf;
 			while (length && *cursor) {
