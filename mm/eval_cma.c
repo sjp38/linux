@@ -340,8 +340,8 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 	struct eval_result *result;
 	unsigned long nr_pages;
 
-	sscanf(buf, "%ld", &nr_pages);
-	pr_info("%s called with %ld\n", __func__, nr_pages);
+	sscanf(buf, "%lu", &nr_pages);
+	pr_info("%s called with %lu\n", __func__, nr_pages);
 
 	result = get_result(nr_pages);
 	/* warning have been done from get_result() */
@@ -376,12 +376,12 @@ static void sprint_res(struct eval_result *res, char *buffer)
 	reclaim_lat = &res->reclaim_latency;
 	migrate_lat = &res->migrate_latency;
 
-	sprintf(buffer, "%ld,%ld,%ld,%ld,%ld"
-			"%ld,%ld,%ld,"
-			"%ld,%ld,%ld,"
-			"%ld,%ld,%ld,"
-			"%ld,%ld,%ld,"
-			"%ld,%ld,%ld\n",
+	sprintf(buffer, "%lu,%lu,%lu,%lu,%lu"
+			"%lu,%lu,%lu,"
+			"%lu,%lu,%lu,"
+			"%lu,%lu,%lu,"
+			"%lu,%lu,%lu,"
+			"%lu,%lu,%lu\n",
 			res->nr_pages,
 			res->nr_eval, res->nr_fail,
 			res->nr_reclaim, res->nr_migrate,
@@ -452,7 +452,7 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 
 	list_for_each_entry(result, &eval_result_list, node) {
 		list_for_each_entry(stat, &result->stats, node) {
-			sprintf(kbuf, "%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
+			sprintf(kbuf, "%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
 					result->nr_pages, stat->usecs,
 					stat->nr_succ, stat->nr_fail,
 					stat->nr_release,
