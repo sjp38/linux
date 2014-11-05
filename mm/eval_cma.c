@@ -234,7 +234,7 @@ out:
 void eval_cma_reclaim_start()
 {
 	if (current_result == NULL)
-		return
+		return;
 
 	getnstimeofday(&start_time);
 }
@@ -246,7 +246,7 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 	struct eval_stat *stat;
 
 	if (current_result == NULL || nr_reclaimed == 0)
-		return
+		return;
 
 	getnstimeofday(&end_time);
 
@@ -265,7 +265,7 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 void eval_cma_migrate_start()
 {
 	if (current_result == NULL)
-		return
+		return;
 
 	getnstimeofday(&start_time);
 }
@@ -277,7 +277,7 @@ void eval_cma_migrate_end(unsigned long nr_migrated)
 	struct eval_stat *stat;
 
 	if (current_result == NULL || nr_migrated == 0)
-		return
+		return;
 
 	getnstimeofday(&end_time);
 
