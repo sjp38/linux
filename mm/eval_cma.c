@@ -224,6 +224,9 @@ out:
 
 void eval_cma_reclaim_start()
 {
+	if (current_result == NULL)
+		return
+
 	getnstimeofday(&start_time);
 }
 
@@ -232,6 +235,9 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 	struct timespec end_time;
 	unsigned long time;
 	struct eval_stat *stat;
+
+	if (current_result == NULL)
+		return
 
 	getnstimeofday(&end_time);
 
@@ -249,6 +255,9 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 
 void eval_cma_migrate_start()
 {
+	if (current_result == NULL)
+		return
+
 	getnstimeofday(&start_time);
 }
 
@@ -257,6 +266,9 @@ void eval_cma_migrate_end(unsigned long nr_migrated)
 	struct timespec end_time;
 	unsigned long time;
 	struct eval_stat *stat;
+
+	if (current_result == NULL)
+		return
 
 	getnstimeofday(&end_time);
 
@@ -353,6 +365,8 @@ static ssize_t eval_write(struct file *filp, const char __user *buf,
 	current_result = result;
 
 	eval_cma(result);
+
+	current_result = NULL;
 
 out:
 	return length;
