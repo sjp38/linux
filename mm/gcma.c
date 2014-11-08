@@ -708,7 +708,6 @@ retry:
 
 		spin_lock(&tree->lock);
 		spin_lock(&slru_lock);
-		list_del(&page->lru);
 		/* drop refcount increased by above loop */
 		swap_slot_entry_put(tree, entry);
 		/* free entry if the entry is still in tree */
@@ -722,7 +721,6 @@ retry:
 	if (start_pfn)
 		goto retry;
 
-	BUG_ON(!list_empty(&free_pages));
 	return 0;
 }
 
