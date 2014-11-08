@@ -56,13 +56,24 @@ struct eval_stat {
 	struct list_head node;
 };
 
+/*
+ * during @nr_eval time @nr_pages cma allocation,
+ * reclaim tried @nr_reclaim times and it successfully reclaimed
+ * @nr_reclaimed_pages pages.
+ * each reclaim call required @reclaim_latency->{min,max,avg} micro seconds
+ *
+ * loughly, we can say one clean page reclamation requires
+ * @reclaim_latency->avg * @nr_reclaim / @nr_reclaimed_pages micro-seconds.
+ */
 struct eval_result {
 	unsigned long nr_pages;
 	unsigned long nr_eval;
 	unsigned long nr_fail;
 
-	unsigned long nr_reclaim;
+	unsigned long nr_reclaim; /* reclaim tries */
+	unsigned long nr_reclaimed_pages; /* reclaim success pages */
 	unsigned long nr_migrate;
+	unsigned long nr_migrated_pages;
 
 	struct cma_latency alloc_latency;
 	struct cma_latency fail_latency;
@@ -140,15 +151,6 @@ static int measure_cma(int nr_pages,
 	return 0;
 }
 
-static void apply_n_result(unsigned long n, unsigned long nth,
-				unsigned long time, struct cma_latency *lat)
-{
-	time = time / n;
-	lat->min = min_of(lat->min, time);
-	lat->max = max_of(lat->max, time);
-	lat->avg = (lat->avg * (nth - 1) + time) / nth;
-}
-
 static void apply_nth_result(unsigned long nth, unsigned long time,
 				struct cma_latency *lat)
 {
@@ -217,8 +219,8 @@ static struct eval_result *get_result(unsigned long nr_pages)
 
 	result->nr_eval = 0;
 	result->nr_fail = 0;
-	result->nr_reclaim = 0;
-	result->nr_migrate = 0;
+	result->nr_reclaim = result->nr_reclaimed_pages = 0;
+	result->nr_migrate = result->nr_migrated_pages = 0;
 
 	init_cma_latency(&result->alloc_latency);
 	init_cma_latency(&result->fail_latency);
@@ -247,21 +249,21 @@ void eval_cma_reclaim_end(unsigned long nr_reclaimed)
 	unsigned long time;
 	struct eval_stat *stat;
 
-	if (current_result == NULL || nr_reclaimed == 0)
+	if (current_result == NULL)
 		return;
 
 	getnstimeofday(&end_time);
 
 	time = ns_to_us(time_diff(&start_time, &end_time));
 
-	current_result->nr_reclaim += nr_reclaimed;
+	current_result->nr_reclaim++;
+	current_result->nr_reclaimed_pages += nr_reclaimed;
 
-	apply_n_result(nr_reclaimed, current_result->nr_reclaim, time,
+	apply_nth_result(current_result->nr_reclaim, time,
 			&current_result->reclaim_latency);
 
 	stat = get_stat(time, &current_result->stats);
 	stat->nr_reclaim++;
-
 }
 
 void eval_cma_migrate_start()
@@ -285,9 +287,10 @@ void eval_cma_migrate_end(unsigned long nr_migrated)
 
 	time = ns_to_us(time_diff(&start_time, &end_time));
 
-	current_result->nr_migrate += nr_migrated;
+	current_result->nr_migrate++;
+	current_result->nr_migrated_pages += nr_migrated;
 
-	apply_n_result(nr_migrated, current_result->nr_migrate, time,
+	apply_nth_result(current_result->nr_migrate, time,
 			&current_result->migrate_latency);
 
 	stat = get_stat(time, &current_result->stats);
@@ -403,19 +406,21 @@ static void sprint_res(struct eval_result *res, char *buffer)
 	reclaim_lat = &res->reclaim_latency;
 	migrate_lat = &res->migrate_latency;
 
-	sprintf(buffer, "%lu,,%lu,%lu,,%lu,%lu,,"
+	sprintf(buffer, "%lu,,%lu,%lu,,"
 			"%lu,%lu,%lu,,"
 			"%lu,%lu,%lu,,"
 			"%lu,%lu,%lu,,"
+			"%lu,%lu,%lu,%lu,,"
 			"%lu,%lu,%lu,,"
 			"%lu,%lu,%lu\n",
 			res->nr_pages,
 			res->nr_eval, res->nr_fail,
-			res->nr_reclaim, res->nr_migrate,
 			alloc_lat->min, alloc_lat->max, alloc_lat->avg,
 			fail_lat->min, fail_lat->max, fail_lat->avg,
 			release_lat->min, release_lat->max,
 			release_lat->avg,
+			res->nr_reclaim, res->nr_migrate,
+			res->nr_reclaimed_pages, res->nr_migrated_pages,
 			reclaim_lat->min, reclaim_lat->max, reclaim_lat->avg,
 			migrate_lat->min, migrate_lat->max, migrate_lat->avg
 			);
