@@ -310,7 +310,6 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		tree = swap_tree(page);
 		entry = swap_slot(page);
 
-		list_del(&page->lru);
 		spin_lock(&tree->lock);
 		spin_lock(&slru_lock);
 		/* drop refcount increased by above loop */
@@ -322,7 +321,6 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		spin_unlock(&tree->lock);
 	}
 
-	BUG_ON(!list_empty(&free_pages));
 	return evicted;
 }
 
