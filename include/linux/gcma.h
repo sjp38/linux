@@ -4,7 +4,7 @@
  * GCMA aims for contiguous memory allocation with success and fast
  * latency guarantee.
  * It reserves large amount of memory and let it be allocated to the
- * contiguous memory request.
+ * contiguous memory request and utilize them as swap cache.
  *
  * Copyright (C) 2014  LG Electronics Inc.,
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
