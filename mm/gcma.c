@@ -93,7 +93,7 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
  *
  * GF_ISOLATED
  * The page is isolated for contiguous memory allocation.
- * GCMA customer can use the page safely while frontswap should not use it.
+ * GCMA guests can use the page safely while frontswap guests should not.
  * Protected by gcma->lock.
  */
 enum gpage_flags {
@@ -186,6 +186,7 @@ out:
 	return page;
 }
 
+/* Caller should hold slru_lock */
 static void gcma_free_page(struct gcma *gcma, struct page *page)
 {
 	unsigned long pfn, offset;
@@ -665,7 +666,7 @@ retry:
 
 		/*
 		 * Someone is allocating the page but it's not yet in LRU
-		 * in case of frontswap_load or it was deleted from LRU
+		 * in case of frontswap_store or it was deleted from LRU
 		 * but not yet from gcma's bitmap in case of
 		 * frontswap_invalidate. Anycase, the race is small so retry
 		 * after a while will see success. Below isolate_interrupted
@@ -683,7 +684,7 @@ retry:
 	}
 
 	/*
-	 * Since we increase refcount of the page above, we can access
+	 * Since we increased refcount of the page above, we can access
 	 * swap_slot_entry with safe
 	 */
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
