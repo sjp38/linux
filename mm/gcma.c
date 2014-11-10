@@ -3,7 +3,7 @@
  *
  * GCMA aims for contiguous memory allocation with success and fast
  * latency guarantee.
- * It reserve large amount of memory and let it be allocated to the
+ * It reserves large amount of memory and let it be allocated to the
  * contiguous memory request.
  *
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
@@ -20,7 +20,6 @@
 struct gcma {
 	spinlock_t lock;
 	unsigned long *bitmap;
-
 	unsigned long base_pfn, size;
 	struct list_head list;
 };
@@ -42,7 +41,7 @@ static struct gcma_info ginfo = {
  * @size	number of pages in the contiguous memory area
  * @res_gcma	pointer to store the created gcma region
  *
- * 0 on success, error code on failure.
+ * Returns 0 on success, error code on failure.
  */
 int gcma_init(unsigned long start_pfn, unsigned long size,
 		struct gcma **res_gcma)
@@ -85,7 +84,6 @@ static struct page *gcma_alloc_page(struct gcma *gcma)
 
 	spin_lock(&gcma->lock);
 	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
-
 	if (bit >= gcma->size) {
 		spin_unlock(&gcma->lock);
 		goto out;
@@ -118,7 +116,7 @@ static void gcma_free_page(struct gcma *gcma, struct page *page)
  * @start_pfn	start pfn of requiring contiguous memory area
  * @size	size of the requiring contiguous memory area
  *
- * 0 on success, error code on failure.
+ * Returns 0 on success, error code on failure.
  */
 int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 			unsigned long size)

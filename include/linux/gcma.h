@@ -3,7 +3,7 @@
  *
  * GCMA aims for contiguous memory allocation with success and fast
  * latency guarantee.
- * It reserve larges amount of memory and let it be allocated to the
+ * It reserves large amount of memory and let it be allocated to the
  * contiguous memory request.
  *
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
