@@ -349,6 +349,7 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 	struct swap_slot_entry *entry;
 	struct page *page, *n;
 	unsigned long evicted = 0;
+	pgoff_t slot_offset;
 	LIST_HEAD(free_pages);
 
 	spin_lock(&slru_lock);
@@ -378,9 +379,10 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		spin_lock(&tree->lock);
 		spin_lock(&slru_lock);
 		/* drop refcount increased by above loop */
+		slot_offset = entry->offset;
 		swap_slot_entry_put(tree, entry);
 		/* free entry if the entry is still in tree */
-		if (frontswap_rb_search(&tree->rbroot, entry->offset))
+		if (frontswap_rb_search(&tree->rbroot, slot_offset))
 			swap_slot_entry_put(tree, entry);
 		spin_unlock(&slru_lock);
 		spin_unlock(&tree->lock);
@@ -637,6 +639,7 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	struct frontswap_tree *tree;
 	unsigned long pfn;
 	unsigned long orig_start = start_pfn;
+	pgoff_t slot_offset;
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
@@ -719,9 +722,10 @@ next_page:
 		spin_lock(&tree->lock);
 		spin_lock(&slru_lock);
 		/* drop refcount increased by above loop */
+		slot_offset = entry->offset;
 		swap_slot_entry_put(tree, entry);
 		/* free entry if the entry is still in tree */
-		if (frontswap_rb_search(&tree->rbroot, entry->offset))
+		if (frontswap_rb_search(&tree->rbroot, slot_offset))
 			swap_slot_entry_put(tree, entry);
 		spin_unlock(&slru_lock);
 		spin_unlock(&tree->lock);
