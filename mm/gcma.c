@@ -653,42 +653,57 @@ retry:
 			spin_unlock(&gcma->lock);
 			continue;
 		}
+		if (gpage_flag(page, GF_ISOLATED)) {
+			spin_unlock(&gcma->lock);
+			continue;
+		}
 
 		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
 		spin_lock(&slru_lock);
-		/*
-		 * If the page is in LRU, we can get swap_slot_entry from
-		 * the page with no problem.
-		 */
-		if (gpage_flag(page, GF_SWAP_LRU)) {
-			entry = swap_slot(page);
-			if (atomic_inc_not_zero(&entry->refcount)) {
-				clear_gpage_flag(page, GF_SWAP_LRU);
-				set_gpage_flag(page, GF_RECLAIMING);
-				atomic_inc(&gcma_reclaimed_pages);
-				list_move(&page->lru, &free_pages);
-				spin_unlock(&slru_lock);
-				continue;
-			}
-		}
+		spin_lock(&gcma->lock);
 
 		/*
-		 * Someone is allocating the page but it's not yet in LRU
-		 * in case of frontswap_store or it was deleted from LRU
-		 * but not yet from gcma's bitmap in case of
-		 * frontswap_invalidate. Anycase, the race is small so retry
-		 * after a while will see success. Below isolate_interrupted
-		 * handles it.
+		 * The page could be freed by others while holding gcma->lock
+		 * again.
 		 */
-		spin_lock(&gcma->lock);
 		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
 			bitmap_set(gcma->bitmap, offset, 1);
 			set_gpage_flag(page, GF_ISOLATED);
-		} else {
-			set_gpage_flag(page, GF_RECLAIMING);
-			atomic_inc(&gcma_reclaimed_pages);
+			goto next_page;
 		}
+
+		if (gpage_flag(page, GF_ISOLATED)) {
+			goto next_page;
+		}
+
+		/* Avoid others allocate this page again */
+		set_gpage_flag(page, GF_RECLAIMING);
+
+		/*
+		 * The page is in LRU and being used by someone. Remove from
+		 * LRU and ready to put the swap slot soon.
+		 */
+		if (gpage_flag(page, GF_SWAP_LRU)) {
+		       entry = swap_slot(page);
+		       if (atomic_inc_not_zero(&entry->refcount)) {
+				clear_gpage_flag(page, GF_SWAP_LRU);
+				list_move(&page->lru, &free_pages);
+				atomic_inc(&gcma_reclaimed_pages);
+				goto next_page;
+		       }
+		}
+
+		/*
+		 * The page is
+		 * 1) allocated by others but not yet in LRU in case of
+		 *    frontswap_store or
+		 * 2) deleted from LRU but not yet from gcma's bitmap in case
+		 *    of frontswap_invalidate or evict_frontswap_pages.
+		 * Anycase, the race is small so retry after a while will see
+		 * success. Below isolate_interrupted handles it.
+		 */
+next_page:
 		spin_unlock(&gcma->lock);
 		spin_unlock(&slru_lock);
 	}
