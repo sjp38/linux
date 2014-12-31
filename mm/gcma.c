@@ -662,8 +662,6 @@ retry:
 		 * the page with no problem.
 		 */
 		if (gpage_flag(page, GF_SWAP_LRU)) {
-			BUG_ON(gpage_flag(page, GF_RECLAIMING));
-
 			entry = swap_slot(page);
 			if (atomic_inc_not_zero(&entry->refcount)) {
 				clear_gpage_flag(page, GF_SWAP_LRU);
