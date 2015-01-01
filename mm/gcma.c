@@ -663,6 +663,7 @@ retry:
 
 		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
+
 		spin_lock(&slru_lock);
 		spin_lock(&gcma->lock);
 
@@ -680,7 +681,7 @@ retry:
 			goto next_page;
 		}
 
-		/* Avoid others allocate this page again */
+		/* Avoid allocation from other threads */
 		set_gpage_flag(page, GF_RECLAIMING);
 
 		/*
