@@ -667,20 +667,6 @@ retry:
 		spin_lock(&slru_lock);
 		spin_lock(&gcma->lock);
 
-		/*
-		 * The page could be freed by others while holding gcma->lock
-		 * again.
-		 */
-		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
-			bitmap_set(gcma->bitmap, offset, 1);
-			set_gpage_flag(page, GF_ISOLATED);
-			goto next_page;
-		}
-
-		if (gpage_flag(page, GF_ISOLATED)) {
-			goto next_page;
-		}
-
 		/* Avoid allocation from other threads */
 		set_gpage_flag(page, GF_RECLAIMING);
 
