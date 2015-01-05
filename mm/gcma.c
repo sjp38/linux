@@ -15,6 +15,7 @@
 
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/cleancache.h>
 #include <linux/frontswap.h>
 #include <linux/highmem.h>
 #include <linux/gcma.h>
@@ -620,6 +621,52 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 	return ret;
 }
 
+/* Returns positive pool id or negative error code */
+int gcma_cleancache_init_fs(size_t pagesize)
+{
+	return -1;
+}
+
+int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+{
+	return -1;
+}
+
+int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
+				pgoff_t pgoffset, struct page *page)
+{
+	return -1;
+}
+
+void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
+				pgoff_t pgoffset, struct page *page)
+{
+}
+
+void gcma_cleancache_invalidate_page(int pool_id, struct cleancache_filekey key,
+					pgoff_t pgoffset)
+{
+}
+
+void gcma_cleancache_invalidate_inode(int pool_id,
+					struct cleancache_filekey key)
+{
+}
+
+void gcma_cleancache_invalidate_fs(int pool_id)
+{
+}
+
+struct cleancache_ops gcma_cleancache_ops = {
+	.init_fs = gcma_cleancache_init_fs,
+	.init_shared_fs = gcma_cleancache_init_shared_fs,
+	.get_page = gcma_cleancache_get_page,
+	.put_page = gcma_cleancache_put_page,
+	.invalidate_page = gcma_cleancache_invalidate_page,
+	.invalidate_inode = gcma_cleancache_invalidate_inode,
+	.invalidate_fs = gcma_cleancache_invalidate_fs,
+};
+
 /*
  * gcma_alloc_contig - allocates contiguous pages
  *
@@ -791,6 +838,8 @@ static int __init init_gcma(void)
 	 */
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
+
+	cleancache_register_ops(&gcma_cleancache_ops);
 
 	gcma_debugfs_init();
 	return 0;
