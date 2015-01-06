@@ -22,6 +22,10 @@
 
 /* XXX: What's the ideal? */
 #define NR_EVICT_BATCH	32
+#define NR_CC_EVICT_BATCH	32
+
+#define MAX_CLEANCACHE_FS	16
+#define FILEKEY_LEN		sizeof(struct cleancache_filekey)
 
 struct gcma {
 	spinlock_t lock;
@@ -53,16 +57,48 @@ struct frontswap_tree {
 	spinlock_t lock;
 };
 
+struct inode_entry {
+	struct rb_node rbnode;
+	char filekey[FILEKEY_LEN];
+	struct rb_root pages_root;
+	atomic_t refcount;
+	spinlock_t pages_lock;
+};
+
+struct page_entry {
+	struct gcma *gcma;
+	struct rb_node rbnode;
+	pgoff_t offset;
+	struct page *page;
+	atomic_t refcount;
+};
+
+struct cleancache_tree {
+	struct rb_root inodes_root;
+	spinlock_t lock;
+};
+
 static LIST_HEAD(slru_list);	/* LRU list of swap cache */
 static spinlock_t slru_lock;	/* protect slru_list */
 static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
 static struct kmem_cache *swap_slot_entry_cache;
+
+static LIST_HEAD(clru_list);	/* LRU list of cleancache */
+static spinlock_t clru_lock;	/* protect clru_list */
+static struct cleancache_tree *cleancache_trees[MAX_CLEANCACHE_FS];
+static atomic_t nr_cleancache_tree = ATOMIC_INIT(0);
+static struct kmem_cache *inode_entry_cache;
+static struct kmem_cache *page_entry_cache;
 
 /* For statistics */
 static atomic_t gcma_stored_pages = ATOMIC_INIT(0);
 static atomic_t gcma_loaded_pages = ATOMIC_INIT(0);
 static atomic_t gcma_evicted_pages = ATOMIC_INIT(0);
 static atomic_t gcma_reclaimed_pages = ATOMIC_INIT(0);
+
+static atomic_t gcma_cc_init_fses = ATOMIC_INIT(0);
+static atomic_t gcma_cc_put_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_get_pages = ATOMIC_INIT(0);
 
 static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 
@@ -89,7 +125,7 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 /*
  * Flags for status of a page in gcma
  *
- * GF_SWAP_LRU
+ * GF_LRU
  * The page is being used for frontswap and hang on frontswap LRU list.
  * It can be drained for contiguous memory allocation anytime.
  * Protected by slru_lock.
@@ -105,7 +141,7 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
  * Protected by gcma->lock.
  */
 enum gpage_flags {
-	GF_SWAP_LRU = 0x1,
+	GF_LRU = 0x1,
 	GF_RECLAIMING = 0x2,
 	GF_ISOLATED = 0x4,
 };
@@ -366,7 +402,7 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		if (!atomic_inc_not_zero(&entry->refcount))
 			continue;
 
-		clear_gpage_flag(page, GF_SWAP_LRU);
+		clear_gpage_flag(page, GF_LRU);
 		list_move(&page->lru, &free_pages);
 		if (++evicted >= nr_pages)
 			break;
@@ -485,7 +521,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	} while (ret == -EEXIST);
 
 	spin_lock(&slru_lock);
-	set_gpage_flag(gcma_page, GF_SWAP_LRU);
+	set_gpage_flag(gcma_page, GF_LRU);
 	list_add(&gcma_page->lru, &slru_list);
 	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
@@ -526,7 +562,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 
 	spin_lock(&tree->lock);
 	spin_lock(&slru_lock);
-	if (likely(gpage_flag(gcma_page, GF_SWAP_LRU)))
+	if (likely(gpage_flag(gcma_page, GF_LRU)))
 		list_move(&gcma_page->lru, &slru_list);
 	swap_slot_entry_put(tree, entry);
 	spin_unlock(&slru_lock);
@@ -584,6 +620,595 @@ static struct frontswap_ops gcma_frontswap_ops = {
 	.invalidate_area = gcma_frontswap_invalidate_area
 };
 
+static unsigned long evict_cleancache_pages(unsigned long nr_pages);
+
+static int compare_filekey(void *l, void *r)
+{
+	return memcmp(l, r, FILEKEY_LEN);
+}
+
+static int compare_offset(pgoff_t l, pgoff_t r)
+{
+	return l - r;
+}
+
+static struct inode_entry *inode_entry(struct page *page)
+{
+	return (struct inode_entry *)page->mapping;
+}
+
+static void set_inode_entry(struct page *page, struct inode_entry *ientry)
+{
+	page->mapping = (struct address_space *)ientry;
+}
+
+static struct page_entry *page_entry(struct page *page)
+{
+	return (struct page_entry *)page->index;
+}
+
+static void set_page_entry(struct page *page, struct page_entry *pentry)
+{
+	page->index = (pgoff_t)pentry;
+}
+
+static int cc_inode_rb_insert(struct rb_root *root,
+				struct inode_entry *entry,
+				struct inode_entry **dupentry)
+{
+	struct rb_node **link = &root->rb_node, *parent = NULL;
+	struct inode_entry *ientry;
+	int compared;
+
+	while (*link) {
+		parent = *link;
+		ientry = rb_entry(parent, struct inode_entry, rbnode);
+		compared = compare_filekey(entry->filekey, ientry->filekey);
+		if (compared < 0)
+			link = &(*link)->rb_left;
+		else if (compared > 0)
+			link = &(*link)->rb_right;
+		else {
+			*dupentry = ientry;
+			return -EEXIST;
+		}
+	}
+	rb_link_node(&entry->rbnode, parent, link);
+	rb_insert_color(&entry->rbnode, root);
+	return 0;
+}
+
+static void cc_inode_rb_erase(struct rb_root *root, struct inode_entry *entry)
+{
+	if (!RB_EMPTY_NODE(&entry->rbnode)) {
+		rb_erase(&entry->rbnode, root);
+		RB_CLEAR_NODE(&entry->rbnode);
+	}
+}
+
+static struct inode_entry *cc_inode_rb_search(struct rb_root *root,
+						void *filekey)
+{
+	struct rb_node *node = root->rb_node;
+	struct inode_entry *entry;
+	int compared;
+
+	while (node) {
+		entry = rb_entry(node, struct inode_entry, rbnode);
+		compared = compare_filekey(filekey, entry->filekey);
+		if (compared < 0)
+			node = node->rb_left;
+		else if (compared > 0)
+			node = node->rb_right;
+		else
+			return entry;
+	}
+	return NULL;
+}
+
+static int cc_page_rb_insert(struct rb_root *root,
+				struct page_entry *entry,
+				struct page_entry **dupentry)
+{
+	struct rb_node **link = &root->rb_node, *parent = NULL;
+	struct page_entry *pentry;
+	int compared;
+
+	while (*link) {
+		parent = *link;
+		pentry = rb_entry(parent, struct page_entry, rbnode);
+		compared = compare_offset(entry->offset, pentry->offset);
+		if (compared < 0)
+			link = &(*link)->rb_left;
+		else if (compared > 0)
+			link = &(*link)->rb_right;
+		else {
+			*dupentry = pentry;
+			return -EEXIST;
+		}
+	}
+	rb_link_node(&entry->rbnode, parent, link);
+	rb_insert_color(&entry->rbnode, root);
+	return 0;
+}
+
+static void cc_page_rb_erase(struct rb_root *root, struct page_entry *entry)
+{
+	if (!RB_EMPTY_NODE(&entry->rbnode)) {
+		rb_erase(&entry->rbnode, root);
+		RB_CLEAR_NODE(&entry->rbnode);
+	}
+}
+
+static struct page_entry *cc_page_rb_search(struct rb_root *root,
+						pgoff_t offset)
+{
+	struct rb_node *node = root->rb_node;
+	struct page_entry *entry;
+	int compared;
+
+	while (node) {
+		entry = rb_entry(node, struct page_entry, rbnode);
+		compared = compare_offset(offset, entry->offset);
+		if (compared < 0)
+			node = node->rb_left;
+		else if (compared > 0)
+			node = node->rb_right;
+		else
+			return entry;
+	}
+	return NULL;
+}
+
+static void free_inode_entry(struct inode_entry *entry)
+{
+	kmem_cache_free(inode_entry_cache, entry);
+}
+
+/* Allocates a page from gcma areas using round-robin way */
+static struct page *cleancache_alloc_page(struct gcma **res_gcma)
+{
+	struct page *page;
+	struct gcma *gcma;
+
+retry:
+	spin_lock(&ginfo.lock);
+	gcma = list_first_entry(&ginfo.head, struct gcma, list);
+	list_move_tail(&gcma->list, &ginfo.head);
+
+	list_for_each_entry(gcma, &ginfo.head, list) {
+		page = gcma_alloc_page(gcma);
+		if (page) {
+			spin_unlock(&ginfo.lock);
+			goto got;
+		}
+	}
+	spin_unlock(&ginfo.lock);
+
+	/* Failed to alloc a page from entire gcma. Evict adequate LRU
+	 * frontswap slots and try allocation again */
+	if (evict_cleancache_pages(NR_CC_EVICT_BATCH))
+		goto retry;
+
+got:
+	*res_gcma = gcma;
+	return page;
+}
+
+static void free_page_entry(struct page_entry *entry)
+{
+	if (entry->page != NULL)
+		gcma_free_page(entry->gcma, entry->page);
+	kmem_cache_free(page_entry_cache, entry);
+}
+
+static void get_inode_entry(struct inode_entry *entry)
+{
+	atomic_inc(&entry->refcount);
+}
+
+static void get_page_entry(struct page_entry *entry)
+{
+	atomic_inc(&entry->refcount);
+}
+
+static void put_inode_entry(struct rb_root *root,
+				struct inode_entry *entry)
+{
+	int refcount = atomic_dec_return(&entry->refcount);
+
+	BUG_ON(refcount < 0);
+
+	if (refcount == 0) {
+		cc_inode_rb_erase(root, entry);
+		free_inode_entry(entry);
+	}
+}
+
+static void put_page_entry(struct rb_root *root,
+				struct page_entry *entry)
+{
+	int refcount = atomic_dec_return(&entry->refcount);
+
+	BUG_ON(refcount < 0);
+
+	if (refcount == 0) {
+		struct page *page = entry->page;
+
+		cc_page_rb_erase(root, entry);
+		list_del(&page->lru);
+
+		free_page_entry(entry);
+	}
+}
+
+static struct inode_entry *find_get_inode_entry(struct rb_root *root,
+						void *filekey)
+{
+	struct inode_entry *entry = cc_inode_rb_search(root, filekey);
+	if (entry)
+		get_inode_entry(entry);
+	return entry;
+}
+
+static struct page_entry *find_get_page_entry(struct rb_root *root,
+						pgoff_t offset)
+{
+	struct page_entry *entry = cc_page_rb_search(root, offset);
+	if (entry)
+		get_page_entry(entry);
+	return entry;
+}
+
+/*
+ * evict_cleancache_pages - evict @nr_pages LRU cleancache backed pages
+ *
+ * @nr_pages	number of LRU pages to be evicted
+ *
+ * Returns number of successfully evicted pages
+ */
+static unsigned long evict_cleancache_pages(unsigned long nr_pages)
+{
+	struct inode_entry *ientry;
+	struct page_entry *pentry;
+	struct page *page, *n;
+	unsigned long evicted = 0;
+	pgoff_t page_offset;
+	LIST_HEAD(free_pages);
+
+	spin_lock(&clru_lock);
+	list_for_each_entry_safe_reverse(page, n, &clru_list, lru) {
+		pentry = page_entry(page);
+
+		/*
+		 * the entry could be free by other thread in the while.
+		 * check whether the situation occurred and avoid others to
+		 * free it by compare reference count and increase it
+		 * atomically.
+		 */
+		if (!atomic_inc_not_zero(&pentry->refcount))
+			continue;
+
+		clear_gpage_flag(page, GF_LRU);
+		list_move(&page->lru, &free_pages);
+		if (++evicted >= nr_pages)
+			break;
+	}
+	spin_unlock(&clru_lock);
+
+	list_for_each_entry_safe(page, n, &free_pages, lru) {
+		ientry = inode_entry(page);
+		pentry = page_entry(page);
+
+		spin_lock(&ientry->pages_lock);
+		spin_lock(&clru_lock);
+		/* drop refcount increased by above loop */
+		page_offset = pentry->offset;
+		put_page_entry(&ientry->pages_root, pentry);
+		/* free pentry if the pentry is still in inode entry */
+		if (cc_page_rb_search(&ientry->pages_root, page_offset))
+			put_page_entry(&ientry->pages_root, pentry);
+		spin_unlock(&clru_lock);
+		spin_unlock(&ientry->pages_lock);
+	}
+
+	atomic_add(evicted, &gcma_evicted_pages);
+	return evicted;
+}
+
+static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
+							void *filekey)
+{
+	struct inode_entry *entry, *dupentry;
+
+	entry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
+	if (entry == NULL) {
+		pr_warn("failed to alloc inode from %s\n", __func__);
+		return NULL;
+	}
+	entry->pages_root = RB_ROOT;
+	memcpy(entry->filekey, filekey, FILEKEY_LEN);
+	atomic_set(&entry->refcount, 1);
+	RB_CLEAR_NODE(&entry->rbnode);
+	spin_lock_init(&entry->pages_lock);
+
+	BUG_ON(cc_inode_rb_insert(root, entry, &dupentry) == -EEXIST);
+	get_inode_entry(entry);
+	return entry;
+}
+
+static struct page_entry *create_page_entry(pgoff_t offset,
+						struct page *src_page)
+{
+	struct page_entry *entry;
+	u8 *src, *dst;
+
+	entry = kmem_cache_alloc(page_entry_cache, GFP_KERNEL);
+	if (entry == NULL) {
+		pr_warn("failed to alloc page entry\n");
+		return entry;
+	}
+	entry->offset = offset;
+	entry->page = cleancache_alloc_page(&entry->gcma);
+	if (!entry->page) {
+		pr_warn("failed to alloc page from cma\n");
+		kmem_cache_free(page_entry_cache, entry);
+		return NULL;
+	}
+	atomic_set(&entry->refcount, 1);
+	RB_CLEAR_NODE(&entry->rbnode);
+
+	src = kmap_atomic(src_page);
+	dst = kmap_atomic(entry->page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+	return entry;
+}
+
+/* Returns positive tree id or negative error code */
+int gcma_cleancache_init_fs(size_t pagesize)
+{
+	int nr_tree;
+	struct cleancache_tree *tree;
+
+	tree = kzalloc(sizeof(struct cleancache_tree), GFP_KERNEL);
+	if (!tree) {
+		pr_err("failed to alloc cleancache_tree from %s\n", __func__);
+		return -1;
+	}
+
+	tree->inodes_root = RB_ROOT;
+	spin_lock_init(&tree->lock);
+
+	nr_tree = atomic_add_return(1, &nr_cleancache_tree) - 1;
+	cleancache_trees[nr_tree] = tree;
+
+	atomic_inc(&gcma_cc_init_fses);
+	return nr_tree;
+}
+
+int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
+{
+	/* gcma doesn't support shared fs cleancache yet */
+	return -1;
+}
+
+void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
+				pgoff_t offset, struct page *page)
+{
+	struct page_entry *pentry, *dupentry;
+	struct inode_entry *ientry;
+	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	int res;
+
+	if (!tree) {
+		pr_warn("wrong tree id %d to %s\n", tree_id, __func__);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	ientry = find_get_inode_entry(&tree->inodes_root, &key);
+	if (!ientry) {
+		ientry = create_insert_get_inode_entry(&tree->inodes_root,
+							&key);
+		if (ientry == NULL) {
+			spin_unlock(&tree->lock);
+			return;
+		}
+	}
+	spin_unlock(&tree->lock);
+
+	pentry = create_page_entry(offset, page);
+	if (pentry == NULL)
+		goto out;
+
+	set_inode_entry(pentry->page, (void *)ientry);
+	set_page_entry(pentry->page, (void *)pentry);
+
+	spin_lock(&ientry->pages_lock);
+	do {
+		res = cc_page_rb_insert(&ientry->pages_root, pentry, &dupentry);
+		if (res == -EEXIST)
+			cc_page_rb_erase(&ientry->pages_root, dupentry);
+	} while (res == -EEXIST);
+	spin_unlock(&ientry->pages_lock);
+
+	spin_lock(&clru_lock);
+	set_gpage_flag(pentry->page, GF_LRU);
+	list_add(&pentry->page->lru, &clru_list);
+	spin_unlock(&clru_lock);
+
+out:
+	spin_lock(&tree->lock);
+	put_inode_entry(&tree->inodes_root, ientry);
+	spin_unlock(&tree->lock);
+
+	atomic_inc(&gcma_cc_put_pages);
+}
+
+int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
+				pgoff_t offset, struct page *page)
+{
+	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	struct inode_entry *ientry;
+	struct page_entry *pentry;
+	u8 *src, *dst;
+
+	if (!tree) {
+		pr_warn("wrong tree id %d to %s\n", tree_id, __func__);
+		return -1;
+	}
+
+	spin_lock(&tree->lock);
+	ientry = find_get_inode_entry(&tree->inodes_root, (void *)&key);
+	spin_unlock(&tree->lock);
+	if (!ientry) {
+		pr_debug("could not find the inode from %s. tree id: %d\n",
+				__func__, tree_id);
+		return -1;
+	}
+
+	spin_lock(&ientry->pages_lock);
+	pentry = find_get_page_entry(&ientry->pages_root, offset);
+	spin_unlock(&ientry->pages_lock);
+	if (!pentry) {
+		pr_warn("%s - couldn't find the page entry\n", __func__);
+		spin_lock(&tree->lock);
+		put_inode_entry(&tree->inodes_root, ientry);
+		spin_unlock(&tree->lock);
+		return -1;
+	}
+
+	src = kmap_atomic(pentry->page);
+	dst = kmap_atomic(page);
+	memcpy(dst, src, PAGE_SIZE);
+	kunmap_atomic(src);
+	kunmap_atomic(dst);
+
+	/*
+	 * Because cleancache is ephemeral, we could save space by
+	 * implementing this clean cache backend as exclusive cache.
+	 * But, don't do so because we have LRU mechanism.
+	 */
+	spin_lock(&ientry->pages_lock);
+	spin_lock(&clru_lock);
+	if (likely(gpage_flag(pentry->page, GF_LRU)))
+		list_move(&pentry->page->lru, &clru_list);
+	put_page_entry(&ientry->pages_root, pentry);
+	spin_unlock(&clru_lock);
+	spin_unlock(&ientry->pages_lock);
+
+	spin_lock(&tree->lock);
+	put_inode_entry(&tree->inodes_root, ientry);
+	spin_unlock(&tree->lock);
+
+	atomic_inc(&gcma_cc_get_pages);
+	return 0;
+}
+
+void gcma_cleancache_invalidate_page(int tree_id, struct cleancache_filekey key,
+					pgoff_t offset)
+{
+	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	struct inode_entry *ientry;
+	struct page_entry *pentry;
+
+	spin_lock(&tree->lock);
+	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
+	if (!ientry) {
+		pr_warn("%s failed to search inode\n", __func__);
+		spin_unlock(&tree->lock);
+		return;
+	}
+
+	spin_lock(&ientry->pages_lock);
+	pentry = cc_page_rb_search(&ientry->pages_root, offset);
+	if (!pentry) {
+		pr_warn("%s failed to get entry\n", __func__);
+		goto out;
+	}
+
+	spin_lock(&clru_lock);
+	put_page_entry(&ientry->pages_root, pentry);
+	spin_unlock(&clru_lock);
+
+out:
+	spin_unlock(&ientry->pages_lock);
+	spin_unlock(&tree->lock);
+}
+
+void gcma_cleancache_invalidate_inode(int tree_id,
+					struct cleancache_filekey key)
+{
+	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	struct inode_entry *ientry;
+	struct page_entry *pentry, *n;
+
+	spin_lock(&tree->lock);
+	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
+	if (!ientry) {
+		pr_warn("failed to search inode from %s\n", __func__);
+		spin_unlock(&tree->lock);
+		return;
+	}
+	spin_lock(&ientry->pages_lock);
+	rbtree_postorder_for_each_entry_safe(pentry, n, &ientry->pages_root,
+						rbnode) {
+		spin_lock(&clru_lock);
+		put_page_entry(&ientry->pages_root, pentry);
+		spin_unlock(&clru_lock);
+	}
+	ientry->pages_root = RB_ROOT;
+	spin_unlock(&ientry->pages_lock);
+
+	put_inode_entry(&tree->inodes_root, ientry);
+	spin_unlock(&tree->lock);
+}
+
+void gcma_cleancache_invalidate_fs(int tree_id)
+{
+	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	struct inode_entry *ientry, *n;
+	struct page_entry *pentry, *m;
+
+	if (!tree) {
+		pr_warn("wrong tree id %d requested on %s\n",
+				tree_id, __func__);
+		return;
+	}
+
+	spin_lock(&tree->lock);
+	rbtree_postorder_for_each_entry_safe(ientry, n, &tree->inodes_root,
+						rbnode) {
+		spin_lock(&ientry->pages_lock);
+		rbtree_postorder_for_each_entry_safe(pentry, m,
+						&ientry->pages_root, rbnode) {
+			spin_lock(&clru_lock);
+			put_page_entry(&ientry->pages_root, pentry);
+			spin_unlock(&clru_lock);
+		}
+		ientry->pages_root = RB_ROOT;
+		spin_unlock(&ientry->pages_lock);
+		put_inode_entry(&tree->inodes_root, ientry);
+	}
+	tree->inodes_root = RB_ROOT;
+	spin_unlock(&tree->lock);
+
+	kfree(tree);
+	cleancache_trees[tree_id] = NULL;
+}
+
+struct cleancache_ops gcma_cleancache_ops = {
+	.init_fs = gcma_cleancache_init_fs,
+	.init_shared_fs = gcma_cleancache_init_shared_fs,
+	.get_page = gcma_cleancache_get_page,
+	.put_page = gcma_cleancache_put_page,
+	.invalidate_page = gcma_cleancache_invalidate_page,
+	.invalidate_inode = gcma_cleancache_invalidate_inode,
+	.invalidate_fs = gcma_cleancache_invalidate_fs,
+};
+
 /*
  * Return 0 if [start_pfn, end_pfn] is isolated.
  * Otherwise, return first unisolated pfn from the start_pfn.
@@ -620,52 +1245,6 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 	spin_unlock(&gcma->lock);
 	return ret;
 }
-
-/* Returns positive pool id or negative error code */
-int gcma_cleancache_init_fs(size_t pagesize)
-{
-	return -1;
-}
-
-int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
-{
-	return -1;
-}
-
-int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
-				pgoff_t pgoffset, struct page *page)
-{
-	return -1;
-}
-
-void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
-				pgoff_t pgoffset, struct page *page)
-{
-}
-
-void gcma_cleancache_invalidate_page(int pool_id, struct cleancache_filekey key,
-					pgoff_t pgoffset)
-{
-}
-
-void gcma_cleancache_invalidate_inode(int pool_id,
-					struct cleancache_filekey key)
-{
-}
-
-void gcma_cleancache_invalidate_fs(int pool_id)
-{
-}
-
-struct cleancache_ops gcma_cleancache_ops = {
-	.init_fs = gcma_cleancache_init_fs,
-	.init_shared_fs = gcma_cleancache_init_shared_fs,
-	.get_page = gcma_cleancache_get_page,
-	.put_page = gcma_cleancache_put_page,
-	.invalidate_page = gcma_cleancache_invalidate_page,
-	.invalidate_inode = gcma_cleancache_invalidate_inode,
-	.invalidate_fs = gcma_cleancache_invalidate_fs,
-};
 
 /*
  * gcma_alloc_contig - allocates contiguous pages
@@ -721,10 +1300,10 @@ retry:
 		 * The page is in LRU and being used by someone. Remove from
 		 * LRU and ready to put the swap slot soon.
 		 */
-		if (gpage_flag(page, GF_SWAP_LRU)) {
+		if (gpage_flag(page, GF_LRU)) {
 		       entry = swap_slot(page);
 		       if (atomic_inc_not_zero(&entry->refcount)) {
-				clear_gpage_flag(page, GF_SWAP_LRU);
+				clear_gpage_flag(page, GF_LRU);
 				list_move(&page->lru, &free_pages);
 				atomic_inc(&gcma_reclaimed_pages);
 				goto next_page;
@@ -839,6 +1418,19 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	spin_lock_init(&clru_lock);
+	inode_entry_cache = KMEM_CACHE(inode_entry, 0);
+	if (inode_entry_cache == NULL) {
+		pr_warn("failed to create inode cache\n");
+		return -ENOMEM;
+	}
+
+	page_entry_cache= KMEM_CACHE(page_entry, 0);
+	if (page_entry_cache == NULL) {
+		pr_warn("failed to create page entry cache\n");
+		kmem_cache_destroy(inode_entry_cache);
+		return -ENOMEM;
+	}
 	cleancache_register_ops(&gcma_cleancache_ops);
 
 	gcma_debugfs_init();
