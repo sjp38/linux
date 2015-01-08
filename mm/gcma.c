@@ -125,10 +125,15 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
 /*
  * Flags for status of a page in gcma
  *
- * GF_LRU
+ * GF_SWAP_LRU
  * The page is being used for frontswap and hang on frontswap LRU list.
  * It can be drained for contiguous memory allocation anytime.
  * Protected by slru_lock.
+ *
+ * GF_CC_LRU
+ * The page is being used for cleancache and hang on cleancache LRU list.
+ * It can be drained for contiguous memory allocation anytime.
+ * Protected by clru_lock.
  *
  * GF_RECLAIMING
  * The page is being draining for contiguous memory allocation.
@@ -141,9 +146,10 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
  * Protected by gcma->lock.
  */
 enum gpage_flags {
-	GF_LRU = 0x1,
-	GF_RECLAIMING = 0x2,
-	GF_ISOLATED = 0x4,
+	GF_SWAP_LRU = 0x1,
+	GF_CC_LRU = 0x2,
+	GF_RECLAIMING = 0x4,
+	GF_ISOLATED = 0x8,
 };
 
 static int gpage_flag(struct page *page, int flag)
@@ -402,7 +408,7 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		if (!atomic_inc_not_zero(&entry->refcount))
 			continue;
 
-		clear_gpage_flag(page, GF_LRU);
+		clear_gpage_flag(page, GF_SWAP_LRU);
 		list_move(&page->lru, &free_pages);
 		if (++evicted >= nr_pages)
 			break;
@@ -521,7 +527,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	} while (ret == -EEXIST);
 
 	spin_lock(&slru_lock);
-	set_gpage_flag(gcma_page, GF_LRU);
+	set_gpage_flag(gcma_page, GF_SWAP_LRU);
 	list_add(&gcma_page->lru, &slru_list);
 	spin_unlock(&slru_lock);
 	spin_unlock(&tree->lock);
@@ -562,7 +568,7 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 
 	spin_lock(&tree->lock);
 	spin_lock(&slru_lock);
-	if (likely(gpage_flag(gcma_page, GF_LRU)))
+	if (likely(gpage_flag(gcma_page, GF_SWAP_LRU)))
 		list_move(&gcma_page->lru, &slru_list);
 	swap_slot_entry_put(tree, entry);
 	spin_unlock(&slru_lock);
@@ -889,7 +895,7 @@ static unsigned long evict_cleancache_pages(unsigned long nr_pages)
 		if (!atomic_inc_not_zero(&pentry->refcount))
 			continue;
 
-		clear_gpage_flag(page, GF_LRU);
+		clear_gpage_flag(page, GF_CC_LRU);
 		list_move(&page->lru, &free_pages);
 		if (++evicted >= nr_pages)
 			break;
@@ -1035,7 +1041,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 	spin_unlock(&ientry->pages_lock);
 
 	spin_lock(&clru_lock);
-	set_gpage_flag(pentry->page, GF_LRU);
+	set_gpage_flag(pentry->page, GF_CC_LRU);
 	list_add(&pentry->page->lru, &clru_list);
 	spin_unlock(&clru_lock);
 
@@ -1093,7 +1099,7 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	 */
 	spin_lock(&ientry->pages_lock);
 	spin_lock(&clru_lock);
-	if (likely(gpage_flag(pentry->page, GF_LRU)))
+	if (likely(gpage_flag(pentry->page, GF_CC_LRU)))
 		list_move(&pentry->page->lru, &clru_list);
 	put_page_entry(&ientry->pages_root, pentry);
 	spin_unlock(&clru_lock);
@@ -1257,7 +1263,8 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 			unsigned long size)
 {
-	LIST_HEAD(free_pages);
+	LIST_HEAD(fs_free_pages);
+	LIST_HEAD(cc_free_pages);
 	struct page *page, *n;
 	struct swap_slot_entry *entry;
 	unsigned long offset;
@@ -1266,6 +1273,9 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	unsigned long pfn;
 	unsigned long orig_start = start_pfn;
 	pgoff_t slot_offset;
+
+	struct inode_entry *ientry;
+	struct page_entry *pentry;
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
@@ -1291,6 +1301,7 @@ retry:
 		spin_unlock(&gcma->lock);
 
 		spin_lock(&slru_lock);
+		spin_lock(&clru_lock);
 		spin_lock(&gcma->lock);
 
 		/* Avoid allocation from other threads */
@@ -1300,14 +1311,26 @@ retry:
 		 * The page is in LRU and being used by someone. Remove from
 		 * LRU and ready to put the swap slot soon.
 		 */
-		if (gpage_flag(page, GF_LRU)) {
-		       entry = swap_slot(page);
-		       if (atomic_inc_not_zero(&entry->refcount)) {
-				clear_gpage_flag(page, GF_LRU);
-				list_move(&page->lru, &free_pages);
+		if (gpage_flag(page, GF_SWAP_LRU)) {
+			pr_info("frontswap page found from %s\n", __func__);
+			entry = swap_slot(page);
+			if (atomic_inc_not_zero(&entry->refcount)) {
+				clear_gpage_flag(page, GF_SWAP_LRU);
+				list_move(&page->lru, &fs_free_pages);
 				atomic_inc(&gcma_reclaimed_pages);
 				goto next_page;
-		       }
+			}
+		}
+
+		if (gpage_flag(page, GF_CC_LRU)) {
+			pr_info("cleancache page found from %s\n", __func__);
+			pentry = page_entry(page);
+			if (atomic_inc_not_zero(&pentry->refcount)) {
+				clear_gpage_flag(page, GF_CC_LRU);
+				list_move(&page->lru, &cc_free_pages);
+				atomic_inc(&gcma_reclaimed_pages);
+				goto next_page;
+			}
 		}
 
 		/*
@@ -1321,6 +1344,7 @@ retry:
 		 */
 next_page:
 		spin_unlock(&gcma->lock);
+		spin_unlock(&clru_lock);
 		spin_unlock(&slru_lock);
 	}
 
@@ -1328,7 +1352,8 @@ next_page:
 	 * Since we increased refcount of the page above, we can access
 	 * swap_slot_entry with safe
 	 */
-	list_for_each_entry_safe(page, n, &free_pages, lru) {
+	pr_info("let's iterate fs free pages\n");
+	list_for_each_entry_safe(page, n, &fs_free_pages, lru) {
 		tree = swap_tree(page);
 		entry = swap_slot(page);
 
@@ -1342,6 +1367,23 @@ next_page:
 			swap_slot_entry_put(tree, entry);
 		spin_unlock(&slru_lock);
 		spin_unlock(&tree->lock);
+	}
+
+	pr_info("let's iterate cc free pages\n");
+	list_for_each_entry_safe(page, n, &cc_free_pages, lru) {
+		ientry = inode_entry(page);
+		pentry = page_entry(page);
+
+		spin_lock(&ientry->pages_lock);
+		spin_lock(&clru_lock);
+		/* drop refcount increased by above loop */
+		slot_offset = pentry->offset;
+		put_page_entry(&ientry->pages_root, pentry);
+		/* free entry if the entry is still in tree */
+		if (cc_page_rb_search(&ientry->pages_root, slot_offset))
+			put_page_entry(&ientry->pages_root, pentry);
+		spin_unlock(&clru_lock);
+		spin_unlock(&ientry->pages_lock);
 	}
 
 	start_pfn = isolate_interrupted(gcma, orig_start, orig_start + size);
@@ -1432,7 +1474,6 @@ static int __init init_gcma(void)
 		return -ENOMEM;
 	}
 	cleancache_register_ops(&gcma_cleancache_ops);
-
 	gcma_debugfs_init();
 	return 0;
 }
