@@ -98,7 +98,15 @@ static atomic_t gcma_reclaimed_pages = ATOMIC_INIT(0);
 
 static atomic_t gcma_cc_init_fses = ATOMIC_INIT(0);
 static atomic_t gcma_cc_put_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_put_failed_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_get_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_get_failed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_failed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_inodes = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_failed_inodes = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_fses = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_failed_fses = ATOMIC_INIT(0);
 
 static unsigned long evict_frontswap_pages(unsigned long nr_pages);
 
@@ -929,7 +937,7 @@ static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
 
 	entry = kmem_cache_alloc(inode_entry_cache, GFP_KERNEL);
 	if (entry == NULL) {
-		pr_warn("failed to alloc inode from %s\n", __func__);
+		pr_warn("%s failed to alloc inode\n", __func__);
 		return NULL;
 	}
 	entry->pages_root = RB_ROOT;
@@ -951,13 +959,13 @@ static struct page_entry *create_page_entry(pgoff_t offset,
 
 	entry = kmem_cache_alloc(page_entry_cache, GFP_KERNEL);
 	if (entry == NULL) {
-		pr_warn("failed to alloc page entry\n");
+		pr_warn("%s failed to alloc page entry\n", __func__);
 		return entry;
 	}
 	entry->offset = offset;
 	entry->page = cleancache_alloc_page(&entry->gcma);
 	if (!entry->page) {
-		pr_warn("failed to alloc page from cma\n");
+		pr_warn("%s failed to alloc page from cma\n", __func__);
 		kmem_cache_free(page_entry_cache, entry);
 		return NULL;
 	}
@@ -980,7 +988,7 @@ int gcma_cleancache_init_fs(size_t pagesize)
 
 	tree = kzalloc(sizeof(struct cleancache_tree), GFP_KERNEL);
 	if (!tree) {
-		pr_err("failed to alloc cleancache_tree from %s\n", __func__);
+		pr_err("%s failed to alloc cleancache_tree\n", __func__);
 		return -1;
 	}
 
@@ -1009,7 +1017,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 	int res;
 
 	if (!tree) {
-		pr_warn("wrong tree id %d to %s\n", tree_id, __func__);
+		atomic_inc(&gcma_cc_put_failed_pages);
 		return;
 	}
 
@@ -1020,14 +1028,17 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 							&key);
 		if (ientry == NULL) {
 			spin_unlock(&tree->lock);
+			atomic_inc(&gcma_cc_put_failed_pages);
 			return;
 		}
 	}
 	spin_unlock(&tree->lock);
 
 	pentry = create_page_entry(offset, page);
-	if (pentry == NULL)
+	if (pentry == NULL) {
+		atomic_inc(&gcma_cc_put_failed_pages);
 		goto out;
+	}
 
 	set_inode_entry(pentry->page, (void *)ientry);
 	set_page_entry(pentry->page, (void *)pentry);
@@ -1045,12 +1056,11 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 	list_add(&pentry->page->lru, &clru_list);
 	spin_unlock(&clru_lock);
 
+	atomic_inc(&gcma_cc_put_pages);
 out:
 	spin_lock(&tree->lock);
 	put_inode_entry(&tree->inodes_root, ientry);
 	spin_unlock(&tree->lock);
-
-	atomic_inc(&gcma_cc_put_pages);
 }
 
 int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
@@ -1062,7 +1072,7 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	u8 *src, *dst;
 
 	if (!tree) {
-		pr_warn("wrong tree id %d to %s\n", tree_id, __func__);
+		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
 	}
 
@@ -1070,8 +1080,7 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	ientry = find_get_inode_entry(&tree->inodes_root, (void *)&key);
 	spin_unlock(&tree->lock);
 	if (!ientry) {
-		pr_debug("could not find the inode from %s. tree id: %d\n",
-				__func__, tree_id);
+		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
 	}
 
@@ -1079,10 +1088,11 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	pentry = find_get_page_entry(&ientry->pages_root, offset);
 	spin_unlock(&ientry->pages_lock);
 	if (!pentry) {
-		pr_warn("%s - couldn't find the page entry\n", __func__);
+		atomic_inc(&gcma_cc_get_failed_pages);
 		spin_lock(&tree->lock);
 		put_inode_entry(&tree->inodes_root, ientry);
 		spin_unlock(&tree->lock);
+		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
 	}
 
@@ -1123,21 +1133,22 @@ void gcma_cleancache_invalidate_page(int tree_id, struct cleancache_filekey key,
 	spin_lock(&tree->lock);
 	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
 	if (!ientry) {
-		pr_warn("%s failed to search inode\n", __func__);
 		spin_unlock(&tree->lock);
+		atomic_inc(&gcma_cc_invalidate_failed_pages);
 		return;
 	}
 
 	spin_lock(&ientry->pages_lock);
 	pentry = cc_page_rb_search(&ientry->pages_root, offset);
 	if (!pentry) {
-		pr_warn("%s failed to get entry\n", __func__);
+		atomic_inc(&gcma_cc_invalidate_failed_pages);
 		goto out;
 	}
 
 	spin_lock(&clru_lock);
 	put_page_entry(&ientry->pages_root, pentry);
 	spin_unlock(&clru_lock);
+	atomic_inc(&gcma_cc_invalidate_pages);
 
 out:
 	spin_unlock(&ientry->pages_lock);
@@ -1154,8 +1165,8 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 	spin_lock(&tree->lock);
 	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
 	if (!ientry) {
-		pr_warn("failed to search inode from %s\n", __func__);
 		spin_unlock(&tree->lock);
+		atomic_inc(&gcma_cc_invalidate_failed_inodes);
 		return;
 	}
 	spin_lock(&ientry->pages_lock);
@@ -1170,6 +1181,7 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 
 	put_inode_entry(&tree->inodes_root, ientry);
 	spin_unlock(&tree->lock);
+	atomic_inc(&gcma_cc_invalidate_inodes);
 }
 
 void gcma_cleancache_invalidate_fs(int tree_id)
@@ -1179,8 +1191,7 @@ void gcma_cleancache_invalidate_fs(int tree_id)
 	struct page_entry *pentry, *m;
 
 	if (!tree) {
-		pr_warn("wrong tree id %d requested on %s\n",
-				tree_id, __func__);
+		atomic_inc(&gcma_cc_invalidate_failed_fses);
 		return;
 	}
 
@@ -1203,6 +1214,7 @@ void gcma_cleancache_invalidate_fs(int tree_id)
 
 	kfree(tree);
 	cleancache_trees[tree_id] = NULL;
+	atomic_inc(&gcma_cc_invalidate_fses);
 }
 
 struct cleancache_ops gcma_cleancache_ops = {
@@ -1432,6 +1444,29 @@ static int __init gcma_debugfs_init(void)
 			gcma_debugfs_root, &gcma_evicted_pages);
 	debugfs_create_atomic_t("reclaimed_pages", S_IRUGO,
 			gcma_debugfs_root, &gcma_reclaimed_pages);
+
+	debugfs_create_atomic_t("cc_init_fses", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_init_fses);
+	debugfs_create_atomic_t("cc_put_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_put_pages);
+	debugfs_create_atomic_t("cc_put_failed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_put_failed_pages);
+	debugfs_create_atomic_t("cc_get_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_get_pages);
+	debugfs_create_atomic_t("cc_get_failed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_get_failed_pages);
+	debugfs_create_atomic_t("cc_invalidate_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_pages);
+	debugfs_create_atomic_t("cc_invalidate_failed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_failed_pages);
+	debugfs_create_atomic_t("cc_invalidate_inodes", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_inodes);
+	debugfs_create_atomic_t("cc_invalidate_failed_inodes", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_failed_inodes);
+	debugfs_create_atomic_t("cc_invalidate_fses", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_pages);
+	debugfs_create_atomic_t("cc_invalidate_failed_fses", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_failed_pages);
 
 	pr_info("gcma debufs init\n");
 	return 0;
