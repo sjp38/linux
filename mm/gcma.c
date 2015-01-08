@@ -927,7 +927,7 @@ static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
 {
 	struct inode_entry *entry, *dupentry;
 
-	entry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
+	entry = kmem_cache_alloc(inode_entry_cache, GFP_KERNEL);
 	if (entry == NULL) {
 		pr_warn("failed to alloc inode from %s\n", __func__);
 		return NULL;
