@@ -931,15 +931,10 @@ static unsigned long evict_cleancache_pages(unsigned long nr_pages)
 }
 
 static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
-							void *filekey)
+							void *filekey, struct inode_entry *entry)
 {
-	struct inode_entry *entry, *dupentry;
+	struct inode_entry *dupentry;
 
-	entry = kmem_cache_alloc(inode_entry_cache, GFP_KERNEL);
-	if (entry == NULL) {
-		pr_warn("%s failed to alloc inode\n", __func__);
-		return NULL;
-	}
 	entry->pages_root = RB_ROOT;
 	memcpy(entry->filekey, filekey, FILEKEY_LEN);
 	atomic_set(&entry->refcount, 1);
@@ -1021,16 +1016,24 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 		return;
 	}
 
+	ientry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
+	if (ientry == NULL) {
+		pr_warn("%s failed to alloc inode\n", __func__);
+		return;
+	}
+
 	spin_lock(&tree->lock);
 	ientry = find_get_inode_entry(&tree->inodes_root, &key);
 	if (!ientry) {
 		ientry = create_insert_get_inode_entry(&tree->inodes_root,
-							&key);
+							&key, ientry);
 		if (ientry == NULL) {
 			spin_unlock(&tree->lock);
 			atomic_inc(&gcma_cc_put_failed_pages);
 			return;
 		}
+	} else {
+		kmem_cache_free(inode_entry_cache, ientry);
 	}
 	spin_unlock(&tree->lock);
 
