@@ -935,8 +935,6 @@ static struct inode_entry *create_insert_get_inode_entry(struct rb_root *root,
 {
 	struct inode_entry *dupentry;
 
-	entry->pages_root = RB_ROOT;
-	memcpy(entry->filekey, filekey, FILEKEY_LEN);
 	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
 	spin_lock_init(&entry->pages_lock);
@@ -952,7 +950,7 @@ static struct page_entry *create_page_entry(pgoff_t offset,
 	struct page_entry *entry;
 	u8 *src, *dst;
 
-	entry = kmem_cache_alloc(page_entry_cache, GFP_KERNEL);
+	entry = kmem_cache_alloc(page_entry_cache, GFP_ATOMIC);
 	if (entry == NULL) {
 		pr_warn("%s failed to alloc page entry\n", __func__);
 		return entry;
@@ -1007,7 +1005,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 				pgoff_t offset, struct page *page)
 {
 	struct page_entry *pentry, *dupentry;
-	struct inode_entry *ientry;
+	struct inode_entry *ientry, *dupientry;
 	struct cleancache_tree *tree = cleancache_trees[tree_id];
 	int res;
 
@@ -1016,24 +1014,30 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 		return;
 	}
 
-	ientry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
-	if (ientry == NULL) {
-		pr_warn("%s failed to alloc inode\n", __func__);
-		return;
-	}
-
 	spin_lock(&tree->lock);
 	ientry = find_get_inode_entry(&tree->inodes_root, &key);
 	if (!ientry) {
-		ientry = create_insert_get_inode_entry(&tree->inodes_root,
-							&key, ientry);
+		spin_unlock(&tree->lock);
+
+		ientry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
 		if (ientry == NULL) {
-			spin_unlock(&tree->lock);
+			pr_warn("%s failed to alloc inode\n", __func__);
 			atomic_inc(&gcma_cc_put_failed_pages);
 			return;
 		}
-	} else {
-		kmem_cache_free(inode_entry_cache, ientry);
+
+		ientry->pages_root = RB_ROOT;
+		memcpy(ientry->filekey, &key, FILEKEY_LEN);
+
+		spin_lock(&tree->lock);
+		dupientry = find_get_inode_entry(&tree->inodes_root, &key);
+		if (dupientry) {
+			kmem_cache_free(inode_entry_cache, ientry);
+			ientry = dupientry;
+		} else {
+			ientry = create_insert_get_inode_entry(
+					&tree->inodes_root, &key, ientry);
+		}
 	}
 	spin_unlock(&tree->lock);
 
