@@ -194,6 +194,7 @@ int gcma_init(unsigned long start_pfn, unsigned long size,
 {
 	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
 	struct gcma *gcma;
+	unsigned long flags;
 
 	gcma = kmalloc(sizeof(*gcma), GFP_KERNEL);
 	if (!gcma)
@@ -207,9 +208,9 @@ int gcma_init(unsigned long start_pfn, unsigned long size,
 	gcma->base_pfn = start_pfn;
 	spin_lock_init(&gcma->lock);
 
-	spin_lock(&ginfo.lock);
+	spin_lock_irqsave(&ginfo.lock, flags);
 	list_add(&gcma->list, &ginfo.head);
-	spin_unlock(&ginfo.lock);
+	spin_unlock_irqrestore(&ginfo.lock, flags);
 
 	*res_gcma = gcma;
 	pr_info("initialized gcma area [%lu, %lu]\n",
@@ -227,17 +228,18 @@ static struct page *gcma_alloc_page(struct gcma *gcma)
 	unsigned long bit;
 	unsigned long *bitmap = gcma->bitmap;
 	struct page *page = NULL;
+	unsigned long flags;
 
-	spin_lock(&gcma->lock);
+	spin_lock_irqsave(&gcma->lock, flags);
 	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
 	if (bit >= gcma->size) {
-		spin_unlock(&gcma->lock);
+		spin_unlock_irqrestore(&gcma->lock, flags);
 		goto out;
 	}
 
 	bitmap_set(bitmap, bit, 1);
 	page = pfn_to_page(gcma->base_pfn + bit);
-	spin_unlock(&gcma->lock);
+	spin_unlock_irqrestore(&gcma->lock, flags);
 	clear_gpage_flagall(page);
 
 out:
@@ -784,20 +786,21 @@ static struct page *cleancache_alloc_page(struct gcma **res_gcma)
 {
 	struct page *page;
 	struct gcma *gcma;
+	unsigned long flags;
 
 retry:
-	spin_lock(&ginfo.lock);
+	spin_lock_irqsave(&ginfo.lock, flags);
 	gcma = list_first_entry(&ginfo.head, struct gcma, list);
 	list_move_tail(&gcma->list, &ginfo.head);
 
 	list_for_each_entry(gcma, &ginfo.head, list) {
 		page = gcma_alloc_page(gcma);
 		if (page) {
-			spin_unlock(&ginfo.lock);
+			spin_unlock_irqrestore(&ginfo.lock, flags);
 			goto got;
 		}
 	}
-	spin_unlock(&ginfo.lock);
+	spin_unlock_irqrestore(&ginfo.lock, flags);
 
 	/* Failed to alloc a page from entire gcma. Evict adequate LRU
 	 * frontswap slots and try allocation again */
@@ -1007,6 +1010,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 	struct page_entry *pentry, *dupentry;
 	struct inode_entry *ientry, *dupientry;
 	struct cleancache_tree *tree = cleancache_trees[tree_id];
+	unsigned long flags;
 	int res;
 
 	if (!tree) {
@@ -1014,10 +1018,10 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 		return;
 	}
 
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	ientry = find_get_inode_entry(&tree->inodes_root, &key);
 	if (!ientry) {
-		spin_unlock(&tree->lock);
+		spin_unlock_irqrestore(&tree->lock, flags);
 
 		ientry = kmem_cache_alloc(inode_entry_cache, GFP_ATOMIC);
 		if (ientry == NULL) {
@@ -1029,7 +1033,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 		ientry->pages_root = RB_ROOT;
 		memcpy(ientry->filekey, &key, FILEKEY_LEN);
 
-		spin_lock(&tree->lock);
+		spin_lock_irqsave(&tree->lock, flags);
 		dupientry = find_get_inode_entry(&tree->inodes_root, &key);
 		if (dupientry) {
 			kmem_cache_free(inode_entry_cache, ientry);
@@ -1039,7 +1043,7 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 					&tree->inodes_root, &key, ientry);
 		}
 	}
-	spin_unlock(&tree->lock);
+	spin_unlock_irqrestore(&tree->lock, flags);
 
 	pentry = create_page_entry(offset, page);
 	if (pentry == NULL) {
@@ -1065,9 +1069,9 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 
 	atomic_inc(&gcma_cc_put_pages);
 out:
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	put_inode_entry(&tree->inodes_root, ientry);
-	spin_unlock(&tree->lock);
+	spin_unlock_irqrestore(&tree->lock, flags);
 }
 
 int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
@@ -1077,15 +1081,16 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	struct inode_entry *ientry;
 	struct page_entry *pentry;
 	u8 *src, *dst;
+	unsigned long flags;
 
 	if (!tree) {
 		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
 	}
 
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	ientry = find_get_inode_entry(&tree->inodes_root, (void *)&key);
-	spin_unlock(&tree->lock);
+	spin_unlock_irqrestore(&tree->lock, flags);
 	if (!ientry) {
 		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
@@ -1096,9 +1101,9 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	spin_unlock(&ientry->pages_lock);
 	if (!pentry) {
 		atomic_inc(&gcma_cc_get_failed_pages);
-		spin_lock(&tree->lock);
+		spin_lock_irqsave(&tree->lock, flags);
 		put_inode_entry(&tree->inodes_root, ientry);
-		spin_unlock(&tree->lock);
+		spin_unlock_irqrestore(&tree->lock, flags);
 		atomic_inc(&gcma_cc_get_failed_pages);
 		return -1;
 	}
@@ -1122,9 +1127,9 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	spin_unlock(&clru_lock);
 	spin_unlock(&ientry->pages_lock);
 
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	put_inode_entry(&tree->inodes_root, ientry);
-	spin_unlock(&tree->lock);
+	spin_unlock_irqrestore(&tree->lock, flags);
 
 	atomic_inc(&gcma_cc_get_pages);
 	return 0;
@@ -1168,11 +1173,12 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 	struct cleancache_tree *tree = cleancache_trees[tree_id];
 	struct inode_entry *ientry;
 	struct page_entry *pentry, *n;
+	unsigned long flags;
 
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
 	if (!ientry) {
-		spin_unlock(&tree->lock);
+		spin_unlock_irqrestore(&tree->lock, flags);
 		atomic_inc(&gcma_cc_invalidate_failed_inodes);
 		return;
 	}
@@ -1187,7 +1193,7 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 	spin_unlock(&ientry->pages_lock);
 
 	put_inode_entry(&tree->inodes_root, ientry);
-	spin_unlock(&tree->lock);
+	spin_unlock_irqrestore(&tree->lock, flags);
 	atomic_inc(&gcma_cc_invalidate_inodes);
 }
 
@@ -1245,8 +1251,9 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 	unsigned long *bitmap;
 	unsigned long pfn, ret = 0;
 	struct page *page;
+	unsigned long flags;
 
-	spin_lock(&gcma->lock);
+	spin_lock_irqsave(&gcma->lock, flags);
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 		int set;
@@ -1267,7 +1274,7 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 		}
 
 	}
-	spin_unlock(&gcma->lock);
+	spin_unlock_irqrestore(&gcma->lock, flags);
 	return ret;
 }
 
@@ -1296,9 +1303,11 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	struct inode_entry *ientry;
 	struct page_entry *pentry;
 
+	unsigned long flags;
+
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
-		spin_lock(&gcma->lock);
+		spin_lock_irqsave(&gcma->lock, flags);
 
 		offset = pfn - gcma->base_pfn;
 		bitmap = gcma->bitmap + offset / BITS_PER_LONG;
@@ -1308,20 +1317,20 @@ retry:
 			/* set a bit for prevent allocation for frontswap */
 			bitmap_set(gcma->bitmap, offset, 1);
 			set_gpage_flag(page, GF_ISOLATED);
-			spin_unlock(&gcma->lock);
+			spin_unlock_irqrestore(&gcma->lock, flags);
 			continue;
 		}
 		if (gpage_flag(page, GF_ISOLATED)) {
-			spin_unlock(&gcma->lock);
+			spin_unlock_irqrestore(&gcma->lock, flags);
 			continue;
 		}
 
 		/* Someone is using the page so it's complicated :( */
-		spin_unlock(&gcma->lock);
+		spin_unlock_irqrestore(&gcma->lock, flags);
 
 		spin_lock(&slru_lock);
 		spin_lock(&clru_lock);
-		spin_lock(&gcma->lock);
+		spin_lock_irqsave(&gcma->lock, flags);
 
 		/* Avoid allocation from other threads */
 		set_gpage_flag(page, GF_RECLAIMING);
@@ -1362,7 +1371,7 @@ retry:
 		 * success. Below isolate_interrupted handles it.
 		 */
 next_page:
-		spin_unlock(&gcma->lock);
+		spin_unlock_irqrestore(&gcma->lock, flags);
 		spin_unlock(&clru_lock);
 		spin_unlock(&slru_lock);
 	}
