@@ -1185,12 +1185,12 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 		return;
 	}
 	spin_lock(&ientry->pages_lock);
+	spin_lock(&clru_lock);
 	rbtree_postorder_for_each_entry_safe(pentry, n, &ientry->pages_root,
 						rbnode) {
-		spin_lock(&clru_lock);
 		put_page_entry(&ientry->pages_root, pentry);
-		spin_unlock(&clru_lock);
 	}
+	spin_unlock(&clru_lock);
 	ientry->pages_root = RB_ROOT;
 	spin_unlock(&ientry->pages_lock);
 
@@ -1214,12 +1214,12 @@ void gcma_cleancache_invalidate_fs(int tree_id)
 	rbtree_postorder_for_each_entry_safe(ientry, n, &tree->inodes_root,
 						rbnode) {
 		spin_lock(&ientry->pages_lock);
+		spin_lock(&clru_lock);
 		rbtree_postorder_for_each_entry_safe(pentry, m,
 						&ientry->pages_root, rbnode) {
-			spin_lock(&clru_lock);
 			put_page_entry(&ientry->pages_root, pentry);
-			spin_unlock(&clru_lock);
 		}
+		spin_unlock(&clru_lock);
 		ientry->pages_root = RB_ROOT;
 		spin_unlock(&ientry->pages_lock);
 		put_inode_entry(&tree->inodes_root, ientry);
