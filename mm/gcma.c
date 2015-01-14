@@ -816,8 +816,7 @@ got:
 
 static void free_page_entry(struct page_entry *entry)
 {
-	if (entry->page != NULL)
-		gcma_free_page(entry->gcma, entry->page);
+	gcma_free_page(entry->gcma, entry->page);
 	kmem_cache_free(page_entry_cache, entry);
 }
 
