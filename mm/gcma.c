@@ -1343,7 +1343,6 @@ retry:
 		 * LRU and ready to put the swap slot soon.
 		 */
 		if (gpage_flag(page, GF_SWAP_LRU)) {
-			pr_info("frontswap page found from %s\n", __func__);
 			entry = swap_slot(page);
 			if (atomic_inc_not_zero(&entry->refcount)) {
 				clear_gpage_flag(page, GF_SWAP_LRU);
@@ -1354,7 +1353,6 @@ retry:
 		}
 
 		if (gpage_flag(page, GF_CC_LRU)) {
-			pr_info("cleancache page found from %s\n", __func__);
 			pentry = page_entry(page);
 			if (atomic_inc_not_zero(&pentry->refcount)) {
 				clear_gpage_flag(page, GF_CC_LRU);
@@ -1383,7 +1381,6 @@ next_page:
 	 * Since we increased refcount of the page above, we can access
 	 * swap_slot_entry with safe
 	 */
-	pr_info("let's iterate fs free pages\n");
 	list_for_each_entry_safe(page, n, &fs_free_pages, lru) {
 		tree = swap_tree(page);
 		entry = swap_slot(page);
@@ -1400,7 +1397,6 @@ next_page:
 		spin_unlock(&tree->lock);
 	}
 
-	pr_info("let's iterate cc free pages\n");
 	list_for_each_entry_safe(page, n, &cc_free_pages, lru) {
 		ientry = inode_entry(page);
 		pentry = page_entry(page);
