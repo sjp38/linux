@@ -1194,7 +1194,6 @@ void gcma_cleancache_invalidate_inode(int tree_id,
 	ientry->pages_root = RB_ROOT;
 	spin_unlock(&ientry->pages_lock);
 
-	put_inode_entry(&tree->inodes_root, ientry);
 	spin_unlock_irqrestore(&tree->lock, flags);
 	atomic_inc(&gcma_cc_invalidate_inodes);
 }
@@ -1222,13 +1221,9 @@ void gcma_cleancache_invalidate_fs(int tree_id)
 		spin_unlock(&clru_lock);
 		ientry->pages_root = RB_ROOT;
 		spin_unlock(&ientry->pages_lock);
-		put_inode_entry(&tree->inodes_root, ientry);
 	}
-	tree->inodes_root = RB_ROOT;
 	spin_unlock(&tree->lock);
 
-	kfree(tree);
-	cleancache_trees[tree_id] = NULL;
 	atomic_inc(&gcma_cc_invalidate_fses);
 }
 
