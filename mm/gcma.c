@@ -1483,7 +1483,7 @@ static int __init gcma_debugfs_init(void)
 	debugfs_create_atomic_t("cc_invalidate_failed_fses", S_IRUGO,
 			gcma_debugfs_root, &gcma_cc_invalidate_failed_pages);
 
-	pr_info("gcma debufs init\n");
+	pr_info("gcma debugfs init\n");
 	return 0;
 }
 #else
