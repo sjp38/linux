@@ -1054,18 +1054,18 @@ void gcma_cleancache_put_page(int tree_id, struct cleancache_filekey key,
 	set_inode_entry(pentry->page, (void *)ientry);
 	set_page_entry(pentry->page, (void *)pentry);
 
-	spin_lock(&ientry->pages_lock);
+	spin_lock_irqsave(&ientry->pages_lock, flags);
 	do {
 		res = cc_page_rb_insert(&ientry->pages_root, pentry, &dupentry);
 		if (res == -EEXIST)
 			cc_page_rb_erase(&ientry->pages_root, dupentry);
 	} while (res == -EEXIST);
-	spin_unlock(&ientry->pages_lock);
+	spin_unlock_irqrestore(&ientry->pages_lock, flags);
 
-	spin_lock(&clru_lock);
+	spin_lock_irqsave(&clru_lock, flags);
 	set_gpage_flag(pentry->page, GF_CC_LRU);
 	list_add(&pentry->page->lru, &clru_list);
-	spin_unlock(&clru_lock);
+	spin_unlock_irqrestore(&clru_lock, flags);
 
 	atomic_inc(&gcma_cc_put_pages);
 out:
@@ -1096,9 +1096,9 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 		return -1;
 	}
 
-	spin_lock(&ientry->pages_lock);
+	spin_lock_irqsave(&ientry->pages_lock, flags);
 	pentry = find_get_page_entry(&ientry->pages_root, offset);
-	spin_unlock(&ientry->pages_lock);
+	spin_unlock_irqrestore(&ientry->pages_lock, flags);
 	if (!pentry) {
 		atomic_inc(&gcma_cc_get_failed_pages);
 		spin_lock_irqsave(&tree->lock, flags);
@@ -1119,13 +1119,13 @@ int gcma_cleancache_get_page(int tree_id, struct cleancache_filekey key,
 	 * implementing this clean cache backend as exclusive cache.
 	 * But, don't do so because we have LRU mechanism.
 	 */
-	spin_lock(&ientry->pages_lock);
+	spin_lock_irqsave(&ientry->pages_lock, flags);
 	spin_lock(&clru_lock);
 	if (likely(gpage_flag(pentry->page, GF_CC_LRU)))
 		list_move(&pentry->page->lru, &clru_list);
 	put_page_entry(&ientry->pages_root, pentry);
 	spin_unlock(&clru_lock);
-	spin_unlock(&ientry->pages_lock);
+	spin_unlock_irqrestore(&ientry->pages_lock, flags);
 
 	spin_lock_irqsave(&tree->lock, flags);
 	put_inode_entry(&tree->inodes_root, ientry);
@@ -1141,11 +1141,12 @@ void gcma_cleancache_invalidate_page(int tree_id, struct cleancache_filekey key,
 	struct cleancache_tree *tree = cleancache_trees[tree_id];
 	struct inode_entry *ientry;
 	struct page_entry *pentry;
+	unsigned long flags;
 
-	spin_lock(&tree->lock);
+	spin_lock_irqsave(&tree->lock, flags);
 	ientry = cc_inode_rb_search(&tree->inodes_root, (void *)&key);
 	if (!ientry) {
-		spin_unlock(&tree->lock);
+		spin_unlock_irqrestore(&tree->lock, flags);
 		atomic_inc(&gcma_cc_invalidate_failed_pages);
 		return;
 	}
@@ -1304,6 +1305,8 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	struct page_entry *pentry;
 
 	unsigned long flags;
+	unsigned long clruirq_flags;
+	unsigned long ieirq_flags;
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
@@ -1329,7 +1332,7 @@ retry:
 		spin_unlock_irqrestore(&gcma->lock, flags);
 
 		spin_lock(&slru_lock);
-		spin_lock(&clru_lock);
+		spin_lock_irqsave(&clru_lock, clruirq_flags);
 		spin_lock_irqsave(&gcma->lock, flags);
 
 		/* Avoid allocation from other threads */
@@ -1372,7 +1375,7 @@ retry:
 		 */
 next_page:
 		spin_unlock_irqrestore(&gcma->lock, flags);
-		spin_unlock(&clru_lock);
+		spin_unlock_irqrestore(&clru_lock, clruirq_flags);
 		spin_unlock(&slru_lock);
 	}
 
@@ -1402,16 +1405,16 @@ next_page:
 		ientry = inode_entry(page);
 		pentry = page_entry(page);
 
-		spin_lock(&ientry->pages_lock);
-		spin_lock(&clru_lock);
+		spin_lock_irqsave(&ientry->pages_lock, ieirq_flags);
+		spin_lock_irqsave(&clru_lock, clruirq_flags);
 		/* drop refcount increased by above loop */
 		slot_offset = pentry->offset;
 		put_page_entry(&ientry->pages_root, pentry);
 		/* free entry if the entry is still in tree */
 		if (cc_page_rb_search(&ientry->pages_root, slot_offset))
 			put_page_entry(&ientry->pages_root, pentry);
-		spin_unlock(&clru_lock);
-		spin_unlock(&ientry->pages_lock);
+		spin_unlock_irqrestore(&clru_lock, clruirq_flags);
+		spin_unlock_irqrestore(&ientry->pages_lock, ieirq_flags);
 	}
 
 	start_pfn = isolate_interrupted(gcma, orig_start, orig_start + size);
