@@ -250,10 +250,11 @@ out:
 static void gcma_free_page(struct gcma *gcma, struct page *page)
 {
 	unsigned long pfn, offset;
+	unsigned long flags;
 
 	pfn = page_to_pfn(page);
 
-	spin_lock(&gcma->lock);
+	spin_lock_irqsave(&gcma->lock, flags);
 	offset = pfn - gcma->base_pfn;
 
 	if (likely(!gpage_flag(page, GF_RECLAIMING))) {
@@ -268,7 +269,7 @@ static void gcma_free_page(struct gcma *gcma, struct page *page)
 		bitmap_set(gcma->bitmap, offset, 1);
 		set_gpage_flag(page, GF_ISOLATED);
 	}
-	spin_unlock(&gcma->lock);
+	spin_unlock_irqrestore(&gcma->lock, flags);
 }
 
 /*
@@ -331,20 +332,21 @@ static struct page *frontswap_alloc_page(struct gcma **res_gcma)
 {
 	struct page *page;
 	struct gcma *gcma;
+	unsigned long flags;
 
 retry:
-	spin_lock(&ginfo.lock);
+	spin_lock_irqsave(&ginfo.lock, flags);
 	gcma = list_first_entry(&ginfo.head, struct gcma, list);
 	list_move_tail(&gcma->list, &ginfo.head);
 
 	list_for_each_entry(gcma, &ginfo.head, list) {
 		page = gcma_alloc_page(gcma);
 		if (page) {
-			spin_unlock(&ginfo.lock);
+			spin_unlock_irqrestore(&ginfo.lock, flags);
 			goto got;
 		}
 	}
-	spin_unlock(&ginfo.lock);
+	spin_unlock_irqrestore(&ginfo.lock, flags);
 
 	/* Failed to alloc a page from entire gcma. Evict adequate LRU
 	 * frontswap slots and try allocation again */
@@ -1430,11 +1432,12 @@ void gcma_free_contig(struct gcma *gcma,
 		      unsigned long start_pfn, unsigned long size)
 {
 	unsigned long offset;
+	unsigned long flags;
 
-	spin_lock(&gcma->lock);
+	spin_lock_irqsave(&gcma->lock, flags);
 	offset = start_pfn - gcma->base_pfn;
 	bitmap_clear(gcma->bitmap, offset, size);
-	spin_unlock(&gcma->lock);
+	spin_unlock_irqrestore(&gcma->lock, flags);
 }
 
 #ifdef CONFIG_DEBUG_FS
