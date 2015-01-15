@@ -19,6 +19,12 @@
 #include <linux/frontswap.h>
 #include <linux/highmem.h>
 #include <linux/gcma.h>
+#include <linux/hash.h>
+
+#define DMEM_HASH_BUCKET_BITS	8
+#define NR_DMEM_HASH_BUCKETS	(1 << DMEM_HASH_BUCKET_BITS)
+
+#define MAX_CLEANCACHE_FS	16
 
 /* XXX: What's the ideal? */
 #define NR_EVICT_BATCH	32
@@ -40,50 +46,83 @@ static struct gcma_info ginfo = {
 	.lock = __SPIN_LOCK_UNLOCKED(ginfo.lock),
 };
 
-struct swap_slot_entry {
+/*
+ * TODO: Better naming sense than dmem, maybe?
+ * Discardable memory is a key-value store which stores easily discardable
+ * pages for second-class clients of gcma.
+ */
+
+struct dmem_key {
+	u8 key[sizeof(pgoff_t) + sizeof(struct cleancache_filekey)];
+};
+
+/* TODO: Configurable discard mechanism */
+struct dmem_entry {
 	struct gcma *gcma;
 	struct rb_node rbnode;
-	pgoff_t offset;
+	struct dmem_key key;
 	struct page *page;
 	atomic_t refcount;
 };
 
-struct frontswap_tree {
+/* discardable memory hash bucket */
+struct dmem_hashbucket {
 	struct rb_root rbroot;
+	int (*compare)(struct dmem_key *lkey, struct dmem_key *rkey);
 	spinlock_t lock;
 };
 
-static LIST_HEAD(slru_list);	/* LRU list of swap cache */
-static spinlock_t slru_lock;	/* protect slru_list */
-static struct frontswap_tree *gcma_swap_trees[MAX_SWAPFILES];
-static struct kmem_cache *swap_slot_entry_cache;
+/*
+ * Discardable memory pool
+ */
+struct dmem_pool {
+	struct dmem_hashbucket hashbuckets[NR_DMEM_HASH_BUCKETS];
+};
+
+static LIST_HEAD(dlru_list);	/* LRU list of dmem */
+static spinlock_t dlru_lock;	/* protect dlru_list */
+static struct dmem_pool *gcma_dmem_pools[MAX_SWAPFILES + MAX_CLEANCACHE_FS];
+static struct kmem_cache *dmem_entry_cache;
 
 /* For statistics */
-static atomic_t gcma_stored_pages = ATOMIC_INIT(0);
-static atomic_t gcma_loaded_pages = ATOMIC_INIT(0);
-static atomic_t gcma_evicted_pages = ATOMIC_INIT(0);
-static atomic_t gcma_reclaimed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_stored_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_loaded_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_evicted_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_reclaimed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_invalidated_pages = ATOMIC_INIT(0);
+static atomic_t gcma_fs_invalidated_areas = ATOMIC_INIT(0);
 
-static unsigned long evict_frontswap_pages(unsigned long nr_pages);
+#if 0
+static atomic_t gcma_cc_stored_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_loaded_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_load_failed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_evicted_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_reclaimed_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidated_pages = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidated_inodes = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidated_fses = ATOMIC_INIT(0);
+#endif
 
-static struct frontswap_tree *swap_tree(struct page *page)
+static unsigned long dmem_evict_lru(unsigned long nr_pages);
+
+static struct dmem_hashbucket *dmem_hashbuck(struct page *page)
 {
-	return (struct frontswap_tree *)page->mapping;
+	return (struct dmem_hashbucket *)page->mapping;
 }
 
-static void set_swap_tree(struct page *page, struct frontswap_tree *tree)
+static void set_dmem_hashbuck(struct page *page, struct dmem_hashbucket *buck)
 {
-	page->mapping = (struct address_space *)tree;
+	page->mapping = (struct address_space *)buck;
 }
 
-static struct swap_slot_entry *swap_slot(struct page *page)
+static struct dmem_entry *dmem_entry(struct page *page)
 {
-	return (struct swap_slot_entry *)page->index;
+	return (struct dmem_entry *)page->index;
 }
 
-static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
+static void set_dmem_entry(struct page *page, struct dmem_entry *entry)
 {
-	page->index = (pgoff_t)slot;
+	page->index = (pgoff_t)entry;
 }
 
 /*
@@ -92,12 +131,12 @@ static void set_swap_slot(struct page *page, struct swap_slot_entry *slot)
  * GF_SWAP_LRU
  * The page is being used for frontswap and hang on frontswap LRU list.
  * It can be drained for contiguous memory allocation anytime.
- * Protected by slru_lock.
+ * Protected by dlru_lock.
  *
  * GF_RECLAIMING
  * The page is being draining for contiguous memory allocation.
  * Frontswap guests should not use it.
- * Protected by slru_lock.
+ * Protected by dlru_lock.
  *
  * GF_ISOLATED
  * The page is isolated for contiguous memory allocation.
@@ -194,7 +233,7 @@ out:
 	return page;
 }
 
-/* Caller should hold slru_lock */
+/* Caller should hold dlru_lock */
 static void gcma_free_page(struct gcma *gcma, struct page *page)
 {
 	unsigned long pfn, offset;
@@ -223,50 +262,54 @@ static void gcma_free_page(struct gcma *gcma, struct page *page)
  * In the case that a entry with the same offset is found, a pointer to
  * the existing entry is stored in dupentry and the function returns -EEXIST.
  */
-static int frontswap_rb_insert(struct rb_root *root,
-		struct swap_slot_entry *entry,
-		struct swap_slot_entry **dupentry)
+static int dmem_insert_entry(struct dmem_hashbucket *bucket,
+		struct dmem_entry *entry,
+		struct dmem_entry **dupentry)
 {
-	struct rb_node **link = &root->rb_node, *parent = NULL;
-	struct swap_slot_entry *myentry;
+	struct rb_node **link = &bucket->rbroot.rb_node, *parent = NULL;
+	struct dmem_entry *ientry;
+	int cmp;
 
 	while (*link) {
 		parent = *link;
-		myentry = rb_entry(parent, struct swap_slot_entry, rbnode);
-		if (myentry->offset > entry->offset)
+		ientry = rb_entry(parent, struct dmem_entry, rbnode);
+		cmp = bucket->compare(&entry->key, &ientry->key);
+		if (cmp < 0)
 			link = &(*link)->rb_left;
-		else if (myentry->offset < entry->offset)
+		else if (cmp > 0)
 			link = &(*link)->rb_right;
 		else {
-			*dupentry = myentry;
+			*dupentry = ientry;
 			return -EEXIST;
 		}
 	}
 	rb_link_node(&entry->rbnode, parent, link);
-	rb_insert_color(&entry->rbnode, root);
+	rb_insert_color(&entry->rbnode, &bucket->rbroot);
 	return 0;
 }
 
-static void frontswap_rb_erase(struct rb_root *root,
-		struct swap_slot_entry *entry)
+static void dmem_erase_entry(struct dmem_hashbucket *bucket,
+		struct dmem_entry *entry)
 {
 	if (!RB_EMPTY_NODE(&entry->rbnode)) {
-		rb_erase(&entry->rbnode, root);
+		rb_erase(&entry->rbnode, &bucket->rbroot);
 		RB_CLEAR_NODE(&entry->rbnode);
 	}
 }
 
-static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
-		pgoff_t offset)
+static struct dmem_entry *dmem_search_entry(struct dmem_hashbucket *bucket,
+		struct dmem_key *key)
 {
-	struct rb_node *node = root->rb_node;
-	struct swap_slot_entry *entry;
+	struct rb_node *node = bucket->rbroot.rb_node;
+	struct dmem_entry *entry;
+	int cmp;
 
 	while (node) {
-		entry = rb_entry(node, struct swap_slot_entry, rbnode);
-		if (entry->offset > offset)
+		entry = rb_entry(node, struct dmem_entry, rbnode);
+		cmp = bucket->compare(key, &entry->key);
+		if (cmp < 0)
 			node = node->rb_left;
-		else if (entry->offset < offset)
+		else if (cmp > 0)
 			node = node->rb_right;
 		else
 			return entry;
@@ -275,7 +318,7 @@ static struct swap_slot_entry *frontswap_rb_search(struct rb_root *root,
 }
 
 /* Allocates a page from gcma areas using round-robin way */
-static struct page *frontswap_alloc_page(struct gcma **res_gcma)
+static struct page *dmem_alloc_page(struct gcma **res_gcma)
 {
 	struct page *page;
 	struct gcma *gcma;
@@ -295,8 +338,8 @@ retry:
 	spin_unlock(&ginfo.lock);
 
 	/* Failed to alloc a page from entire gcma. Evict adequate LRU
-	 * frontswap slots and try allocation again */
-	if (evict_frontswap_pages(NR_EVICT_BATCH))
+	 * discardable memory and try allocation again */
+	if (dmem_evict_lru(NR_EVICT_BATCH))
 		goto retry;
 
 got:
@@ -304,24 +347,24 @@ got:
 	return page;
 }
 
-static void frontswap_free_entry(struct swap_slot_entry *entry)
+static void dmem_free_entry(struct dmem_entry *entry)
 {
 	gcma_free_page(entry->gcma, entry->page);
-	kmem_cache_free(swap_slot_entry_cache, entry);
+	kmem_cache_free(dmem_entry_cache, entry);
 }
 
-/* Caller should hold frontswap tree spinlock */
-static void swap_slot_entry_get(struct swap_slot_entry *entry)
+/* Caller should hold hashbucket spinlock */
+static void dmem_get(struct dmem_entry *entry)
 {
 	atomic_inc(&entry->refcount);
 }
 
 /*
- * Caller should hold frontswap tree spinlock and slru_lock.
- * Remove from the tree and free it, if nobody reference the entry.
+ * Caller should hold hashbucket spinlock and dlru_lock.
+ * Remove from the bucket and free it, if nobody reference the entry.
  */
-static void swap_slot_entry_put(struct frontswap_tree *tree,
-		struct swap_slot_entry *entry)
+static void dmem_put(struct dmem_hashbucket *buck,
+				struct dmem_entry *entry)
 {
 	int refcount = atomic_dec_return(&entry->refcount);
 
@@ -330,32 +373,32 @@ static void swap_slot_entry_put(struct frontswap_tree *tree,
 	if (refcount == 0) {
 		struct page *page = entry->page;
 
-		frontswap_rb_erase(&tree->rbroot, entry);
+		dmem_erase_entry(buck, entry);
 		list_del(&page->lru);
 
-		frontswap_free_entry(entry);
+		dmem_free_entry(entry);
 	}
 }
 
 /*
- * evict_frontswap_pages - evict @nr_pages LRU frontswap backed pages
+ * dmem_evict_lru - evict @nr_pages LRU dmem pages
  *
  * @nr_pages	number of LRU pages to be evicted
  *
  * Returns number of successfully evicted pages
  */
-static unsigned long evict_frontswap_pages(unsigned long nr_pages)
+static unsigned long dmem_evict_lru(unsigned long nr_pages)
 {
-	struct frontswap_tree *tree;
-	struct swap_slot_entry *entry;
+	struct dmem_hashbucket *buck;
+	struct dmem_entry *entry;
 	struct page *page, *n;
 	unsigned long evicted = 0;
-	pgoff_t slot_offset;
+	struct dmem_key key;
 	LIST_HEAD(free_pages);
 
-	spin_lock(&slru_lock);
-	list_for_each_entry_safe_reverse(page, n, &slru_list, lru) {
-		entry = swap_slot(page);
+	spin_lock(&dlru_lock);
+	list_for_each_entry_safe_reverse(page, n, &dlru_list, lru) {
+		entry = dmem_entry(page);
 
 		/*
 		 * the entry could be free by other thread in the while.
@@ -371,94 +414,127 @@ static unsigned long evict_frontswap_pages(unsigned long nr_pages)
 		if (++evicted >= nr_pages)
 			break;
 	}
-	spin_unlock(&slru_lock);
+	spin_unlock(&dlru_lock);
 
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
-		tree = swap_tree(page);
-		entry = swap_slot(page);
+		buck = dmem_hashbuck(page);
+		entry = dmem_entry(page);
 
-		spin_lock(&tree->lock);
-		spin_lock(&slru_lock);
+		spin_lock(&buck->lock);
+		spin_lock(&dlru_lock);
 		/* drop refcount increased by above loop */
-		slot_offset = entry->offset;
-		swap_slot_entry_put(tree, entry);
+		memcpy(&key, &entry->key, sizeof(struct dmem_key));
+		dmem_put(buck, entry);
 		/* free entry if the entry is still in tree */
-		if (frontswap_rb_search(&tree->rbroot, slot_offset))
-			swap_slot_entry_put(tree, entry);
-		spin_unlock(&slru_lock);
-		spin_unlock(&tree->lock);
+		if (dmem_search_entry(buck, &key))
+			dmem_put(buck, entry);
+		spin_unlock(&dlru_lock);
+		spin_unlock(&buck->lock);
 	}
 
-	atomic_add(evicted, &gcma_evicted_pages);
+	atomic_add(evicted, &gcma_fs_evicted_pages);
 	return evicted;
 }
 
-/* Caller should hold frontswap tree spinlock */
-static struct swap_slot_entry *frontswap_find_get(struct frontswap_tree *tree,
-						pgoff_t offset)
+/* Caller should hold bucket spinlock */
+static struct dmem_entry *dmem_find_get_entry(struct dmem_hashbucket *buck,
+						struct dmem_key *key)
 {
-	struct swap_slot_entry *entry;
-	struct rb_root *root = &tree->rbroot;
+	struct dmem_entry *entry;
 
-	assert_spin_locked(&tree->lock);
-	entry = frontswap_rb_search(root, offset);
+	assert_spin_locked(&buck->lock);
+	entry = dmem_search_entry(buck, key);
 	if (entry)
-		swap_slot_entry_get(entry);
+		dmem_get(entry);
 
 	return entry;
 }
 
+unsigned int dmem_hash(struct dmem_key *key)
+{
+	unsigned long *k = (unsigned long *)&key->key;
+	return hash_long(k[0] ^ k[1] ^ k[2], DMEM_HASH_BUCKET_BITS);
+}
+
+static struct dmem_hashbucket *dmem_find_hashbucket(struct dmem_pool *pool,
+							struct dmem_key *key)
+{
+	return &pool->hashbuckets[dmem_hash(key)];
+}
+
+static void frontswap_set_dmem_key(pgoff_t *offset, struct dmem_key *key)
+{
+	memcpy(key, offset, sizeof(pgoff_t));
+}
+
+static int frontswap_cmp(struct dmem_key *lkey, struct dmem_key *rkey)
+{
+	return memcmp(lkey, rkey, sizeof(pgoff_t));
+}
+
 void gcma_frontswap_init(unsigned type)
 {
-	struct frontswap_tree *tree;
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
+	int i;
 
-	tree = kzalloc(sizeof(struct frontswap_tree), GFP_KERNEL);
-	if (!tree) {
-		pr_warn("front swap tree for type %d failed to alloc\n", type);
+	pool = kzalloc(sizeof(struct dmem_pool), GFP_KERNEL);
+	if (!pool) {
+		pr_warn("failed to alloc dmem pool for frontswap type %d\n",
+				type);
 		return;
 	}
 
-	tree->rbroot = RB_ROOT;
-	spin_lock_init(&tree->lock);
-	gcma_swap_trees[type] = tree;
+	for (i = 0; i < NR_DMEM_HASH_BUCKETS; i++) {
+		buck = &pool->hashbuckets[i];
+		buck->rbroot = RB_ROOT;
+		buck->compare = frontswap_cmp;
+		spin_lock_init(&buck->lock);
+	}
+
+	gcma_dmem_pools[type] = pool;
 }
 
 int gcma_frontswap_store(unsigned type, pgoff_t offset,
 				struct page *page)
 {
-	struct swap_slot_entry *entry, *dupentry;
+	struct dmem_entry *entry, *dupentry;
 	struct gcma *gcma;
 	struct page *gcma_page = NULL;
-	struct frontswap_tree *tree = gcma_swap_trees[type];
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
+      
 	u8 *src, *dst;
 	int ret;
-
-	if (!tree) {
-		WARN(1, "frontswap tree for type %d is not exist\n",
+ 
+	pool = gcma_dmem_pools[type];
+	if (!pool) {
+		WARN(1, "dmem pool for frontswap type %d is not exist\n",
 				type);
 		return -ENODEV;
 	}
 
-	gcma_page = frontswap_alloc_page(&gcma);
+	gcma_page = dmem_alloc_page(&gcma);
 	if (!gcma_page)
 		return -ENOMEM;
 
-	entry = kmem_cache_alloc(swap_slot_entry_cache, GFP_NOIO);
+	entry = kmem_cache_alloc(dmem_entry_cache, GFP_NOIO);
 	if (!entry) {
-		spin_lock(&slru_lock);
+		spin_lock(&dlru_lock);
 		gcma_free_page(gcma, gcma_page);
-		spin_unlock(&slru_lock);
+		spin_unlock(&dlru_lock);
 		return -ENOMEM;
 	}
 
 	entry->gcma = gcma;
 	entry->page = gcma_page;
-	entry->offset = offset;
+	frontswap_set_dmem_key(&offset, &entry->key);
 	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	set_swap_tree(gcma_page, tree);
-	set_swap_slot(gcma_page, entry);
+	buck = dmem_find_hashbucket(pool, &entry->key);
+	set_dmem_hashbuck(gcma_page, buck);
+	set_dmem_entry(gcma_page, entry);
 
 	/* copy from orig data to gcma-page */
 	src = kmap_atomic(page);
@@ -467,7 +543,7 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
-	spin_lock(&tree->lock);
+	spin_lock(&buck->lock);
 	do {
 		/*
 		 * Though this duplication scenario may happen rarely by
@@ -475,22 +551,22 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 		 * than fix swap layer because handling the possibility of
 		 * duplicates is part of the tmem ABI.
 		 */
-		ret = frontswap_rb_insert(&tree->rbroot, entry, &dupentry);
+		ret = dmem_insert_entry(buck, entry, &dupentry);
 		if (ret == -EEXIST) {
-			frontswap_rb_erase(&tree->rbroot, dupentry);
-			spin_lock(&slru_lock);
-			swap_slot_entry_put(tree, dupentry);
-			spin_unlock(&slru_lock);
+			dmem_erase_entry(buck, dupentry);
+			spin_lock(&dlru_lock);
+			dmem_put(buck, dupentry);
+			spin_unlock(&dlru_lock);
 		}
 	} while (ret == -EEXIST);
 
-	spin_lock(&slru_lock);
+	spin_lock(&dlru_lock);
 	set_gpage_flag(gcma_page, GF_SWAP_LRU);
-	list_add(&gcma_page->lru, &slru_list);
-	spin_unlock(&slru_lock);
-	spin_unlock(&tree->lock);
+	list_add(&gcma_page->lru, &dlru_list);
+	spin_unlock(&dlru_lock);
+	spin_unlock(&buck->lock);
 
-	atomic_inc(&gcma_stored_pages);
+	atomic_inc(&gcma_fs_stored_pages);
 	return ret;
 }
 
@@ -501,19 +577,25 @@ int gcma_frontswap_store(unsigned type, pgoff_t offset,
 int gcma_frontswap_load(unsigned type, pgoff_t offset,
 			       struct page *page)
 {
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry;
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
+	struct dmem_entry *entry;
+	struct dmem_key key;
 	struct page *gcma_page;
 	u8 *src, *dst;
 
-	if (!tree) {
-		WARN(1, "tree for type %d not exist\n", type);
+	pool = gcma_dmem_pools[type];
+	if (!pool) {
+		WARN(1, "dmem pool for frontswap type %d not exist\n", type);
 		return -1;
 	}
 
-	spin_lock(&tree->lock);
-	entry = frontswap_find_get(tree, offset);
-	spin_unlock(&tree->lock);
+	frontswap_set_dmem_key(&offset, &key);
+	buck = dmem_find_hashbucket(pool, &key);
+
+	spin_lock(&buck->lock);
+	entry = dmem_find_get_entry(buck, &key);
+	spin_unlock(&buck->lock);
 	if (!entry)
 		return -1;
 
@@ -524,56 +606,74 @@ int gcma_frontswap_load(unsigned type, pgoff_t offset,
 	kunmap_atomic(src);
 	kunmap_atomic(dst);
 
-	spin_lock(&tree->lock);
-	spin_lock(&slru_lock);
+	spin_lock(&buck->lock);
+	spin_lock(&dlru_lock);
 	if (likely(gpage_flag(gcma_page, GF_SWAP_LRU)))
-		list_move(&gcma_page->lru, &slru_list);
-	swap_slot_entry_put(tree, entry);
-	spin_unlock(&slru_lock);
-	spin_unlock(&tree->lock);
+		list_move(&gcma_page->lru, &dlru_list);
+	dmem_put(buck, entry);
+	spin_unlock(&dlru_lock);
+	spin_unlock(&buck->lock);
 
-	atomic_inc(&gcma_loaded_pages);
+	atomic_inc(&gcma_fs_loaded_pages);
 	return 0;
 }
 
 void gcma_frontswap_invalidate_page(unsigned type, pgoff_t offset)
 {
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry;
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
+	struct dmem_key key;
+	struct dmem_entry *entry;
 
-	spin_lock(&tree->lock);
-	entry = frontswap_rb_search(&tree->rbroot, offset);
+	pool = gcma_dmem_pools[type];
+	frontswap_set_dmem_key(&offset, &key);
+	buck = dmem_find_hashbucket(pool, &key);
+
+	spin_lock(&buck->lock);
+	entry = dmem_search_entry(buck, &key);
 	if (!entry) {
-		spin_unlock(&tree->lock);
+		spin_unlock(&buck->lock);
 		return;
 	}
 
-	spin_lock(&slru_lock);
-	swap_slot_entry_put(tree, entry);
-	spin_unlock(&slru_lock);
-	spin_unlock(&tree->lock);
+	spin_lock(&dlru_lock);
+	dmem_put(buck, entry);
+	spin_unlock(&dlru_lock);
+	spin_unlock(&buck->lock);
+
+	atomic_inc(&gcma_fs_invalidated_pages);
 }
 
 void gcma_frontswap_invalidate_area(unsigned type)
 {
-	struct frontswap_tree *tree = gcma_swap_trees[type];
-	struct swap_slot_entry *entry, *n;
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
+	struct dmem_entry *entry, *n;
+	int i;
 
-	if (!tree)
+	pool = gcma_dmem_pools[type];
+	if (!pool)
 		return;
 
-	spin_lock(&tree->lock);
-	rbtree_postorder_for_each_entry_safe(entry, n, &tree->rbroot, rbnode) {
-		frontswap_rb_erase(&tree->rbroot, entry);
-		spin_lock(&slru_lock);
-		swap_slot_entry_put(tree, entry);
-		spin_unlock(&slru_lock);
+	for (i = 0; i < NR_DMEM_HASH_BUCKETS; i++) {
+		buck = &pool->hashbuckets[i];
+		spin_lock(&buck->lock);
+		rbtree_postorder_for_each_entry_safe(entry, n, &buck->rbroot,
+				rbnode) {
+			/* TODO: unnecessary erase? */
+			dmem_erase_entry(buck, entry);
+			spin_lock(&dlru_lock);
+			dmem_put(buck, entry);
+			spin_unlock(&dlru_lock);
+		}
+		buck->rbroot = RB_ROOT;
+		spin_unlock(&buck->lock);
 	}
-	tree->rbroot = RB_ROOT;
-	spin_unlock(&tree->lock);
 
-	kfree(tree);
-	gcma_swap_trees[type] = NULL;
+	kfree(pool);
+	gcma_dmem_pools[type] = NULL;
+
+	atomic_inc(&gcma_fs_invalidated_areas);
 }
 
 static struct frontswap_ops gcma_frontswap_ops = {
@@ -680,13 +780,13 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 {
 	LIST_HEAD(free_pages);
 	struct page *page, *n;
-	struct swap_slot_entry *entry;
+	struct dmem_hashbucket *buck;
+	struct dmem_entry *entry;
+	struct dmem_key dmem_key;
 	unsigned long offset;
 	unsigned long *bitmap;
-	struct frontswap_tree *tree;
 	unsigned long pfn;
 	unsigned long orig_start = start_pfn;
-	pgoff_t slot_offset;
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
@@ -697,7 +797,7 @@ retry:
 		page = pfn_to_page(pfn);
 
 		if (!test_bit(offset % BITS_PER_LONG, bitmap)) {
-			/* set a bit for prevent allocation for frontswap */
+			/* set a bit to prevent allocation for dmem */
 			bitmap_set(gcma->bitmap, offset, 1);
 			set_gpage_flag(page, GF_ISOLATED);
 			spin_unlock(&gcma->lock);
@@ -711,7 +811,7 @@ retry:
 		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
 
-		spin_lock(&slru_lock);
+		spin_lock(&dlru_lock);
 		spin_lock(&gcma->lock);
 
 		/* Avoid allocation from other threads */
@@ -722,11 +822,11 @@ retry:
 		 * LRU and ready to put the swap slot soon.
 		 */
 		if (gpage_flag(page, GF_SWAP_LRU)) {
-		       entry = swap_slot(page);
+		       entry = dmem_entry(page);
 		       if (atomic_inc_not_zero(&entry->refcount)) {
 				clear_gpage_flag(page, GF_SWAP_LRU);
 				list_move(&page->lru, &free_pages);
-				atomic_inc(&gcma_reclaimed_pages);
+				atomic_inc(&gcma_fs_reclaimed_pages);
 				goto next_page;
 		       }
 		}
@@ -742,27 +842,27 @@ retry:
 		 */
 next_page:
 		spin_unlock(&gcma->lock);
-		spin_unlock(&slru_lock);
+		spin_unlock(&dlru_lock);
 	}
 
 	/*
 	 * Since we increased refcount of the page above, we can access
-	 * swap_slot_entry with safe
+	 * dmem_entry with safe
 	 */
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
-		tree = swap_tree(page);
-		entry = swap_slot(page);
+		buck = dmem_hashbuck(page);
+		entry = dmem_entry(page);
 
-		spin_lock(&tree->lock);
-		spin_lock(&slru_lock);
+		spin_lock(&buck->lock);
+		spin_lock(&dlru_lock);
 		/* drop refcount increased by above loop */
-		slot_offset = entry->offset;
-		swap_slot_entry_put(tree, entry);
+		memcpy(&dmem_key, &entry->key, sizeof(struct dmem_key));
+		dmem_put(buck, entry);
 		/* free entry if the entry is still in tree */
-		if (frontswap_rb_search(&tree->rbroot, slot_offset))
-			swap_slot_entry_put(tree, entry);
-		spin_unlock(&slru_lock);
-		spin_unlock(&tree->lock);
+		if (dmem_search_entry(buck, &dmem_key))
+			dmem_put(buck, entry);
+		spin_unlock(&dlru_lock);
+		spin_unlock(&buck->lock);
 	}
 
 	start_pfn = isolate_interrupted(gcma, orig_start, orig_start + size);
@@ -803,14 +903,18 @@ static int __init gcma_debugfs_init(void)
 	if (!gcma_debugfs_root)
 		return -ENOMEM;
 
-	debugfs_create_atomic_t("stored_pages", S_IRUGO,
-			gcma_debugfs_root, &gcma_stored_pages);
-	debugfs_create_atomic_t("loaded_pages", S_IRUGO,
-			gcma_debugfs_root, &gcma_loaded_pages);
-	debugfs_create_atomic_t("evicted_pages", S_IRUGO,
-			gcma_debugfs_root, &gcma_evicted_pages);
-	debugfs_create_atomic_t("reclaimed_pages", S_IRUGO,
-			gcma_debugfs_root, &gcma_reclaimed_pages);
+	debugfs_create_atomic_t("fs_stored_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_stored_pages);
+	debugfs_create_atomic_t("fs_loaded_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_loaded_pages);
+	debugfs_create_atomic_t("fs_evicted_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_evicted_pages);
+	debugfs_create_atomic_t("fs_reclaimed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_reclaimed_pages);
+	debugfs_create_atomic_t("fs_invalidated_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_invalidated_pages);
+	debugfs_create_atomic_t("fs_invalidated_areas", S_IRUGO,
+			gcma_debugfs_root, &gcma_fs_invalidated_areas);
 
 	pr_info("gcma debufs init\n");
 	return 0;
@@ -827,9 +931,9 @@ static int __init init_gcma(void)
 {
 	pr_info("loading gcma\n");
 
-	spin_lock_init(&slru_lock);
-	swap_slot_entry_cache = KMEM_CACHE(swap_slot_entry, 0);
-	if (swap_slot_entry_cache == NULL)
+	spin_lock_init(&dlru_lock);
+	dmem_entry_cache = KMEM_CACHE(dmem_entry, 0);
+	if (dmem_entry_cache == NULL)
 		return -ENOMEM;
 
 	/*
