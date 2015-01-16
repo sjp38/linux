@@ -501,6 +501,7 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 	for (i = 0; i < NR_DMEM_HASH_BUCKETS; i++) {
 		buck = &pool->hashbuckets[i];
 		buck->rbroot = RB_ROOT;
+		buck->dmem = dmem;
 		spin_lock_init(&buck->lock);
 	}
 
