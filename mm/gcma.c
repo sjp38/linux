@@ -23,6 +23,8 @@
 
 #define DMEM_HASH_BUCKET_BITS	8
 #define NR_DMEM_HASH_BUCKETS	(1 << DMEM_HASH_BUCKET_BITS)
+#define BYTES_DMEM_KEY		(sizeof(pgoff_t) + \
+				sizeof(struct cleancache_filekey))
 
 #define MAX_CLEANCACHE_FS	16
 
@@ -53,7 +55,7 @@ static struct gcma_info ginfo = {
  */
 
 struct dmem_key {
-	u8 key[sizeof(pgoff_t) + sizeof(struct cleancache_filekey)];
+	u8 key[BYTES_DMEM_KEY];
 };
 
 /* TODO: Configurable discard mechanism */
