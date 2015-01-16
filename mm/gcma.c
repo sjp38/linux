@@ -94,7 +94,6 @@ static atomic_t gcma_fs_reclaimed_pages = ATOMIC_INIT(0);
 static atomic_t gcma_fs_invalidated_pages = ATOMIC_INIT(0);
 static atomic_t gcma_fs_invalidated_areas = ATOMIC_INIT(0);
 
-#if 0
 static atomic_t gcma_cc_stored_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_loaded_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_load_failed_pages = ATOMIC_INIT(0);
@@ -103,7 +102,6 @@ static atomic_t gcma_cc_reclaimed_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_inodes = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_fses = ATOMIC_INIT(0);
-#endif
 
 static unsigned long dmem_evict_lru(unsigned long nr_pages);
 
@@ -917,6 +915,23 @@ static int __init gcma_debugfs_init(void)
 			gcma_debugfs_root, &gcma_fs_invalidated_pages);
 	debugfs_create_atomic_t("fs_invalidated_areas", S_IRUGO,
 			gcma_debugfs_root, &gcma_fs_invalidated_areas);
+
+	debugfs_create_atomic_t("cc_stored_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_stored_pages);
+	debugfs_create_atomic_t("cc_loaded_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_loaded_pages);
+	debugfs_create_atomic_t("cc_load_failed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_load_failed_pages);
+	debugfs_create_atomic_t("cc_evicted_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_evicted_pages);
+	debugfs_create_atomic_t("cc_reclaimed_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_reclaimed_pages);
+	debugfs_create_atomic_t("cc_invalidated_pages", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidated_pages);
+	debugfs_create_atomic_t("cc_invalidated_inodes", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidated_inodes);
+	debugfs_create_atomic_t("cc_invalidated_fses", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidated_fses);
 
 	pr_info("gcma debufs init\n");
 	return 0;
