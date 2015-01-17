@@ -286,7 +286,7 @@ static int dmem_insert_entry(struct dmem_hashbucket *bucket,
 	while (*link) {
 		parent = *link;
 		ientry = rb_entry(parent, struct dmem_entry, rbnode);
-		cmp = bucket->dmem->compare(&entry->key, &ientry->key);
+		cmp = bucket->dmem->compare(entry->key, ientry->key);
 		if (cmp < 0)
 			link = &(*link)->rb_left;
 		else if (cmp > 0)
@@ -319,7 +319,7 @@ static struct dmem_entry *dmem_search_entry(struct dmem_hashbucket *bucket,
 
 	while (node) {
 		entry = rb_entry(node, struct dmem_entry, rbnode);
-		cmp = bucket->dmem->compare(key, &entry->key);
+		cmp = bucket->dmem->compare(key, entry->key);
 		if (cmp < 0)
 			node = node->rb_left;
 		else if (cmp > 0)
@@ -407,7 +407,7 @@ static unsigned long dmem_evict_lru(struct dmem *dmem, unsigned long nr_pages)
 	struct dmem_entry *entry;
 	struct page *page, *n;
 	unsigned long evicted = 0;
-	void *key;
+	u8 key[dmem->sz_key];
 	LIST_HEAD(free_pages);
 
 	spin_lock(&dmem->lru_lock);
@@ -437,7 +437,7 @@ static unsigned long dmem_evict_lru(struct dmem *dmem, unsigned long nr_pages)
 		spin_lock(&buck->lock);
 		spin_lock(&dmem->lru_lock);
 		/* drop refcount increased by above loop */
-		memcpy(key, entry->key, dmem->sz_key);
+		memcpy(&key, entry->key, dmem->sz_key);
 		dmem_put(buck, entry);
 		/* free entry if the entry is still in tree */
 		if (dmem_search_entry(buck, &key))
@@ -549,11 +549,11 @@ int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 		kmem_cache_free(dmem_entry_cache, entry);
 		return -ENOMEM;
 	}
-	memcpy(key, &entry->key, dmem->sz_key);
+	memcpy(entry->key, key, dmem->sz_key);
 	atomic_set(&entry->refcount, 1);
 	RB_CLEAR_NODE(&entry->rbnode);
 
-	buck = dmem_find_hashbucket(dmem, pool, &entry->key);
+	buck = dmem_find_hashbucket(dmem, pool, entry->key);
 	set_dmem_hashbuck(gcma_page, buck);
 	set_dmem_entry(gcma_page, entry);
 
@@ -641,7 +641,7 @@ int dmem_invalidate_entry(struct dmem *dmem, unsigned pool_id, void *key)
 	buck = dmem_find_hashbucket(dmem, pool, key);
 
 	spin_lock(&buck->lock);
-	entry = dmem_search_entry(buck, &key);
+	entry = dmem_search_entry(buck, key);
 	if (!entry) {
 		spin_unlock(&buck->lock);
 		return -ENOENT;
@@ -847,18 +847,12 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	struct page *page, *n;
 	struct dmem_hashbucket *buck;
 	struct dmem_entry *entry;
-	void *key;
+	struct frontswap_dmem_key key;
 	unsigned long offset;
 	unsigned long *bitmap;
 	unsigned long pfn;
 	unsigned long orig_start = start_pfn;
 	spinlock_t *lru_lock;
-
-	key = (void *)(kmem_cache_alloc(fs_dmem.key_cache, GFP_NOIO));
-	if (!key) {
-		WARN(1, "%s: failed to alloc key\n", __func__);
-		return -ENOMEM;
-	}
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
@@ -930,10 +924,10 @@ next_page:
 		spin_lock(&buck->lock);
 		spin_lock(lru_lock);
 		/* drop refcount increased by above loop */
-		memcpy(key, &entry->key, dmem_hashbuck(page)->dmem->sz_key);
+		memcpy(&key, entry->key, dmem_hashbuck(page)->dmem->sz_key);
 		dmem_put(buck, entry);
 		/* free entry if the entry is still in tree */
-		if (dmem_search_entry(buck, key))
+		if (dmem_search_entry(buck, &key))
 			dmem_put(buck, entry);
 		spin_unlock(lru_lock);
 		spin_unlock(&buck->lock);
