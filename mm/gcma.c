@@ -21,14 +21,15 @@
 #include <linux/gcma.h>
 #include <linux/hash.h>
 
-#define DMEM_HASH_BUCKET_BITS	8
-#define NR_DMEM_HASH_BUCKETS	(1 << DMEM_HASH_BUCKET_BITS)
-#define BYTES_DMEM_KEY		(sizeof(pgoff_t) + \
-				sizeof(struct cleancache_filekey))
-
-#define BYTES_FS_DMEM_KEY	(sizeof(pgoff_t))
+#define BITS_FS_DMEM_HASH	8
+#define NR_FS_DMEM_HASH_BUCKS	(1 << BITS_FS_DMEM_HASH)
+#define BYTES_FS_DMEM_KEY	(sizeof(struct frontswap_dmem_key))
 
 #define MAX_CLEANCACHE_FS	16
+#define BITS_CC_DMEM_HASH	8
+#define NR_CC_DMEM_HASH_BUCKS	(1 << BITS_CC_DMEM_HASH)
+
+#define BYTES_CC_DMEM_KEY	(sizeof(struct cleancache_dmem_key))
 
 /* XXX: What's the ideal? */
 #define NR_EVICT_BATCH	32
@@ -100,8 +101,15 @@ struct frontswap_dmem_key {
 	pgoff_t key;
 };
 
+struct cleancache_dmem_key {
+	u8 key[sizeof(pgoff_t) + sizeof(struct cleancache_filekey)];
+};
+
 static struct kmem_cache *dmem_entry_cache;
 static struct dmem fs_dmem;	/* dmem for frontswap backend */
+
+static struct dmem cc_dmem;	/* dmem for cleancache backend */
+static atomic_t nr_cleancache_fses = ATOMIC_INIT(0);
 
 /* For statistics */
 static atomic_t gcma_fs_stored_pages = ATOMIC_INIT(0);
@@ -119,6 +127,7 @@ static atomic_t gcma_cc_reclaimed_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_pages = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_inodes = ATOMIC_INIT(0);
 static atomic_t gcma_cc_invalidated_fses = ATOMIC_INIT(0);
+static atomic_t gcma_cc_invalidate_fses_fail = ATOMIC_INIT(0);
 
 static unsigned long dmem_evict_lru(struct dmem *dmem, unsigned long nr_pages);
 
@@ -323,9 +332,11 @@ got:
 }
 
 /* Should be called from dmem_put only */
-static void dmem_free_entry(struct dmem_entry *entry)
+static void dmem_free_entry(struct dmem *dmem, struct dmem_entry *entry)
 {
 	gcma_free_page(entry->gcma, entry->page);
+	/* TODO: free entry->key */
+	kmem_cache_free(dmem->key_cache, entry->key);
 	kmem_cache_free(dmem_entry_cache, entry);
 }
 
@@ -352,7 +363,7 @@ static void dmem_put(struct dmem_hashbucket *buck,
 		dmem_erase_entry(buck, entry);
 		list_del(&page->lru);
 
-		dmem_free_entry(entry);
+		dmem_free_entry(buck->dmem, entry);
 	}
 }
 
@@ -427,13 +438,6 @@ static struct dmem_entry *dmem_find_get_entry(struct dmem_hashbucket *buck,
 	return entry;
 }
 
-/* TODO: cleancache only */
-unsigned int dmem_hash(void *key)
-{
-	unsigned long *k = (unsigned long *)key;
-	return hash_long(k[0] ^ k[1] ^ k[2], DMEM_HASH_BUCKET_BITS);
-}
-
 static struct dmem_hashbucket *dmem_find_hashbucket(struct dmem *dmem,
 							struct dmem_pool *pool,
 							void *key)
@@ -466,7 +470,7 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < NR_DMEM_HASH_BUCKETS; i++) {
+	for (i = 0; i < dmem->nr_hash; i++) {
 		buck = &pool->hashbuckets[i];
 		buck->rbroot = RB_ROOT;
 		buck->dmem = dmem;
@@ -732,10 +736,41 @@ static struct frontswap_ops gcma_frontswap_ops = {
 	.invalidate_area = gcma_frontswap_invalidate_area
 };
 
+
+static int cleancache_compare(void *lkey, void *rkey)
+{
+	/* Frontswap uses pgoff_t value as key */
+	return memcmp(lkey, rkey, BYTES_CC_DMEM_KEY);
+}
+
+unsigned int cleancache_hash_key(void *key)
+{
+	unsigned long *k = (unsigned long *)key;
+	return hash_long(k[0] ^ k[1] ^ k[2], BITS_CC_DMEM_HASH);
+}
+
+void cleancache_set_key(struct cleancache_filekey *fkey, pgoff_t *offset,
+			void *key)
+{
+	memcpy(key, offset, sizeof(pgoff_t));
+	memcpy(key + sizeof(pgoff_t), fkey, sizeof(struct cleancache_filekey));
+}
+
+
 /* Returns positive pool id or negative error code */
 int gcma_cleancache_init_fs(size_t pagesize)
 {
-	return -1;
+	int pool_id;
+
+	pool_id = atomic_inc_return(&nr_cleancache_fses) - 1;
+	pr_info("dbg: cc: create fs %d\n", pool_id);
+	if (pool_id >= MAX_CLEANCACHE_FS) {
+		WARN(1, "too many cleancache fs %d / %d\n",
+				pool_id, MAX_CLEANCACHE_FS);
+		return -1;
+	}
+
+	return dmem_init_pool(&cc_dmem, pool_id);
 }
 
 int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
@@ -743,22 +778,48 @@ int gcma_cleancache_init_shared_fs(char *uuid, size_t pagesize)
 	return -1;
 }
 
-int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey key,
-				pgoff_t pgoffset, struct page *page)
+int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey fkey,
+				pgoff_t offset, struct page *page)
 {
-	return -1;
+	struct cleancache_dmem_key key;
+	int ret;
+
+	cleancache_set_key(&fkey, &offset, &key);
+
+	ret = dmem_load_page(&cc_dmem, pool_id, &key, page);
+	if (ret == 0)
+		atomic_inc(&gcma_cc_loaded_pages);
+	return ret;
 }
 
-void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey key,
-				pgoff_t pgoffset, struct page *page)
+void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey fkey,
+				pgoff_t offset, struct page *page)
 {
+	struct cleancache_dmem_key key;
+
+	cleancache_set_key(&fkey, &offset, &key);
+
+	if (dmem_store_page(&cc_dmem, pool_id, &key, page) == 0)
+		atomic_inc(&gcma_cc_stored_pages);
 }
 
-void gcma_cleancache_invalidate_page(int pool_id, struct cleancache_filekey key,
-					pgoff_t pgoffset)
+void gcma_cleancache_invalidate_page(int pool_id,
+					struct cleancache_filekey fkey,
+					pgoff_t offset)
 {
+	struct cleancache_dmem_key key;
+
+	cleancache_set_key(&fkey, &offset, &key);
+
+	if (dmem_invalidate_entry(&cc_dmem, pool_id, &key) == 0)
+		atomic_inc(&gcma_cc_invalidated_pages);
+
 }
 
+/* TODO: implement
+ *
+ * The pages would be discarded by LRU policy, anyway.
+ */
 void gcma_cleancache_invalidate_inode(int pool_id,
 					struct cleancache_filekey key)
 {
@@ -766,6 +827,14 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 
 void gcma_cleancache_invalidate_fs(int pool_id)
 {
+	if (pool_id < 0 || pool_id >= atomic_read(&nr_cleancache_fses)) {
+		pr_warn("%s received wrong pool id %d\n",
+				__func__, pool_id);
+		atomic_inc(&gcma_cc_invalidate_fses_fail);
+		return;
+	}
+	if (dmem_invalidate_pool(&cc_dmem, pool_id) == 0)
+		atomic_inc(&gcma_cc_invalidated_fses);
 }
 
 struct cleancache_ops gcma_cleancache_ops = {
@@ -872,7 +941,7 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	struct page *page, *n;
 	struct dmem_hashbucket *buck;
 	struct dmem_entry *entry;
-	struct frontswap_dmem_key key;
+	struct cleancache_dmem_key key;	/* cc key is larger than fs's */
 	unsigned long offset;
 	unsigned long *bitmap;
 	unsigned long pfn;
@@ -1025,6 +1094,8 @@ static int __init gcma_debugfs_init(void)
 			gcma_debugfs_root, &gcma_cc_invalidated_inodes);
 	debugfs_create_atomic_t("cc_invalidated_fses", S_IRUGO,
 			gcma_debugfs_root, &gcma_cc_invalidated_fses);
+	debugfs_create_atomic_t("cc_invalidate_fses_fail", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_invalidate_fses_fail);
 
 	pr_info("gcma debufs init\n");
 	return 0;
@@ -1036,19 +1107,23 @@ static int __init gcma_debugfs_init(void)
 }
 #endif
 
-
 static int __init init_gcma(void)
 {
 	pr_info("loading gcma\n");
 
+	dmem_entry_cache = KMEM_CACHE(dmem_entry, 0);
+	if (dmem_entry_cache == NULL)
+		return -ENOMEM;
+
+	/* TODO: split dmem initialization into a factory function */
 	fs_dmem.bytes_key = BYTES_FS_DMEM_KEY;
 	fs_dmem.nr_pools = MAX_SWAPFILES;
-	fs_dmem.nr_hash = NR_DMEM_HASH_BUCKETS;
+	fs_dmem.nr_hash = NR_FS_DMEM_HASH_BUCKS;
 
 	fs_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * fs_dmem.nr_pools,
 				GFP_KERNEL);
 	if (!fs_dmem.pools) {
-		pr_warn("failed to allocate pools\n");
+		pr_warn("failed to allocate frontswap dmem pools\n");
 		return -ENOMEM;
 	}
 	spin_lock_init(&fs_dmem.lru_lock);
@@ -1059,10 +1134,6 @@ static int __init init_gcma(void)
 	fs_dmem.hash_key = frontswap_hash_key;
 	fs_dmem.compare = frontswap_compare;
 
-	dmem_entry_cache = KMEM_CACHE(dmem_entry, 0);
-	if (dmem_entry_cache == NULL)
-		return -ENOMEM;
-
 	/*
 	 * By writethough mode, GCMA could discard all of pages in an instant
 	 * instead of slow writing pages out to the swap device.
@@ -1070,6 +1141,23 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+	cc_dmem.bytes_key = BYTES_CC_DMEM_KEY;
+	cc_dmem.nr_pools = MAX_CLEANCACHE_FS;
+	cc_dmem.nr_hash = NR_CC_DMEM_HASH_BUCKS;
+
+	cc_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * cc_dmem.nr_pools,
+				GFP_KERNEL);
+	if (!cc_dmem.pools) {
+		pr_warn("failed to allocate cleancache dmem pools\n");
+		return -ENOMEM;
+	}
+	spin_lock_init(&cc_dmem.lru_lock);
+	INIT_LIST_HEAD(&cc_dmem.lru_list);
+
+	cc_dmem.key_cache = KMEM_CACHE(cleancache_dmem_key, 0);
+
+	cc_dmem.hash_key = cleancache_hash_key;
+	cc_dmem.compare = cleancache_compare;
 	cleancache_register_ops(&gcma_cleancache_ops);
 
 	gcma_debugfs_init();
