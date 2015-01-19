@@ -200,7 +200,9 @@ static struct page *gcma_alloc_page(struct gcma *gcma)
 	unsigned long bit;
 	unsigned long *bitmap = gcma->bitmap;
 	struct page *page = NULL;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	spin_lock(&gcma->lock);
 	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
 	if (bit >= gcma->size) {
@@ -214,6 +216,7 @@ static struct page *gcma_alloc_page(struct gcma *gcma)
 	clear_gpage_flagall(page);
 
 out:
+	local_irq_restore(flags);
 	return page;
 }
 
@@ -221,9 +224,11 @@ out:
 static void gcma_free_page(struct gcma *gcma, struct page *page)
 {
 	unsigned long pfn, offset;
+	unsigned long flags;
 
 	pfn = page_to_pfn(page);
 
+	local_irq_save(flags);
 	spin_lock(&gcma->lock);
 	offset = pfn - gcma->base_pfn;
 
@@ -240,6 +245,7 @@ static void gcma_free_page(struct gcma *gcma, struct page *page)
 		set_gpage_flag(page, GF_ISOLATED);
 	}
 	spin_unlock(&gcma->lock);
+	local_irq_restore(flags);
 }
 
 /*
@@ -306,7 +312,9 @@ static struct page *dmem_alloc_page(struct dmem *dmem, struct gcma **res_gcma)
 {
 	struct page *page;
 	struct gcma *gcma;
+	unsigned long flags;
 
+	local_irq_save(flags);
 retry:
 	spin_lock(&ginfo.lock);
 	gcma = list_first_entry(&ginfo.head, struct gcma, list);
@@ -327,6 +335,7 @@ retry:
 		goto retry;
 
 got:
+	local_irq_restore(flags);
 	*res_gcma = gcma;
 	return page;
 }
@@ -783,10 +792,13 @@ int gcma_cleancache_get_page(int pool_id, struct cleancache_filekey fkey,
 {
 	struct cleancache_dmem_key key;
 	int ret;
+	unsigned long flags;
 
 	cleancache_set_key(&fkey, &offset, &key);
 
+	local_irq_save(flags);
 	ret = dmem_load_page(&cc_dmem, pool_id, &key, page);
+	local_irq_restore(flags);
 	if (ret == 0)
 		atomic_inc(&gcma_cc_loaded_pages);
 	return ret;
@@ -796,11 +808,14 @@ void gcma_cleancache_put_page(int pool_id, struct cleancache_filekey fkey,
 				pgoff_t offset, struct page *page)
 {
 	struct cleancache_dmem_key key;
+	unsigned long flags;
 
 	cleancache_set_key(&fkey, &offset, &key);
 
+	local_irq_save(flags);
 	if (dmem_store_page(&cc_dmem, pool_id, &key, page) == 0)
 		atomic_inc(&gcma_cc_stored_pages);
+	local_irq_restore(flags);
 }
 
 void gcma_cleancache_invalidate_page(int pool_id,
@@ -808,12 +823,14 @@ void gcma_cleancache_invalidate_page(int pool_id,
 					pgoff_t offset)
 {
 	struct cleancache_dmem_key key;
+	unsigned long flags;
 
 	cleancache_set_key(&fkey, &offset, &key);
 
+	local_irq_save(flags);
 	if (dmem_invalidate_entry(&cc_dmem, pool_id, &key) == 0)
 		atomic_inc(&gcma_cc_invalidated_pages);
-
+	local_irq_restore(flags);
 }
 
 /* TODO: implement
@@ -827,14 +844,18 @@ void gcma_cleancache_invalidate_inode(int pool_id,
 
 void gcma_cleancache_invalidate_fs(int pool_id)
 {
+	unsigned long flags;
+
 	if (pool_id < 0 || pool_id >= atomic_read(&nr_cleancache_fses)) {
 		pr_warn("%s received wrong pool id %d\n",
 				__func__, pool_id);
 		atomic_inc(&gcma_cc_invalidate_fses_fail);
 		return;
 	}
+	local_irq_save(flags);
 	if (dmem_invalidate_pool(&cc_dmem, pool_id) == 0)
 		atomic_inc(&gcma_cc_invalidated_fses);
+	local_irq_restore(flags);
 }
 
 struct cleancache_ops gcma_cleancache_ops = {
@@ -861,6 +882,7 @@ int gcma_init(unsigned long start_pfn, unsigned long size,
 {
 	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
 	struct gcma *gcma;
+	unsigned long flags;
 
 	gcma = kmalloc(sizeof(*gcma), GFP_KERNEL);
 	if (!gcma)
@@ -874,9 +896,11 @@ int gcma_init(unsigned long start_pfn, unsigned long size,
 	gcma->base_pfn = start_pfn;
 	spin_lock_init(&gcma->lock);
 
+	local_irq_save(flags);
 	spin_lock(&ginfo.lock);
 	list_add(&gcma->list, &ginfo.head);
 	spin_unlock(&ginfo.lock);
+	local_irq_restore(flags);
 
 	*res_gcma = gcma;
 	pr_info("initialized gcma area [%lu, %lu]\n",
@@ -900,7 +924,9 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 	unsigned long *bitmap;
 	unsigned long pfn, ret = 0;
 	struct page *page;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	spin_lock(&gcma->lock);
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
@@ -923,6 +949,7 @@ static unsigned long isolate_interrupted(struct gcma *gcma,
 
 	}
 	spin_unlock(&gcma->lock);
+	local_irq_restore(flags);
 	return ret;
 }
 
@@ -947,9 +974,11 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 	unsigned long pfn;
 	unsigned long orig_start = start_pfn;
 	spinlock_t *lru_lock;
+	unsigned long flags = 0;
 
 retry:
 	for (pfn = start_pfn; pfn < start_pfn + size; pfn++) {
+		local_irq_save(flags);
 		spin_lock(&gcma->lock);
 
 		offset = pfn - gcma->base_pfn;
@@ -961,17 +990,21 @@ retry:
 			bitmap_set(gcma->bitmap, offset, 1);
 			set_gpage_flag(page, GF_ISOLATED);
 			spin_unlock(&gcma->lock);
+			local_irq_restore(flags);
 			continue;
 		}
 		if (gpage_flag(page, GF_ISOLATED)) {
 			spin_unlock(&gcma->lock);
+			local_irq_restore(flags);
 			continue;
 		}
 
 		/* Someone is using the page so it's complicated :( */
 		spin_unlock(&gcma->lock);
+		local_irq_restore(flags);
 
 		lru_lock = &dmem_hashbuck(page)->dmem->lru_lock;
+		local_irq_save(flags);
 		spin_lock(lru_lock);
 		spin_lock(&gcma->lock);
 
@@ -1004,6 +1037,7 @@ retry:
 next_page:
 		spin_unlock(&gcma->lock);
 		spin_unlock(lru_lock);
+		local_irq_restore(flags);
 	}
 
 	/*
@@ -1015,6 +1049,8 @@ next_page:
 		entry = dmem_entry(page);
 		lru_lock = &dmem_hashbuck(page)->dmem->lru_lock;
 
+		if (lru_lock == &cc_dmem.lru_lock)
+			local_irq_save(flags);
 		spin_lock(&buck->lock);
 		spin_lock(lru_lock);
 		/* drop refcount increased by above loop */
@@ -1025,6 +1061,9 @@ next_page:
 			dmem_put(buck, entry);
 		spin_unlock(lru_lock);
 		spin_unlock(&buck->lock);
+		if (lru_lock == &cc_dmem.lru_lock)
+			local_irq_restore(flags);
+
 	}
 
 	start_pfn = isolate_interrupted(gcma, orig_start, orig_start + size);
@@ -1044,11 +1083,14 @@ void gcma_free_contig(struct gcma *gcma,
 			unsigned long start_pfn, unsigned long size)
 {
 	unsigned long offset;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	spin_lock(&gcma->lock);
 	offset = start_pfn - gcma->base_pfn;
 	bitmap_clear(gcma->bitmap, offset, size);
 	spin_unlock(&gcma->lock);
+	local_irq_restore(flags);
 }
 
 #ifdef CONFIG_DEBUG_FS
