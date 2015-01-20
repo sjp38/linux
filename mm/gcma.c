@@ -1152,6 +1152,8 @@ static int __init gcma_debugfs_init(void)
 	debugfs_create_atomic_t("fs_invalidated_areas", S_IRUGO,
 			gcma_debugfs_root, &gcma_fs_invalidated_areas);
 
+	debugfs_create_atomic_t("cc_inits", S_IRUGO,
+			gcma_debugfs_root, &gcma_cc_inits);
 	debugfs_create_atomic_t("cc_stored_pages", S_IRUGO,
 			gcma_debugfs_root, &gcma_cc_stored_pages);
 	debugfs_create_atomic_t("cc_loaded_pages", S_IRUGO,
