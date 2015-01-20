@@ -516,7 +516,7 @@ int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 	if (!gcma_page)
 		return -ENOMEM;
 
-	entry = kmem_cache_alloc(dmem_entry_cache, GFP_NOIO);
+	entry = kmem_cache_alloc(dmem_entry_cache, GFP_ATOMIC);
 	if (!entry) {
 		spin_lock(&dmem->lru_lock);
 		gcma_free_page(gcma, gcma_page);
@@ -526,7 +526,7 @@ int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 
 	entry->gcma = gcma;
 	entry->page = gcma_page;
-	entry->key = kmem_cache_alloc(dmem->key_cache, GFP_NOIO);
+	entry->key = kmem_cache_alloc(dmem->key_cache, GFP_ATOMIC);
 	if (!entry->key) {
 		spin_lock(&dmem->lru_lock);
 		gcma_free_page(gcma, gcma_page);
