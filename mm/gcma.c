@@ -311,6 +311,7 @@ static struct page *dmem_alloc_page(struct dmem *dmem, struct gcma **res_gcma)
 {
 	struct page *page;
 	struct gcma *gcma;
+	unsigned long evicted;
 	unsigned long flags;
 
 	local_irq_save(flags);
@@ -328,10 +329,11 @@ retry:
 	}
 	spin_unlock(&ginfo.lock);
 
-	/* TODO: evict both frontswap and cleancache
-	 * Failed to alloc a page from entire gcma. Evict adequate LRU
+	/* Failed to alloc a page from entire gcma. Evict adequate LRU
 	 * discardable pages and try allocation again */
-	if (dmem_evict_lru(dmem, NR_EVICT_BATCH))
+	evicted = dmem_evict_lru(&cc_dmem, NR_EVICT_BATCH) +
+			dmem_evict_lru(&fs_dmem, NR_EVICT_BATCH);
+	if (evicted > 0)
 		goto retry;
 
 got:
