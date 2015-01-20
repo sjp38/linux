@@ -686,8 +686,6 @@ int dmem_invalidate_pool(struct dmem *dmem, unsigned pool_id)
 		spin_lock(&buck->lock);
 		rbtree_postorder_for_each_entry_safe(entry, n, &buck->rbroot,
 				rbnode) {
-			/* TODO: unnecessary erase? */
-			dmem_erase_entry(buck, entry);
 			spin_lock(&dmem->lru_lock);
 			dmem_put(buck, entry);
 			spin_unlock(&dmem->lru_lock);
