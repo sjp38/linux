@@ -332,7 +332,8 @@ retry:
 	}
 	spin_unlock(&ginfo.lock);
 
-	/* Failed to alloc a page from entire gcma. Evict adequate LRU
+	/* TODO: evict both frontswap and cleancache
+	 * Failed to alloc a page from entire gcma. Evict adequate LRU
 	 * discardable pages and try allocation again */
 	if (dmem_evict_lru(dmem, NR_EVICT_BATCH))
 		goto retry;
