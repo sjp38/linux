@@ -484,6 +484,22 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 		buck->rbroot = RB_ROOT;
 		buck->dmem = dmem;
 		spin_lock_init(&buck->lock);
+
+		/*
+		 * Because lockdep recognize lock class using spin_lock_init
+		 * calling position, bucket lock of dmem for frontswap and
+		 * cleancache be treated as same class.
+		 * Because cleancache have dependency with softirq safe lock
+		 * while frontswap doesn't, it causes false irq lock inversion
+		 * dependency report from lockdep.
+		 * Avoid the situation using ugly, simple hack.
+		 *
+		 * TODO: better solution?
+		 */
+		if (dmem == &fs_dmem)
+			spin_lock_init(&buck->lock);
+		else
+			spin_lock_init(&buck->lock);
 	}
 
 	dmem->pools[pool_id] = pool;
