@@ -328,9 +328,10 @@ retry:
 	}
 	spin_unlock(&ginfo.lock);
 
-	/* TODO: evict both frontswap and cleancache
+	/*
 	 * Failed to alloc a page from entire gcma. Evict adequate LRU
-	 * discardable pages and try allocation again */
+	 * discardable pages and try allocation again.
+	 */
 	if (dmem_evict_lru(dmem, NR_EVICT_BATCH))
 		goto retry;
 
@@ -789,7 +790,6 @@ int gcma_cleancache_init_fs(size_t pagesize)
 	int pool_id;
 
 	pool_id = atomic_inc_return(&nr_cleancache_fses) - 1;
-	pr_info("dbg: cc: create fs %d\n", pool_id);
 	if (pool_id >= MAX_CLEANCACHE_FS) {
 		WARN(1, "too many cleancache fs %d / %d\n",
 				pool_id, MAX_CLEANCACHE_FS);
@@ -1050,7 +1050,7 @@ retry:
 		 * 1) allocated by others but not yet in LRU in case of
 		 *    frontswap_store or
 		 * 2) deleted from LRU but not yet from gcma's bitmap in case
-		 *    of frontswap_invalidate or evict_frontswap_pages.
+		 *    of dmem_invalidate or dmem_evict_lru.
 		 * Anycase, the race is small so retry after a while will see
 		 * success. Below isolate_interrupted handles it.
 		 */
@@ -1184,21 +1184,22 @@ static int __init init_gcma(void)
 	if (dmem_entry_cache == NULL)
 		return -ENOMEM;
 
-	/* TODO: split dmem initialization into a factory function */
-	fs_dmem.bytes_key = BYTES_FS_DMEM_KEY;
 	fs_dmem.nr_pools = MAX_SWAPFILES;
-	fs_dmem.nr_hash = NR_FS_DMEM_HASH_BUCKS;
-
 	fs_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * fs_dmem.nr_pools,
 				GFP_KERNEL);
 	if (!fs_dmem.pools) {
 		pr_warn("failed to allocate frontswap dmem pools\n");
 		return -ENOMEM;
 	}
-	spin_lock_init(&fs_dmem.lru_lock);
-	INIT_LIST_HEAD(&fs_dmem.lru_list);
 
+	fs_dmem.nr_hash = NR_FS_DMEM_HASH_BUCKS;
 	fs_dmem.key_cache = KMEM_CACHE(frontswap_dmem_key, 0);
+	if (!fs_dmem.key_cache)
+		return -ENOMEM;
+	fs_dmem.bytes_key = BYTES_FS_DMEM_KEY;
+
+	INIT_LIST_HEAD(&fs_dmem.lru_list);
+	spin_lock_init(&fs_dmem.lru_lock);
 
 	fs_dmem.hash_key = frontswap_hash_key;
 	fs_dmem.compare = frontswap_compare;
@@ -1210,20 +1211,21 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
-	cc_dmem.bytes_key = BYTES_CC_DMEM_KEY;
 	cc_dmem.nr_pools = MAX_CLEANCACHE_FS;
-	cc_dmem.nr_hash = NR_CC_DMEM_HASH_BUCKS;
-
 	cc_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * cc_dmem.nr_pools,
 				GFP_KERNEL);
 	if (!cc_dmem.pools) {
 		pr_warn("failed to allocate cleancache dmem pools\n");
 		return -ENOMEM;
 	}
-	spin_lock_init(&cc_dmem.lru_lock);
-	INIT_LIST_HEAD(&cc_dmem.lru_list);
-
+	cc_dmem.nr_hash = NR_CC_DMEM_HASH_BUCKS;
 	cc_dmem.key_cache = KMEM_CACHE(cleancache_dmem_key, 0);
+	if (!cc_dmem.key_cache)
+		return -ENOMEM;
+	cc_dmem.bytes_key = BYTES_CC_DMEM_KEY;
+
+	INIT_LIST_HEAD(&cc_dmem.lru_list);
+	spin_lock_init(&cc_dmem.lru_lock);
 
 	cc_dmem.hash_key = cleancache_hash_key;
 	cc_dmem.compare = cleancache_compare;
