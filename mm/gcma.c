@@ -52,16 +52,14 @@ static struct gcma_info ginfo = {
 };
 
 /*
- * TODO: Better naming sense rather than dmem, maybe?
- *
- * Discardable memory is a key-value storage.
- *
- * It store pages for second-class clients of gcma. Those pages should be
- * easily discardable when 1st-class client(contgiuous memory allocation
- * request) wants.
+ * Discardable memory(dmem) is a storage for easily discardable pages being
+ * used by gcma second-class clients. Those pages enhance system memory space
+ * efficiency by utilizing gcma area. Also, because those pages could be
+ * discarded easily, gcma can guarantee both success and fast latency to
+ * first-class client's request(contiguous memory allocation, of course)s.
  */
 
-/* TODO: Configurable discard mechanism */
+/* entry for a discardable page */
 struct dmem_entry {
 	struct rb_node rbnode;
 	struct gcma *gcma;
@@ -70,16 +68,14 @@ struct dmem_entry {
 	atomic_t refcount;
 };
 
-/* discardable memory hash bucket */
+/* dmem hash bucket */
 struct dmem_hashbucket {
 	struct dmem *dmem;
 	struct rb_root rbroot;
 	spinlock_t lock;
 };
 
-/*
- * Discardable memory pool
- */
+/* dmem pool */
 struct dmem_pool {
 	struct dmem_hashbucket *hashbuckets;
 };
@@ -158,8 +154,8 @@ static void set_dmem_entry(struct page *page, struct dmem_entry *entry)
  * Flags for status of a page in gcma
  *
  * GF_LRU
- * The page is being used for dmem and hang on LRU list.
- * It could be discarded for contiguous memory allocation anytime.
+ * The page is being used for dmem and hang on LRU list of the dmem.
+ * It could be discarded for contiguous memory allocation easily.
  * Protected by lru_lock.
  *
  * GF_RECLAIMING
@@ -348,7 +344,6 @@ got:
 static void dmem_free_entry(struct dmem *dmem, struct dmem_entry *entry)
 {
 	gcma_free_page(entry->gcma, entry->page);
-	/* TODO: free entry->key */
 	kmem_cache_free(dmem->key_cache, entry->key);
 	kmem_cache_free(dmem_entry_cache, entry);
 }
@@ -493,8 +488,8 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 		spin_lock_init(&buck->lock);
 
 		/*
-		 * Because lockdep recognize lock class using spin_lock_init
-		 * calling position, bucket lock of dmem for frontswap and
+		 * Because lockdep recognizes lock class using lock
+		 * initialization point, bucket lock of dmem for frontswap and
 		 * cleancache be treated as same class.
 		 * Because cleancache have dependency with softirq safe lock
 		 * while frontswap doesn't, it causes false irq lock inversion
