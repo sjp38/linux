@@ -108,6 +108,13 @@ static struct dmem fs_dmem;	/* dmem for frontswap backend */
 static struct dmem cc_dmem;	/* dmem for cleancache backend */
 static atomic_t nr_cleancache_fses = ATOMIC_INIT(0);
 
+/* configs from kernel parameter */
+static bool fs_disabled __read_mostly;
+module_param_named(fs_disabled, fs_disabled, bool, 0444);
+
+static bool cc_disabled __read_mostly;
+module_param_named(cc_disabled, cc_disabled, bool, 0444);
+
 /* For statistics */
 static atomic_t gcma_fs_inits = ATOMIC_INIT(0);
 static atomic_t gcma_fs_stored_pages = ATOMIC_INIT(0);
@@ -1184,6 +1191,10 @@ static int __init init_gcma(void)
 	if (dmem_entry_cache == NULL)
 		return -ENOMEM;
 
+	if (fs_disabled) {
+		pr_info("gcma frontswap is disabled. skip it\n");
+		goto init_cleancache;
+	}
 	fs_dmem.nr_pools = MAX_SWAPFILES;
 	fs_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * fs_dmem.nr_pools,
 				GFP_KERNEL);
@@ -1211,6 +1222,11 @@ static int __init init_gcma(void)
 	frontswap_writethrough(true);
 	frontswap_register_ops(&gcma_frontswap_ops);
 
+init_cleancache:
+	if (cc_disabled) {
+		pr_info("gcma cleancache is disabled. skip it\n");
+		goto init_debugfs;
+	}
 	cc_dmem.nr_pools = MAX_CLEANCACHE_FS;
 	cc_dmem.pools = kzalloc(sizeof(struct dmem_pool *) * cc_dmem.nr_pools,
 				GFP_KERNEL);
@@ -1231,6 +1247,7 @@ static int __init init_gcma(void)
 	cc_dmem.compare = cleancache_compare;
 	cleancache_register_ops(&gcma_cleancache_ops);
 
+init_debugfs:
 	gcma_debugfs_init();
 	return 0;
 }
