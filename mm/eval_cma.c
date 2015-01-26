@@ -452,10 +452,9 @@ static ssize_t eval_res_read(struct file *filp, char __user *buf,
 			length--;
 			bytes_read++;
 		}
-
-		*offset += bytes_read;
 	}
 
+	*offset += bytes_read;
 	return bytes_read;
 }
 
@@ -474,11 +473,11 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 	char kbuf[256];
 	char *cursor = kbuf;
 	int bytes_read = 0;
+	loff_t skipping = 0;
+	loff_t line_len = 0;
 
 	pr_info("%s called. length: %d, offset: %d\n",
 			__func__, (int)length, (int)*offset);
-	if (*offset > 0)
-		return 0;
 
 	list_for_each_entry(result, &eval_result_list, node) {
 		list_for_each_entry(stat, &result->stats, node) {
@@ -488,17 +487,27 @@ static ssize_t eval_res_hist_read(struct file *filp, char __user *buf,
 					stat->nr_release,
 					stat->nr_reclaim, stat->nr_migrate);
 
-			cursor = kbuf;
+			if (*offset > 0) {
+				line_len = strlen(kbuf);
+				skipping += line_len;
+				if (skipping < *offset)
+					continue;
+				else
+					cursor = kbuf + (*offset + line_len -
+							skipping);
+			} else {
+				cursor = kbuf;
+			}
 			while (length && *cursor) {
 				put_user(*(cursor++), buf++);
 
 				length--;
 				bytes_read++;
 			}
-			*offset += bytes_read;
 		}
 	}
 
+	*offset += bytes_read;
 	return bytes_read;
 }
 
