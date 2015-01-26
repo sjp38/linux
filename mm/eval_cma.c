@@ -121,9 +121,7 @@ static unsigned long ns_to_us(unsigned long nsecs)
 
 static unsigned long time_diff(struct timespec *start, struct timespec *end)
 {
-	return (end->tv_sec >= start->tv_sec) ?
-		end->tv_nsec - start->tv_nsec :
-		1000000000 - (start->tv_nsec - end->tv_nsec);
+	return timespec_to_ns(end) - timespec_to_ns(start);
 }
 
 /**
