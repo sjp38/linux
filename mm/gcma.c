@@ -3,33 +3,40 @@
  *
  * GCMA aims for contiguous memory allocation with success and fast
  * latency guarantee.
- * It reserves large amount of memory and let it be allocated to the
- * contiguous memory request and utilize as swap cache using frontswap.
+ * It reserves large amount of memory during early boot and let it be used for
+ * following requests:
+ * 1) contiguous memory requests and
+ * 2) discontiguous, easily discardable memory reqeusts from frontswap and
+ *    cleancache.
+ *
+ * GCMA enhances system memory space efficiency with 2) and guarantees both
+ * success and fast latency of 1) by discarding pages being used for 2) if
+ * 1) requires.
  *
  * Copyright (C) 2014  LG Electronics Inc.,
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
- * Copyright (C) 2014  SeongJae Park <sj38.park@gmail.com>
+ * Copyright (C) 2014-2015  SeongJae Park <sj38.park@gmail.com>
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/module.h>
-#include <linux/slab.h>
 #include <linux/cleancache.h>
 #include <linux/frontswap.h>
-#include <linux/highmem.h>
 #include <linux/gcma.h>
 #include <linux/hash.h>
+#include <linux/highmem.h>
+#include <linux/module.h>
+#include <linux/slab.h>
 
 #define BITS_FS_DMEM_HASH	8
 #define NR_FS_DMEM_HASH_BUCKS	(1 << BITS_FS_DMEM_HASH)
 #define BYTES_FS_DMEM_KEY	(sizeof(struct frontswap_dmem_key))
 
-#define MAX_CLEANCACHE_FS	16
 #define BITS_CC_DMEM_HASH	8
 #define NR_CC_DMEM_HASH_BUCKS	(1 << BITS_CC_DMEM_HASH)
-
 #define BYTES_CC_DMEM_KEY	(sizeof(struct cleancache_dmem_key))
+#define MAX_CLEANCACHE_FS	16
+
 
 /* XXX: What's the ideal? */
 #define NR_EVICT_BATCH	32
@@ -52,11 +59,11 @@ static struct gcma_info ginfo = {
 };
 
 /*
- * Discardable memory(dmem) is a storage for easily discardable pages being
- * used by gcma second-class clients. Those pages enhance system memory space
- * efficiency by utilizing gcma area. Also, because those pages could be
- * discarded easily, gcma can guarantee both success and fast latency to
- * first-class client's request(contiguous memory allocation, of course)s.
+ * Discardable memory(dmem) is a storage in gcma which stores easily
+ * discardable pages being used by gcma second-class clients. It enhances
+ * system memory space efficiency by utilizing gcma area and helps guaranteeing
+ * both success / fast latency to first-class client(contig memory allocation,
+ * of course) by discarding pages in it when the first-class client needs them.
  */
 
 /* entry for a discardable page */
@@ -161,18 +168,18 @@ static void set_dmem_entry(struct page *page, struct dmem_entry *entry)
  * Flags for status of a page in gcma
  *
  * GF_LRU
- * The page is being used for dmem and hang on LRU list of the dmem.
+ * The page is being used for a dmem and hang on LRU list of the dmem.
  * It could be discarded for contiguous memory allocation easily.
  * Protected by lru_lock.
  *
  * GF_RECLAIMING
  * The page is being discarded for contiguous memory allocation.
- * It should not be used by dmem anymore.
+ * It should not be used for dmem anymore.
  * Protected by lru_lock.
  *
  * GF_ISOLATED
  * The page is isolated from dmem.
- * GCMA guests can use the page safely while dmem should not.
+ * GCMA clients can use the page safely while dmem should not.
  * Protected by gcma->lock.
  */
 enum gpage_flags {
@@ -263,19 +270,19 @@ static int dmem_insert_entry(struct dmem_hashbucket *bucket,
 		struct dmem_entry **dupentry)
 {
 	struct rb_node **link = &bucket->rbroot.rb_node, *parent = NULL;
-	struct dmem_entry *ientry;
+	struct dmem_entry *iter;
 	int cmp;
 
 	while (*link) {
 		parent = *link;
-		ientry = rb_entry(parent, struct dmem_entry, rbnode);
-		cmp = bucket->dmem->compare(entry->key, ientry->key);
+		iter = rb_entry(parent, struct dmem_entry, rbnode);
+		cmp = bucket->dmem->compare(entry->key, iter->key);
 		if (cmp < 0)
 			link = &(*link)->rb_left;
 		else if (cmp > 0)
 			link = &(*link)->rb_right;
 		else {
-			*dupentry = ientry;
+			*dupentry = iter;
 			return -EEXIST;
 		}
 	}
@@ -297,18 +304,18 @@ static struct dmem_entry *dmem_search_entry(struct dmem_hashbucket *bucket,
 		void *key)
 {
 	struct rb_node *node = bucket->rbroot.rb_node;
-	struct dmem_entry *entry;
+	struct dmem_entry *iter;
 	int cmp;
 
 	while (node) {
-		entry = rb_entry(node, struct dmem_entry, rbnode);
-		cmp = bucket->dmem->compare(key, entry->key);
+		iter = rb_entry(node, struct dmem_entry, rbnode);
+		cmp = bucket->dmem->compare(key, iter->key);
 		if (cmp < 0)
 			node = node->rb_left;
 		else if (cmp > 0)
 			node = node->rb_right;
 		else
-			return entry;
+			return iter;
 	}
 	return NULL;
 }
@@ -370,7 +377,6 @@ static void dmem_put(struct dmem_hashbucket *buck,
 				struct dmem_entry *entry)
 {
 	int refcount = atomic_dec_return(&entry->refcount);
-
 	BUG_ON(refcount < 0);
 
 	if (refcount == 0) {
@@ -378,7 +384,6 @@ static void dmem_put(struct dmem_hashbucket *buck,
 
 		dmem_erase_entry(buck, entry);
 		list_del(&page->lru);
-
 		dmem_free_entry(buck->dmem, entry);
 	}
 }
@@ -476,7 +481,8 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 
 	pool = kzalloc(sizeof(struct dmem_pool), GFP_KERNEL);
 	if (!pool) {
-		pr_warn("failed to alloc dmem pool %d\n", pool_id);
+		pr_warn("%s: failed to alloc dmem pool %d\n",
+				__func__, pool_id);
 		return -ENOMEM;
 	}
 
@@ -484,15 +490,15 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 				sizeof(struct dmem_hashbucket) * dmem->nr_hash,
 				GFP_KERNEL);
 	if (!pool) {
-		pr_warn("failed to alloc hashbuckets\n");
+		pr_warn("%s: failed to alloc hashbuckets\n", __func__);
 		kfree(pool);
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < dmem->nr_hash; i++) {
 		buck = &pool->hashbuckets[i];
-		buck->rbroot = RB_ROOT;
 		buck->dmem = dmem;
+		buck->rbroot = RB_ROOT;
 		spin_lock_init(&buck->lock);
 
 		/*
@@ -503,8 +509,6 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 		 * while frontswap doesn't, it causes false irq lock inversion
 		 * dependency report from lockdep.
 		 * Avoid the situation using ugly, simple hack.
-		 *
-		 * TODO: better solution?
 		 */
 		if (dmem == &fs_dmem)
 			spin_lock_init(&buck->lock);
@@ -523,18 +527,19 @@ int dmem_init_pool(struct dmem *dmem, unsigned pool_id)
 int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 			struct page *page)
 {
+	struct dmem_pool *pool;
+	struct dmem_hashbucket *buck;
 	struct dmem_entry *entry, *dupentry;
 	struct gcma *gcma;
 	struct page *gcma_page = NULL;
-	struct dmem_pool *pool;
-	struct dmem_hashbucket *buck;
 
 	u8 *src, *dst;
 	int ret;
 
 	pool = dmem->pools[pool_id];
 	if (!pool) {
-		WARN(1, "dmem pool for id %d is not exist\n", pool_id);
+		pr_warn("%s: dmem pool for id %d is not exist\n",
+				__func__, pool_id);
 		return -ENODEV;
 	}
 
@@ -568,7 +573,7 @@ int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 	set_dmem_hashbuck(gcma_page, buck);
 	set_dmem_entry(gcma_page, entry);
 
-	/* copy from orig data to gcma-page */
+	/* copy from orig data to gcma_page */
 	src = kmap_atomic(page);
 	dst = kmap_atomic(gcma_page);
 	memcpy(dst, src, PAGE_SIZE);
@@ -579,9 +584,9 @@ int dmem_store_page(struct dmem *dmem, unsigned pool_id, void *key,
 	do {
 		/*
 		 * Though this duplication scenario may happen rarely by
-		 * race of swap layer, we handle this case here rather
-		 * than fix swap layer because handling the possibility of
-		 * duplicates is part of the tmem ABI.
+		 * race of dmem client layer, we handle this case here rather
+		 * than fix the client layer because handling the possibility
+		 * of duplicates is part of the tmem ABI.
 		 */
 		ret = dmem_insert_entry(buck, entry, &dupentry);
 		if (ret == -EEXIST) {
@@ -616,7 +621,7 @@ int dmem_load_page(struct dmem *dmem, unsigned pool_id, void *key,
 
 	pool = dmem->pools[pool_id];
 	if (!pool) {
-		WARN(1, "dmem pool for id %d not exist\n", pool_id);
+		pr_warn("dmem pool for id %d not exist\n", pool_id);
 		return -1;
 	}
 
@@ -693,7 +698,7 @@ int dmem_invalidate_pool(struct dmem *dmem, unsigned pool_id)
 		buck = &pool->hashbuckets[i];
 		spin_lock(&buck->lock);
 		rbtree_postorder_for_each_entry_safe(entry, n, &buck->rbroot,
-				rbnode) {
+							rbnode) {
 			spin_lock(&dmem->lru_lock);
 			dmem_put(buck, entry);
 			spin_unlock(&dmem->lru_lock);
@@ -709,9 +714,9 @@ int dmem_invalidate_pool(struct dmem *dmem, unsigned pool_id)
 	return 0;
 }
 
+
 static int frontswap_compare(void *lkey, void *rkey)
 {
-	/* Frontswap uses pgoff_t value as key */
 	return *(pgoff_t *)lkey - *(pgoff_t *)rkey;
 }
 
@@ -784,7 +789,7 @@ static unsigned int cleancache_hash_key(void *key)
 }
 
 static void cleancache_set_key(struct cleancache_filekey *fkey, pgoff_t *offset,
-			void *key)
+				void *key)
 {
 	memcpy(key, offset, sizeof(pgoff_t));
 	memcpy(key + sizeof(pgoff_t), fkey, sizeof(struct cleancache_filekey));
@@ -798,8 +803,8 @@ int gcma_cleancache_init_fs(size_t pagesize)
 
 	pool_id = atomic_inc_return(&nr_cleancache_fses) - 1;
 	if (pool_id >= MAX_CLEANCACHE_FS) {
-		WARN(1, "too many cleancache fs %d / %d\n",
-				pool_id, MAX_CLEANCACHE_FS);
+		pr_warn("%s: too many cleancache fs %d / %d\n",
+				__func__, pool_id, MAX_CLEANCACHE_FS);
 		return -1;
 	}
 
@@ -895,6 +900,7 @@ struct cleancache_ops gcma_cleancache_ops = {
 	.invalidate_inode = gcma_cleancache_invalidate_inode,
 	.invalidate_fs = gcma_cleancache_invalidate_fs,
 };
+
 
 /*
  * gcma_init - initializes a contiguous memory area
@@ -993,10 +999,10 @@ int gcma_alloc_contig(struct gcma *gcma, unsigned long start_pfn,
 			unsigned long size)
 {
 	LIST_HEAD(free_pages);
-	struct page *page, *n;
 	struct dmem_hashbucket *buck;
 	struct dmem_entry *entry;
 	struct cleancache_dmem_key key;	/* cc key is larger than fs's */
+	struct page *page, *n;
 	unsigned long offset;
 	unsigned long *bitmap;
 	unsigned long pfn;
@@ -1040,8 +1046,8 @@ retry:
 		set_gpage_flag(page, GF_RECLAIMING);
 
 		/*
-		 * The page is in LRU and being used by someone. Remove from
-		 * LRU and ready to put the swap slot soon.
+		 * The page is in LRU and being used by someone. Discard it
+		 * after removing from lru_list.
 		 */
 		if (gpage_flag(page, GF_LRU)) {
 			entry = dmem_entry(page);
@@ -1055,7 +1061,7 @@ retry:
 		/*
 		 * The page is
 		 * 1) allocated by others but not yet in LRU in case of
-		 *    frontswap_store or
+		 *    dmem_store or
 		 * 2) deleted from LRU but not yet from gcma's bitmap in case
 		 *    of dmem_invalidate or dmem_evict_lru.
 		 * Anycase, the race is small so retry after a while will see
@@ -1069,7 +1075,7 @@ next_page:
 
 	/*
 	 * Since we increased refcount of the page above, we can access
-	 * dmem_entry with safe
+	 * dmem_entry with safe.
 	 */
 	list_for_each_entry_safe(page, n, &free_pages, lru) {
 		buck = dmem_hashbuck(page);
