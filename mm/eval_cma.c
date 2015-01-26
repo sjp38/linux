@@ -165,7 +165,7 @@ static void init_cma_latency(struct cma_latency *lat)
 static unsigned long get_expon_larger(unsigned long value)
 {
 	unsigned long ret = 1;
-	while (ret < value)
+	while (ret <= value)
 		ret *= 2;
 
 	return ret;
@@ -175,7 +175,7 @@ static struct eval_stat *get_stat(unsigned long usecs, struct list_head *list)
 {
 	struct eval_stat *ret, *iter;
 	list_for_each_entry(iter, list, node) {
-		if (usecs > iter->usecs / 2 && usecs <= iter->usecs)
+		if (usecs >= iter->usecs / 2 && usecs < iter->usecs)
 			return iter;
 	}
 
