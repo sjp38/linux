@@ -1037,6 +1037,10 @@ retry:
 		spin_unlock(&gcma->lock);
 		local_irq_restore(flags);
 
+		/* During dmem_store, hashbuck could not be set in page, yet */
+		if (dmem_hashbuck(page) == NULL)
+			continue;
+
 		lru_lock = &dmem_hashbuck(page)->dmem->lru_lock;
 		local_irq_save(flags);
 		spin_lock(lru_lock);
