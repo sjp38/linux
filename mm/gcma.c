@@ -27,6 +27,9 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 
+/* XXX: What's the ideal? */
+#define NR_EVICT_BATCH	32
+
 struct gcma {
 	spinlock_t lock;
 	unsigned long *bitmap;
@@ -89,8 +92,6 @@ struct dmem {
 static struct kmem_cache *dmem_entry_cache;
 
 static unsigned long dmem_evict_lru(struct dmem *dmem, unsigned long nr_pages);
-static struct page *gcma_alloc_page(struct gcma *gcma);
-static void gcma_free_page(struct gcma *gcma, struct page *page);
 
 static struct dmem_hashbucket *dmem_hashbuck(struct page *page)
 {
@@ -154,6 +155,95 @@ static void clear_gpage_flag(struct page *page, int flag)
 static void clear_gpage_flagall(struct page *page)
 {
 	page->private = 0;
+}
+
+/*
+ * gcma_init - initializes a contiguous memory area
+ *
+ * @start_pfn	start pfn of contiguous memory area
+ * @size	number of pages in the contiguous memory area
+ * @res_gcma	pointer to store the created gcma region
+ *
+ * Returns 0 on success, error code on failure.
+ */
+int gcma_init(unsigned long start_pfn, unsigned long size,
+		struct gcma **res_gcma)
+{
+	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
+	struct gcma *gcma;
+
+	gcma = kmalloc(sizeof(*gcma), GFP_KERNEL);
+	if (!gcma)
+		goto out;
+
+	gcma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
+	if (!gcma->bitmap)
+		goto free_cma;
+
+	gcma->size = size;
+	gcma->base_pfn = start_pfn;
+	spin_lock_init(&gcma->lock);
+
+	spin_lock(&ginfo.lock);
+	list_add(&gcma->list, &ginfo.head);
+	spin_unlock(&ginfo.lock);
+
+	*res_gcma = gcma;
+	pr_info("initialized gcma area [%lu, %lu]\n",
+			start_pfn, start_pfn + size);
+	return 0;
+
+free_cma:
+	kfree(gcma);
+out:
+	return -ENOMEM;
+}
+
+static struct page *gcma_alloc_page(struct gcma *gcma)
+{
+	unsigned long bit;
+	unsigned long *bitmap = gcma->bitmap;
+	struct page *page = NULL;
+
+	spin_lock(&gcma->lock);
+	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
+	if (bit >= gcma->size) {
+		spin_unlock(&gcma->lock);
+		goto out;
+	}
+
+	bitmap_set(bitmap, bit, 1);
+	page = pfn_to_page(gcma->base_pfn + bit);
+	spin_unlock(&gcma->lock);
+	clear_gpage_flagall(page);
+
+out:
+	return page;
+}
+
+/* Caller should hold lru_lock */
+static void gcma_free_page(struct gcma *gcma, struct page *page)
+{
+	unsigned long pfn, offset;
+
+	pfn = page_to_pfn(page);
+
+	spin_lock(&gcma->lock);
+	offset = pfn - gcma->base_pfn;
+
+	if (likely(!gpage_flag(page, GF_RECLAIMING))) {
+		bitmap_clear(gcma->bitmap, offset, 1);
+	} else {
+		/*
+		 * The page should be safe to be used for a thread which
+		 * reclaimed the page.
+		 * To prevent further allocation from other thread,
+		 * set bitmap and mark the page as isolated.
+		 */
+		bitmap_set(gcma->bitmap, offset, 1);
+		set_gpage_flag(page, GF_ISOLATED);
+	}
+	spin_unlock(&gcma->lock);
 }
 
 /*
@@ -620,95 +710,6 @@ int dmem_invalidate_pool(struct dmem *dmem, unsigned pool_id)
 	dmem->pools[pool_id] = NULL;
 
 	return 0;
-}
-
-/*
- * gcma_init - initializes a contiguous memory area
- *
- * @start_pfn	start pfn of contiguous memory area
- * @size	number of pages in the contiguous memory area
- * @res_gcma	pointer to store the created gcma region
- *
- * Returns 0 on success, error code on failure.
- */
-int gcma_init(unsigned long start_pfn, unsigned long size,
-		struct gcma **res_gcma)
-{
-	int bitmap_size = BITS_TO_LONGS(size) * sizeof(long);
-	struct gcma *gcma;
-
-	gcma = kmalloc(sizeof(*gcma), GFP_KERNEL);
-	if (!gcma)
-		goto out;
-
-	gcma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
-	if (!gcma->bitmap)
-		goto free_cma;
-
-	gcma->size = size;
-	gcma->base_pfn = start_pfn;
-	spin_lock_init(&gcma->lock);
-
-	spin_lock(&ginfo.lock);
-	list_add(&gcma->list, &ginfo.head);
-	spin_unlock(&ginfo.lock);
-
-	*res_gcma = gcma;
-	pr_info("initialized gcma area [%lu, %lu]\n",
-			start_pfn, start_pfn + size);
-	return 0;
-
-free_cma:
-	kfree(gcma);
-out:
-	return -ENOMEM;
-}
-
-static struct page *gcma_alloc_page(struct gcma *gcma)
-{
-	unsigned long bit;
-	unsigned long *bitmap = gcma->bitmap;
-	struct page *page = NULL;
-
-	spin_lock(&gcma->lock);
-	bit = bitmap_find_next_zero_area(bitmap, gcma->size, 0, 1, 0);
-	if (bit >= gcma->size) {
-		spin_unlock(&gcma->lock);
-		goto out;
-	}
-
-	bitmap_set(bitmap, bit, 1);
-	page = pfn_to_page(gcma->base_pfn + bit);
-	spin_unlock(&gcma->lock);
-	clear_gpage_flagall(page);
-
-out:
-	return page;
-}
-
-/* Caller should hold lru_lock */
-static void gcma_free_page(struct gcma *gcma, struct page *page)
-{
-	unsigned long pfn, offset;
-
-	pfn = page_to_pfn(page);
-
-	spin_lock(&gcma->lock);
-	offset = pfn - gcma->base_pfn;
-
-	if (likely(!gpage_flag(page, GF_RECLAIMING))) {
-		bitmap_clear(gcma->bitmap, offset, 1);
-	} else {
-		/*
-		 * The page should be safe to be used for a thread which
-		 * reclaimed the page.
-		 * To prevent further allocation from other thread,
-		 * set bitmap and mark the page as isolated.
-		 */
-		bitmap_set(gcma->bitmap, offset, 1);
-		set_gpage_flag(page, GF_ISOLATED);
-	}
-	spin_unlock(&gcma->lock);
 }
 
 /*
