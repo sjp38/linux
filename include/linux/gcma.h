@@ -4,7 +4,16 @@
  * GCMA aims for contiguous memory allocation with success and fast
  * latency guarantee.
  * It reserves large amount of memory and let it be allocated to
- * contiguous memory requests.
+ * contiguous memory requests. Because system memory space efficiency could be
+ * degraded if reserved area being idle, GCMA let the reserved area could be
+ * used by other clients with lower priority.
+ * We call those lower priority clients as second-class clients. In this
+ * context, contiguous memory requests are first-class clients, of course.
+ *
+ * GCMA guarantees success and fast latency of contiguous memory allocation by
+ * discarding memory being used for second-class clients. For the purpose, GCMA
+ * restricts only easily discardable memory could be used for second-class
+ * clients.
  *
  * Copyright (C) 2014  LG Electronics Inc.,
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
