@@ -15,6 +15,9 @@
  * restricts only easily discardable memory could be used for second-class
  * clients.
  *
+ * Currently, GCMA uses cleancache and write-through mode frontswap as
+ * second-class clients.
+ *
  * Copyright (C) 2014  LG Electronics Inc.,
  * Copyright (C) 2014  Minchan Kim <minchan@kernel.org>
  * Copyright (C) 2014-2015  SeongJae Park <sj38.park@gmail.com>
