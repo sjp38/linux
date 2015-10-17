@@ -527,6 +527,22 @@ config CMA_AREAS
 
 	  If unsure, leave the default value "7".
 
+config EVAL_CMA
+	bool "debugfs CMA evaluation facility"
+	depends on CMA
+	help
+	  Turns on CMA evaluation facility using debugfs. User can evaluate CMA
+	  using debugfs and easily see the result(min / max / average of
+	  latency).
+
+config EVAL_CMA_MIGRATE
+	bool "evaluate cma migration"
+	depends on EVAL_CMA
+	help
+	  Evalute migration inside CMA in detail. It record how many clean
+	  pages be reclaimed, how many dirty pages be migrated and how many
+	  times the jobs consumed.
+
 config GCMA
 	bool "Guaranteed Contiguous Memory Allocator (EXPERIMENTAL)"
 	default n

@@ -69,4 +69,5 @@ obj-$(CONFIG_ZSMALLOC)	+= zsmalloc.o
 obj-$(CONFIG_GENERIC_EARLY_IOREMAP) += early_ioremap.o
 obj-$(CONFIG_CMA)	+= cma.o
 obj-$(CONFIG_GCMA)	+= gcma.o
+obj-$(CONFIG_EVAL_CMA)	+= eval_cma.o
 obj-$(CONFIG_MEMORY_BALLOON) += balloon_compaction.o

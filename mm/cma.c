@@ -34,6 +34,7 @@
 #include <linux/cma.h>
 #include <linux/gcma.h>
 #include <linux/highmem.h>
+#include <linux/time.h>
 
 #define IS_GCMA ((struct gcma *)(void *)0xFF)
 
@@ -410,12 +411,21 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 	unsigned long bitmap_maxno, bitmap_no, bitmap_count;
 	struct page *page = NULL;
 	int ret;
+	struct timespec startt, endt;
+
+	getnstimeofday(&startt);
 
 	if (!cma || !cma->count)
 		return NULL;
 
-	pr_debug("%s(cma %p, count %d, align %d)\n", __func__, (void *)cma,
-		 count, align);
+#if 0
+	if (cma->gcma)
+		pr_debug("%s(gcma %p, count %d, align %d)\n", __func__, (void *)cma,
+				count, align);
+	else
+		pr_debug("%s(cma %p, count %d, align %d)\n", __func__, (void *)cma,
+				count, align);
+#endif
 
 	if (!count)
 		return NULL;
@@ -464,7 +474,9 @@ struct page *cma_alloc(struct cma *cma, int count, unsigned int align)
 		start = bitmap_no + mask + 1;
 	}
 
-	pr_debug("%s(): returned %p\n", __func__, page);
+	getnstimeofday(&endt);
+	pr_debug("%s(): returned %p, consumed %llu nsecs\n", __func__, page,
+			timespec_to_ns(&endt) - timespec_to_ns(&startt));
 	return page;
 }
 
@@ -485,7 +497,10 @@ bool cma_release(struct cma *cma, struct page *pages, int count)
 	if (!cma || !pages)
 		return false;
 
-	pr_debug("%s(page %p)\n", __func__, (void *)pages);
+	if (cma->gcma)
+		pr_debug("gcma %s(page %p)\n", __func__, (void *)pages);
+	else
+		pr_debug("cma %s(page %p)\n", __func__, (void *)pages);
 
 	pfn = page_to_pfn(pages);
 

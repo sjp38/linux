@@ -45,6 +45,7 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <asm/cacheflush.h>
+#include <linux/time.h>
 
 #include "vc_cma.h"
 
@@ -568,6 +569,10 @@ static bool send_worker_msg(VCHIQ_HEADER_T * msg)
 static int vc_cma_alloc_chunks(int num_chunks, struct cma_msg *reply)
 {
 	int i;
+	struct timespec startt, endt;
+
+	getnstimeofday(&startt);
+
 	for (i = 0; i < num_chunks; i++) {
 		struct page *chunk;
 		unsigned int chunk_num;
@@ -633,6 +638,10 @@ static int vc_cma_alloc_chunks(int num_chunks, struct cma_msg *reply)
 			LOG_ERR("vchiq_queue_message return " "%x", ret);
 	}
 
+	getnstimeofday(&endt);
+	pr_info("%s with %d chunks consumed %llu nanosecs.\n",
+			__func__, num_chunks,
+			timespec_to_ns(&endt) - timespec_to_ns(&startt));
 	return num_chunks;
 }
 
