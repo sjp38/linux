@@ -736,4 +736,15 @@ config ARCH_HAS_PTE_SPECIAL
 config ARCH_HAS_HUGEPD
 	bool
 
+config DAMON
+	bool "Data Access Monitor"
+	depends on MMU
+	default y
+	help
+	  provides data access pattern monitoring.
+
+config DAMON_TEST
+	bool "Test for damon"
+	depends on DAMON && KUNIT
+
 endmenu

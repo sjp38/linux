@@ -1,0 +1,1242 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Data Access Monitor
+ *
+ * Copyright 2019 Amazon.com, Inc. or its affiliates.  All rights reserved.
+ *
+ * Author: SeongJae Park <sjpark@amazon.de>
+ */
+
+#define pr_fmt(fmt) "damon: " fmt
+
+#include <linux/debugfs.h>
+#include <linux/delay.h>
+#include <linux/kthread.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/page_idle.h>
+#include <linux/random.h>
+#include <linux/sched/mm.h>
+#include <linux/sched/task.h>
+#include <linux/slab.h>
+
+#define damon_get_task_struct(t) \
+	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
+
+#define damon_next_region(r) \
+	(container_of(r->list.next, struct damon_region, list))
+
+#define damon_prev_region(r) \
+	(container_of(r->list.prev, struct damon_region, list))
+
+#define damon_for_each_region(r, t) \
+	list_for_each_entry(r, &t->regions_list, list)
+
+#define damon_for_each_region_safe(r, next, t) \
+	list_for_each_entry_safe(r, next, &t->regions_list, list)
+
+#define damon_for_each_task(t) \
+	list_for_each_entry(t, &damon_tasks_list, list)
+
+#define damon_for_each_task_safe(t, next) \
+	list_for_each_entry_safe(t, next, &damon_tasks_list, list)
+
+struct damon_region {
+	unsigned long vm_start;
+	unsigned long vm_end;
+	unsigned long sampling_addr;
+	unsigned int nr_accesses;
+	struct list_head list;
+};
+
+struct damon_task {
+	unsigned long pid;
+	struct list_head regions_list;
+	struct list_head list;
+};
+
+/* List of damon_task objects */
+static LIST_HEAD(damon_tasks_list);
+
+/*
+ * For each 'sample_interval', damon checks whether each region is accessed or
+ * not.  It aggregates and keeps the access information (number of accesses to
+ * each region) for 'aggr_interval' and then flushes it to the result buffer if
+ * an 'aggr_interval' surpassed.  And for each 'regions_update_interval', damon
+ * checks whether the memory mapping of the target task has changed (e.g., by
+ * mmap() calls from the applications) and applies the change.
+ *
+ * All intervals are in micro-seconds.
+ */
+static unsigned long sample_interval = 5 * 1000;
+static unsigned long aggr_interval = 100 * 1000;
+static unsigned long regions_update_interval = 1000 * 1000;
+
+static struct timespec64 last_aggregate_time;
+static struct timespec64 last_regions_update_time;
+
+static unsigned long min_nr_regions = 10;
+static unsigned long max_nr_regions = 1000;
+
+static struct rnd_state rndseed;
+
+/* result buffer */
+#define DAMON_LEN_RBUF	(1024 * 1024 * 4)
+static char damon_rbuf[DAMON_LEN_RBUF];
+static unsigned int damon_rbuf_offset;
+
+/* result file */
+#define LEN_RES_FILE_PATH	256
+static char rfile_path[LEN_RES_FILE_PATH] = "/damon.data";
+
+static bool damon_thread_stop;
+static struct task_struct *damon_thread;
+
+/* Protects damon_thread_stop and damon_thread */
+static DEFINE_SPINLOCK(damon_thread_lock);
+
+static inline void damon_set_sampling_target(struct damon_region *r)
+{
+	r->sampling_addr = r->vm_start + prandom_u32_state(&rndseed) %
+		(r->vm_end - r->vm_start);
+}
+
+/*
+ * Return a new damon region object, or NULL if fails
+ */
+static struct damon_region *damon_new_region(unsigned long vm_start,
+					unsigned long vm_end)
+{
+	struct damon_region *ret;
+
+	ret = kmalloc(sizeof(struct damon_region), GFP_KERNEL);
+	if (!ret)
+		return NULL;
+	ret->vm_start = vm_start;
+	ret->vm_end = vm_end;
+	ret->nr_accesses = 0;
+	damon_set_sampling_target(ret);
+	INIT_LIST_HEAD(&ret->list);
+
+	return ret;
+}
+
+/*
+ * Add a region between two regions
+ */
+static inline void damon_add_region(struct damon_region *r,
+		struct damon_region *prev, struct damon_region *next)
+{
+	__list_add(&r->list, &prev->list, &next->list);
+}
+
+/*
+ * Add a region into a task
+ */
+static void damon_add_region_tail(struct damon_region *r, struct damon_task *t)
+{
+	list_add_tail(&r->list, &t->regions_list);
+}
+
+/*
+ * Delete a region from its list
+ */
+static void damon_del_region(struct damon_region *r)
+{
+	list_del(&r->list);
+}
+
+/*
+ * De-allocate a region
+ */
+static void damon_free_region(struct damon_region *r)
+{
+	kfree(r);
+}
+
+static void damon_destroy_region(struct damon_region *r)
+{
+	damon_del_region(r);
+	damon_free_region(r);
+}
+
+static struct damon_task *damon_new_task(unsigned long pid)
+{
+	struct damon_task *t;
+
+	t = kmalloc(sizeof(struct damon_task), GFP_KERNEL);
+	if (!t)
+		return NULL;
+	t->pid = pid;
+	INIT_LIST_HEAD(&t->regions_list);
+
+	return t;
+}
+
+/* Get n-th damon region of a given task */
+struct damon_region *damon_nth_region_of(struct damon_task *t, unsigned int n)
+{
+	struct damon_region *r;
+	unsigned int i;
+
+	i = 0;
+	damon_for_each_region(r, t) {
+		if (i++ == n)
+			return r;
+	}
+	return NULL;
+}
+
+static void damon_add_task_tail(struct damon_task *t)
+{
+	list_add_tail(&t->list, &damon_tasks_list);
+}
+
+static void damon_del_task(struct damon_task *t)
+{
+	list_del(&t->list);
+}
+
+static void damon_free_task(struct damon_task *t)
+{
+	struct damon_region *r, *next;
+
+	damon_for_each_region_safe(r, next, t)
+		damon_free_region(r);
+	kfree(t);
+}
+
+static void damon_destroy_task(struct damon_task *t)
+{
+	damon_del_task(t);
+	damon_free_task(t);
+}
+
+static unsigned int nr_damon_tasks(void)
+{
+	struct damon_task *t;
+	unsigned int ret = 0;
+
+	damon_for_each_task(t)
+		ret++;
+	return ret;
+}
+
+/*
+ * Return number of regions for given process
+ */
+static unsigned int nr_damon_regions(struct damon_task *t)
+{
+	struct damon_region *r;
+	unsigned int ret = 0;
+
+	damon_for_each_region(r, t)
+		ret++;
+	return ret;
+}
+
+/*
+ * Returns mm_struct of the task on success, NULL on failure
+ */
+static struct mm_struct *damon_get_mm(struct damon_task *t)
+{
+	struct task_struct *task;
+	struct mm_struct *mm;
+
+	task = damon_get_task_struct(t);
+	if (!task)
+		return NULL;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	return mm;
+}
+
+/*
+ * Split a region into 'nr_pieces' pieces having same size
+ *
+ * Returns 0 on success, or negative error code otherwise.
+ */
+static int damon_split_region(struct damon_region *r,
+				unsigned int nr_pieces)
+{
+	unsigned long sz_orig, sz_piece, orig_end;
+	struct damon_region *piece = NULL, *next;
+	unsigned long start;
+
+	if (nr_pieces == 0)
+		return -EINVAL;
+
+	orig_end = r->vm_end;
+	sz_orig = r->vm_end - r->vm_start;
+	sz_piece = sz_orig / nr_pieces;
+
+	if (!sz_piece)
+		return -EINVAL;
+
+	r->vm_end = r->vm_start + sz_piece;
+	next = damon_next_region(r);
+	for (start = r->vm_end; start + sz_piece <= orig_end;
+			start += sz_piece) {
+		piece = damon_new_region(start, start + sz_piece);
+		damon_add_region(piece, r, next);
+		r = piece;
+	}
+	if (piece)
+		piece->vm_end = orig_end;
+	return 0;
+}
+
+struct region {
+	unsigned long start;
+	unsigned long end;
+};
+
+static unsigned long sz_region(struct region *r)
+{
+	return r->end - r->start;
+}
+
+static void swap_regions(struct region *r1, struct region *r2)
+{
+	struct region tmp;
+
+	tmp = *r1;
+	*r1 = *r2;
+	*r2 = tmp;
+}
+
+/*
+ * Find the three regions in the address space
+ *
+ * vma		the head of the target address space
+ * regions	an array of three 'struct region's that result will be saved
+ *
+ * For the tradeoff between accuracy and overhead, we convert the dynamically
+ * mapped complex memory regions of the target process into a simple form and
+ * track it.  The simplified memory region is constructed with three regions
+ * seperated by two biggest gaps in the original address space.  The two
+ * biggest gaps will usually be the gaps between the heap, mmap()ed region, and
+ * the stack, because the memory maps of common tasks are as below:
+ *
+ *   <code>
+ *   <heap>
+ *   <!!BIG GAP!!>
+ *   <file-backed or anonymous mmapped pages>
+ *   <!!BIG GAP!!>
+ *   <stack>
+ *   <vvar>
+ *   <vdso>
+ *   <vsyscall>
+ *
+ * Returns 0 if success, or negative error code otherwise.
+ */
+static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
+		struct region regions[3])
+{
+	struct region gap = {0,}, first_gap = {0,}, second_gap = {0,};
+	struct vm_area_struct *last_vma = NULL;
+	unsigned long start = 0;
+
+	/* Find two biggest gaps */
+	for (; vma; vma = vma->vm_next) {
+		if (!last_vma) {
+			start = vma->vm_start;
+			last_vma = vma;
+			continue;
+		}
+		gap.start = last_vma->vm_end;
+		gap.end = vma->vm_start;
+		if (sz_region(&gap) > sz_region(&second_gap)) {
+			swap_regions(&gap, &second_gap);
+			if (sz_region(&second_gap) > sz_region(&first_gap))
+				swap_regions(&second_gap, &first_gap);
+		}
+		last_vma = vma;
+	}
+
+	if (!sz_region(&second_gap) || !sz_region(&first_gap))
+		return -EINVAL;
+
+	/* Sort the two biggest gaps by address */
+	if (first_gap.start > second_gap.start)
+		swap_regions(&first_gap, &second_gap);
+
+	/* Store the result */
+	regions[0].start = start;
+	regions[0].end = first_gap.start;
+	regions[1].start = first_gap.end;
+	regions[1].end = second_gap.start;
+	regions[2].start = second_gap.end;
+	regions[2].end = last_vma->vm_end;
+
+	return 0;
+}
+
+/*
+ * Get the three regions in the given task
+ *
+ * Returns 0 on success, negative error code otherwise.
+ */
+static int damon_three_regions_of(struct damon_task *t,
+				struct region regions[3])
+{
+	struct mm_struct *mm;
+	int ret;
+
+	mm = damon_get_mm(t);
+	if (!mm)
+		return -EINVAL;
+
+	down_read(&mm->mmap_sem);
+	ret = damon_three_regions_in_vmas(mm->mmap, regions);
+	up_read(&mm->mmap_sem);
+
+	mmput(mm);
+	return ret;
+}
+
+/*
+ * Initialize '->regions_list' for the given task
+ *
+ * t	the given target task
+ *
+ * This function initializes the '->regions_list' of the given task so that the
+ * list covers the entire address space of the task.  Because only a few parts
+ * of the entire address space is dynamically mapped to the memory and
+ * accessed, checking accesses to the unmapped regions is only wasteful.  That
+ * said, because we can deal with small noises, the every dynamic memory map
+ * change is not strictly required to be tracked.  Moreover, tracking every
+ * such change might only result in additional overhead.
+ *
+ * For the trade-off, damon finds and eliminates only two biggest unmapped
+ * regions in the address space from the list of regions that we will check.
+ * Usual memory mappings of tasks will have two super-big gaps between the
+ * heap, the file-backed or anonymous mmapped pages and the stack.  Because of
+ * their super-big size, finding and eliminating only those from the target
+ * regions will increase the monitoring quality with reasonably low cost.
+ */
+static void init_regions_of(struct damon_task *t)
+{
+	struct damon_region *r;
+	struct region regions[3];
+	int i;
+
+	if (damon_three_regions_of(t, regions)) {
+		pr_err("Failed to get three regions of task %lu\n", t->pid);
+		return;
+	}
+
+	/* Set the initial three regions of the task */
+	for (i = 0; i < 3; i++) {
+		r = damon_new_region(regions[i].start, regions[i].end);
+		damon_add_region_tail(r, t);
+	}
+
+	/* Split the middle region into 'min_nr_regions - 2' regions */
+	r = damon_nth_region_of(t, 1);
+	if (damon_split_region(r, min_nr_regions - 2))
+		pr_warn("Init middle region failed to be splitted\n");
+}
+
+/* Initialize '->regions_list' of every task */
+static void init_regions(void)
+{
+	struct damon_task *t;
+
+	damon_for_each_task(t)
+		init_regions_of(t);
+}
+
+/*
+ * Check access to the given region
+ *
+ * mm	'mm_struct' for the given virtual address space
+ * r	the region to be checked
+ *
+ * This function checks whether given virtual address space region has been
+ * accessed since the last check.  In detail, it uses the page table entry
+ * access bit for a page in the region that randomly selected.
+ */
+static void check_access(struct mm_struct *mm, struct damon_region *r)
+{
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		goto mkold;
+
+	/* Read the page table access bit of the page */
+	if (pte && pte_young(*pte))
+		r->nr_accesses++;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	else if (pmd && pmd_young(*pmd))
+		r->nr_accesses++;
+#endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
+
+	spin_unlock(ptl);
+
+mkold:
+	/* mkold next target */
+	damon_set_sampling_target(r);
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		return;
+
+	if (pte) {
+		if (pte_young(*pte))
+			clear_page_idle(pte_page(*pte));
+		*pte = pte_mkold(*pte);
+	}
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	else if (pmd) {
+		if (pmd_young(*pmd))
+			clear_page_idle(pmd_page(*pmd));
+		*pmd = pmd_mkold(*pmd);
+	}
+#endif
+
+	spin_unlock(ptl);
+}
+
+/*
+ * Check whether a time interval is elapsed
+ *
+ * baseline	the time to check whether the interval has elapsed since
+ * interval	the time interval (microseconds)
+ *
+ * See whether the given time interval has passed since the given baseline
+ * time.  If so, it also updates the baseline to current time for later check.
+ *
+ * Returns true if the time interval has passed, or false otherwise.
+ */
+static bool damon_check_reset_time_interval(struct timespec64 *baseline,
+		unsigned long interval)
+{
+	struct timespec64 now;
+
+	ktime_get_coarse_ts64(&now);
+	if ((timespec64_to_ns(&now) - timespec64_to_ns(baseline)) / 1000 <
+			interval)
+		return false;
+	*baseline = now;
+	return true;
+}
+
+/*
+ * Check whether it is time to aggregate samples
+ */
+static bool need_aggregate(void)
+{
+	return damon_check_reset_time_interval(&last_aggregate_time,
+			aggr_interval);
+}
+
+/*
+ * Flush the content in the result buffer to the result file
+ */
+static void damon_flush_rbuffer(void)
+{
+	ssize_t sz;
+	loff_t pos;
+	struct file *rfile;
+
+	while (damon_rbuf_offset) {
+		pos = 0;
+		rfile = filp_open(rfile_path, O_CREAT | O_RDWR | O_APPEND,
+				0644);
+		if (IS_ERR(rfile)) {
+			pr_err("Cannot open the result file %s\n", rfile_path);
+			return;
+		}
+
+		sz = kernel_write(rfile, damon_rbuf, damon_rbuf_offset, &pos);
+		filp_close(rfile, NULL);
+
+		damon_rbuf_offset -= sz;
+	}
+}
+
+/* Store the monitored information into the result buffer */
+static void damon_write_rbuf(void *data, ssize_t size)
+{
+	if (damon_rbuf_offset + size > DAMON_LEN_RBUF)
+		damon_flush_rbuffer();
+
+	memcpy(&damon_rbuf[damon_rbuf_offset], data, size);
+	damon_rbuf_offset += size;
+}
+
+/*
+ * Aggregate samples to one set of memory access patterns for each region
+ *
+ * Stores current tracking results to the result buffer and reset 'nr_accesses'
+ * of each regions.  The format for the result buffer is as below:
+ *
+ *   <time> <number of tasks> <array of task infos>
+ *
+ *   task info: <pid> <number of regions> <array of region infos>
+ *   region info: <start address> <end address> <nr_accesses>
+ */
+static void aggregate(void)
+{
+	struct damon_task *t;
+	struct timespec64 now;
+	unsigned int nr;
+
+	ktime_get_coarse_ts64(&now);
+
+	damon_write_rbuf(&now, sizeof(struct timespec64));
+	nr = nr_damon_tasks();
+	damon_write_rbuf(&nr, sizeof(nr));
+
+	damon_for_each_task(t) {
+		struct damon_region *r;
+
+		damon_write_rbuf(&t->pid, sizeof(t->pid));
+		nr = nr_damon_regions(t);
+		damon_write_rbuf(&nr, sizeof(nr));
+		damon_for_each_region(r, t) {
+			damon_write_rbuf(&r->vm_start, sizeof(r->vm_start));
+			damon_write_rbuf(&r->vm_end, sizeof(r->vm_end));
+			damon_write_rbuf(&r->nr_accesses,
+					sizeof(r->nr_accesses));
+			r->nr_accesses = 0;
+		}
+	}
+}
+
+/*
+ * Merge two adjacent regions into one region
+ */
+static void damon_merge_two_regions(struct damon_region *l,
+				struct damon_region *r)
+{
+	BUG_ON(damon_next_region(l) != r);
+
+	l->nr_accesses = (l->nr_accesses * (l->vm_end - l->vm_start) +
+			r->nr_accesses * (r->vm_end - r->vm_start)) /
+			(l->vm_end - l->vm_start + r->vm_end - r->vm_start);
+	l->vm_end = r->vm_end;
+	damon_destroy_region(r);
+}
+
+#define diff_of(a, b) (a > b ? a - b : b - a)
+
+/*
+ * merge adjacent regions having similar nr_accesses
+ *
+ * t		task that merge operation will make change
+ * thres	do not merge regions having diff larger than this threshold
+ */
+static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
+{
+	struct damon_region *r, *prev = NULL, *next;
+
+	damon_for_each_region_safe(r, next, t) {
+		if (!prev || prev->vm_end != r->vm_start)
+			goto next;
+		if (diff_of(prev->nr_accesses, r->nr_accesses) > thres)
+			goto next;
+		damon_merge_two_regions(prev, r);
+		continue;
+next:
+		prev = r;
+	}
+}
+
+static void damon_merge_regions(unsigned int threshold)
+{
+	struct damon_task *t;
+
+	damon_for_each_task(t)
+		damon_merge_regions_of(t, threshold);
+}
+
+/*
+ * Split a region into two regions
+ *
+ * r		the region to be splitted
+ * sz_r		size of the first region that will be made
+ */
+static void damon_split_region_at(struct damon_region *r, unsigned long sz_r)
+{
+	struct damon_region *new;
+
+	new = damon_new_region(r->vm_start + sz_r, r->vm_end);
+	r->vm_end = new->vm_start;
+
+	damon_add_region(new, r, damon_next_region(r));
+}
+
+static void damon_split_regions_of(struct damon_task *t)
+{
+	struct damon_region *r, *next;
+	unsigned long sz_left_region;
+
+	damon_for_each_region_safe(r, next, t) {
+		/*
+		 * Randomly select size of splitted left region to be at least
+		 * 10 percent and at most 90% of original region
+		 */
+		sz_left_region = (prandom_u32_state(&rndseed) % 9 + 1) *
+			(r->vm_end - r->vm_start) / 10;
+		/* Do not allow blank region */
+		if (sz_left_region == 0)
+			continue;
+		damon_split_region_at(r, sz_left_region);
+	}
+}
+
+static void damon_split_regions(void)
+{
+	struct damon_task *t;
+	unsigned int nr_regions = 0;
+
+	damon_for_each_task(t)
+		nr_regions += nr_damon_regions(t);
+	if (nr_regions > max_nr_regions / 2)
+		return;
+
+	damon_for_each_task(t)
+		damon_split_regions_of(t);
+}
+
+/*
+ * Check whether regions need to be updated
+ *
+ * Returns true if it is.
+ */
+static bool need_update_regions(void)
+{
+	return damon_check_reset_time_interval(&last_regions_update_time,
+			regions_update_interval);
+}
+
+static bool damon_intersect(struct damon_region *r, struct region *re)
+{
+	return !(r->vm_end <= re->start || re->end <= r->vm_start);
+}
+
+/*
+ * Check if a region is intersecting with three regions sorted by address
+ */
+static bool damon_intersect_three(struct damon_region *r,
+		struct region regions[3])
+{
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		if (damon_intersect(r, &regions[i]))
+			return true;
+	}
+	return false;
+}
+
+/*
+ * Update damon regions for the three big regions of the given task
+ *
+ * t		the given task
+ * bregions	the three big regions of the task
+ */
+static void damon_apply_three_regions(struct damon_task *t,
+				struct region bregions[3])
+{
+	struct damon_region *r, *next;
+	unsigned int i = 0;
+
+	/* Remove regions which isn't in the three big regions now */
+	damon_for_each_region_safe(r, next, t) {
+		if (!damon_intersect_three(r, bregions))
+			damon_destroy_region(r);
+	}
+
+	/* Adjust intersecting regions to fit with the threee big regions */
+	for (i = 0; i < 3; i++) {
+		struct damon_region *first = NULL, *last;
+		struct damon_region *newr;
+		struct region *br;
+
+		br = &bregions[i];
+		/* Get the first and last regions which intersects with br */
+		damon_for_each_region(r, t) {
+			if (damon_intersect(r, br)) {
+				if (!first)
+					first = r;
+				last = r;
+			}
+			if (r->vm_start >= br->end)
+				break;
+		}
+		if (!first) {
+			/* no damon_region intersects with this big region */
+			newr = damon_new_region(br->start, br->end);
+			damon_add_region(newr, damon_prev_region(r), r);
+		} else {
+			first->vm_start = br->start;
+			last->vm_end = br->end;
+		}
+	}
+}
+
+/*
+ * Update regions for current vmas of target processes
+ */
+static void update_regions(void)
+{
+	struct region three_regions[3];
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		if (damon_three_regions_of(t, three_regions))
+			continue;
+		damon_apply_three_regions(t, three_regions);
+	}
+}
+
+/*
+ * Check whether current monitoring should be stopped
+ *
+ * If users asked to stop, need stop.  Even though no user has asked to stop,
+ * need stop if every target task has dead.
+ *
+ * Returns true if need to stop current monitoring.
+ */
+static bool need_stop(void)
+{
+	struct damon_task *t;
+	struct task_struct *task;
+	bool stop;
+
+	spin_lock(&damon_thread_lock);
+	stop = damon_thread_stop;
+	spin_unlock(&damon_thread_lock);
+	if (stop)
+		return true;
+
+	damon_for_each_task(t) {
+		task = damon_get_task_struct(t);
+		if (task) {
+			put_task_struct(task);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/*
+ * The monitoring thread that does the real work.
+ */
+static int damon_thread_fn(void *data)
+{
+	struct damon_task *t;
+	struct damon_region *r, *next;
+	struct mm_struct *mm;
+	unsigned long max_nr_accesses;
+
+	pr_info("damon thread (%d) starts\n", damon_thread->pid);
+	init_regions();
+	while (!need_stop()) {
+		max_nr_accesses = 0;
+		damon_for_each_task(t) {
+			mm = damon_get_mm(t);
+			if (!mm)
+				continue;
+			damon_for_each_region(r, t) {
+				check_access(mm, r);
+				if (r->nr_accesses > max_nr_accesses)
+					max_nr_accesses = r->nr_accesses;
+			}
+			mmput(mm);
+		}
+
+		if (need_aggregate()) {
+			damon_merge_regions(max_nr_accesses / 10);
+			aggregate();
+			damon_split_regions();
+		}
+
+		if (need_update_regions())
+			update_regions();
+
+		usleep_range(sample_interval, sample_interval + 1);
+	}
+	damon_flush_rbuffer();
+	damon_for_each_task(t) {
+		damon_for_each_region_safe(r, next, t)
+			damon_destroy_region(r);
+	}
+	pr_info("damon thread (%d) finishes\n", damon_thread->pid);
+	spin_lock(&damon_thread_lock);
+	damon_thread = NULL;
+	spin_unlock(&damon_thread_lock);
+	return 0;
+}
+
+/*
+ * Controller functions
+ */
+
+static int damon_turn_monitor(bool on)
+{
+	spin_lock(&damon_thread_lock);
+	damon_thread_stop = !on;
+	if (!damon_thread && on) {
+		damon_thread = kthread_run(damon_thread_fn, NULL, "damon");
+		if (!damon_thread)
+			goto fail;
+		goto success;
+	}
+	if (damon_thread && !on) {
+		spin_unlock(&damon_thread_lock);
+		while (true) {
+			spin_lock(&damon_thread_lock);
+			if (!damon_thread)
+				goto success;
+			spin_unlock(&damon_thread_lock);
+
+			usleep_range(sample_interval, sample_interval * 2);
+		}
+	}
+
+	/* tried to turn on while turned on, or turn off while turned off */
+
+fail:
+	spin_unlock(&damon_thread_lock);
+	return -EINVAL;
+
+success:
+	spin_unlock(&damon_thread_lock);
+	return 0;
+}
+
+static inline bool damon_target_pid(unsigned long pid)
+{
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		if (t->pid == pid)
+			return true;
+	}
+	return false;
+}
+
+static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
+{
+	ssize_t i;
+	struct damon_task *t, *next;
+
+	/* Remove unselected tasks */
+	damon_for_each_task_safe(t, next) {
+		for (i = 0; i < nr_pids; i++) {
+			if (pids[i] == t->pid) {
+				break;
+			}
+		}
+		if (i != nr_pids)
+			continue;
+		damon_destroy_task(t);
+	}
+
+	/* Add new tasks */
+	for (i = 0; i < nr_pids; i++) {
+		if (damon_target_pid(pids[i]))
+			continue;
+		t = damon_new_task(pids[i]);
+		if (!t) {
+			pr_err("Failed to alloc damon_task\n");
+			return -ENOMEM;
+		}
+		damon_add_task_tail(t);
+	}
+
+	return 0;
+}
+
+/*
+ * Set attributes for the monitoring
+ *
+ * sample_int		time interval between samplings
+ * aggr_int		time interval between aggregations
+ * regions_update_int	time interval between vma update checks
+ * min_nr_reg		minimal number of regions
+ * max_nr_reg		maximum number of regions
+ * path_to_rfile	path to the monitor result files
+ *
+ * Every time interval is in micro-seconds.
+ *
+ * Returns 0 on success, negative error code otherwise.
+ */
+static long damon_set_attrs(unsigned long sample_int,
+		unsigned long aggr_int, unsigned long regions_update_int,
+		unsigned long min_nr_reg, unsigned long max_nr_reg,
+		char *path_to_rfile)
+{
+	if (strnlen(path_to_rfile, LEN_RES_FILE_PATH) >= LEN_RES_FILE_PATH) {
+		pr_err("too long (>%d) result file path %s\n",
+				LEN_RES_FILE_PATH, path_to_rfile);
+		return -EINVAL;
+	}
+	if (min_nr_reg < 3) {
+		pr_err("min_nr_regions (%lu) should be bigger than 2\n",
+				min_nr_reg);
+		return -EINVAL;
+	}
+	if (min_nr_reg >= max_nr_regions) {
+		pr_err("invalid nr_regions.  min (%lu) >= max (%lu)\n",
+				min_nr_reg, max_nr_reg);
+		return -EINVAL;
+	}
+
+	sample_interval = sample_int;
+	aggr_interval = aggr_int;
+	regions_update_interval = regions_update_int;
+	min_nr_regions = min_nr_reg;
+	max_nr_regions = max_nr_reg;
+	strncpy(rfile_path, path_to_rfile, LEN_RES_FILE_PATH);
+	return 0;
+}
+
+/*
+ * debugfs functions
+ */
+
+static ssize_t debugfs_monitor_on_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	char monitor_on_buf[5];
+	bool monitor_on;
+
+	spin_lock(&damon_thread_lock);
+	monitor_on = damon_thread != NULL;
+	spin_unlock(&damon_thread_lock);
+
+	snprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
+
+	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf,
+			monitor_on ? 3 : 4);
+}
+
+static ssize_t debugfs_monitor_on_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t ret;
+	bool on = false;
+	char cmdbuf[5];
+
+	ret = simple_write_to_buffer(cmdbuf, 5, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	if (sscanf(cmdbuf, "%s", cmdbuf) != 1)
+		return -EINVAL;
+	if (!strncmp(cmdbuf, "on", 5))
+		on = true;
+	else if (!strncmp(cmdbuf, "off", 5))
+		on = false;
+	else
+		return -EINVAL;
+
+	if (damon_turn_monitor(on))
+		return -EINVAL;
+
+	return ret;
+}
+
+static ssize_t damon_sprint_pids(char *buf, ssize_t len)
+{
+	char *cursor = buf;
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		snprintf(cursor, len, "%lu ", t->pid);
+		cursor += strnlen(cursor, len);
+	}
+	if (cursor != buf)
+		cursor--;
+	snprintf(cursor, len, "\n");
+	return strnlen(buf, len);
+}
+
+static ssize_t debugfs_pids_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t len;
+	char pids_buf[512];
+
+	len = damon_sprint_pids(pids_buf, 512);
+
+	return simple_read_from_buffer(buf, count, ppos, pids_buf, len);
+}
+
+/*
+ * Converts a string into an array of unsigned long integers
+ *
+ * Returns an array of unsigned long integers that converted, or NULL if the
+ * input is wrong.
+ */
+static unsigned long *str_to_pids(const char *str, ssize_t len,
+				ssize_t *nr_pids)
+{
+	unsigned long *pids;
+	unsigned long pid;
+	int pos = 0, parsed, ret;
+
+	*nr_pids = 0;
+	pids = kmalloc_array(256, sizeof(unsigned long), GFP_KERNEL);
+	while (*nr_pids < 256 && pos < len) {
+		ret = sscanf(&str[pos], "%lu%n", &pid, &parsed);
+		pos += parsed;
+		if (ret != 1)
+			break;
+		pids[*nr_pids] = pid;
+		*nr_pids += 1;
+	}
+	if (*nr_pids == 0) {
+		kfree(pids);
+		pids = NULL;
+	}
+
+	return pids;
+}
+
+static ssize_t debugfs_pids_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t ret;
+	unsigned long *targets;
+	ssize_t nr_targets;
+	char pids_buf[512];
+
+	ret = simple_write_to_buffer(pids_buf, 512, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	targets = str_to_pids(pids_buf, ret, &nr_targets);
+
+	spin_lock(&damon_thread_lock);
+	if (damon_thread)
+		goto monitor_running;
+
+	damon_set_pids(targets, nr_targets);
+	spin_unlock(&damon_thread_lock);
+	if (targets)
+		kfree(targets);
+
+	return ret;
+
+monitor_running:
+	spin_unlock(&damon_thread_lock);
+	pr_err("damon thread is running. Turn it off first.\n");
+	return -EINVAL;
+}
+
+static ssize_t debugfs_attrs_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	char attrs_buf[512];
+
+	snprintf(attrs_buf, 512, "%lu %lu %lu %lu %lu %s\n",
+			sample_interval, aggr_interval,
+			regions_update_interval, min_nr_regions,
+			max_nr_regions, rfile_path);
+
+	return simple_read_from_buffer(buf, count, ppos, attrs_buf,
+			strnlen(attrs_buf, 512));
+}
+
+static ssize_t debugfs_attrs_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	unsigned long s, a, r, minr, maxr;
+	char attrs_buf[512];
+	char res_file_path[LEN_RES_FILE_PATH];
+	ssize_t ret;
+
+	if (count > 512) {
+		pr_err("attributes stream is too large: %s\n", buf);
+		return -ENOMEM;
+	}
+
+	ret = simple_write_to_buffer(attrs_buf, 512, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	if (sscanf(attrs_buf, "%lu %lu %lu %lu %lu %s",
+				&s, &a, &r, &minr, &maxr, res_file_path) != 6)
+		return -EINVAL;
+
+	spin_lock(&damon_thread_lock);
+	if (damon_thread)
+		goto monitor_running;
+
+	damon_set_attrs(s, a, r, minr, maxr, res_file_path);
+	spin_unlock(&damon_thread_lock);
+
+	return ret;
+
+monitor_running:
+	spin_unlock(&damon_thread_lock);
+	pr_err("damon thread is running. Turn it off first.\n");
+	return -EINVAL;
+}
+
+static const struct file_operations monitor_on_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_monitor_on_read,
+	.write = debugfs_monitor_on_write,
+};
+
+static const struct file_operations pids_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_pids_read,
+	.write = debugfs_pids_write,
+};
+
+static const struct file_operations attrs_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_attrs_read,
+	.write = debugfs_attrs_write,
+};
+
+static int __init debugfs_init(void)
+{
+	static struct dentry *debugfs_root;
+	char *file_names[] = {"attrs", "pids", "monitor_on"};
+	const struct file_operations *fops[] = {&attrs_fops, &pids_fops,
+		&monitor_on_fops};
+	int i;
+
+	debugfs_root = debugfs_create_dir("damon", NULL);
+	if (!debugfs_root) {
+		pr_err("failed to create debugfs\n");
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
+		if (!debugfs_create_file(file_names[i], 0600, debugfs_root,
+					NULL, fops[i])) {
+			pr_err("failed to create %s file\n", file_names[i]);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
+
+static int __init damon_init(void)
+{
+	pr_info("init\n");
+
+	prandom_seed_state(&rndseed, 42);
+	ktime_get_coarse_ts64(&last_aggregate_time);
+	last_regions_update_time = last_aggregate_time;
+
+	return debugfs_init();
+}
+
+module_init(damon_init);
+
+#include "damon-test.h"
