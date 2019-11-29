@@ -248,6 +248,34 @@ static int backend_probe_and_watch(struct notifier_block *notifier,
 	return NOTIFY_DONE;
 }
 
+static int xenbus_backend_reclaim(struct device *dev, void *data)
+{
+	struct xenbus_driver *drv;
+	if (!dev->driver)
+		return -ENOENT;
+	drv = to_xenbus_driver(dev->driver);
+	if (drv && drv->reclaim)
+		drv->reclaim(to_xenbus_device(dev), DOMID_INVALID);
+	return 0;
+}
+
+/*
+ * Returns 0 always because we are using shrinker to only detect memory
+ * pressure.
+ */
+static unsigned long xenbus_backend_shrink_count(struct shrinker *shrinker,
+				struct shrink_control *sc)
+{
+	bus_for_each_dev(&xenbus_backend.bus, NULL, NULL,
+			xenbus_backend_reclaim);
+	return 0;
+}
+
+static struct shrinker xenbus_backend_shrinker = {
+	.count_objects = xenbus_backend_shrink_count,
+	.seeks = DEFAULT_SEEKS,
+};
+
 static int __init xenbus_probe_backend_init(void)
 {
 	static struct notifier_block xenstore_notifier = {
@@ -263,6 +291,9 @@ static int __init xenbus_probe_backend_init(void)
 		return err;
 
 	register_xenstore_notifier(&xenstore_notifier);
+
+	if (register_shrinker(&xenbus_backend_shrinker))
+		pr_warn("shrinker registration failed\n");
 
 	return 0;
 }
