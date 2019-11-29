@@ -142,6 +142,31 @@ static inline bool persistent_gnt_timeout(struct persistent_gnt *persistent_gnt)
 		HZ * xen_blkif_pgrant_timeout);
 }
 
+/*
+ * Once a memory pressure is detected, squeeze free page pools
+ * this time (milliseconds)
+ */
+static int xen_blkif_buffer_squeeze_duration = 10;
+module_param_named(buffer_squeeze_duration,
+		xen_blkif_buffer_squeeze_duration, int, 0644);
+MODULE_PARM_DESC(buffer_squeeze_duration,
+"Duration in ms to squeeze pages buffer when a memory pressure is detected");
+
+static unsigned long xen_blk_buffer_squeeze_end;
+
+static unsigned long blkif_shrink_count(struct shrinker *shrinker,
+				struct shrink_control *sc)
+{
+	xen_blk_buffer_squeeze_end = jiffies +
+		msecs_to_jiffies(xen_blkif_buffer_squeeze_duration);
+	return 0;
+}
+
+static struct shrinker blkif_shrinker = {
+	.count_objects = blkif_shrink_count,
+	.seeks = DEFAULT_SEEKS,
+};
+
 static inline int get_free_page(struct xen_blkif_ring *ring, struct page **page)
 {
 	unsigned long flags;
@@ -656,8 +681,11 @@ purge_gnt_list:
 			ring->next_lru = jiffies + msecs_to_jiffies(LRU_INTERVAL);
 		}
 
-		/* Shrink if we have more than xen_blkif_max_buffer_pages */
-		shrink_free_pagepool(ring, xen_blkif_max_buffer_pages);
+		/* Shrink the free pages pool if it is too large. */
+		if (time_before(jiffies, xen_blk_buffer_squeeze_end))
+			shrink_free_pagepool(ring, 0);
+		else
+			shrink_free_pagepool(ring, xen_blkif_max_buffer_pages);
 
 		if (log_stats && time_after(jiffies, ring->st_print))
 			print_stats(ring);
@@ -1497,6 +1525,9 @@ static int __init xen_blkif_init(void)
 	rc = xen_blkif_xenbus_init();
 	if (rc)
 		goto failed_init;
+
+	if (register_shrinker(&blkif_shrinker))
+		pr_warn("shrinker registration failed\n");
 
  failed_init:
 	return rc;
