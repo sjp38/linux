@@ -135,6 +135,31 @@ module_param(log_stats, int, 0644);
 /* Number of free pages to remove on each call to gnttab_free_pages */
 #define NUM_BATCH_FREE_PAGES 10
 
+/*
+ * Once a memory pressure is detected, keep aggressive shrinking of the free
+ * page pools for this time (milliseconds)
+ */
+static int xen_blkif_aggressive_shrinking_duration = 10;
+module_param_named(aggressive_shrinking_duration,
+		xen_blkif_aggressive_shrinking_duration, int, 0644);
+MODULE_PARM_DESC(aggressive_shrinking_duration,
+"Duration in ms to do aggressive shrinking when a memory pressure is detected");
+
+static unsigned long xen_blk_mem_pressure_end;
+
+static unsigned long blkif_shrink_count(struct shrinker *shrinker,
+				struct shrink_control *sc)
+{
+	xen_blk_mem_pressure_end = jiffies +
+		msecs_to_jiffies(xen_blkif_aggressive_shrinking_duration);
+	return 0;
+}
+
+static struct shrinker blkif_shrinker = {
+	.count_objects = blkif_shrink_count,
+	.seeks = DEFAULT_SEEKS,
+};
+
 static inline bool persistent_gnt_timeout(struct persistent_gnt *persistent_gnt)
 {
 	return xen_blkif_pgrant_timeout &&
@@ -656,8 +681,11 @@ purge_gnt_list:
 			ring->next_lru = jiffies + msecs_to_jiffies(LRU_INTERVAL);
 		}
 
-		/* Shrink if we have more than xen_blkif_max_buffer_pages */
-		shrink_free_pagepool(ring, xen_blkif_max_buffer_pages);
+		/* Shrink the free pages pool if it is too large. */
+		if (time_before(jiffies, xen_blk_mem_pressure_end))
+			shrink_free_pagepool(ring, 0);
+		else
+			shrink_free_pagepool(ring, xen_blkif_max_buffer_pages);
 
 		if (log_stats && time_after(jiffies, ring->st_print))
 			print_stats(ring);
@@ -1499,6 +1527,9 @@ static int __init xen_blkif_init(void)
 	rc = xen_blkif_xenbus_init();
 	if (rc)
 		goto failed_init;
+
+	if (register_shrinker(&blkif_shrinker))
+		pr_warn("shrinker registration failed\n");
 
  failed_init:
 	return rc;
