@@ -492,6 +492,7 @@ static int xen_vbd_create(struct xen_blkif *blkif, blkif_vdev_t handle,
 static int xen_blkbk_remove(struct xenbus_device *dev)
 {
 	struct backend_info *be = dev_get_drvdata(&dev->dev);
+	unsigned long flags;
 
 	pr_debug("%s %p %d\n", __func__, dev, dev->otherend_id);
 
@@ -504,6 +505,7 @@ static int xen_blkbk_remove(struct xenbus_device *dev)
 		be->backend_watch.node = NULL;
 	}
 
+	spin_lock_irqsave(&dev->reclaim_lock, flags);
 	dev_set_drvdata(&dev->dev, NULL);
 
 	if (be->blkif) {
@@ -512,6 +514,7 @@ static int xen_blkbk_remove(struct xenbus_device *dev)
 		/* Put the reference we set in xen_blkif_alloc(). */
 		xen_blkif_put(be->blkif);
 	}
+	spin_unlock_irqrestore(&dev->reclaim_lock, flags);
 
 	return 0;
 }
@@ -597,6 +600,7 @@ static int xen_blkbk_probe(struct xenbus_device *dev,
 	int err;
 	struct backend_info *be = kzalloc(sizeof(struct backend_info),
 					  GFP_KERNEL);
+	unsigned long flags;
 
 	/* match the pr_debug in xen_blkbk_remove */
 	pr_debug("%s %p %d\n", __func__, dev, dev->otherend_id);
@@ -607,6 +611,7 @@ static int xen_blkbk_probe(struct xenbus_device *dev,
 		return -ENOMEM;
 	}
 	be->dev = dev;
+	spin_lock_irqsave(&dev->reclaim_lock, flags);
 	dev_set_drvdata(&dev->dev, be);
 
 	be->blkif = xen_blkif_alloc(dev->otherend_id);
@@ -614,8 +619,10 @@ static int xen_blkbk_probe(struct xenbus_device *dev,
 		err = PTR_ERR(be->blkif);
 		be->blkif = NULL;
 		xenbus_dev_fatal(dev, err, "creating block interface");
+		spin_unlock_irqrestore(&dev->reclaim_lock, flags);
 		goto fail;
 	}
+	spin_unlock_irqrestore(&dev->reclaim_lock, flags);
 
 	err = xenbus_printf(XBT_NIL, dev->nodename,
 			    "feature-max-indirect-segments", "%u",
@@ -823,6 +830,28 @@ static void frontend_changed(struct xenbus_device *dev,
 	}
 }
 
+
+/* Once a memory pressure is detected, squeeze free page pools for a while. */
+static unsigned int buffer_squeeze_duration_ms = 10;
+module_param_named(buffer_squeeze_duration_ms,
+		buffer_squeeze_duration_ms, int, 0644);
+MODULE_PARM_DESC(buffer_squeeze_duration_ms,
+"Duration in ms to squeeze pages buffer when a memory pressure is detected");
+
+/*
+ * Callback received when the memory pressure is detected.
+ */
+static void reclaim_memory(struct xenbus_device *dev)
+{
+	struct backend_info *be = dev_get_drvdata(&dev->dev);
+
+	/* Device is registered but not probed yet */
+	if (!be)
+		return;
+
+	be->blkif->buffer_squeeze_end = jiffies +
+		msecs_to_jiffies(buffer_squeeze_duration_ms);
+}
 
 /* ** Connection ** */
 
@@ -1115,7 +1144,8 @@ static struct xenbus_driver xen_blkbk_driver = {
 	.ids  = xen_blkbk_ids,
 	.probe = xen_blkbk_probe,
 	.remove = xen_blkbk_remove,
-	.otherend_changed = frontend_changed
+	.otherend_changed = frontend_changed,
+	.reclaim_memory = reclaim_memory,
 };
 
 int xen_blkif_xenbus_init(void)
