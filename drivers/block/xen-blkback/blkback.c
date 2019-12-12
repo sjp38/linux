@@ -152,8 +152,9 @@ static unsigned long buffer_squeeze_end;
 
 void xen_blkbk_reclaim_memory(struct xenbus_device *dev)
 {
-	buffer_squeeze_end = jiffies +
-		msecs_to_jiffies(buffer_squeeze_duration_ms);
+	if (!buffer_squeeze_end)
+		buffer_squeeze_end = jiffies +
+			msecs_to_jiffies(buffer_squeeze_duration_ms);
 }
 
 static inline int get_free_page(struct xen_blkif_ring *ring, struct page **page)
@@ -669,10 +670,13 @@ purge_gnt_list:
 		}
 
 		/* Shrink the free pages pool if it is too large. */
-		if (time_before(jiffies, buffer_squeeze_end))
+		if (time_before(jiffies, buffer_squeeze_end)) {
 			shrink_free_pagepool(ring, 0);
-		else
+		} else {
+			if (unlikely(buffer_squeeze_end))
+				buffer_squeeze_end = 0;
 			shrink_free_pagepool(ring, max_buffer_pages);
+		}
 
 		if (log_stats && time_after(jiffies, ring->st_print))
 			print_stats(ring);
