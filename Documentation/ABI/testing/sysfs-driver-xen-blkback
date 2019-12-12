@@ -25,3 +25,12 @@ Description:
                 allocated without being in use. The time is in
                 seconds, 0 means indefinitely long.
                 The default is 60 seconds.
+
+What:           /sys/module/xen_blkback/parameters/buffer_squeeze_duration_ms
+Date:           December 2019
+KernelVersion:  5.5
+Contact:        Roger Pau Monné <roger.pau@citrix.com>
+Description:
+                How long the block backend buffers release every free pages in
+                those under memory pressure.  The time is in milliseconds.
+                The default is 10 milliseconds.
