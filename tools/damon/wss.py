@@ -22,7 +22,7 @@ def patterns(f):
         patterns.append([eaddr - saddr, nr_accesses])
     return patterns
 
-def plot_dist(data_file, output_file):
+def plot_dist(data_file, output_file, xlabel):
     terminal = output_file.split('.')[-1]
     if not terminal in ['pdf', 'jpeg', 'png', 'svg']:
         os.remove(data_file)
@@ -33,7 +33,9 @@ def plot_dist(data_file, output_file):
     set term %s;
     set output '%s';
     set key off;
-    plot '%s' with linespoints;""" % (terminal, output_file, data_file)
+    set ylabel 'working set size (bytes)';
+    set xlabel '%s';
+    plot '%s' with linespoints;""" % (terminal, output_file, xlabel, data_file)
     subprocess.call(['gnuplot', '-e', gnuplot_cmd])
     os.remove(data_file)
 
@@ -46,7 +48,7 @@ def set_argparser(parser):
     parser.add_argument('--sortby', '-s', choices=['time', 'size'],
             help='the metric to be used for the sort of the working set sizes')
     parser.add_argument('--plot', '-p', type=str, metavar='<file>',
-            help='plot to an image file')
+            help='plot the distribution to an image file')
 
 def main(args=None):
     if not args:
@@ -110,7 +112,10 @@ def main(args=None):
         sys.stdout = orig_stdout
         tmp_file.flush()
         tmp_file.close()
-        plot_dist(tmp_path, args.plot)
+        xlabel = 'runtime (percent)'
+        if wss_sort:
+            xlabel = 'percentile'
+        plot_dist(tmp_path, args.plot, xlabel)
 
 if __name__ == '__main__':
     main()
