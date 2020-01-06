@@ -4,8 +4,11 @@
 "Print out distribution of the number of regions in the given record"
 
 import argparse
+import os
 import struct
+import subprocess
 import sys
+import tempfile
 
 def patterns(f):
     wss = 0
@@ -19,6 +22,23 @@ def patterns(f):
         patterns.append([eaddr - saddr, nr_accesses])
     return patterns
 
+def plot_dist(data_file, output_file, xlabel):
+    terminal = output_file.split('.')[-1]
+    if not terminal in ['pdf', 'jpeg', 'png', 'svg']:
+        os.remove(data_file)
+        print("Unsupported plot output type.")
+        exit(-1)
+
+    gnuplot_cmd = """
+    set term %s;
+    set output '%s';
+    set key off;
+    set ylabel 'number of sampling regions';
+    set xlabel '%s';
+    plot '%s' with linespoints;""" % (terminal, output_file, xlabel, data_file)
+    subprocess.call(['gnuplot', '-e', gnuplot_cmd])
+    os.remove(data_file)
+
 def set_argparser(parser):
     parser.add_argument('--input', '-i', type=str, metavar='<file>',
             default='damon.data', help='input file name')
@@ -27,6 +47,8 @@ def set_argparser(parser):
             help='range of wss percentiles to print')
     parser.add_argument('--sortby', '-s', choices=['time', 'size'],
             help='the metric to be used for sorting the number of regions')
+    parser.add_argument('--plot', '-p', type=str, metavar='<file>',
+            help='plot the distribution to an image file')
 
 def main(args=None):
     if not args:
@@ -57,6 +79,12 @@ def main(args=None):
                     pid_pattern_map[pid] = []
                 pid_pattern_map[pid].append(patterns(f))
 
+    orig_stdout = sys.stdout
+    if args.plot:
+        tmp_path = tempfile.mkstemp()[1]
+        tmp_file = open(tmp_path, 'w')
+        sys.stdout = tmp_file
+
     print('# <percentile> <# regions>')
     for pid in pid_pattern_map.keys():
         snapshots = pid_pattern_map[pid][20:]
@@ -74,6 +102,15 @@ def main(args=None):
                 thres_idx -= 1
             threshold = nr_regions_dist[thres_idx]
             print('%d\t%d' % (percentile, nr_regions_dist[thres_idx]))
+
+    if args.plot:
+        sys.stdout = orig_stdout
+        tmp_file.flush()
+        tmp_file.close()
+        xlabel = 'runtime (percent)'
+        if wss_sort:
+            xlabel = 'percentile'
+        plot_dist(tmp_path, args.plot, xlabel)
 
 if __name__ == '__main__':
     main()
