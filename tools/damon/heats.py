@@ -325,10 +325,10 @@ def set_argparser(parser):
             help='minimal space address of the output')
     parser.add_argument('--amax', metavar='<address>', type=lambda x: int(x,0),
             help='maximum space address of the output')
+    parser.add_argument('--guide', action='store_true',
+            help='print a guidance for the min/max/resolution settings')
     parser.add_argument('--heatmap', metavar='<file>', type=str,
             help='heatmap image file to create')
-    parser.add_argument('--guide', action='store_true',
-            help='give a guidance for the min/max/resolution settings')
 
 def main(args=None):
     if not args:
