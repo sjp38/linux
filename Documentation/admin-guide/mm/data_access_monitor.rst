@@ -22,31 +22,34 @@ maximize the quality and minimize the overhead with its best efforts while
 preserving the users configured trade-off.
 
 
-Quick Tutorial
-==============
-
-1. Ensure your kernel is built with CONFIG_DAMON turned on.
-2. ``<your kernel source tree>/tools/damon/damn -h``
-
-
 Background
 ==========
 
-Optimizing memory management schemes based on the actual data access pattern of
-main workloads can highly improve the performance of memory-senstive systems.
-However, knowing the actual data access pattern of huge and complex program is
-not easy, even for the developers of the programs.
+For performance-centric analysis and optimization of memory management schemes
+(either that of kernel space or user space), the actual data access pattern of
+the workloads is highly useful.  The information should be reasonably accurate,
+but also must guaranteed to be taken with only light-weight overhead.  Manually
+extracting such data from huge and complex programs is not easy and time
+consuming, even for the developers of the programs.
 
-There are tools and techniques developed for memory access investigations, but
-none of those are designed for performance-centric memory management
-optimizations.  PIN-like memory access instrumentation techniques can be useful
-for accurate monitoring such as bug detection, but incurs too high overhead.
-H/W based access counting features (e.g., page table access bit) based access
-tracking mechanisms can dramatically decrease the overhead compared to the
-instrumentation based techniques, but the overhead can arbitrarily increases as
-the size of the target workload grows.  Miniature-like static region based
-sampling can bound the maximum overhead, but it will decrease the quality of
-the output as the size of the workload grows.
+There are a range of tools and techniques developed for general memory access
+investigations, and some of those could be partially used for this purpose.
+However, most of those are not practical or unscalable, mainly because those
+are designed with no consideration about the trade-off between the accuracy of
+the output and the overhead.
+
+The memory access instrumentation techniques which is applied to many tools
+such as Intel PIN is essential for highly detailed analysis such as bug
+detections, but incur unacceptably high overhead.  This is mainly due to the
+fact that those techniques are designed for the highly detailed information,
+which is not strictly required for performance-centric purpose.  H/W based
+access counting features (e.g., page table access bit) based access tracking
+mechanisms can dramatically decrease the overhead by forgiving some of the
+monitoring quality, compared to the instrumentation based techniques.  That
+said, the overhead can arbitrarily increase as the size of the target workload
+grows.  Miniature-like static region based sampling can set the upperbound of
+the overhead, but it will now decrease the quality of the output as the size of
+the workload grows.
 
 
 Mechanisms of DAMON
@@ -187,3 +190,12 @@ DAMON has a shallow wrapper python script providing more convenient interface
 as ``/tools/damon/damn``.  Note that it only aims to be used for minimal
 reference of the debugfs interface and for debugging purposes.  Based on the
 debugfs interface, you can of course create another cool user space tools.
+
+
+Quick Tutorial
+--------------
+
+To test DAMON on your system,
+
+1. Ensure your kernel is built with CONFIG_DAMON turned on.
+2. ``<your kernel source tree>/tools/damon/damn -h``
