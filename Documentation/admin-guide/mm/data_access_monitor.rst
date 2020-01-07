@@ -128,7 +128,7 @@ User Interface
 ==============
 
 DAMON exports three files, ``attrs``, ``pids``, and ``monitor_on`` under its
-debugfs directory, ``/sys/kernel/debug/damon/``.
+debugfs directory, ``<debugfs>/damon/``.
 
 
 Attributes
@@ -140,7 +140,7 @@ Users can read and write the ``sampling interval``, ``aggregation interval``,
 example, below commands set those values to 5 ms, 100 ms, 1,000 ms, 10, 1000,
 and ``/damon.data`` and check it again::
 
-    # cd /sys/kernel/debug/damon
+    # cd <debugfs>/damon
     # echo 5000 100000 1000000 10 1000 /damon.data > attrs
     # cat attrs
     5000 100000 1000000 10 1000 /damon.data
@@ -154,7 +154,7 @@ reading from and writing to the `pids` file.  For example, below commands set
 processes having pids 42 and 4242 as the processes to be monitored and check
 it again::
 
-    # cd /sys/kernel/debug/damon
+    # cd <debugfs>/damon
     # echo 42 4242 > pids
     # cat pids
     42 4242
@@ -171,7 +171,7 @@ monitor the target processes with the attributes.  Writing ``off`` to the file
 stops DAMON.  DAMON also stops if every target processes is be terminated.
 Below example commands turn on, off, and check status of DAMON::
 
-    # cd /sys/kernel/debug/damon
+    # cd <debugfs>/damon
     # echo on > monitor_on
     # echo off > monitor_on
     # cat monitor_on
