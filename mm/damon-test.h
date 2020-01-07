@@ -36,7 +36,7 @@ static void damon_test_str_to_pids(struct kunit *test)
 	question = "a123";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, 0l, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, (void *)answers, NULL);
+	KUNIT_EXPECT_PTR_EQ(test, answers, (unsigned long *)NULL);
 
 	question = "12 35";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
