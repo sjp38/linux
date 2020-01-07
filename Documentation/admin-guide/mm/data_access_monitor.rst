@@ -43,9 +43,9 @@ such as Intel PIN is essential for highly detailed analysis such as bug
 detections, but incur unacceptably high overhead.  This is mainly due to the
 fact that those techniques are designed for the highly detailed information,
 which is not strictly required for performance-centric purpose.  H/W based
-access counting features (e.g., page table access bit) based access tracking
-mechanisms can dramatically decrease the overhead by forgiving some of the
-monitoring quality, compared to the instrumentation based techniques.  That
+access counting features (e.g., the Accessed bits of PTEs) based access
+tracking mechanisms can dramatically decrease the overhead by forgiving some of
+the monitoring quality, compared to the instrumentation based techniques.  That
 said, the overhead can arbitrarily increase as the size of the target workload
 grows.  Miniature-like static region based sampling can set the upperbound of
 the overhead, but it will now decrease the quality of the output as the size of
@@ -59,59 +59,58 @@ Mechanisms of DAMON
 Basic Access Check
 ------------------
 
-For each of user-specified time interval, DAMON reports what page is how
-frequently accessed.  The report is passed to users by writing binary format
-information to a ``result file`` that user previously specified it's path.
-Note that the frequency is not an absolute number of accesses, but a relative
-frequency.
+DAMON basically reports what pages are how frequently accessed.  The report is
+passed to users in binary format via a ``result file`` which users can set it's
+path.  Note that the frequency is not an absolute number of accesses, but a
+relative frequency.
 
-Users can also control the resolution of the frequencies.  In detail, users can
-set two time intervals, ``sampling interval`` and ``aggregation interval``.
+Users can also control the resolution of the reports by setting two time
+intervals, ``sampling interval`` and ``aggregation interval``.  In detail,
 DAMON checks access to each page per ``sampling interval``, aggregates the
-results, and reports/initializes the aggregated results per ``aggregation
-interval``.  For the access check of each page, DAMON uses the page table
-access bit.
+results (counts the number of the accesses to each page), and
+reports/initializes the aggregated results per ``aggregation interval``.  For
+the access check of each page, DAMON uses the Accessed bits of PTEs.
 
-This is almost same with the previously mentioned H/W based access tracking
-mechanisms, which overhead is increasing as the size of target process grows.
+This is thus similar to the previously mentioned H/W based access tracking
+mechanisms, which overhead is increasing as the size of the target process
+grows.
 
 
 Region Based Sampling
 ---------------------
 
-To avoid the unbounded increase of the overhead, DAMON groups the pages of the
-target process into a number of regions that supposed to constructed with pages
-that have similar access frequencies.  As long as the assumption is kept, only
-one page in the region is required to be checked.  Thus, for each ``sampling
-interval``, DAMON randomly pick one page in each region and clear its access
-bit.  After one more ``sampling interval``, DAMON checks the access bits of the
-pages chosen in the last interval and increase the access frequency of the
-region if the bit is set meanwhile.  Thus, the monitoring overhead is
-controlled by the number of regions.  DAMON allows users to set the minimal and
+To avoid the unbounded increase of the overhead, DAMON groups a number of
+adjacent pages that assumed to have same access frequencies into a region.  As
+long as the assumption (pages in a region have same access frequencies) is
+kept, only one page in the region is necessary to be checked.  Thus, for each
+``sampling interval``, DAMON randomly picks one page in each region and clears
+its Accessed bit.  After one more ``sampling interval``, DAMON reads the
+Accessed bit of the page and increases the access frequency of the region if
+the bit has set meanwhile.  Therefore, the monitoring overhead is controllable
+by setting the number of regions.  DAMON allows users to set the minimal and
 maximum number of regions for the trade-off.
 
 Except the assumption, this is almost same with the miniature-like static
 region based sampling.  Therefore, this scheme cannot preserve the quality of
-the output if the assumption of the regions is not guaranteed.
+the output if the assumption is not guaranteed.
 
 
-Dynamic Regions Adjustment
---------------------------
+Adaptive Regions Adjustment
+---------------------------
 
 At the beginning of the monitoring, DAMON creates initial regions by evenly
 splitting the memory mapped address space of the process into the
 user-specified minimal number of regions.  In this initial state, the
-assumption is normally not kept and thus the quality could be low as the size
-of the target increases.  To keep the assumption as much as be preserved, DAMON
-dynamically merges and splits each region.  For each ``aggregation interval``,
-it compares the access frequencies of adjacent regions and merges if the
-difference is small.
-Then, after it reports and clears the aggregated frequencies of each region, it
-splits each region into two regions if total number of regions is smaller than
-the user-specified maximum number of regions.
+assumption is normally not kept and thus the quality could be low.  To keep the
+assumption as much as possible, DAMON adaptively merges and splits each region.
+For each ``aggregation interval``, it compares the access frequencies of
+adjacent regions and merges if the difference is small.  Then, after it reports
+and clears the aggregated access frequency of each region, it splits each
+region into two regions if the total number of regions is smaller than the half
+of the user-specified maximum number of regions.
 
 In this way, DAMON provides its best-effort quality and minimal overhead while
-keeping the users required trade-off bounds.
+keeping the bounds users set for their trade-off.
 
 
 Applying Dynamic Memory Mapping
@@ -119,8 +118,8 @@ Applying Dynamic Memory Mapping
 
 Only a small portions of the super-huge virtual address space of processes is
 mapped to physical memory and used.  Thus, tracking the unmapped address
-regions is just wasteful.  However, tracking every memory mapping change can
-incur high overhead only.  Thus, DAMON allow users to specify a time interval
+regions is just wasteful.  However, tracking every memory mapping change might
+incur high overhead.  Thus, DAMON allow users to specify a time interval
 (``regions update interval``) to check and apply the dynamic memory mapping
 changes to the tracking regions.
 
@@ -136,10 +135,10 @@ Attributes
 ----------
 
 Users can read and write the ``sampling interval``, ``aggregation interval``,
-``regions update interval``, min/max number of regions, and the ``result file``
-path by reading from and writing to the file.  For example, below command sets
-those values to 5 ms, 100 ms, 1,000 ms, 10, 1000, and ``/damon.data`` and
-checks it again::
+``regions update interval``, min/max number of regions, and the path to
+``result file`` by reading from and writing to the ``attrs`` file.  For
+example, below commands set those values to 5 ms, 100 ms, 1,000 ms, 10, 1000,
+and ``/damon.data`` and check it again::
 
     # cd /sys/kernel/debug/damon
     # echo 5000 100000 1000000 10 1000 /damon.data > attrs
@@ -151,26 +150,26 @@ Target PIDs
 -----------
 
 Users can read and write the pids of current monitoring target processes by
-reading from and writing to the `pids` file.  For example, below command sets
-processes having pids 42 and 4242 as the processes to monitor and checks it
-again::
+reading from and writing to the `pids` file.  For example, below commands set
+processes having pids 42 and 4242 as the processes to be monitored and check
+it again::
 
     # cd /sys/kernel/debug/damon
     # echo 42 4242 > pids
     # cat pids
     42 4242
 
-Note that setting the pids doesn't start the monitoring.
+Note that setting the pids doesn't starts the monitoring.
 
 
 Turning On/Off
 --------------
 
-You can check current status, start and stop the DAMON by reading from and
+You can check current status, start and stop the monitoring by reading from and
 writing to the ``monitor_on`` file.  Writing ``on`` to the file starts DAMON to
 monitor the target processes with the attributes.  Writing ``off`` to the file
-stops DAMON.  DAMON will also stop if every target processes is be terminated.
-Below command turns on, off, and checks status of DAMON::
+stops DAMON.  DAMON also stops if every target processes is be terminated.
+Below example commands turn on, off, and check status of DAMON::
 
     # cd /sys/kernel/debug/damon
     # echo on > monitor_on
@@ -178,18 +177,19 @@ Below command turns on, off, and checks status of DAMON::
     # cat monitor_on
     off
 
-Please note that 'attrs' and 'pids' file is only readable while DAMON is
-running on.  If you try to write to those files while DAMON is running, it will
-return ``-EINVAL``.
+Please note that you cannot write to the ``attrs`` and ``pids`` files while the
+monitoring is turned on.  If you write to the files while DAMON is running,
+``-EINVAL`` will be returned.
 
 
 User Space Wrapper
 ------------------
 
-DAMON has a shallow wrapper python script providing more convenient interface
-as ``/tools/damon/damn``.  Note that it only aims to be used for minimal
-reference of the debugfs interface and for debugging purposes.  Based on the
-debugfs interface, you can of course create another cool user space tools.
+DAMON has a shallow wrapper python script, ``/tools/damon/damn`` that provides
+more convenient interface.  Note that it is only aimed to be used for minimal
+reference of the DAMON's raw interfaces and for debugging of the DAMON itself.
+Based on the debugfs interface, you can create another cool and more convenient
+user space tools.
 
 
 Quick Tutorial
@@ -197,5 +197,6 @@ Quick Tutorial
 
 To test DAMON on your system,
 
-1. Ensure your kernel is built with CONFIG_DAMON turned on.
+1. Ensure your kernel is built with CONFIG_DAMON turned on, and debugfs is
+   mounted at ``/sys/kernel/debug/``.
 2. ``<your kernel source tree>/tools/damon/damn -h``
