@@ -124,6 +124,66 @@ incur high overhead.  Thus, DAMON allow users to specify a time interval
 changes to the tracking regions.
 
 
+Expected Use-cases
+==================
+
+DAMON can be used to analyze the behavior of the program.  Based on that, users
+can confirm whether the program is running as intended or not.  This can be
+useful for debugging and tests of design points.
+
+The monitored results can also be used to count and predict the dynamic working
+set size.  For the administration of memory overcommitted systems, this will be
+useful.
+
+If you are a programmer, you can also optimize your program by managing the
+memory based on the actual data access pattern.  For example, you can identify
+the dynamic hotness of your data using DAMON and call ``mlock()`` to keep your
+hot data in DRAM, or ``madvise()`` with ``MADV_PAGEOUT`` to proactively reclaim
+cold data.  Even though your program is guaranteed to not encounter memory
+pressure, you can still improve the performance by applying the DAMON outputs
+for call of ``MADV_HUGEPAGE`` and ``MADV_NOHUGEPAGE``.  Our evaluation of DAMON
+includes the optimization using ``mlock()``.  Please refer to below Evaluation
+section for more detail.
+
+As DAMON incurs very low overhead, such optimizations can be applied not only
+offline, but also online.  Also, there is no reason to limit the optimization
+to user space.  Several parts of the kernel's memory management mechanisms
+could be also optimized using DAMON. The reclamation, the THP (de)promotion
+decisions, and the compaction parts would be a good example.
+
+
+Evaluation
+==========
+
+A prototype of DAMON has evaluated on an Intel Xeon E7-8837 machine using 20
+benchmarks that picked from SPEC CPU 2006, NAS, Tensorflow Benchmark,
+SPLASH-2X, and PARSEC 3 benchmark suite.  Nonethless, this section provides
+only summary of the results.  For more detail, please refer to the slides used
+for the introduction of DAMON at the Linux Plumbers Conference 2019
+(https://linuxplumbersconf.org/event/4/contributions/548/attachments/311/590/damon_ksummit19.pdf)
+or the MIDDLEWARE'19 industrial track paper
+(https://dl.acm.org/doi/10.1145/3366626.3368125).
+
+We first traced and visualized the data access pattern of each workload.  We
+were able to confirm that the visualized results are reasonably accurate by
+manually comparing those with the source code of the workloads.
+
+To see the usefulness of the monitoring, we optimized 9 memory intensive
+workloads among them for memory pressure situations using the DAMON outputs.
+In detail, we identified frequently accessed memory regions in each workload
+based on the DAMON results and protected them with ``mlock()`` system calls.
+The optimized versions consistently show speedup (2.55x in best case, 1.65x in
+average) under memory pressure situation.
+
+We also measured the overhead of DAMON by counting the number of sampling
+regions.  It was not only under the upperbound, but was much lower (0.6 percent
+of the bound in best case, 13.288 percent of the bound in average) as we
+intended with the adaptive regions adjustment.  We also compared the number
+with that of the straightforward Accessed bit based monitoring, which checks
+the access of every page frame.  The overhead was smaller than the normal
+mechanism by 94.242.42x in best case, and 3,159.61x in average.
+
+
 User Interface
 ==============
 
@@ -200,63 +260,3 @@ To test DAMON on your system,
 1. Ensure your kernel is built with CONFIG_DAMON turned on, and debugfs is
    mounted at ``/sys/kernel/debug/``.
 2. ``<your kernel source tree>/tools/damon/damn -h``
-
-
-Expected Use-cases
-==================
-
-DAMON can be used to analyze the behavior of the program.  Based on that, users
-can confirm whether the program is running as intended or not.  This can be
-useful for debugging and tests of design points.
-
-The monitored results can also be used to count and predict the dynamic working
-set size.  For the administration of memory overcommitted systems, this will be
-useful.
-
-If you are a programmer, you can also optimize your program by managing the
-memory based on the actual data access pattern.  For example, you can identify
-the dynamic hotness of your data using DAMON and call ``mlock()`` to keep your
-hot data in DRAM, or ``madvise()`` with ``MADV_PAGEOUT`` to proactively reclaim
-cold data.  Even though your program is guaranteed to not encounter memory
-pressure, you can still improve the performance by applying the DAMON outputs
-for call of ``MADV_HUGEPAGE`` and ``MADV_NOHUGEPAGE``.  Our evaluation of DAMON
-includes the optimization using ``mlock()``.  Please refer to below Evaluation
-section for more detail.
-
-As DAMON incurs very low overhead, such optimizations can be applied not only
-offline, but also online.  Also, there is no reason to limit the optimization
-to user space.  Several parts of the kernel's memory management mechanisms
-could be also optimized using DAMON. The reclamation, the THP (de)promotion
-decisions, and the compaction parts would be a good example.
-
-
-Evaluation
-==========
-
-A prototype of DAMON has evaluated on an Intel Xeon E7-8837 machine using 20
-benchmarks that picked from SPEC CPU 2006, NAS, Tensorflow Benchmark,
-SPLASH-2X, and PARSEC 3 benchmark suite.  Nonethless, this section provides
-only summary of the results.  For more detail, please refer to the slides used
-for the introduction of DAMON at the Linux Plumbers Conference 2019
-(https://linuxplumbersconf.org/event/4/contributions/548/attachments/311/590/damon_ksummit19.pdf)
-or the MIDDLEWARE'19 industrial track paper
-(https://dl.acm.org/doi/10.1145/3366626.3368125).
-
-We first traced and visualized the data access pattern of each workload.  We
-were able to confirm that the visualized results are reasonably accurate by
-manually comparing those with the source code of the workloads.
-
-To see the usefulness of the monitoring, we optimized 9 memory intensive
-workloads among them for memory pressure situations using the DAMON outputs.
-In detail, we identified frequently accessed memory regions in each workload
-based on the DAMON results and protected them with ``mlock()`` system calls.
-The optimized versions consistently show speedup (2.55x in best case, 1.65x in
-average) under memory pressure situation.
-
-We also measured the overhead of DAMON by counting the number of sampling
-regions.  It was not only under the upperbound, but was much lower (0.6 percent
-of the bound in best case, 13.288 percent of the bound in average) as we
-intended with the adaptive regions adjustment.  We also compared the number
-with that of the straightforward Accessed bit based monitoring, which checks
-the access of every page frame.  The overhead was smaller than the normal
-mechanism by 94.242.42x in best case, and 3,159.61x in average.
