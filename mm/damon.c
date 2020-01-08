@@ -312,27 +312,13 @@ static void swap_regions(struct region *r1, struct region *r2)
 }
 
 /*
- * Find the three regions in the address space
+ * Find the three regions in an address space
  *
- * vma		the head of the target address space
- * regions	an array of three 'struct region's that result will be saved
+ * vma		the head vma of the target address space
+ * regions	an array of three 'struct region's that results will be saved
  *
- * For the tradeoff between accuracy and overhead, we convert the dynamically
- * mapped complex memory regions of the target process into a simple form and
- * track it.  The simplified memory region is constructed with three regions
- * seperated by two biggest gaps in the original address space.  The two
- * biggest gaps will usually be the gaps between the heap, mmap()ed region, and
- * the stack, because the memory maps of common tasks are as below:
- *
- *   <code>
- *   <heap>
- *   <!!BIG GAP!!>
- *   <file-backed or anonymous mmapped pages>
- *   <!!BIG GAP!!>
- *   <stack>
- *   <vvar>
- *   <vdso>
- *   <vsyscall>
+ * This function receives an address space and finds three regions in it which
+ * seperated by the two biggest unmapped regions in the space.
  *
  * Returns 0 if success, or negative error code otherwise.
  */
@@ -343,7 +329,7 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 	struct vm_area_struct *last_vma = NULL;
 	unsigned long start = 0;
 
-	/* Find two biggest gaps */
+	/* Find two biggest gaps so that first_gap > second_gap > others */
 	for (; vma; vma = vma->vm_next) {
 		if (!last_vma) {
 			start = vma->vm_start;
@@ -402,24 +388,36 @@ static int damon_three_regions_of(struct damon_task *t,
 }
 
 /*
- * Initialize '->regions_list' for the given task
+ * Initialize address space regions to monitor for the given task
  *
  * t	the given target task
  *
- * This function initializes the '->regions_list' of the given task so that the
- * list covers the entire address space of the task.  Because only a few parts
- * of the entire address space is dynamically mapped to the memory and
- * accessed, checking accesses to the unmapped regions is only wasteful.  That
- * said, because we can deal with small noises, the every dynamic memory map
- * change is not strictly required to be tracked.  Moreover, tracking every
- * such change might only result in additional overhead.
+ * Because only a number of small portions of the entire address space
+ * is acutally mapped to the memory and accessed, monitoring the unmapped
+ * regions is wasteful.  That said, because we can deal with small noises,
+ * tracking every mapping is not strictly required but could even incur a high
+ * overhead if the mapping frequently changes or the number of mappings is
+ * high.
  *
- * For the trade-off, damon finds and eliminates only two biggest unmapped
- * regions in the address space from the list of regions that we will check.
- * Usual memory mappings of tasks will have two super-big gaps between the
- * heap, the file-backed or anonymous mmapped pages and the stack.  Because of
- * their super-big size, finding and eliminating only those from the target
- * regions will increase the monitoring quality with reasonably low cost.
+ * As usual memory map of processes is as below, the gap between the heap and
+ * the uppermost mmap()-ed region, and the gap between the lowermost mmap()-ed
+ * region and the stack will be two biggest unmapped regions.  Because these
+ * gaps are outliers between the mapped and unmapped regions in the address
+ * space in terms of the size, excluding these two biggest unmapped regions
+ * will be sufficient to make a trade-off.
+ *
+ *   <heap>
+ *   <BIG UNMAPPED REGION 1>
+ *   <uppermost mmap()-ed region>
+ *   (other mmap()-ed regions and small unmapped regions)
+ *   <lowermost mmap()-ed region>
+ *   <BIG UNMAPPED REGION 2>
+ *   <stack>
+ *
+ * For the reason, this function converts the original address space of the
+ * given task to a simplified address space, that is constructed with three
+ * regions seperated by the two biggest unmapped regions and stores those in
+ * the given task.
  */
 static void init_regions_of(struct damon_task *t)
 {
