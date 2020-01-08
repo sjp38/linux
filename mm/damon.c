@@ -78,9 +78,6 @@ static struct timespec64 last_regions_update_time;
 static unsigned long min_nr_regions = 10;
 static unsigned long max_nr_regions = 1000;
 
-#define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
-static struct rnd_state rndseed;
-
 /* result buffer */
 #define DAMON_LEN_RBUF	(1024 * 1024 * 4)
 static char damon_rbuf[DAMON_LEN_RBUF];
@@ -95,6 +92,9 @@ static struct task_struct *damon_thread;
 
 /* Protects damon_thread_stop and damon_thread */
 static DEFINE_SPINLOCK(damon_thread_lock);
+
+static struct rnd_state rndseed;
+#define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
 
 /*
  * Return a new damon region object, or NULL if fails
