@@ -610,6 +610,8 @@ static void flush_aggregated(void)
 	}
 }
 
+#define sz_damon_region(r) (r->vm_end - r->vm_start)
+
 /*
  * Merge two adjacent regions into one region
  */
@@ -618,9 +620,9 @@ static void damon_merge_two_regions(struct damon_region *l,
 {
 	BUG_ON(damon_next_region(l) != r);
 
-	l->nr_accesses = (l->nr_accesses * (l->vm_end - l->vm_start) +
-			r->nr_accesses * (r->vm_end - r->vm_start)) /
-			(l->vm_end - l->vm_start + r->vm_end - r->vm_start);
+	l->nr_accesses = (l->nr_accesses * sz_damon_region(l) +
+			r->nr_accesses * sz_damon_region(r)) /
+			(sz_damon_region(l) + sz_damon_region(r));
 	l->vm_end = r->vm_end;
 	damon_destroy_region(r);
 }
