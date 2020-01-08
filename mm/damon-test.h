@@ -390,20 +390,20 @@ static void damon_test_update_two_gaps4(struct kunit *test)
 	damon_cleanup_global_state();
 }
 
-static void damon_test_split(struct kunit *test)
+static void damon_test_split_evenly(struct kunit *test)
 {
 	struct damon_task *t;
 	struct damon_region *r;
 	unsigned long i;
 
-	KUNIT_EXPECT_EQ(test, damon_split_region(NULL, 5), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(NULL, 5), -EINVAL);
 
 	t = damon_new_task(42);
 	r = damon_new_region(0, 100);
-	KUNIT_EXPECT_EQ(test, damon_split_region(r, 0), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(r, 0), -EINVAL);
 
 	damon_add_region_tail(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region(r, 10), 0);
+	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(r, 10), 0);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 10u);
 
 	i = 0;
@@ -416,7 +416,7 @@ static void damon_test_split(struct kunit *test)
 	t = damon_new_task(42);
 	r = damon_new_region(5, 59);
 	damon_add_region_tail(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region(r, 5), 0);
+	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(r, 5), 0);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 5u);
 
 	i = 0;
@@ -433,7 +433,7 @@ static void damon_test_split(struct kunit *test)
 	t = damon_new_task(42);
 	r = damon_new_region(5, 6);
 	damon_add_region_tail(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region(r, 2), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(r, 2), -EINVAL);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 1u);
 
 	damon_for_each_region(r, t) {
@@ -551,7 +551,7 @@ static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damon_test_update_two_gaps2),
 	KUNIT_CASE(damon_test_update_two_gaps3),
 	KUNIT_CASE(damon_test_update_two_gaps4),
-	KUNIT_CASE(damon_test_split),
+	KUNIT_CASE(damon_test_split_evenly),
 	KUNIT_CASE(damon_test_split_at),
 	KUNIT_CASE(damon_test_merge_two),
 	KUNIT_CASE(damon_test_merge_regions_of),

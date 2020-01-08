@@ -262,7 +262,7 @@ static struct mm_struct *damon_get_mm(struct damon_task *t)
  *
  * Returns 0 on success, or negative error code otherwise.
  */
-static int damon_split_region(struct damon_region *r,
+static int damon_split_region_evenly(struct damon_region *r,
 				unsigned int nr_pieces)
 {
 	unsigned long sz_orig, sz_piece, orig_end;
@@ -438,7 +438,7 @@ static void init_regions_of(struct damon_task *t)
 
 	/* Split the middle region into 'min_nr_regions - 2' regions */
 	r = damon_nth_region_of(t, 1);
-	if (damon_split_region(r, min_nr_regions - 2))
+	if (damon_split_region_evenly(r, min_nr_regions - 2))
 		pr_warn("Init middle region failed to be splitted\n");
 }
 
