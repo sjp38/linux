@@ -78,6 +78,7 @@ static struct timespec64 last_regions_update_time;
 static unsigned long min_nr_regions = 10;
 static unsigned long max_nr_regions = 1000;
 
+#define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
 static struct rnd_state rndseed;
 
 /* result buffer */
@@ -95,12 +96,6 @@ static struct task_struct *damon_thread;
 /* Protects damon_thread_stop and damon_thread */
 static DEFINE_SPINLOCK(damon_thread_lock);
 
-static inline void damon_set_sampling_target(struct damon_region *r)
-{
-	r->sampling_addr = r->vm_start + prandom_u32_state(&rndseed) %
-		(r->vm_end - r->vm_start);
-}
-
 /*
  * Return a new damon region object, or NULL if fails
  */
@@ -115,7 +110,7 @@ static struct damon_region *damon_new_region(unsigned long vm_start,
 	ret->vm_start = vm_start;
 	ret->vm_end = vm_end;
 	ret->nr_accesses = 0;
-	damon_set_sampling_target(ret);
+	ret->sampling_addr = damon_rand(vm_start, vm_end);
 	INIT_LIST_HEAD(&ret->list);
 
 	return ret;
@@ -479,7 +474,7 @@ static void check_access(struct mm_struct *mm, struct damon_region *r)
 
 mkold:
 	/* mkold next target */
-	damon_set_sampling_target(r);
+	r->sampling_addr = damon_rand(r->vm_start, r->vm_end);
 
 	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
 		return;
