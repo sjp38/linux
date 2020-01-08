@@ -1,5 +1,13 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
+This patchset introduces a new kernel module for monitoring of data accesses of
+specific user processes, DAMON.
+
+The patches are based on the v5.4.  The complete git tree is also available at
+https://github.com/sjp38/linux/releases/tag/damon/rfc/v1
+
+----
+
 The data access monitor (DAMON) is a kernel module that allows users to monitor
 the actual memory access pattern of specific user-space processes.  It aims to
 be 1) sufficiently accurate to be useful for performance centric optimizations,
