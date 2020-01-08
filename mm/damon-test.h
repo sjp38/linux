@@ -200,7 +200,7 @@ static void damon_test_aggregate(struct kunit *test)
 		}
 		it++;
 	}
-	aggregate();
+	flush_aggregated();
 	it = 0;
 	damon_for_each_task(t) {
 		ir = 0;

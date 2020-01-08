@@ -530,7 +530,7 @@ static bool damon_check_reset_time_interval(struct timespec64 *baseline,
 /*
  * Check whether it is time to aggregate samples
  */
-static bool need_aggregate(void)
+static bool aggregate_interval_passed(void)
 {
 	return damon_check_reset_time_interval(&last_aggregate_time,
 			aggr_interval);
@@ -572,7 +572,7 @@ static void damon_write_rbuf(void *data, ssize_t size)
 }
 
 /*
- * Aggregate samples to one set of memory access patterns for each region
+ * Flush aggregated monitoring results to the result buffer
  *
  * Stores current tracking results to the result buffer and reset 'nr_accesses'
  * of each regions.  The format for the result buffer is as below:
@@ -582,7 +582,7 @@ static void damon_write_rbuf(void *data, ssize_t size)
  *   task info: <pid> <number of regions> <array of region infos>
  *   region info: <start address> <end address> <nr_accesses>
  */
-static void aggregate(void)
+static void flush_aggregated(void)
 {
 	struct damon_task *t;
 	struct timespec64 now;
@@ -855,9 +855,9 @@ static int damon_thread_fn(void *data)
 			mmput(mm);
 		}
 
-		if (need_aggregate()) {
+		if (aggregate_interval_passed()) {
 			damon_merge_regions(max_nr_accesses / 10);
-			aggregate();
+			flush_aggregated();
 			damon_split_regions();
 		}
 
