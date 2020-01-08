@@ -725,21 +725,6 @@ static bool damon_intersect(struct damon_region *r, struct region *re)
 }
 
 /*
- * Check if a region is intersecting with three regions sorted by address
- */
-static bool damon_intersect_three(struct damon_region *r,
-		struct region regions[3])
-{
-	int i;
-
-	for (i = 0; i < 3; i++) {
-		if (damon_intersect(r, &regions[i]))
-			return true;
-	}
-	return false;
-}
-
-/*
  * Update damon regions for the three big regions of the given task
  *
  * t		the given task
@@ -753,7 +738,11 @@ static void damon_apply_three_regions(struct damon_task *t,
 
 	/* Remove regions which isn't in the three big regions now */
 	damon_for_each_region_safe(r, next, t) {
-		if (!damon_intersect_three(r, bregions))
+		for (i = 0; i < 3; i++) {
+			if (damon_intersect(r, &bregions[i]))
+				break;
+		}
+		if (i == 3)
 			damon_destroy_region(r);
 	}
 
