@@ -917,6 +917,9 @@ static inline bool damon_is_target(unsigned long pid)
 	return false;
 }
 
+/*
+ * This function should not be called while the damon thread is running.
+ */
 static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
 {
 	ssize_t i;
@@ -959,6 +962,7 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
  * max_nr_reg		maximum number of regions
  * path_to_rfile	path to the monitor result files
  *
+ * This function should not be called while the damon thread is running.
  * Every time interval is in micro-seconds.
  *
  * Returns 0 on success, negative error code otherwise.
