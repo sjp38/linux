@@ -1127,7 +1127,7 @@ static ssize_t debugfs_pids_write(struct file *file,
 
 monitor_running:
 	spin_unlock(&damon_thread_lock);
-	pr_err("damon thread is running. Turn it off first.\n");
+	pr_err("%s: damon thread is running. Turn it off first.\n", __func__);
 	return -EINVAL;
 }
 
@@ -1177,7 +1177,7 @@ static ssize_t debugfs_attrs_write(struct file *file,
 
 monitor_running:
 	spin_unlock(&damon_thread_lock);
-	pr_err("damon thread is running. Turn it off first.\n");
+	pr_err("%s: damon thread is running. Turn it off first.\n", __func__);
 	return -EINVAL;
 }
 
