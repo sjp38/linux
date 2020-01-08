@@ -97,7 +97,9 @@ static struct rnd_state rndseed;
 #define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
 
 /*
- * Return a new damon region object, or NULL if fails
+ * Construct a damon_region struct
+ *
+ * Returns the pointer to the new struct if success, or NULL otherwise
  */
 static struct damon_region *damon_new_region(unsigned long vm_start,
 					unsigned long vm_end)
@@ -117,7 +119,7 @@ static struct damon_region *damon_new_region(unsigned long vm_start,
 }
 
 /*
- * Add a region between two regions
+ * Add a region between two other regions
  */
 static inline void damon_add_region(struct damon_region *r,
 		struct damon_region *prev, struct damon_region *next)
@@ -126,7 +128,7 @@ static inline void damon_add_region(struct damon_region *r,
 }
 
 /*
- * Add a region into a task
+ * Append a region to a task's list of regions
  */
 static void damon_add_region_tail(struct damon_region *r, struct damon_task *t)
 {
@@ -155,6 +157,11 @@ static void damon_destroy_region(struct damon_region *r)
 	damon_free_region(r);
 }
 
+/*
+ * Construct a damon_task struct
+ *
+ * Returns the pointer to the new struct if success, or NULL otherwise
+ */
 static struct damon_task *damon_new_task(unsigned long pid)
 {
 	struct damon_task *t;
@@ -168,7 +175,7 @@ static struct damon_task *damon_new_task(unsigned long pid)
 	return t;
 }
 
-/* Get n-th damon region of a given task */
+/* Returns n-th damon_region of the given task */
 struct damon_region *damon_nth_region_of(struct damon_task *t, unsigned int n)
 {
 	struct damon_region *r;
@@ -207,6 +214,9 @@ static void damon_destroy_task(struct damon_task *t)
 	damon_free_task(t);
 }
 
+/*
+ * Returns number of monitoring target tasks
+ */
 static unsigned int nr_damon_tasks(void)
 {
 	struct damon_task *t;
@@ -218,7 +228,7 @@ static unsigned int nr_damon_tasks(void)
 }
 
 /*
- * Return number of regions for given process
+ * Returns number of regions for a given task
  */
 static unsigned int nr_damon_regions(struct damon_task *t)
 {
@@ -231,7 +241,7 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 }
 
 /*
- * Returns mm_struct of the task on success, NULL on failure
+ * Returns the mm_struct of the task on success, NULL on failure
  */
 static struct mm_struct *damon_get_mm(struct damon_task *t)
 {
