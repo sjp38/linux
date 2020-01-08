@@ -396,6 +396,8 @@ static void damon_test_split(struct kunit *test)
 	struct damon_region *r;
 	unsigned long i;
 
+	KUNIT_EXPECT_EQ(test, damon_split_region(NULL, 5), -EINVAL);
+
 	t = damon_new_task(42);
 	r = damon_new_region(0, 100);
 	KUNIT_EXPECT_EQ(test, damon_split_region(r, 0), -EINVAL);
