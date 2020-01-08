@@ -269,7 +269,7 @@ static int damon_split_region(struct damon_region *r,
 	struct damon_region *piece = NULL, *next;
 	unsigned long start;
 
-	if (nr_pieces == 0)
+	if (!r || !nr_pieces)
 		return -EINVAL;
 
 	orig_end = r->vm_end;
