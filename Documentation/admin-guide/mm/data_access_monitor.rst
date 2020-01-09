@@ -56,29 +56,31 @@ will now decrease the quality of the output as the size of the workload grows.
 Expected Use-cases
 ==================
 
-DAMON can be used to analyze the behavior of the program.  Based on that, users
-can confirm whether the program is running as intended or not.  This can be
-useful for debugging and tests of design points.
+DAMON can be used to analyze the behavior of the program.  With the DAMON
+output, users can confirm whether the program is running as intended or not.
+This can be useful for debugging and tests of design points.
 
 The monitored results can also be used to count and predict the dynamic working
-set size.  For the administration of memory overcommitted systems, this will be
-useful.
+set size.  For the administration of memory overcommitted systems or selection
+of the environments (e.g., containers providing different amount of memory) for
+your workloads, this will be useful.
 
-If you are a programmer, you can also optimize your program by managing the
-memory based on the actual data access pattern.  For example, you can identify
-the dynamic hotness of your data using DAMON and call ``mlock()`` to keep your
-hot data in DRAM, or ``madvise()`` with ``MADV_PAGEOUT`` to proactively reclaim
+If you are a programmer, you can optimize your program by managing the memory
+based on the actual data access pattern.  For example, you can identify the
+dynamic hotness of your data using DAMON and call ``mlock()`` to keep your hot
+data in DRAM, or ``madvise()`` with ``MADV_PAGEOUT`` to proactively reclaim
 cold data.  Even though your program is guaranteed to not encounter memory
 pressure, you can still improve the performance by applying the DAMON outputs
-for call of ``MADV_HUGEPAGE`` and ``MADV_NOHUGEPAGE``.  Our evaluation of DAMON
-includes the optimization using ``mlock()``.  Please refer to below Evaluation
-section for more detail.
+for call of ``MADV_HUGEPAGE`` and ``MADV_NOHUGEPAGE``.  More creative
+optimizations would be possible.  Our evaluations of DAMON includes a
+straightforward optimization using the ``mlock()``.  Please refer to the below
+Evaluation section for more detail.
 
 As DAMON incurs very low overhead, such optimizations can be applied not only
-offline, but also online.  Also, there is no reason to limit the optimization
-to user space.  Several parts of the kernel's memory management mechanisms
+offline, but also online.  Also, there is no reason to limit such optimizations
+to the user space.  Several parts of the kernel's memory management mechanisms
 could be also optimized using DAMON. The reclamation, the THP (de)promotion
-decisions, and the compaction parts would be a good example.
+decisions, and the compaction would be such a candidates.
 
 
 Mechanisms of DAMON
