@@ -928,9 +928,8 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
 	/* Remove unselected tasks */
 	damon_for_each_task_safe(t, next) {
 		for (i = 0; i < nr_pids; i++) {
-			if (pids[i] == t->pid) {
+			if (pids[i] == t->pid)
 				break;
-			}
 		}
 		if (i != nr_pids)
 			continue;
