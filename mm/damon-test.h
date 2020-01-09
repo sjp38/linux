@@ -200,7 +200,7 @@ static void damon_test_aggregate(struct kunit *test)
 		}
 		it++;
 	}
-	flush_aggregated();
+	kdamond_flush_aggregated();
 	it = 0;
 	damon_for_each_task(t) {
 		ir = 0;
@@ -534,9 +534,9 @@ static void damon_test_split_regions_of(struct kunit *test)
 	damon_free_task(t);
 }
 
-static void damon_test_need_stop(struct kunit *test)
+static void damon_test_kdamond_need_stop(struct kunit *test)
 {
-	KUNIT_EXPECT_TRUE(test, need_stop());
+	KUNIT_EXPECT_TRUE(test, kdamond_need_stop());
 }
 
 static struct kunit_case damon_test_cases[] = {
@@ -556,7 +556,7 @@ static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damon_test_merge_two),
 	KUNIT_CASE(damon_test_merge_regions_of),
 	KUNIT_CASE(damon_test_split_regions_of),
-	KUNIT_CASE(damon_test_need_stop),
+	KUNIT_CASE(damon_test_kdamond_need_stop),
 	{},
 };
 

@@ -20,6 +20,12 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 
+/*
+ * damon_ prefix for common functions
+ * damond_ prefix for kdamond directly calling functions
+ * debugfs_ prefix for debugfs controller
+ */
+
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
 
@@ -443,7 +449,7 @@ static void init_regions_of(struct damon_task *t)
 }
 
 /* Initialize '->regions_list' of every task */
-static void init_regions(void)
+static void kdamond_init_regions(void)
 {
 	struct damon_task *t;
 
@@ -461,7 +467,7 @@ static void init_regions(void)
  * accessed since the last check.  In detail, it uses the page table entry
  * access bit for a page in the region that randomly selected.
  */
-static void check_access(struct mm_struct *mm, struct damon_region *r)
+static void kdamond_check_access(struct mm_struct *mm, struct damon_region *r)
 {
 	pte_t *pte = NULL;
 	pmd_t *pmd = NULL;
@@ -530,7 +536,7 @@ static bool damon_check_reset_time_interval(struct timespec64 *baseline,
 /*
  * Check whether it is time to aggregate samples
  */
-static bool aggregate_interval_passed(void)
+static bool kdamond_aggregate_interval_passed(void)
 {
 	return damon_check_reset_time_interval(&last_aggregate_time,
 			aggr_interval);
@@ -582,7 +588,7 @@ static void damon_write_rbuf(void *data, ssize_t size)
  *   task info: <pid> <number of regions> <array of region infos>
  *   region info: <start address> <end address> <nr_accesses>
  */
-static void flush_aggregated(void)
+static void kdamond_flush_aggregated(void)
 {
 	struct damon_task *t;
 	struct timespec64 now;
@@ -651,7 +657,7 @@ next:
 	}
 }
 
-static void damon_merge_regions(unsigned int threshold)
+static void kdamond_merge_regions(unsigned int threshold)
 {
 	struct damon_task *t;
 
@@ -694,7 +700,7 @@ static void damon_split_regions_of(struct damon_task *t)
 	}
 }
 
-static void damon_split_regions(void)
+static void kdamond_split_regions(void)
 {
 	struct damon_task *t;
 	unsigned int nr_regions = 0;
@@ -713,7 +719,7 @@ static void damon_split_regions(void)
  *
  * Returns true if it is.
  */
-static bool need_update_regions(void)
+static bool kdamond_need_update_regions(void)
 {
 	return damon_check_reset_time_interval(&last_regions_update_time,
 			regions_update_interval);
@@ -777,7 +783,7 @@ static void damon_apply_three_regions(struct damon_task *t,
 /*
  * Update regions for current vmas of target processes
  */
-static void update_regions(void)
+static void kdamond_update_regions(void)
 {
 	struct region three_regions[3];
 	struct damon_task *t;
@@ -797,7 +803,7 @@ static void update_regions(void)
  *
  * Returns true if need to stop current monitoring.
  */
-static bool need_stop(void)
+static bool kdamond_need_stop(void)
 {
 	struct damon_task *t;
 	struct task_struct *task;
@@ -831,29 +837,29 @@ static int kdamond_fn(void *data)
 	unsigned long max_nr_accesses;
 
 	pr_info("kdamond (%d) starts\n", kdamond->pid);
-	init_regions();
-	while (!need_stop()) {
+	kdamond_init_regions();
+	while (!kdamond_need_stop()) {
 		max_nr_accesses = 0;
 		damon_for_each_task(t) {
 			mm = damon_get_mm(t);
 			if (!mm)
 				continue;
 			damon_for_each_region(r, t) {
-				check_access(mm, r);
+				kdamond_check_access(mm, r);
 				if (r->nr_accesses > max_nr_accesses)
 					max_nr_accesses = r->nr_accesses;
 			}
 			mmput(mm);
 		}
 
-		if (aggregate_interval_passed()) {
-			damon_merge_regions(max_nr_accesses / 10);
-			flush_aggregated();
-			damon_split_regions();
+		if (kdamond_aggregate_interval_passed()) {
+			kdamond_merge_regions(max_nr_accesses / 10);
+			kdamond_flush_aggregated();
+			kdamond_split_regions();
 		}
 
-		if (need_update_regions())
-			update_regions();
+		if (kdamond_need_update_regions())
+			kdamond_update_regions();
 
 		usleep_range(sample_interval, sample_interval + 1);
 	}
