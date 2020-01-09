@@ -87,11 +87,11 @@ static unsigned int damon_rbuf_offset;
 #define LEN_RES_FILE_PATH	256
 static char rfile_path[LEN_RES_FILE_PATH] = "/damon.data";
 
-static bool damon_thread_stop;
-static struct task_struct *damon_thread;
+static bool kdamond_stop;
+static struct task_struct *kdamond;
 
-/* Protects damon_thread_stop and damon_thread */
-static DEFINE_SPINLOCK(damon_thread_lock);
+/* Protects kdamond_stop and kdamond */
+static DEFINE_SPINLOCK(kdamond_lock);
 
 static struct rnd_state rndseed;
 #define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
@@ -803,9 +803,9 @@ static bool need_stop(void)
 	struct task_struct *task;
 	bool stop;
 
-	spin_lock(&damon_thread_lock);
-	stop = damon_thread_stop;
-	spin_unlock(&damon_thread_lock);
+	spin_lock(&kdamond_lock);
+	stop = kdamond_stop;
+	spin_unlock(&kdamond_lock);
 	if (stop)
 		return true;
 
@@ -821,16 +821,16 @@ static bool need_stop(void)
 }
 
 /*
- * The monitoring thread that does the real work.
+ * The monitoring daemon that runs as a kernel thread
  */
-static int damon_thread_fn(void *data)
+static int kdamond_fn(void *data)
 {
 	struct damon_task *t;
 	struct damon_region *r, *next;
 	struct mm_struct *mm;
 	unsigned long max_nr_accesses;
 
-	pr_info("damon thread (%d) starts\n", damon_thread->pid);
+	pr_info("kdamond (%d) starts\n", kdamond->pid);
 	init_regions();
 	while (!need_stop()) {
 		max_nr_accesses = 0;
@@ -862,10 +862,10 @@ static int damon_thread_fn(void *data)
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
-	pr_info("damon thread (%d) finishes\n", damon_thread->pid);
-	spin_lock(&damon_thread_lock);
-	damon_thread = NULL;
-	spin_unlock(&damon_thread_lock);
+	pr_info("kdamond (%d) finishes\n", kdamond->pid);
+	spin_lock(&kdamond_lock);
+	kdamond = NULL;
+	spin_unlock(&kdamond_lock);
 	return 0;
 }
 
@@ -875,21 +875,21 @@ static int damon_thread_fn(void *data)
 
 static int damon_turn_monitor(bool on)
 {
-	spin_lock(&damon_thread_lock);
-	damon_thread_stop = !on;
-	if (!damon_thread && on) {
-		damon_thread = kthread_run(damon_thread_fn, NULL, "damon");
-		if (!damon_thread)
+	spin_lock(&kdamond_lock);
+	kdamond_stop = !on;
+	if (!kdamond && on) {
+		kdamond = kthread_run(kdamond_fn, NULL, "kdamond");
+		if (!kdamond)
 			goto fail;
 		goto success;
 	}
-	if (damon_thread && !on) {
-		spin_unlock(&damon_thread_lock);
+	if (kdamond && !on) {
+		spin_unlock(&kdamond_lock);
 		while (true) {
-			spin_lock(&damon_thread_lock);
-			if (!damon_thread)
+			spin_lock(&kdamond_lock);
+			if (!kdamond)
 				goto success;
-			spin_unlock(&damon_thread_lock);
+			spin_unlock(&kdamond_lock);
 
 			usleep_range(sample_interval, sample_interval * 2);
 		}
@@ -898,11 +898,11 @@ static int damon_turn_monitor(bool on)
 	/* tried to turn on while turned on, or turn off while turned off */
 
 fail:
-	spin_unlock(&damon_thread_lock);
+	spin_unlock(&kdamond_lock);
 	return -EINVAL;
 
 success:
-	spin_unlock(&damon_thread_lock);
+	spin_unlock(&kdamond_lock);
 	return 0;
 }
 
@@ -918,7 +918,7 @@ static inline bool damon_is_target(unsigned long pid)
 }
 
 /*
- * This function should not be called while the damon thread is running.
+ * This function should not be called while the kdamond is running.
  */
 static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
 {
@@ -962,7 +962,7 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
  * max_nr_reg		maximum number of regions
  * path_to_rfile	path to the monitor result files
  *
- * This function should not be called while the damon thread is running.
+ * This function should not be called while the kdamond is running.
  * Every time interval is in micro-seconds.
  *
  * Returns 0 on success, negative error code otherwise.
@@ -1007,9 +1007,9 @@ static ssize_t debugfs_monitor_on_read(struct file *file,
 	char monitor_on_buf[5];
 	bool monitor_on;
 
-	spin_lock(&damon_thread_lock);
-	monitor_on = damon_thread != NULL;
-	spin_unlock(&damon_thread_lock);
+	spin_lock(&kdamond_lock);
+	monitor_on = kdamond != NULL;
+	spin_unlock(&kdamond_lock);
 
 	snprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
 
@@ -1114,20 +1114,20 @@ static ssize_t debugfs_pids_write(struct file *file,
 
 	targets = str_to_pids(pids_buf, ret, &nr_targets);
 
-	spin_lock(&damon_thread_lock);
-	if (damon_thread)
+	spin_lock(&kdamond_lock);
+	if (kdamond)
 		goto monitor_running;
 
 	damon_set_pids(targets, nr_targets);
-	spin_unlock(&damon_thread_lock);
+	spin_unlock(&kdamond_lock);
 	if (targets)
 		kfree(targets);
 
 	return ret;
 
 monitor_running:
-	spin_unlock(&damon_thread_lock);
-	pr_err("%s: damon thread is running. Turn it off first.\n", __func__);
+	spin_unlock(&kdamond_lock);
+	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
 	return -EINVAL;
 }
 
@@ -1166,18 +1166,18 @@ static ssize_t debugfs_attrs_write(struct file *file,
 				&s, &a, &r, &minr, &maxr, res_file_path) != 6)
 		return -EINVAL;
 
-	spin_lock(&damon_thread_lock);
-	if (damon_thread)
+	spin_lock(&kdamond_lock);
+	if (kdamond)
 		goto monitor_running;
 
 	damon_set_attrs(s, a, r, minr, maxr, res_file_path);
-	spin_unlock(&damon_thread_lock);
+	spin_unlock(&kdamond_lock);
 
 	return ret;
 
 monitor_running:
-	spin_unlock(&damon_thread_lock);
-	pr_err("%s: damon thread is running. Turn it off first.\n", __func__);
+	spin_unlock(&kdamond_lock);
+	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
 	return -EINVAL;
 }
 
