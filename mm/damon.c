@@ -1119,8 +1119,7 @@ static ssize_t debugfs_pids_write(struct file *file,
 
 	damon_set_pids(targets, nr_targets);
 	spin_unlock(&kdamond_lock);
-	if (targets)
-		kfree(targets);
+	kfree(targets);
 
 	return ret;
 
