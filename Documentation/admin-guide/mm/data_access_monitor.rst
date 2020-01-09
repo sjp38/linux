@@ -10,7 +10,7 @@ Too Long; Don't Read
 
 The data access monitor (DAMON) is a kernel module that allows users to monitor
 the actual memory access pattern of specific user-space processes.  It aims to
-be 1) sufficiently accurate to be useful for performance centric optimizations,
+be 1) sufficiently accurate to be useful for performance-centric optimizations,
 and 2) light-weight enough so that it can be applied online.
 
 For the goals, DAMON utilizes its two core mechanisms, called region-based
@@ -27,30 +27,30 @@ Background
 
 For performance-centric analysis and optimization of memory management schemes
 (either that of kernel space or user space), the actual data access pattern of
-the workloads is highly useful.  The information should be reasonably accurate,
-but also must guaranteed to be taken with only light-weight overhead.  Manually
-extracting such data from huge and complex programs is not easy and time
-consuming, even for the developers of the programs.
+the workloads is highly useful.  The information need to be only reasonable
+rather than strictly correct, because some level of incorrectness can be
+handled in performance-centric domains, depending on the goals.  It also need
+to be taken within reasonably short time with only light-weight overhead.
 
-There are a range of tools and techniques developed for general memory access
+Manually extracting such data is not easy and time consuming if the target
+workload is huge and complex, even for the developers of the programs.  There
+are a range of tools and techniques developed for general memory access
 investigations, and some of those could be partially used for this purpose.
 However, most of those are not practical or unscalable, mainly because those
 are designed with no consideration about the trade-off between the accuracy of
 the output and the overhead.
 
 The memory access instrumentation techniques which is applied to many tools
-such as Intel PIN is essential for highly detailed analysis such as bug
-detections, but incur unacceptably high overhead.  This is mainly due to the
-fact that those techniques are designed for the highly detailed information,
-which is not strictly required for performance-centric purpose.  Periodic
-access checks based on H/W or S/W access counting features (e.g., the Accessed
-bits of PTEs or the PG_Idle flags of pages) can dramatically decrease the
-overhead by forgiving some of the monitoring quality, compared to the
-instrumentation based techniques.  The reduced quality is still high enough for
-the purpose, but the overhead can arbitrarily increase as the size of the
-target workload grows.  Miniature-like static region based sampling can set the
-upperbound of the overhead, but it will now decrease the quality of the output
-as the size of the workload grows.
+such as Intel PIN is essential for correctness required cases such as bug
+detections.  However, those usually incur high overhead which is unacceptable
+for many of the performance-centric domains.  Periodic access checks based on
+H/W or S/W access counting features (e.g., the Accessed bits of PTEs or the
+PG_Idle flags of pages) can dramatically decrease the overhead by forgiving
+some of the quality, compared to the instrumentation based techniques.  The
+reduced quality is still useful for many of the domains, but the overhead can
+arbitrarily increase as the size of the target workload grows.  Miniature-like
+static region based sampling can set the upperbound of the overhead, but it
+will now decrease the quality of the output as the size of the workload grows.
 
 
 Expected Use-cases
