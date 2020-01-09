@@ -41,6 +41,7 @@
 #define damon_for_each_task_safe(t, next) \
 	list_for_each_entry_safe(t, next, &damon_tasks_list, list)
 
+/* Represents a monitoring target region on the virtual address space */
 struct damon_region {
 	unsigned long vm_start;
 	unsigned long vm_end;
@@ -49,6 +50,7 @@ struct damon_region {
 	struct list_head list;
 };
 
+/* Represents a monitoring target task */
 struct damon_task {
 	unsigned long pid;
 	struct list_head regions_list;
@@ -59,14 +61,14 @@ struct damon_task {
 static LIST_HEAD(damon_tasks_list);
 
 /*
- * For each 'sample_interval', damon checks whether each region is accessed or
+ * For each 'sample_interval', DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
  * each region) for 'aggr_interval' and then flushes it to the result buffer if
  * an 'aggr_interval' surpassed.  And for each 'regions_update_interval', damon
- * checks whether the memory mapping of the target task has changed (e.g., by
- * mmap() calls from the applications) and applies the change.
+ * checks whether the memory mapping of the target tasks has changed (e.g., by
+ * mmap() calls from the applications) and applies the changes.
  *
- * All intervals are in micro-seconds.
+ * All time intervals are in micro-seconds.
  */
 static unsigned long sample_interval = 5 * 1000;
 static unsigned long aggr_interval = 100 * 1000;
@@ -229,7 +231,7 @@ static unsigned int nr_damon_tasks(void)
 }
 
 /*
- * Returns number of regions for a given task
+ * Returns the number of target regions for a given target task
  */
 static unsigned int nr_damon_regions(struct damon_task *t)
 {
@@ -242,6 +244,10 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 }
 
 /*
+ * get the mm_struct of the given task
+ *
+ * Callser should put the mm_struct after use, unless it is NULL.
+ *
  * Returns the mm_struct of the task on success, NULL on failure
  */
 static struct mm_struct *damon_get_mm(struct damon_task *t)
@@ -259,7 +265,7 @@ static struct mm_struct *damon_get_mm(struct damon_task *t)
 }
 
 /*
- * Size evenly split a region into 'nr_pieces' small regions
+ * Size-evenly split a region into 'nr_pieces' small regions
  *
  * Returns 0 on success, or negative error code otherwise.
  */
