@@ -259,7 +259,7 @@ static struct mm_struct *damon_get_mm(struct damon_task *t)
 }
 
 /*
- * Split a region into 'nr_pieces' pieces having same size
+ * Size evenly split a region into 'nr_pieces' small regions
  *
  * Returns 0 on success, or negative error code otherwise.
  */
