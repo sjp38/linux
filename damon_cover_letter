@@ -3,7 +3,7 @@ Subject: Introduce Data Access MONitor (DAMON)
 This RFC patchset introduces a new kernel module for practical monitoring of
 data accesses, namely DAMON.
 
-The patches are based on the v5.4 plus the kunit from v5.5.-rc1.  The complete
+The patches are based on the v5.4 plus the kunit from v5.5-rc1.  The complete
 git tree is also available at:
 https://github.com/sjp38/linux/releases/tag/damon/rfc/v1
 
