@@ -912,7 +912,7 @@ success:
 	return 0;
 }
 
-static inline bool damon_is_target(unsigned long pid)
+static inline bool damon_is_target_pid(unsigned long pid)
 {
 	struct damon_task *t;
 
@@ -944,7 +944,7 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
 
 	/* Add new tasks */
 	for (i = 0; i < nr_pids; i++) {
-		if (damon_is_target(pids[i]))
+		if (damon_is_target_pid(pids[i]))
 			continue;
 		t = damon_new_task(pids[i]);
 		if (!t) {
