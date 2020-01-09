@@ -874,7 +874,7 @@ static int kdamond_fn(void *data)
  * Controller functions
  */
 
-static int damon_turn_monitor(bool on)
+static int damon_turn_kdamond(bool on)
 {
 	spin_lock(&kdamond_lock);
 	kdamond_stop = !on;
@@ -1037,7 +1037,7 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	else
 		return -EINVAL;
 
-	if (damon_turn_monitor(on))
+	if (damon_turn_kdamond(on))
 		return -EINVAL;
 
 	return ret;
