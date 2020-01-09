@@ -94,7 +94,8 @@ static bool kdamond_stop;
 static DEFINE_SPINLOCK(kdamond_lock);
 
 static struct rnd_state rndseed;
-#define damon_rand(min, max) (min + prandom_u32_state(&rndseed) % (max - min))
+/* Get a random number in [l, r) */
+#define damon_rand(l, r) (l + prandom_u32_state(&rndseed) % (r - l))
 
 /*
  * Construct a damon_region struct
