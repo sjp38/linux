@@ -226,13 +226,13 @@ based on the DAMON results and protected them with ``mlock()`` system calls.
 The optimized versions consistently show speedup (2.55x in best case, 1.65x in
 average) under memory pressure situation.
 
-We also measured the overhead of DAMON by counting the number of sampling
-regions.  It was not only under the upperbound, but was much lower (0.6 percent
-of the bound in best case, 13.288 percent of the bound in average) as we
-intended with the adaptive regions adjustment.  We also compared the number
-with that of the straightforward Accessed bit based monitoring, which checks
-the access of every page frame.  The overhead was smaller than the normal
-mechanism by 94.242.42x in best case, and 3,159.61x in average.
+We also measured the overhead of DAMON.  It was not only under the upperbound
+we set, but was much lower (0.6 percent of the bound in best case, 13.288
+percent of the bound in average) as we intended with the adaptive regions
+adjustment.  We also compared the overhead with that of the straightforward
+periodic Accessed bit check-based monitoring, which checks the access of every
+page frame.  The overhead was smaller than the straightforward mechanism by
+94,242.42x in best case, and 3,159.61x in average.
 
 
 References
