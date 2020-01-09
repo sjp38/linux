@@ -95,10 +95,10 @@ static unsigned int damon_rbuf_offset;
 #define LEN_RES_FILE_PATH	256
 static char rfile_path[LEN_RES_FILE_PATH] = "/damon.data";
 
-static bool kdamond_stop;
 static struct task_struct *kdamond;
+static bool kdamond_stop;
 
-/* Protects kdamond_stop and kdamond */
+/* Protects kdamond and kdamond_stop */
 static DEFINE_SPINLOCK(kdamond_lock);
 
 static struct rnd_state rndseed;
