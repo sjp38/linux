@@ -60,9 +60,9 @@ Related Works
 There are a number of researches[1,2,3,4,5,6] optimizing memory management
 mechanisms based on the actual memory access patterns that shows impressive
 results.  However, most of those has no deep consideration about the monitoring
-of the accesses itself.  Some researches focused on the overhead of the
-monitoring, but those doesn't consider the accuracy scalability[6] or has
-additional dependencies[7].  Indeed, one recent research[5] about the proactive
+of the accesses itself.  Some of those focused on the overhead of the
+monitoring, but does not consider the accuracy scalability[6] or has additional
+dependencies[7].  Indeed, one recent research[5] about the proactive
 reclamation has also proposed[8] to the kernel community but the monitoring
 overhead was considered a main problem.
 
