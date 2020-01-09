@@ -874,6 +874,11 @@ static int kdamond_fn(void *data)
  * Controller functions
  */
 
+/*
+ * Start of stop kdamond
+ *
+ * Returns 0 if success, negative error code otherwise.
+ */
 static int damon_turn_kdamond(bool on)
 {
 	spin_lock(&kdamond_lock);
