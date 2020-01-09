@@ -8,10 +8,10 @@ DAMON: Data Access MONitor
 Too Long; Don't Read
 ====================
 
-The data access monitor (DAMON) is a kernel module that allows users to monitor
-the actual memory access pattern of specific user-space processes.  It aims to
-be 1) sufficiently accurate to be useful for performance-centric optimizations,
-and 2) light-weight enough so that it can be applied online.
+DAMON is a kernel module that allows users to monitor the actual memory access
+pattern of specific user-space processes.  It aims to be 1) sufficiently
+accurate to be useful for performance-centric optimizations, and 2)
+light-weight enough so that it can be applied online.
 
 For the goals, DAMON utilizes its two core mechanisms, called region-based
 sampling and adaptive regions adjustment.  The region-based sampling allows
