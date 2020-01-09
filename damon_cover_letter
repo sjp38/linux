@@ -42,14 +42,15 @@ The memory access instrumentation techniques which is applied to many tools
 such as Intel PIN is essential for highly detailed analysis such as bug
 detections, but incur unacceptably high overhead.  This is mainly due to the
 fact that those techniques are designed for the highly detailed information,
-which is not strictly required for performance-centric purpose.  H/W based
-access counting features (e.g., the Accessed bits of PTEs) based access
-tracking mechanisms can dramatically decrease the overhead by forgiving some of
-the monitoring quality, compared to the instrumentation based techniques.  That
-said, the overhead can arbitrarily increase as the size of the target workload
-grows.  Miniature-like static region based sampling can set the upperbound of
-the overhead, but it will now decrease the quality of the output as the size of
-the workload grows.
+which is not strictly required for performance-centric purpose.  Periodic
+access checks based on H/W or S/W access counting features (e.g., the Accessed
+bits of PTEs or the PG_Idle flags of pages) can dramatically decrease the
+overhead by forgiving some of the monitoring quality, compared to the
+instrumentation based techniques.  The reduced quality is still high enough for
+the purpose, but the overhead can arbitrarily increase as the size of the
+target workload grows.  Miniature-like static region based sampling can set the
+upperbound of the overhead, but it will now decrease the quality of the output
+as the size of the workload grows.
 
 
 Related Works
@@ -148,7 +149,7 @@ results (counts the number of the accesses to each page), and
 reports/initializes the aggregated results per ``aggregation interval``.  For
 the access check of each page, DAMON uses the Accessed bits of PTEs.
 
-This is thus similar to the previously mentioned H/W based access tracking
+This is thus similar to the previously mentioned periodic access checks based
 mechanisms, which overhead is increasing as the size of the target process
 grows.
 
