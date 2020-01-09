@@ -1213,7 +1213,7 @@ static int __init debugfs_init(void)
 
 	debugfs_root = debugfs_create_dir("damon", NULL);
 	if (!debugfs_root) {
-		pr_err("failed to create debugfs\n");
+		pr_err("failed to create the debugfs dir\n");
 		return -ENOMEM;
 	}
 
