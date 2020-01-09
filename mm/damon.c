@@ -1199,7 +1199,7 @@ static const struct file_operations attrs_fops = {
 
 static int __init debugfs_init(void)
 {
-	static struct dentry *debugfs_root;
+	struct dentry *debugfs_root;
 	const char * const file_names[] = {"attrs", "pids", "monitor_on"};
 	const struct file_operations *fops[] = {&attrs_fops, &pids_fops,
 		&monitor_on_fops};
