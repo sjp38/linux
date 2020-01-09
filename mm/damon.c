@@ -244,7 +244,7 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 }
 
 /*
- * get the mm_struct of the given task
+ * Get the mm_struct of the given task
  *
  * Callser should put the mm_struct after use, unless it is NULL.
  *
@@ -395,7 +395,7 @@ static int damon_three_regions_of(struct damon_task *t,
 }
 
 /*
- * Initialize address space regions to monitor for the given task
+ * Initialize the monitoring target regions for the given task
  *
  * t	the given target task
  *
@@ -459,14 +459,10 @@ static void kdamond_init_regions(void)
 }
 
 /*
- * Check access to the given region
+ * Check whether the given region has accessed since the last check
  *
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
- *
- * This function checks whether given virtual address space region has been
- * accessed since the last check.  In detail, it uses the page table entry
- * access bit for a page in the region that randomly selected.
  */
 static void kdamond_check_access(struct mm_struct *mm, struct damon_region *r)
 {
@@ -517,7 +513,7 @@ mkold:
  * interval	the time interval (microseconds)
  *
  * See whether the given time interval has passed since the given baseline
- * time.  If so, it also updates the baseline to current time for later check.
+ * time.  If so, it also updates the baseline to current time for next check.
  *
  * Returns true if the time interval has passed, or false otherwise.
  */
@@ -535,7 +531,7 @@ static bool damon_check_reset_time_interval(struct timespec64 *baseline,
 }
 
 /*
- * Check whether it is time to aggregate samples
+ * Check whether it is time to flush the aggregated information
  */
 static bool kdamond_aggregate_interval_passed(void)
 {
@@ -568,7 +564,9 @@ static void damon_flush_rbuffer(void)
 	}
 }
 
-/* Store the monitored information into the result buffer */
+/*
+ * Write a data into the result buffer
+ */
 static void damon_write_rbuf(void *data, ssize_t size)
 {
 	if (damon_rbuf_offset + size > DAMON_LEN_RBUF)
@@ -579,7 +577,7 @@ static void damon_write_rbuf(void *data, ssize_t size)
 }
 
 /*
- * Flush aggregated monitoring results to the result buffer
+ * Flush the aggregated monitoring results to the result buffer
  *
  * Stores current tracking results to the result buffer and reset 'nr_accesses'
  * of each regions.  The format for the result buffer is as below:
@@ -637,10 +635,10 @@ static void damon_merge_two_regions(struct damon_region *l,
 #define diff_of(a, b) (a > b ? a - b : b - a)
 
 /*
- * merge adjacent regions having similar nr_accesses
+ * Merge adjacent regions having similar access frequencies
  *
  * t		task that merge operation will make change
- * thres	do not merge regions having diff larger than this threshold
+ * thres	merge regions having '->nr_accesses' diff smaller than this
  */
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 {
@@ -659,12 +657,12 @@ next:
 }
 
 /*
- * merge adjacent regions having similar nr_accesses
+ * Merge adjacent regions having similar access frequencies
  *
  * threshold	merge regions havind nr_accesses diff larger than this
  *
- * This function merges adjacent monitoring target regions that having similar
- * access frequencies to one region.  This is for minimizing the monitoring
+ * This function merges monitoring target regions which are adjacent and their
+ * access frequencies are similar.  This is for minimizing the monitoring
  * overhead under the dynamically changeable access pattern.  If a merge was
  * unnecessarily made, later 'kdamond_split_regions()' will revert it.
  */
@@ -677,10 +675,10 @@ static void kdamond_merge_regions(unsigned int threshold)
 }
 
 /*
- * Split a region into two regions
+ * Split a region into two small regions
  *
  * r		the region to be splitted
- * sz_r		size of the first region that will be made
+ * sz_r		size of the first sub-region that will be made
  */
 static void damon_split_region_at(struct damon_region *r, unsigned long sz_r)
 {
@@ -736,7 +734,7 @@ static void kdamond_split_regions(void)
 }
 
 /*
- * Check whether regions need to be updated
+ * Check whether it is time to check and apply the dynamic mmap changes
  *
  * Returns true if it is.
  */
@@ -802,7 +800,7 @@ static void damon_apply_three_regions(struct damon_task *t,
 }
 
 /*
- * Update regions for current vmas of target processes
+ * Update regions for current memory mappings
  */
 static void kdamond_update_regions(void)
 {
@@ -901,7 +899,7 @@ static int kdamond_fn(void *data)
  */
 
 /*
- * Start of stop kdamond
+ * Start or stop the kdamond
  *
  * Returns 0 if success, negative error code otherwise.
  */
