@@ -21,9 +21,11 @@
 #include <linux/slab.h>
 
 /*
- * damon_ prefix for common functions
- * damond_ prefix for kdamond directly calling functions
- * debugfs_ prefix for debugfs controller
+ * Function name prefixes usually (not strictly) means:
+ *
+ * damon_	common functions
+ * kdamond_	kdamond directly calling functions
+ * debugfs_	debugfs controll functions
  */
 
 #define damon_get_task_struct(t) \
