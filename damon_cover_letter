@@ -194,15 +194,15 @@ In this way, DAMON provides its best-effort quality and minimal overhead while
 keeping the bounds users set for their trade-off.
 
 
-Applying Dynamic Memory Mapping
--------------------------------
+Applying Dynamic Memory Mappings
+--------------------------------
 
 Only a small portions of the super-huge virtual address space of processes is
 mapped to physical memory and used.  Thus, tracking the unmapped address
 regions is just wasteful.  However, tracking every memory mapping change might
-incur high overhead.  Thus, DAMON allow users to specify a time interval
-(``regions update interval``) to check and apply the dynamic memory mapping
-changes to the tracking regions.
+incur high overhead.  For the reason, DAMON applies the dynamic memory mapping
+changes to the tracking regions for each of an user-specified time interval
+(``regions update interval``).
 
 
 Evaluation
