@@ -93,14 +93,14 @@ Basic Access Check
 DAMON basically reports what pages are how frequently accessed.  The report is
 passed to users in binary format via a ``result file`` which users can set it's
 path.  Note that the frequency is not an absolute number of accesses, but a
-relative frequency.
+relative frequency among the pages of the target workloads.
 
 Users can also control the resolution of the reports by setting two time
 intervals, ``sampling interval`` and ``aggregation interval``.  In detail,
 DAMON checks access to each page per ``sampling interval``, aggregates the
-results (counts the number of the accesses to each page), and
-reports/initializes the aggregated results per ``aggregation interval``.  For
-the access check of each page, DAMON uses the Accessed bits of PTEs.
+results (counts the number of the accesses to each page), and reports the
+aggregated results per ``aggregation interval``.  For the access check of each
+page, DAMON uses the Accessed bits of PTEs.
 
 This is thus similar to the previously mentioned periodic access checks based
 mechanisms, which overhead is increasing as the size of the target process
