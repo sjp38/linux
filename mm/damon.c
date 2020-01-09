@@ -652,6 +652,16 @@ next:
 	}
 }
 
+/*
+ * merge adjacent regions having similar nr_accesses
+ *
+ * threshold	merge regions havind nr_accesses diff larger than this
+ *
+ * This function merges adjacent monitoring target regions that having similar
+ * access frequencies to one region.  This is for minimizing the monitoring
+ * overhead under the dynamically changeable access pattern.  If a merge was
+ * unnecessarily made, later 'kdamond_split_regions()' will revert it.
+ */
 static void kdamond_merge_regions(unsigned int threshold)
 {
 	struct damon_task *t;
@@ -695,6 +705,16 @@ static void damon_split_regions_of(struct damon_task *t)
 	}
 }
 
+/*
+ * splits every target regions into two randomly-sized regions
+ *
+ * This function splits every target regions into two random-sized regions if
+ * current total number of the regions is smaller than the half of the
+ * user-specified maximum number of regions.  This is for maximizing the
+ * monitoring accuracy under the dynamically changeable access patterns.  If a
+ * split was unnecessarily made, later 'kdamond_merge_regions()' will revert
+ * it.
+ */
 static void kdamond_split_regions(void)
 {
 	struct damon_task *t;
