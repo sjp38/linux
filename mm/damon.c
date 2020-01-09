@@ -20,14 +20,6 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 
-/*
- * Function name prefixes usually (not strictly) means:
- *
- * damon_	common functions
- * kdamond_	kdamond directly calling functions
- * debugfs_	debugfs controll functions
- */
-
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
 
