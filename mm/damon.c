@@ -90,7 +90,7 @@ static char rfile_path[LEN_RES_FILE_PATH] = "/damon.data";
 static struct task_struct *kdamond;
 static bool kdamond_stop;
 
-/* Protects kdamond and kdamond_stop */
+/* Protects read/write of kdamond and kdamond_stop */
 static DEFINE_SPINLOCK(kdamond_lock);
 
 static struct rnd_state rndseed;
