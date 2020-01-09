@@ -171,9 +171,9 @@ the bit has set meanwhile.  Therefore, the monitoring overhead is controllable
 by setting the number of regions.  DAMON allows users to set the minimal and
 maximum number of regions for the trade-off.
 
-Except the assumption, this is almost same with the miniature-like static
-region based sampling.  Therefore, this scheme cannot preserve the quality of
-the output if the assumption is not guaranteed.
+Except the assumption, this is almost same with the above-mentioned
+miniature-like static region based sampling.  In other words, this scheme
+cannot preserve the quality of the output if the assumption is not guaranteed.
 
 
 Adaptive Regions Adjustment
