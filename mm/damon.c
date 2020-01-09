@@ -420,7 +420,7 @@ static int damon_three_regions_of(struct damon_task *t,
  * regions seperated by the two biggest unmapped regions and stores those in
  * the given task.
  */
-static void init_regions_of(struct damon_task *t)
+static void damon_init_regions_of(struct damon_task *t)
 {
 	struct damon_region *r;
 	struct region regions[3];
@@ -449,7 +449,7 @@ static void kdamond_init_regions(void)
 	struct damon_task *t;
 
 	damon_for_each_task(t)
-		init_regions_of(t);
+		damon_init_regions_of(t);
 }
 
 /*
