@@ -1262,3 +1262,5 @@ static int __init damon_init(void)
 }
 
 module_init(damon_init);
+
+#include "damon-test.h"
