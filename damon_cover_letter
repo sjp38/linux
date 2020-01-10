@@ -130,7 +130,9 @@ As DAMON incurs very low overhead, such optimizations can be applied not only
 offline, but also online.  Also, there is no reason to limit such optimizations
 to the user space.  Several parts of the kernel's memory management mechanisms
 could be also optimized using DAMON. The reclamation, the THP (de)promotion
-decisions, and the compaction would be such a candidates.
+decisions, and the compaction would be such a candidates.  That said, current
+version of DAMON focuses on the user space usecases.  It will be extended for
+the in-kernel uses later.
 
 
 Mechanisms of DAMON
