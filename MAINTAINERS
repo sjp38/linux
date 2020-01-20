@@ -4589,6 +4589,7 @@ L:	linux-mm@kvack.org
 S:	Maintained
 F:	mm/damon.c
 F:	tools/damon/*
+F:	Documentation/admin-guide/mm/data_access_monitor.rst
 
 DAVICOM FAST ETHERNET (DMFE) NETWORK DRIVER
 L:	netdev@vger.kernel.org
