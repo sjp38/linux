@@ -9,6 +9,7 @@
 
 #define pr_fmt(fmt) "damon: " fmt
 
+#include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/mm.h>
@@ -1037,6 +1038,233 @@ static long damon_set_attrs(unsigned long sample_int,
 	return 0;
 }
 
+/*
+ * debugfs functions
+ */
+
+static ssize_t debugfs_monitor_on_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	char monitor_on_buf[5];
+	bool monitor_on;
+
+	spin_lock(&kdamond_lock);
+	monitor_on = kdamond != NULL;
+	spin_unlock(&kdamond_lock);
+
+	snprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
+
+	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf,
+			monitor_on ? 3 : 4);
+}
+
+static ssize_t debugfs_monitor_on_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t ret;
+	bool on = false;
+	char cmdbuf[5];
+
+	ret = simple_write_to_buffer(cmdbuf, 5, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	if (sscanf(cmdbuf, "%s", cmdbuf) != 1)
+		return -EINVAL;
+	if (!strncmp(cmdbuf, "on", 5))
+		on = true;
+	else if (!strncmp(cmdbuf, "off", 5))
+		on = false;
+	else
+		return -EINVAL;
+
+	if (damon_turn_kdamond(on))
+		return -EINVAL;
+
+	return ret;
+}
+
+static ssize_t damon_sprint_pids(char *buf, ssize_t len)
+{
+	char *cursor = buf;
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		snprintf(cursor, len, "%lu ", t->pid);
+		cursor += strnlen(cursor, len);
+	}
+	if (cursor != buf)
+		cursor--;
+	snprintf(cursor, len, "\n");
+	return strnlen(buf, len);
+}
+
+static ssize_t debugfs_pids_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t len;
+	char pids_buf[512];
+
+	len = damon_sprint_pids(pids_buf, 512);
+
+	return simple_read_from_buffer(buf, count, ppos, pids_buf, len);
+}
+
+/*
+ * Converts a string into an array of unsigned long integers
+ *
+ * Returns an array of unsigned long integers that converted, or NULL if the
+ * input is wrong.
+ */
+static unsigned long *str_to_pids(const char *str, ssize_t len,
+				ssize_t *nr_pids)
+{
+	unsigned long *pids;
+	unsigned long pid;
+	int pos = 0, parsed, ret;
+
+	*nr_pids = 0;
+	pids = kmalloc_array(256, sizeof(unsigned long), GFP_KERNEL);
+	while (*nr_pids < 256 && pos < len) {
+		ret = sscanf(&str[pos], "%lu%n", &pid, &parsed);
+		pos += parsed;
+		if (ret != 1)
+			break;
+		pids[*nr_pids] = pid;
+		*nr_pids += 1;
+	}
+	if (*nr_pids == 0) {
+		kfree(pids);
+		pids = NULL;
+	}
+
+	return pids;
+}
+
+static ssize_t debugfs_pids_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t ret;
+	unsigned long *targets;
+	ssize_t nr_targets;
+	char pids_buf[512];
+
+	ret = simple_write_to_buffer(pids_buf, 512, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	targets = str_to_pids(pids_buf, ret, &nr_targets);
+
+	spin_lock(&kdamond_lock);
+	if (kdamond)
+		goto monitor_running;
+
+	damon_set_pids(targets, nr_targets);
+	spin_unlock(&kdamond_lock);
+	kfree(targets);
+
+	return ret;
+
+monitor_running:
+	spin_unlock(&kdamond_lock);
+	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
+	return -EINVAL;
+}
+
+static ssize_t debugfs_attrs_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	char attrs_buf[512];
+
+	snprintf(attrs_buf, 512, "%lu %lu %lu %lu %lu %s\n",
+			sample_interval, aggr_interval,
+			regions_update_interval, min_nr_regions,
+			max_nr_regions, rfile_path);
+
+	return simple_read_from_buffer(buf, count, ppos, attrs_buf,
+			strnlen(attrs_buf, 512));
+}
+
+static ssize_t debugfs_attrs_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	unsigned long s, a, r, minr, maxr;
+	char attrs_buf[512];
+	char res_file_path[LEN_RES_FILE_PATH];
+	ssize_t ret;
+
+	if (count > 512) {
+		pr_err("attributes stream is too large: %s\n", buf);
+		return -ENOMEM;
+	}
+
+	ret = simple_write_to_buffer(attrs_buf, 512, ppos, buf, count);
+	if (ret < 0)
+		return ret;
+
+	if (sscanf(attrs_buf, "%lu %lu %lu %lu %lu %s",
+				&s, &a, &r, &minr, &maxr, res_file_path) != 6)
+		return -EINVAL;
+
+	spin_lock(&kdamond_lock);
+	if (kdamond)
+		goto monitor_running;
+
+	damon_set_attrs(s, a, r, minr, maxr, res_file_path);
+	spin_unlock(&kdamond_lock);
+
+	return ret;
+
+monitor_running:
+	spin_unlock(&kdamond_lock);
+	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
+	return -EINVAL;
+}
+
+static const struct file_operations monitor_on_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_monitor_on_read,
+	.write = debugfs_monitor_on_write,
+};
+
+static const struct file_operations pids_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_pids_read,
+	.write = debugfs_pids_write,
+};
+
+static const struct file_operations attrs_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_attrs_read,
+	.write = debugfs_attrs_write,
+};
+
+static struct dentry *debugfs_root;
+
+static int __init debugfs_init(void)
+{
+	const char * const file_names[] = {"attrs", "pids", "monitor_on"};
+	const struct file_operations *fops[] = {&attrs_fops, &pids_fops,
+		&monitor_on_fops};
+	int i;
+
+	debugfs_root = debugfs_create_dir("damon", NULL);
+	if (!debugfs_root) {
+		pr_err("failed to create the debugfs dir\n");
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
+		if (!debugfs_create_file(file_names[i], 0600, debugfs_root,
+					NULL, fops[i])) {
+			pr_err("failed to create %s file\n", file_names[i]);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
+
 static int __init damon_init(void)
 {
 	pr_info("init\n");
@@ -1044,12 +1272,14 @@ static int __init damon_init(void)
 	prandom_seed_state(&rndseed, 42);
 	ktime_get_coarse_ts64(&last_aggregate_time);
 	last_regions_update_time = last_aggregate_time;
-	return 0;
+
+	return debugfs_init();
 }
 
 static void __exit damon_exit(void)
 {
 	damon_turn_kdamond(false);
+	debugfs_remove_recursive(debugfs_root);
 	pr_info("exit\n");
 }
 
