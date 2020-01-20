@@ -4616,6 +4616,7 @@ M:	SeongJae Park <sjpark@amazon.de>
 L:	linux-mm@kvack.org
 S:	Maintained
 F:	mm/damon.c
+F:	mm/damon-test.h
 F:	tools/damon/*
 F:	Documentation/admin-guide/mm/data_access_monitor.rst
 
