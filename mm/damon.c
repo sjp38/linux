@@ -63,14 +63,18 @@ static LIST_HEAD(damon_tasks_list);
  * For each 'sample_interval', DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
  * each region) for 'aggr_interval' and then flushes it to the result buffer if
- * an 'aggr_interval' surpassed.
+ * an 'aggr_interval' surpassed.  And for each 'regions_update_interval', damon
+ * checks whether the memory mapping of the target tasks has changed (e.g., by
+ * mmap() calls from the applications) and applies the changes.
  *
  * All time intervals are in micro-seconds.
  */
 static unsigned long sample_interval = 5 * 1000;
 static unsigned long aggr_interval = 100 * 1000;
+static unsigned long regions_update_interval = 1000 * 1000;
 
 static struct timespec64 last_aggregate_time;
+static struct timespec64 last_regions_update_time;
 
 static unsigned long min_nr_regions = 10;
 static unsigned long max_nr_regions = 1000;
@@ -727,6 +731,87 @@ static void kdamond_split_regions(void)
 }
 
 /*
+ * Check whether it is time to check and apply the dynamic mmap changes
+ *
+ * Returns true if it is.
+ */
+static bool kdamond_need_update_regions(void)
+{
+	return damon_check_reset_time_interval(&last_regions_update_time,
+			regions_update_interval);
+}
+
+static bool damon_intersect(struct damon_region *r, struct region *re)
+{
+	return !(r->vm_end <= re->start || re->end <= r->vm_start);
+}
+
+/*
+ * Update damon regions for the three big regions of the given task
+ *
+ * t		the given task
+ * bregions	the three big regions of the task
+ */
+static void damon_apply_three_regions(struct damon_task *t,
+				struct region bregions[3])
+{
+	struct damon_region *r, *next;
+	unsigned int i = 0;
+
+	/* Remove regions which isn't in the three big regions now */
+	damon_for_each_region_safe(r, next, t) {
+		for (i = 0; i < 3; i++) {
+			if (damon_intersect(r, &bregions[i]))
+				break;
+		}
+		if (i == 3)
+			damon_destroy_region(r);
+	}
+
+	/* Adjust intersecting regions to fit with the threee big regions */
+	for (i = 0; i < 3; i++) {
+		struct damon_region *first = NULL, *last;
+		struct damon_region *newr;
+		struct region *br;
+
+		br = &bregions[i];
+		/* Get the first and last regions which intersects with br */
+		damon_for_each_region(r, t) {
+			if (damon_intersect(r, br)) {
+				if (!first)
+					first = r;
+				last = r;
+			}
+			if (r->vm_start >= br->end)
+				break;
+		}
+		if (!first) {
+			/* no damon_region intersects with this big region */
+			newr = damon_new_region(br->start, br->end);
+			damon_add_region(newr, damon_prev_region(r), r);
+		} else {
+			first->vm_start = br->start;
+			last->vm_end = br->end;
+		}
+	}
+}
+
+/*
+ * Update regions for current memory mappings
+ */
+static void kdamond_update_regions(void)
+{
+	struct region three_regions[3];
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		if (damon_three_regions_of(t, three_regions))
+			continue;
+		damon_apply_three_regions(t, three_regions);
+	}
+}
+
+/*
  * Check whether current monitoring should be stopped
  *
  * If users asked to stop, need stop.  Even though no user has asked to stop,
@@ -788,6 +873,9 @@ static int kdamond_fn(void *data)
 			kdamond_flush_aggregated();
 			kdamond_split_regions();
 		}
+
+		if (kdamond_need_update_regions())
+			kdamond_update_regions();
 
 		usleep_range(sample_interval, sample_interval + 1);
 	}
@@ -895,6 +983,7 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
  *
  * sample_int		time interval between samplings
  * aggr_int		time interval between aggregations
+ * regions_update_int	time interval between vma update checks
  * min_nr_reg		minimal number of regions
  * max_nr_reg		maximum number of regions
  * path_to_rfile	path to the monitor result files
@@ -905,7 +994,7 @@ static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
  * Returns 0 on success, negative error code otherwise.
  */
 static long damon_set_attrs(unsigned long sample_int,
-		unsigned long aggr_int,
+		unsigned long aggr_int, unsigned long regions_update_int,
 		unsigned long min_nr_reg, unsigned long max_nr_reg,
 		char *path_to_rfile)
 {
@@ -927,6 +1016,7 @@ static long damon_set_attrs(unsigned long sample_int,
 
 	sample_interval = sample_int;
 	aggr_interval = aggr_int;
+	regions_update_interval = regions_update_int;
 	min_nr_regions = min_nr_reg;
 	max_nr_regions = max_nr_reg;
 	strncpy(rfile_path, path_to_rfile, LEN_RES_FILE_PATH);
@@ -939,6 +1029,7 @@ static int __init damon_init(void)
 
 	prandom_seed_state(&rndseed, 42);
 	ktime_get_coarse_ts64(&last_aggregate_time);
+	last_regions_update_time = last_aggregate_time;
 	return 0;
 }
 
