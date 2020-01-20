@@ -9,9 +9,14 @@
 
 #define pr_fmt(fmt) "damon: " fmt
 
+#include <linux/delay.h>
+#include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/page_idle.h>
 #include <linux/random.h>
+#include <linux/sched/mm.h>
+#include <linux/sched/task.h>
 #include <linux/slab.h>
 
 #define damon_get_task_struct(t) \
@@ -53,6 +58,36 @@ struct damon_task {
 
 /* List of damon_task objects */
 static LIST_HEAD(damon_tasks_list);
+
+/*
+ * For each 'sample_interval', DAMON checks whether each region is accessed or
+ * not.  It aggregates and keeps the access information (number of accesses to
+ * each region) for 'aggr_interval' and then flushes it to the result buffer if
+ * an 'aggr_interval' surpassed.
+ *
+ * All time intervals are in micro-seconds.
+ */
+static unsigned long sample_interval = 5 * 1000;
+static unsigned long aggr_interval = 100 * 1000;
+
+static struct timespec64 last_aggregate_time;
+
+static unsigned long min_nr_regions = 10;
+
+/* result buffer */
+#define DAMON_LEN_RBUF	(1024 * 1024 * 4)
+static char damon_rbuf[DAMON_LEN_RBUF];
+static unsigned int damon_rbuf_offset;
+
+/* result file */
+#define LEN_RES_FILE_PATH	256
+static char rfile_path[LEN_RES_FILE_PATH] = "/damon.data";
+
+static struct task_struct *kdamond;
+static bool kdamond_stop;
+
+/* Protects read/write of kdamond and kdamond_stop */
+static DEFINE_SPINLOCK(kdamond_lock);
 
 static struct rnd_state rndseed;
 /* Get a random number in [l, r) */
@@ -202,16 +237,580 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 	return ret;
 }
 
+/*
+ * Get the mm_struct of the given task
+ *
+ * Callser should put the mm_struct after use, unless it is NULL.
+ *
+ * Returns the mm_struct of the task on success, NULL on failure
+ */
+static struct mm_struct *damon_get_mm(struct damon_task *t)
+{
+	struct task_struct *task;
+	struct mm_struct *mm;
+
+	task = damon_get_task_struct(t);
+	if (!task)
+		return NULL;
+
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	return mm;
+}
+
+/*
+ * Size-evenly split a region into 'nr_pieces' small regions
+ *
+ * Returns 0 on success, or negative error code otherwise.
+ */
+static int damon_split_region_evenly(struct damon_region *r,
+				unsigned int nr_pieces)
+{
+	unsigned long sz_orig, sz_piece, orig_end;
+	struct damon_region *piece = NULL, *next;
+	unsigned long start;
+
+	if (!r || !nr_pieces)
+		return -EINVAL;
+
+	orig_end = r->vm_end;
+	sz_orig = r->vm_end - r->vm_start;
+	sz_piece = sz_orig / nr_pieces;
+
+	if (!sz_piece)
+		return -EINVAL;
+
+	r->vm_end = r->vm_start + sz_piece;
+	next = damon_next_region(r);
+	for (start = r->vm_end; start + sz_piece <= orig_end;
+			start += sz_piece) {
+		piece = damon_new_region(start, start + sz_piece);
+		damon_add_region(piece, r, next);
+		r = piece;
+	}
+	if (piece)
+		piece->vm_end = orig_end;
+	return 0;
+}
+
+struct region {
+	unsigned long start;
+	unsigned long end;
+};
+
+static unsigned long sz_region(struct region *r)
+{
+	return r->end - r->start;
+}
+
+static void swap_regions(struct region *r1, struct region *r2)
+{
+	struct region tmp;
+
+	tmp = *r1;
+	*r1 = *r2;
+	*r2 = tmp;
+}
+
+/*
+ * Find the three regions in an address space
+ *
+ * vma		the head vma of the target address space
+ * regions	an array of three 'struct region's that results will be saved
+ *
+ * This function receives an address space and finds three regions in it which
+ * separated by the two biggest unmapped regions in the space.
+ *
+ * Returns 0 if success, or negative error code otherwise.
+ */
+static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
+		struct region regions[3])
+{
+	struct region gap = {0,}, first_gap = {0,}, second_gap = {0,};
+	struct vm_area_struct *last_vma = NULL;
+	unsigned long start = 0;
+
+	/* Find two biggest gaps so that first_gap > second_gap > others */
+	for (; vma; vma = vma->vm_next) {
+		if (!last_vma) {
+			start = vma->vm_start;
+			last_vma = vma;
+			continue;
+		}
+		gap.start = last_vma->vm_end;
+		gap.end = vma->vm_start;
+		if (sz_region(&gap) > sz_region(&second_gap)) {
+			swap_regions(&gap, &second_gap);
+			if (sz_region(&second_gap) > sz_region(&first_gap))
+				swap_regions(&second_gap, &first_gap);
+		}
+		last_vma = vma;
+	}
+
+	if (!sz_region(&second_gap) || !sz_region(&first_gap))
+		return -EINVAL;
+
+	/* Sort the two biggest gaps by address */
+	if (first_gap.start > second_gap.start)
+		swap_regions(&first_gap, &second_gap);
+
+	/* Store the result */
+	regions[0].start = start;
+	regions[0].end = first_gap.start;
+	regions[1].start = first_gap.end;
+	regions[1].end = second_gap.start;
+	regions[2].start = second_gap.end;
+	regions[2].end = last_vma->vm_end;
+
+	return 0;
+}
+
+/*
+ * Get the three regions in the given task
+ *
+ * Returns 0 on success, negative error code otherwise.
+ */
+static int damon_three_regions_of(struct damon_task *t,
+				struct region regions[3])
+{
+	struct mm_struct *mm;
+	int ret;
+
+	mm = damon_get_mm(t);
+	if (!mm)
+		return -EINVAL;
+
+	down_read(&mm->mmap_sem);
+	ret = damon_three_regions_in_vmas(mm->mmap, regions);
+	up_read(&mm->mmap_sem);
+
+	mmput(mm);
+	return ret;
+}
+
+/*
+ * Initialize the monitoring target regions for the given task
+ *
+ * t	the given target task
+ *
+ * Because only a number of small portions of the entire address space
+ * is acutally mapped to the memory and accessed, monitoring the unmapped
+ * regions is wasteful.  That said, because we can deal with small noises,
+ * tracking every mapping is not strictly required but could even incur a high
+ * overhead if the mapping frequently changes or the number of mappings is
+ * high.
+ *
+ * As usual memory map of processes is as below, the gap between the heap and
+ * the uppermost mmap()-ed region, and the gap between the lowermost mmap()-ed
+ * region and the stack will be two biggest unmapped regions.  Because these
+ * gaps are outliers between the mapped and unmapped regions in the address
+ * space in terms of the size, excluding these two biggest unmapped regions
+ * will be sufficient to make a trade-off.
+ *
+ *   <heap>
+ *   <BIG UNMAPPED REGION 1>
+ *   <uppermost mmap()-ed region>
+ *   (other mmap()-ed regions and small unmapped regions)
+ *   <lowermost mmap()-ed region>
+ *   <BIG UNMAPPED REGION 2>
+ *   <stack>
+ *
+ * For the reason, this function converts the original address space of the
+ * given task to a simplified address space, that is constructed with three
+ * regions separated by the two biggest unmapped regions and stores those in
+ * the given task.
+ */
+static void damon_init_regions_of(struct damon_task *t)
+{
+	struct damon_region *r;
+	struct region regions[3];
+	int i;
+
+	if (damon_three_regions_of(t, regions)) {
+		pr_err("Failed to get three regions of task %lu\n", t->pid);
+		return;
+	}
+
+	/* Set the initial three regions of the task */
+	for (i = 0; i < 3; i++) {
+		r = damon_new_region(regions[i].start, regions[i].end);
+		damon_add_region_tail(r, t);
+	}
+
+	/* Split the middle region into 'min_nr_regions - 2' regions */
+	r = damon_nth_region_of(t, 1);
+	if (damon_split_region_evenly(r, min_nr_regions - 2))
+		pr_warn("Init middle region failed to be split\n");
+}
+
+/* Initialize '->regions_list' of every task */
+static void kdamond_init_regions(void)
+{
+	struct damon_task *t;
+
+	damon_for_each_task(t)
+		damon_init_regions_of(t);
+}
+
+/*
+ * Check whether the given region has accessed since the last check
+ *
+ * mm	'mm_struct' for the given virtual address space
+ * r	the region to be checked
+ */
+static void kdamond_check_access(struct mm_struct *mm, struct damon_region *r)
+{
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		goto mkold;
+
+	/* Read the page table access bit of the page */
+	if (pte && pte_young(*pte))
+		r->nr_accesses++;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	else if (pmd && pmd_young(*pmd))
+		r->nr_accesses++;
+#endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
+
+	spin_unlock(ptl);
+
+mkold:
+	/* mkold next target */
+	r->sampling_addr = damon_rand(r->vm_start, r->vm_end);
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		return;
+
+	if (pte) {
+		if (pte_young(*pte))
+			clear_page_idle(pte_page(*pte));
+		*pte = pte_mkold(*pte);
+	}
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	else if (pmd) {
+		if (pmd_young(*pmd))
+			clear_page_idle(pmd_page(*pmd));
+		*pmd = pmd_mkold(*pmd);
+	}
+#endif
+
+	spin_unlock(ptl);
+}
+
+/*
+ * Check whether a time interval is elapsed
+ *
+ * baseline	the time to check whether the interval has elapsed since
+ * interval	the time interval (microseconds)
+ *
+ * See whether the given time interval has passed since the given baseline
+ * time.  If so, it also updates the baseline to current time for next check.
+ *
+ * Returns true if the time interval has passed, or false otherwise.
+ */
+static bool damon_check_reset_time_interval(struct timespec64 *baseline,
+		unsigned long interval)
+{
+	struct timespec64 now;
+
+	ktime_get_coarse_ts64(&now);
+	if ((timespec64_to_ns(&now) - timespec64_to_ns(baseline)) / 1000 <
+			interval)
+		return false;
+	*baseline = now;
+	return true;
+}
+
+/*
+ * Check whether it is time to flush the aggregated information
+ */
+static bool kdamond_aggregate_interval_passed(void)
+{
+	return damon_check_reset_time_interval(&last_aggregate_time,
+			aggr_interval);
+}
+
+/*
+ * Flush the content in the result buffer to the result file
+ */
+static void damon_flush_rbuffer(void)
+{
+	ssize_t sz;
+	loff_t pos;
+	struct file *rfile;
+
+	while (damon_rbuf_offset) {
+		pos = 0;
+		rfile = filp_open(rfile_path, O_CREAT | O_RDWR | O_APPEND,
+				0644);
+		if (IS_ERR(rfile)) {
+			pr_err("Cannot open the result file %s\n", rfile_path);
+			return;
+		}
+
+		sz = kernel_write(rfile, damon_rbuf, damon_rbuf_offset, &pos);
+		filp_close(rfile, NULL);
+
+		damon_rbuf_offset -= sz;
+	}
+}
+
+/*
+ * Write a data into the result buffer
+ */
+static void damon_write_rbuf(void *data, ssize_t size)
+{
+	if (damon_rbuf_offset + size > DAMON_LEN_RBUF)
+		damon_flush_rbuffer();
+
+	memcpy(&damon_rbuf[damon_rbuf_offset], data, size);
+	damon_rbuf_offset += size;
+}
+
+/*
+ * Flush the aggregated monitoring results to the result buffer
+ *
+ * Stores current tracking results to the result buffer and reset 'nr_accesses'
+ * of each regions.  The format for the result buffer is as below:
+ *
+ *   <time> <number of tasks> <array of task infos>
+ *
+ *   task info: <pid> <number of regions> <array of region infos>
+ *   region info: <start address> <end address> <nr_accesses>
+ */
+static void kdamond_flush_aggregated(void)
+{
+	struct damon_task *t;
+	struct timespec64 now;
+	unsigned int nr;
+
+	ktime_get_coarse_ts64(&now);
+
+	damon_write_rbuf(&now, sizeof(struct timespec64));
+	nr = nr_damon_tasks();
+	damon_write_rbuf(&nr, sizeof(nr));
+
+	damon_for_each_task(t) {
+		struct damon_region *r;
+
+		damon_write_rbuf(&t->pid, sizeof(t->pid));
+		nr = nr_damon_regions(t);
+		damon_write_rbuf(&nr, sizeof(nr));
+		damon_for_each_region(r, t) {
+			damon_write_rbuf(&r->vm_start, sizeof(r->vm_start));
+			damon_write_rbuf(&r->vm_end, sizeof(r->vm_end));
+			damon_write_rbuf(&r->nr_accesses,
+					sizeof(r->nr_accesses));
+			r->nr_accesses = 0;
+		}
+	}
+}
+
+/*
+ * Check whether current monitoring should be stopped
+ *
+ * If users asked to stop, need stop.  Even though no user has asked to stop,
+ * need stop if every target task has dead.
+ *
+ * Returns true if need to stop current monitoring.
+ */
+static bool kdamond_need_stop(void)
+{
+	struct damon_task *t;
+	struct task_struct *task;
+	bool stop;
+
+	spin_lock(&kdamond_lock);
+	stop = kdamond_stop;
+	spin_unlock(&kdamond_lock);
+	if (stop)
+		return true;
+
+	damon_for_each_task(t) {
+		task = damon_get_task_struct(t);
+		if (task) {
+			put_task_struct(task);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/*
+ * The monitoring daemon that runs as a kernel thread
+ */
+static int kdamond_fn(void *data)
+{
+	struct damon_task *t;
+	struct damon_region *r, *next;
+	struct mm_struct *mm;
+
+	pr_info("kdamond (%d) starts\n", kdamond->pid);
+	kdamond_init_regions();
+	while (!kdamond_need_stop()) {
+		damon_for_each_task(t) {
+			mm = damon_get_mm(t);
+			if (!mm)
+				continue;
+			damon_for_each_region(r, t)
+				kdamond_check_access(mm, r);
+			mmput(mm);
+		}
+
+		if (kdamond_aggregate_interval_passed())
+			kdamond_flush_aggregated();
+
+		usleep_range(sample_interval, sample_interval + 1);
+	}
+	damon_flush_rbuffer();
+	damon_for_each_task(t) {
+		damon_for_each_region_safe(r, next, t)
+			damon_destroy_region(r);
+	}
+	pr_info("kdamond (%d) finishes\n", kdamond->pid);
+	spin_lock(&kdamond_lock);
+	kdamond = NULL;
+	spin_unlock(&kdamond_lock);
+	return 0;
+}
+
+/*
+ * Controller functions
+ */
+
+/*
+ * Start or stop the kdamond
+ *
+ * Returns 0 if success, negative error code otherwise.
+ */
+static int damon_turn_kdamond(bool on)
+{
+	spin_lock(&kdamond_lock);
+	kdamond_stop = !on;
+	if (!kdamond && on) {
+		kdamond = kthread_run(kdamond_fn, NULL, "kdamond");
+		if (!kdamond)
+			goto fail;
+		goto success;
+	}
+	if (kdamond && !on) {
+		spin_unlock(&kdamond_lock);
+		while (true) {
+			spin_lock(&kdamond_lock);
+			if (!kdamond)
+				goto success;
+			spin_unlock(&kdamond_lock);
+
+			usleep_range(sample_interval, sample_interval * 2);
+		}
+	}
+
+	/* tried to turn on while turned on, or turn off while turned off */
+
+fail:
+	spin_unlock(&kdamond_lock);
+	return -EINVAL;
+
+success:
+	spin_unlock(&kdamond_lock);
+	return 0;
+}
+
+static inline bool damon_is_target_pid(unsigned long pid)
+{
+	struct damon_task *t;
+
+	damon_for_each_task(t) {
+		if (t->pid == pid)
+			return true;
+	}
+	return false;
+}
+
+/*
+ * This function should not be called while the kdamond is running.
+ */
+static long damon_set_pids(unsigned long *pids, ssize_t nr_pids)
+{
+	ssize_t i;
+	struct damon_task *t, *next;
+
+	/* Remove unselected tasks */
+	damon_for_each_task_safe(t, next) {
+		for (i = 0; i < nr_pids; i++) {
+			if (pids[i] == t->pid)
+				break;
+		}
+		if (i != nr_pids)
+			continue;
+		damon_destroy_task(t);
+	}
+
+	/* Add new tasks */
+	for (i = 0; i < nr_pids; i++) {
+		if (damon_is_target_pid(pids[i]))
+			continue;
+		t = damon_new_task(pids[i]);
+		if (!t) {
+			pr_err("Failed to alloc damon_task\n");
+			return -ENOMEM;
+		}
+		damon_add_task_tail(t);
+	}
+
+	return 0;
+}
+
+/*
+ * Set attributes for the monitoring
+ *
+ * sample_int		time interval between samplings
+ * aggr_int		time interval between aggregations
+ * min_nr_reg		minimal number of regions
+ * path_to_rfile	path to the monitor result files
+ *
+ * This function should not be called while the kdamond is running.
+ * Every time interval is in micro-seconds.
+ *
+ * Returns 0 on success, negative error code otherwise.
+ */
+static long damon_set_attrs(unsigned long sample_int, unsigned long aggr_int,
+		unsigned long min_nr_reg, char *path_to_rfile)
+{
+	if (strnlen(path_to_rfile, LEN_RES_FILE_PATH) >= LEN_RES_FILE_PATH) {
+		pr_err("too long (>%d) result file path %s\n",
+				LEN_RES_FILE_PATH, path_to_rfile);
+		return -EINVAL;
+	}
+	if (min_nr_reg < 3) {
+		pr_err("min_nr_regions (%lu) should be bigger than 2\n",
+				min_nr_reg);
+		return -EINVAL;
+	}
+
+	sample_interval = sample_int;
+	aggr_interval = aggr_int;
+	min_nr_regions = min_nr_reg;
+	strncpy(rfile_path, path_to_rfile, LEN_RES_FILE_PATH);
+	return 0;
+}
+
 static int __init damon_init(void)
 {
 	pr_info("init\n");
 
 	prandom_seed_state(&rndseed, 42);
+	ktime_get_coarse_ts64(&last_aggregate_time);
 	return 0;
 }
 
 static void __exit damon_exit(void)
 {
+	damon_turn_kdamond(false);
 	pr_info("exit\n");
 }
 
