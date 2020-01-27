@@ -4619,6 +4619,7 @@ F:	mm/damon.c
 F:	mm/damon-test.h
 F:	tools/damon/*
 F:	Documentation/admin-guide/mm/data_access_monitor.rst
+F:	include/trace/events/damon.h
 
 DAVICOM FAST ETHERNET (DMFE) NETWORK DRIVER
 L:	netdev@vger.kernel.org

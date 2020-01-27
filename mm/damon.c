@@ -9,6 +9,8 @@
 
 #define pr_fmt(fmt) "damon: " fmt
 
+#define CREATE_TRACE_POINTS
+
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
@@ -19,6 +21,7 @@
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <linux/slab.h>
+#include <trace/events/damon.h>
 
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
@@ -587,6 +590,7 @@ static void damon_write_rbuf(void *data, ssize_t size)
 		damon_flush_rbuffer();
 
 	memcpy(&damon_rbuf[damon_rbuf_offset], data, size);
+	trace_damon_write_rbuf(data, size);
 	damon_rbuf_offset += size;
 }
 
