@@ -22,3 +22,5 @@ ipv6_flowlabel_mgr
 so_txtime
 tcp_fastopen_backup_key
 nettest
+fin_ack_lat_accept
+fin_ack_lat_connect
