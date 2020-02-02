@@ -867,4 +867,16 @@ config ARCH_HAS_HUGEPD
 config MAPPING_DIRTY_HELPERS
         bool
 
+config DAMON
+	bool "Data Access Monitor"
+	depends on MMU
+	help
+	  This feature allows to monitor access frequency of each memory
+	  region. The information can be useful for performance-centric DRAM
+	  level memory management.
+
+	  See https://damonitor.github.io/doc/html/latest-damon/index.html for
+	  more information.
+	  If unsure, say N.
+
 endmenu
