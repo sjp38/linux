@@ -1423,3 +1423,5 @@ module_exit(damon_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("SeongJae Park <sjpark@amazon.de>");
 MODULE_DESCRIPTION("DAMON: Data Access MONitor");
+
+#include "damon-test.h"
