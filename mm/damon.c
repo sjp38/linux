@@ -11,6 +11,7 @@
 
 #define CREATE_TRACE_POINTS
 
+#include <asm-generic/mman-common.h>
 #include <linux/damon.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
@@ -23,6 +24,8 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 #include <trace/events/damon.h>
+
+#include "internal.h"
 
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
@@ -44,6 +47,12 @@
 
 #define damon_for_each_task_safe(ctx, t, next) \
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
+
+#define damon_for_each_rule(ctx, r) \
+	list_for_each_entry(r, &(ctx)->rules_list, list)
+
+#define damon_for_each_rule_safe(ctx, r, next) \
+	list_for_each_entry_safe(r, next, &(ctx)->rules_list, list)
 
 /*
  * For each 'sample_interval', DAMON checks whether each region is accessed or
@@ -184,6 +193,27 @@ static void damon_destroy_task(struct damon_task *t)
 {
 	damon_del_task(t);
 	damon_free_task(t);
+}
+
+static void damon_add_rule(struct damon_ctx *ctx, struct damon_rule *r)
+{
+	list_add_tail(&r->list, &ctx->rules_list);
+}
+
+static void damon_del_rule(struct damon_rule *r)
+{
+	list_del(&r->list);
+}
+
+static void damon_free_rule(struct damon_rule *r)
+{
+	kfree(r);
+}
+
+static void damon_destroy_rule(struct damon_rule *r)
+{
+	damon_del_rule(r);
+	damon_free_rule(r);
 }
 
 /*
@@ -600,8 +630,117 @@ static void kdamond_flush_aggregated(struct damon_ctx *c)
 			damon_write_rbuf(c, &r->vm_end, sizeof(r->vm_end));
 			damon_write_rbuf(c, &r->nr_accesses,
 					sizeof(r->nr_accesses));
+			r->last_vm_start = r->vm_start;
+			r->last_vm_end = r->vm_end;
+			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
 		}
+	}
+}
+
+#define diff_of(a, b) (a > b ? a - b : b - a)
+
+/*
+ * Adjust the age of the given region
+ *
+ * Increase '->age' if '->vm_start' and '->vm_end' has not changed and
+ * '->nr_accesses' has not changed more than the merge threshold.  Else, reset
+ * it.
+ */
+static void damon_do_count_age(struct damon_region *r, unsigned int threshold)
+{
+	if (r->vm_start != r->last_vm_start || r->vm_end != r->last_vm_end)
+		r->age = 0;
+	else if (diff_of(r->nr_accesses, r->last_nr_accesses) > threshold)
+		r->age = 0;
+	else
+		r->age++;
+}
+
+static void kdamond_count_age(struct damon_ctx *c, unsigned int threshold)
+{
+	struct damon_task *t;
+	struct damon_region *r;
+
+	damon_for_each_task(c, t) {
+		damon_for_each_region(r, t)
+			damon_do_count_age(r, threshold);
+	}
+}
+
+static int damon_do_action(struct damon_task *task, struct damon_region *r,
+			enum damon_action action)
+{
+	struct task_struct *t;
+	struct mm_struct *mm;
+	int madv_action;
+	int ret;
+
+	switch (action) {
+	case DAMON_MADV_WILLNEED:
+		madv_action = MADV_WILLNEED;
+		break;
+	case DAMON_MADV_COLD:
+		madv_action = MADV_COLD;
+		break;
+	case DAMON_MADV_PAGEOUT:
+		madv_action = MADV_PAGEOUT;
+		break;
+	case DAMON_MADV_HUGEPAGE:
+		madv_action = MADV_HUGEPAGE;
+		break;
+	case DAMON_MADV_NOHUGEPAGE:
+		madv_action = MADV_NOHUGEPAGE;
+		break;
+	default:
+		pr_warn("Wrong action %d\n", action);
+		return -EINVAL;
+	}
+
+	t = damon_get_task_struct(task);
+	if (!t)
+		return -EINVAL;
+	mm = damon_get_mm(task);
+	if (!mm) {
+		put_task_struct(t);
+		return -EINVAL;
+	}
+
+	ret = madvise_common(t, mm, PAGE_ALIGN(r->vm_start),
+			PAGE_ALIGN(r->vm_end - r->vm_start), madv_action);
+	put_task_struct(t);
+	mmput(mm);
+	return ret;
+}
+
+static void damon_do_apply_rules(struct damon_ctx *c, struct damon_task *t,
+				struct damon_region *r)
+{
+	struct damon_rule *rule;
+	unsigned long sz;
+
+	damon_for_each_rule(c, rule) {
+		sz = r->vm_end - r->vm_start;
+		if (sz < rule->min_sz_region ||  rule->max_sz_region < sz)
+			continue;
+		if (r->nr_accesses < rule->min_nr_accesses ||
+				rule->max_nr_accesses < r->nr_accesses)
+			continue;
+		if (r->age < rule->min_age_region ||
+				rule->max_age_region < r->age)
+			continue;
+		damon_do_action(t, r, rule->action);
+	}
+}
+
+static void kdamond_apply_rules(struct damon_ctx *c)
+{
+	struct damon_task *t;
+	struct damon_region *r;
+
+	damon_for_each_task(c, t) {
+		damon_for_each_region(r, t)
+			damon_do_apply_rules(c, t, r);
 	}
 }
 
@@ -619,8 +758,6 @@ static void damon_merge_two_regions(struct damon_region *l,
 	l->vm_end = r->vm_end;
 	damon_destroy_region(r);
 }
-
-#define diff_of(a, b) (a > b ? a - b : b - a)
 
 /*
  * Merge adjacent regions having similar access frequencies
@@ -865,6 +1002,8 @@ static int kdamond_fn(void *data)
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			kdamond_merge_regions(ctx, max_nr_accesses / 10);
+			kdamond_count_age(ctx, max_nr_accesses / 10);
+			kdamond_apply_rules(ctx);
 			kdamond_flush_aggregated(ctx);
 			kdamond_split_regions(ctx);
 			if (ctx->aggregate_cb)
@@ -950,6 +1089,22 @@ static inline bool damon_is_target_pid(struct damon_ctx *c, unsigned long pid)
 			return true;
 	}
 	return false;
+}
+
+/*
+ * This function should not be called while the kdamond is running.
+ */
+int damon_set_rules(struct damon_ctx *ctx, struct damon_rule **rules,
+			ssize_t nr_rules)
+{
+	struct damon_rule *r, *next;
+	ssize_t i;
+
+	damon_for_each_rule_safe(ctx, r, next)
+		damon_destroy_rule(r);
+	for (i = 0; i < nr_rules; i++)
+		damon_add_rule(ctx, rules[i]);
+	return 0;
 }
 
 /*
@@ -1372,6 +1527,7 @@ static int __init damon_init_user_ctx(void)
 
 	prandom_seed_state(&ctx->rndseed, 42);
 	INIT_LIST_HEAD(&ctx->tasks_list);
+	INIT_LIST_HEAD(&ctx->rules_list);
 
 	ctx->sample_cb = NULL;
 	ctx->aggregate_cb = NULL;

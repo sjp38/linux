@@ -22,12 +22,37 @@ struct damon_region {
 	unsigned long sampling_addr;
 	unsigned int nr_accesses;
 	struct list_head list;
+
+	unsigned int age;
+	unsigned long last_vm_start;
+	unsigned long last_vm_end;
+	unsigned int last_nr_accesses;
 };
 
 /* Represents a monitoring target task */
 struct damon_task {
 	unsigned long pid;
 	struct list_head regions_list;
+	struct list_head list;
+};
+
+enum damon_action {
+	DAMON_MADV_WILLNEED,
+	DAMON_MADV_COLD,
+	DAMON_MADV_PAGEOUT,
+	DAMON_MADV_HUGEPAGE,
+	DAMON_MADV_NOHUGEPAGE,
+	DAMON_ACTION_LEN,
+};
+
+struct damon_rule {
+	unsigned int min_sz_region;
+	unsigned int max_sz_region;
+	unsigned int min_nr_accesses;
+	unsigned int max_nr_accesses;
+	unsigned int min_age_region;
+	unsigned int max_age_region;
+	enum damon_action action;
 	struct list_head list;
 };
 
@@ -53,6 +78,7 @@ struct damon_ctx {
 	struct rnd_state rndseed;
 
 	struct list_head tasks_list;	/* 'damon_task' objects */
+	struct list_head rules_list;	/* 'damon_rule' objects */
 
 	/* callbacks */
 	void (*sample_cb)(struct damon_ctx *context);
@@ -61,6 +87,8 @@ struct damon_ctx {
 
 int damon_set_pids(struct damon_ctx *ctx,
 			unsigned long *pids, ssize_t nr_pids);
+int damon_set_rules(struct damon_ctx *ctx,
+			struct damon_rule **rules, ssize_t nr_rules);
 int damon_set_recording(struct damon_ctx *ctx,
 			unsigned int rbuf_len, char *rfile_path);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long s, unsigned long a,
