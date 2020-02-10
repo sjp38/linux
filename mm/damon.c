@@ -195,6 +195,29 @@ static void damon_destroy_task(struct damon_task *t)
 	damon_free_task(t);
 }
 
+static struct damon_rule *damon_new_rule(
+		unsigned int min_sz_region, unsigned int max_sz_region,
+		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
+		unsigned int min_age_region, unsigned int max_age_region,
+		enum damon_action action)
+{
+	struct damon_rule *ret;
+
+	ret = kmalloc(sizeof(struct damon_rule), GFP_KERNEL);
+	if (!ret)
+		return NULL;
+	ret->min_sz_region = min_sz_region;
+	ret->max_sz_region = max_sz_region;
+	ret->min_nr_accesses = min_nr_accesses;
+	ret->max_nr_accesses = max_nr_accesses;
+	ret->min_age_region = min_age_region;
+	ret->max_age_region = max_age_region;
+	ret->action = action;
+	INIT_LIST_HEAD(&ret->list);
+
+	return ret;
+}
+
 static void damon_add_rule(struct damon_ctx *ctx, struct damon_rule *r)
 {
 	list_add_tail(&r->list, &ctx->rules_list);
@@ -1266,6 +1289,130 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	return ret;
 }
 
+static ssize_t damon_sprint_rules(struct damon_ctx *c, char *buf, ssize_t len)
+{
+	char *cursor = buf;
+	struct damon_rule *r;
+	int ret;
+
+	damon_for_each_rule(c, r) {
+		ret = snprintf(cursor, len, "%u %u %u %u %u %u %d\n",
+				r->min_sz_region, r->max_sz_region,
+				r->min_nr_accesses, r->max_nr_accesses,
+				r->min_age_region, r->max_age_region,
+				r->action);
+		cursor += ret;
+	}
+	return cursor - buf;
+}
+
+static ssize_t debugfs_rules_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = &damon_user_ctx;
+	ssize_t len;
+	char *rules_buf;
+
+	rules_buf = kmalloc(sizeof(char) * 1024, GFP_KERNEL);
+
+	len = damon_sprint_rules(ctx, rules_buf, 1024);
+	len = simple_read_from_buffer(buf, count, ppos, rules_buf, len);
+
+	kfree(rules_buf);
+	return len;
+}
+
+static void damon_free_rules(struct damon_rule **rules, ssize_t nr_rules)
+{
+	ssize_t i;
+
+	for (i = 0; i < nr_rules; i++)
+		kfree(rules[i]);
+	kfree(rules);
+}
+
+/*
+ * Converts a string into an array of struct damon_rule pointers
+ *
+ * Returns an array of struct damon_rule pointers that converted, or NULL
+ * otherwise.
+ */
+static struct damon_rule **str_to_rules(const char *str, ssize_t len,
+				ssize_t *nr_rules)
+{
+	struct damon_rule *rule, **rules;
+	int pos = 0, parsed, ret;
+	unsigned int min_sz, max_sz, min_nr_a, max_nr_a, min_age, max_age;
+	int action;
+
+	rules = kmalloc_array(256, sizeof(struct damon_rule *), GFP_KERNEL);
+	if (!rules)
+		return NULL;
+
+	*nr_rules = 0;
+	while (pos < len && *nr_rules < 256) {
+		ret = sscanf(&str[pos], "%u %u %u %u %u %u %d%n",
+				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
+				&min_age, &max_age, &action, &parsed);
+		pos += parsed;
+		if (ret != 7)
+			break;
+		if (action >= DAMON_ACTION_LEN) {
+			pr_err("wrong action %d\n", action);
+			goto error;
+		}
+
+		rule = damon_new_rule(min_sz, max_sz, min_nr_a, max_nr_a,
+				min_age, max_age, action);
+		if (!rule)
+			goto error;
+
+		rules[*nr_rules] = rule;
+		*nr_rules += 1;
+	}
+	return rules;
+error:
+	damon_free_rules(rules, *nr_rules);
+	return NULL;
+}
+
+static ssize_t debugfs_rules_write(struct file *file, const char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = &damon_user_ctx;
+	char *rules_buf;
+	struct damon_rule **rules;
+	ssize_t nr_rules, ret;
+
+	rules_buf = kmalloc(sizeof(char) * 1024, GFP_KERNEL);
+	ret = simple_write_to_buffer(rules_buf, 1024, ppos, buf, count);
+	if (ret < 0) {
+		kfree(rules_buf);
+		return ret;
+	}
+
+	rules = str_to_rules(rules_buf, ret, &nr_rules);
+	if (!rules)
+		return -EINVAL;
+
+	spin_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond)
+		goto monitor_running;
+
+	damon_set_rules(ctx, rules, nr_rules);
+	spin_unlock(&ctx->kdamond_lock);
+	kfree(rules_buf);
+	return ret;
+
+monitor_running:
+	spin_unlock(&ctx->kdamond_lock);
+	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
+	ret = -EINVAL;
+	damon_free_rules(rules, nr_rules);
+	kfree(rules_buf);
+	return ret;
+}
+
 static ssize_t damon_sprint_pids(struct damon_ctx *ctx, char *buf, ssize_t len)
 {
 	char *cursor = buf;
@@ -1468,6 +1615,12 @@ static const struct file_operations pids_fops = {
 	.write = debugfs_pids_write,
 };
 
+static const struct file_operations rules_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_rules_read,
+	.write = debugfs_rules_write,
+};
+
 static const struct file_operations record_fops = {
 	.owner = THIS_MODULE,
 	.read = debugfs_record_read,
@@ -1484,10 +1637,10 @@ static struct dentry *debugfs_root;
 
 static int __init debugfs_init(void)
 {
-	const char * const file_names[] = {"attrs", "record",
+	const char * const file_names[] = {"attrs", "record", "rules",
 		"pids", "monitor_on"};
 	const struct file_operations *fops[] = {&attrs_fops, &record_fops,
-		&pids_fops, &monitor_on_fops};
+		&rules_fops, &pids_fops, &monitor_on_fops};
 	int i;
 
 	debugfs_root = debugfs_create_dir("damon", NULL);
