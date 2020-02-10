@@ -1005,7 +1005,7 @@ madvise_behavior_valid(int behavior)
  * @task could be a zombie leader if it calls sys_exit so accessing mm_struct
  * via task->mm is prohibited. Please use @mm instead of task->mm.
  */
-static int madvise_common(struct task_struct *task, struct mm_struct *mm,
+int madvise_common(struct task_struct *task, struct mm_struct *mm,
 			unsigned long start, size_t len_in, int behavior)
 {
 	unsigned long end, tmp;
