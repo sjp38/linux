@@ -79,6 +79,10 @@ static struct damon_region *damon_new_region(struct damon_ctx *ctx,
 	region->sampling_addr = damon_rand(ctx, vm_start, vm_end);
 	INIT_LIST_HEAD(&region->list);
 
+	region->age = 0;
+	region->last_vm_start = vm_start;
+	region->last_vm_end = vm_end;
+
 	return region;
 }
 
@@ -613,8 +617,41 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 					sizeof(r->nr_accesses));
 			trace_damon_aggregated(t->pid, nr,
 					r->vm_start, r->vm_end, r->nr_accesses);
+			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
 		}
+	}
+}
+
+#define diff_of(a, b) (a > b ? a - b : b - a)
+
+/*
+ * Increase or reset the age of the given monitoring target region
+ *
+ * If the area or '->nr_accesses' has changed significantly, reset the '->age'.
+ * Else, increase the age.
+ */
+static void damon_do_count_age(struct damon_region *r, unsigned int threshold)
+{
+	unsigned long sz_threshold = (r->vm_end - r->vm_start) / 5;
+
+	if (diff_of(r->vm_start, r->last_vm_start) +
+			diff_of(r->vm_end, r->last_vm_end) > sz_threshold)
+		r->age = 0;
+	else if (diff_of(r->nr_accesses, r->last_nr_accesses) > threshold)
+		r->age = 0;
+	else
+		r->age++;
+}
+
+static void kdamond_count_age(struct damon_ctx *c, unsigned int threshold)
+{
+	struct damon_task *t;
+	struct damon_region *r;
+
+	damon_for_each_task(c, t) {
+		damon_for_each_region(r, t)
+			damon_do_count_age(r, threshold);
 	}
 }
 
@@ -626,14 +663,14 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 static void damon_merge_two_regions(struct damon_region *l,
 				struct damon_region *r)
 {
-	l->nr_accesses = (l->nr_accesses * sz_damon_region(l) +
-			r->nr_accesses * sz_damon_region(r)) /
-			(sz_damon_region(l) + sz_damon_region(r));
+	unsigned long sz_l = sz_damon_region(l), sz_r = sz_damon_region(r);
+
+	l->nr_accesses = (l->nr_accesses * sz_l + r->nr_accesses * sz_r) /
+			(sz_l + sz_r);
+	l->age = (l->age * sz_l + r->age * sz_r) / (sz_l + sz_r);
 	l->vm_end = r->vm_end;
 	damon_destroy_region(r);
 }
-
-#define diff_of(a, b) (a > b ? a - b : b - a)
 
 /*
  * Merge adjacent regions having similar access frequencies
@@ -644,14 +681,40 @@ static void damon_merge_two_regions(struct damon_region *l,
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 {
 	struct damon_region *r, *prev = NULL, *next;
+	unsigned long sz_subregion, last_last_vm = 0;
+	unsigned long sz_biggest = 0;	/* size of the biggest subregion */
+	struct region last_biggest;	/* last region of the biggest sub */
 
 	damon_for_each_region_safe(r, next, t) {
 		if (!prev || prev->vm_end != r->vm_start ||
 		    diff_of(prev->nr_accesses, r->nr_accesses) > thres) {
+			if (sz_biggest) {
+				sz_biggest = 0;
+				prev->last_vm_start = last_biggest.start;
+				prev->last_vm_end = last_biggest.end;
+			}
 			prev = r;
 			continue;
 		}
+		if (!sz_biggest) {
+			sz_biggest = sz_damon_region(prev);
+			last_biggest.start = prev->last_vm_start;
+			last_biggest.end = prev->last_vm_end;
+		}
+		if (last_last_vm != r->last_vm_start)
+			sz_subregion = 0;
+		sz_subregion += sz_damon_region(r);
+		last_last_vm = r->last_vm_start;
+		if (sz_subregion > sz_biggest) {
+			sz_biggest = sz_subregion;
+			last_biggest.start = r->last_vm_start;
+			last_biggest.end = r->last_vm_end;
+		}
 		damon_merge_two_regions(prev, r);
+	}
+	if (sz_biggest) {
+		prev->last_vm_start = last_biggest.start;
+		prev->last_vm_end = last_biggest.end;
 	}
 }
 
@@ -685,6 +748,12 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 	struct damon_region *new;
 
 	new = damon_new_region(ctx, r->vm_start + sz_r, r->vm_end);
+	new->age = r->age;
+	new->last_vm_start = r->vm_start;
+	new->last_nr_accesses = r->last_nr_accesses;
+
+	r->last_vm_start = r->vm_start;
+	r->last_vm_end = r->vm_end;
 	r->vm_end = new->vm_start;
 
 	damon_insert_region(new, r, damon_next_region(r));
@@ -874,6 +943,7 @@ static int kdamond_fn(void *data)
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			kdamond_merge_regions(ctx, max_nr_accesses / 10);
+			kdamond_count_age(ctx, max_nr_accesses / 10);
 			if (ctx->aggregate_cb)
 				ctx->aggregate_cb(ctx);
 			kdamond_reset_aggregated(ctx);
