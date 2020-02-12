@@ -9,6 +9,7 @@
 
 #define pr_fmt(fmt) "damon: " fmt
 
+#include <linux/damon.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/mm.h>
@@ -39,60 +40,6 @@
 
 #define damon_for_each_task_safe(ctx, t, next) \
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
-
-/* Represents a monitoring target region on the virtual address space */
-struct damon_region {
-	unsigned long vm_start;
-	unsigned long vm_end;
-	unsigned long sampling_addr;
-	unsigned int nr_accesses;
-	struct list_head list;
-};
-
-/* Represents a monitoring target task */
-struct damon_task {
-	unsigned long pid;
-	struct list_head regions_list;
-	struct list_head list;
-};
-
-/*
- * For each 'sample_interval', DAMON checks whether each region is accessed or
- * not.  It aggregates and keeps the access information (number of accesses to
- * each region) for each 'aggr_interval' time.  And for each
- * 'regions_update_interval', damon checks whether the memory mapping of the
- * target tasks has changed (e.g., by mmap() calls from the applications) and
- * applies the changes.
- *
- * All time intervals are in micro-seconds.
- */
-struct damon_ctx {
-	unsigned long sample_interval;
-	unsigned long aggr_interval;
-	unsigned long regions_update_interval;
-	unsigned long min_nr_regions;
-	unsigned long max_nr_regions;
-
-	struct timespec64 last_aggregation;
-	struct timespec64 last_regions_update;
-
-	unsigned char *rbuf;
-	unsigned int rbuf_len;
-	unsigned int rbuf_offset;
-	char *rfile_path;
-
-	struct task_struct *kdamond;
-	bool kdamond_stop;
-	spinlock_t kdamond_lock;
-
-	struct rnd_state rndseed;
-
-	struct list_head tasks_list;	/* 'damon_task' objects */
-
-	/* callbacks */
-	void (*sample_cb)(struct damon_ctx *context);
-	void (*aggregate_cb)(struct damon_ctx *context);
-};
 
 #define MAX_RFILE_PATH_LEN	256
 
@@ -961,10 +908,20 @@ success:
 	return 0;
 }
 
+int damon_start(struct damon_ctx *ctx)
+{
+	return damon_turn_kdamond(ctx, true);
+}
+
+int damon_stop(struct damon_ctx *ctx)
+{
+	return damon_turn_kdamond(ctx, false);
+}
+
 /*
  * This function should not be called while the kdamond is running.
  */
-static int damon_set_pids(struct damon_ctx *ctx,
+int damon_set_pids(struct damon_ctx *ctx,
 			unsigned long *pids, ssize_t nr_pids)
 {
 	ssize_t i;
@@ -998,7 +955,7 @@ static int damon_set_pids(struct damon_ctx *ctx,
  *
  * Returns 0 on success, negative error code otherwise.
  */
-static int damon_set_recording(struct damon_ctx *ctx,
+int damon_set_recording(struct damon_ctx *ctx,
 				unsigned int rbuf_len, char *rfile_path)
 {
 	size_t rfile_path_len;
@@ -1044,7 +1001,7 @@ static int damon_set_recording(struct damon_ctx *ctx,
  *
  * Returns 0 on success, negative error code otherwise.
  */
-static int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
+int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long regions_update_int,
 		unsigned long min_nr_reg, unsigned long max_nr_reg)
 {
