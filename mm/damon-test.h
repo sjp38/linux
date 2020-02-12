@@ -137,6 +137,18 @@ static void damon_test_set_pids(struct kunit *test)
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");
 }
 
+static void damon_test_set_recording(struct kunit *test)
+{
+	struct damon_ctx *ctx = &damon_user_ctx;
+
+	damon_set_recording(ctx, 4242, "foo.bar");
+	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 4242u);
+	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo.bar");
+	damon_set_recording(ctx, 42, "foo");
+	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 42u);
+	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo");
+}
+
 /*
  * Test damon_three_regions_in_vmas() function
  *
@@ -593,6 +605,7 @@ static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damon_test_tasks),
 	KUNIT_CASE(damon_test_regions),
 	KUNIT_CASE(damon_test_set_pids),
+	KUNIT_CASE(damon_test_set_recording),
 	KUNIT_CASE(damon_test_three_regions_in_vmas),
 	KUNIT_CASE(damon_test_aggregate),
 	KUNIT_CASE(damon_test_write_rbuf),
