@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
 """
-Record data access patterns of the target process.
+Apply given operation schemes to the target process.
 """
 
 import argparse
@@ -11,9 +11,10 @@ import signal
 import subprocess
 import time
 
+import _convert_damos
 import _damon
 
-def do_record(target, is_target_cmd, attrs, old_attrs):
+def run_damon(target, is_target_cmd, attrs, old_attrs):
     if os.path.isfile(attrs.rfile_path):
         os.rename(attrs.rfile_path, attrs.rfile_path + '.old')
 
@@ -21,6 +22,8 @@ def do_record(target, is_target_cmd, attrs, old_attrs):
         print('attributes (%s) failed to be applied' % attrs)
         cleanup_exit(old_attrs, -1)
     print('# damon attrs: %s %s' % (attrs.attr_str(), attrs.record_str()))
+    for line in attrs.schemes.split('\n'):
+        print('# scheme: %s' % line)
     if is_target_cmd:
         p = subprocess.Popen(target, shell=True, executable='/bin/bash')
         target = p.pid
@@ -62,10 +65,9 @@ def set_argparser(parser):
     _damon.set_attrs_argparser(parser)
     parser.add_argument('target', type=str, metavar='<target>',
             help='the target command or the pid to record')
-    parser.add_argument('-l', '--rbuf', metavar='<len>', type=int,
-            default=1024*1024, help='length of record result buffer')
-    parser.add_argument('-o', '--out', metavar='<file path>', type=str,
-            default='damon.data', help='output file path')
+    parser.add_argument('-c', '--schemes', metavar='<file>', type=str,
+            default='damon.schemes',
+            help='data access monitoring-based operation schemes')
 
 def main(args=None):
     global orig_attrs
@@ -81,21 +83,23 @@ def main(args=None):
     signal.signal(signal.SIGTERM, sighandler)
     orig_attrs = _damon.current_attrs()
 
-    args.schemes = ''
+    args.rbuf = 0
+    args.out = 'null'
+    args.schemes = _convert_damos.convert(args.schemes, args.sample, args.aggr)
     new_attrs = _damon.cmd_args_to_attrs(args)
     target = args.target
 
     target_fields = target.split()
     if not subprocess.call('which %s > /dev/null' % target_fields[0],
             shell=True, executable='/bin/bash'):
-        do_record(target, True, new_attrs, orig_attrs)
+        run_damon(target, True, new_attrs, orig_attrs)
     else:
         try:
             pid = int(target)
         except:
             print('target \'%s\' is neither a command, nor a pid' % target)
             exit(1)
-        do_record(target, False, new_attrs, orig_attrs)
+        run_damon(target, False, new_attrs, orig_attrs)
 
 if __name__ == '__main__':
     main()
