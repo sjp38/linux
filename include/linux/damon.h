@@ -89,6 +89,9 @@ struct damon_ctx {
 	struct list_head tasks_list;	/* 'damon_task' objects */
 	struct list_head schemes_list;	/* 'damos' objects */
 
+	int nr_damos_applies;
+	int nr_damos_fails;
+
 	/* callbacks */
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
