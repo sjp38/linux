@@ -759,6 +759,8 @@ static void kdamond_count_age(struct damon_ctx *c, unsigned int threshold)
 	}
 }
 
+static unsigned long nr_damos_tries[DAMOS_ACTION_LEN];
+
 #ifndef CONFIG_ADVISE_SYSCALLS
 static int damos_madvise(struct damon_task *task, struct damon_region *r,
 			int behavior)
@@ -816,6 +818,7 @@ static int damos_do_action(struct damon_task *task, struct damon_region *r,
 		return -EINVAL;
 	}
 
+	nr_damos_tries[action]++;
 	return damos_madvise(task, r, madv_action);
 }
 
@@ -1139,6 +1142,19 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	return true;
 }
 
+static void pr_reset_damos_stat(void)
+{
+	static const char *action[] = { "willneed", "cold", "pageout",
+		"hugepage", "nohugepage"};
+	int i;
+
+	for (i = 0; i < DAMOS_ACTION_LEN; i++) {
+		pr_info("action %s tried %lu times\n", action[i],
+				nr_damos_tries[i]);
+		nr_damos_tries[i] = 0;
+	}
+}
+
 /*
  * The monitoring daemon that runs as a kernel thread
  */
@@ -1182,6 +1198,7 @@ static int kdamond_fn(void *data)
 	mutex_lock(&ctx->kdamond_lock);
 	ctx->kdamond = NULL;
 	mutex_unlock(&ctx->kdamond_lock);
+	pr_reset_damos_stat();
 
 	return 0;
 }
