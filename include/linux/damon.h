@@ -91,6 +91,9 @@ struct damon_ctx {
 	struct list_head tasks_list;	/* 'damon_task' objects */
 	struct list_head schemes_list;	/* 'damos' objects */
 
+	int nr_damos_applies;
+	int nr_damos_fails;
+
 	/* callbacks */
 	void (*init_target_regions)(struct damon_ctx *context);
 	void (*update_target_regions)(struct damon_ctx *context);
