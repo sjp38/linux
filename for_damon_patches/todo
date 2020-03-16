@@ -1,0 +1,35 @@
+For the next DAMON release
+--------------------------
+
+Apply Jonathan's comments
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Remove brief introduction from first commit msg
+
+- remove 'default n' in kconfig
+- use reasonable variable names rather than just ret if it's not for ending state
+- sizeof(*ret) instead of sizeof(struct damon_region)
+- blank lines after error check and return NULL;
+- damon_insert_region() rather than damon_add_region()
+- remove unnecesary comments if the function name is sufficient
+- remove implementation detail comment
+- rename 'damon_add_task_tail()' to 'damon_add_task()'
+- remove init log
+
+
+
+For the next DAMOS release
+--------------------------
+
+- Apply Brendan's Reviewed-by
+  (Reviewed-by: Brendan Higgins <brendanhiggins@google.com>)
+
+
+Just future works
+-----------------
+
+- Document exported functions
+- Export the functions for modules
+- Support DAMOS with damo
+- Check 'damon_new_region()' return value
+- Support physical memory
