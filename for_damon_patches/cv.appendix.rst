@@ -230,3 +230,90 @@ mlock() to the region'.  For example, we can imagine rules like below:
 
 An RFC patchset for this is available:
 https://lore.kernel.org/linux-mm/20200218085309.18346-1-sjpark@amazon.com/
+
+
+Appendix E: Evaluations
+=======================
+
+TL;DR
+-----
+
+DAMON is lightweight.  It makes target worloads only 0.76% slower and consumes
+only -0.08% more system memory.
+
+DAMON is accurate and useful for memory management optimizations.  An
+experimental DAMON-based operation scheme for THP removes 83.66% of THP memory
+overheads while preserving 40.67% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation reduced 22.42% of system
+memory usage and 88.86% of residential sets while incurring only 3.07% runtime
+overhead in best case.
+
+NOTE that the experimentail THP optimization and proactive reclamation are not
+for production, just only for proof of concepts.
+
+
+Setup
+-----
+
+On my personal QEMU/KVM based virtual machine on an Intel i7 host machine
+running Ubuntu 18.04, I measure runtime and consumed system memory while
+running various realistic workloads with several configurations.  I use 13 and
+12 workloads in PARSEC3[3] and SPLASH-2X[4] benchmark suites, respectively.  I
+personally use another wrapper scripts[5] for setup and run of the workloads.
+On top of this patchset, we also applied the DAMON-based operation schemes
+patchset[6] for this evaluation.
+
+Measurement
+~~~~~~~~~~~
+
+For the measurement of the amount of consumed memory in system global scope, I
+drop caches before starting each of the workloads and monitor 'MemFree' in the
+'/proc/meminfo' file.  To make results more stable, I repeat the runs 5 times
+and average results.  You can get stdev, min, and max of the numbers among the
+repeated runs in appendix below.
+
+Configurations
+~~~~~~~~~~~~~~
+
+The configurations I use are as below.
+
+orig: Linux v5.5 with 'madvise' THP policy
+rec: 'orig' plus DAMON running with record feature
+thp: same with 'orig', but use 'always' THP policy
+ethp: 'orig' plus a DAMON operation scheme[6], 'efficient THP'
+prcl: 'orig' plus a DAMON operation scheme, 'proactive reclaim[7]'
+
+I use 'rec' for measurement of DAMON overheads to target workloads and system
+memory.  The remaining configs including 'thp', 'ethp', and 'prcl' are for
+measurement of DAMON monitoring accuracy.
+
+'ethp' and 'prcl' is simple DAMON-based operation schemes developed for
+proof of concepts of DAMON.  'ethp' reduces memory space waste of THP by using
+DAMON for decision of promotions and demotion for huge pages, while 'prcl' is
+as similar as the original work.  Those are implemented as below:
+
+# format: <min/max size> <min/max frequency (0-100)> <min/max age> <action>
+# ethp: Use huge pages if a region >2MB shows >5% access rate, use regular
+# pages if a region >2MB shows <5% access rate for >1 second
+2M null    5 null    null null    hugepage
+2M null    null 5    1s null      nohugepage
+
+# prcl: If a region >4KB shows <5% access rate for >5 seconds, page out.
+4K null    null 5    5s null      pageout
+
+Note that both 'ethp' and 'prcl' are designed with my only straightforward
+intuition, because those are for only proof of concepts and monitoring accuracy
+of DAMON.  In other words, those are not for production.  For production use,
+those should be tuned more.
+
+
+[1] "Redis latency problems troubleshooting", https://redis.io/topics/latency
+[2] "Disable Transparent Huge Pages (THP)",
+https://docs.mongodb.com/manual/tutorial/transparent-huge-pages/
+[3] "The PARSEC Becnhmark Suite", https://parsec.cs.princeton.edu/index.htm
+[4] "SPLASH-2x", https://parsec.cs.princeton.edu/parsec3-doc.htm#splash2x
+[5] "parsec3_on_ubuntu", https://github.com/sjp38/parsec3_on_ubuntu
+[6] "[RFC v4 0/7] Implement Data Access Monitoring-based Memory Operation
+Schemes",
+https://lore.kernel.org/linux-mm/20200303121406.20954-1-sjpark@amazon.com/
+[7] "Proactively reclaiming idle memory", https://lwn.net/Articles/787611/
