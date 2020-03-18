@@ -218,6 +218,7 @@ Changes from v6
  - Fix access checking to properly handle regions smaller than single page
    (Jonathan Cameron)
  - Add found typos to 'scripts/spelling.txt'
+ - Add recent evaluation results including DAMON-based Operation Schemes
 
 Changes from v5
 (https://lore.kernel.org/linux-mm/20200217103110.30817-1-sjpark@amazon.com/)
