@@ -162,29 +162,37 @@ introduced by an LWN artice[4].
 Sequence Of Patches
 ===================
 
-The patches are organized in the following sequence.  The first patch
-introduces DAMON module, it's data structures, and data structure related
-common functions.  Following three patches (2nd to 4th) implement the core
-logics of DAMON, namely regions based sampling, adaptive regions adjustment,
-and dynamic memory mapping chage adoption, one by one.
+The patches are organized in the following sequence.  The first two patches are
+preparation of DAMON patchset.  The 1st patch adds typos found in previous
+versions of DAMON patchset to 'scripts/spelling.txt' so that the typos can be
+caught by 'checkpatch.pl'.  The 2nd patch exports 'lookup_page_ext()' to GPL
+modules so that it can be used by DAMON even though it is built as a loadable
+module.
 
-Following five patches are for low level users of DAMON.  The 5th patch
+Next four patches implement the core of DAMON and it's programming interface.
+The 3rd patch introduces DAMON module, it's data structures, and data structure
+related common functions.  Each of following three patches (4nd to 6th)
+implements the core mechanisms of DAMON, namely regions based sampling,
+adaptive regions adjustment, and dynamic memory mapping chage adoption,
+respectively, with programming interface supports of those.
+
+Following four patches are for low level users of DAMON.  The 7th patch
 implements callbacks for each of monitoring steps so that users can do whatever
-they want with the access patterns.  The 6th one implements recording of access
-patterns in DAMON for better convenience and efficiency.  Each of next three
-patches (7th to 9th) respectively adds a programmable interface for other
-kernel code, a debugfs interface for privileged people and/or programs in user
-space, and a tracepoint for other tracepoints supporting tracers such as perf.
+they want with the access patterns.  The 8th one implements recording of access
+patterns in DAMON for better convenience and efficiency.  Each of next two
+patches (9th and 10th) respectively adds a debugfs interface for privileged
+people and/or programs in user space, and a tracepoint for other tracepoints
+supporting tracers such as perf.
 
 Two patches for high level users of DAMON follows.  To provide a minimal
 reference to the debugfs interface and for high level use/tests of the DAMON,
-the next patch (10th) implements an user space tool.  The 11th patch adds a
+the next patch (11th) implements an user space tool.  The 12th patch adds a
 document for administrators of DAMON.
 
-Next two patches are for tests.  The 12th and 13th patches provide unit tests
-(based on kunit) and user space tests (based on kselftest) respectively.
+Next two patches are for tests.  The 13th and 14th patches provide unit tests
+(based on kunit) and user space tests (based on kselftest), respectively.
 
-Finally, the last patch (14th) updates the MAINTAINERS file.
+Finally, the last patch (15th) updates the MAINTAINERS file.
 
 The patches are based on the v5.5.  You can also clone the complete git
 tree:
@@ -208,6 +216,7 @@ Changes from v6
  - Implement API from the beginning (Jonathan Cameron)
  - Fix typos (Jonathan Cameron)
  - Fix access checking to properly handle regions smaller than single page
+   (Jonathan Cameron)
  - Add found typos to 'scripts/spelling.txt'
 
 Changes from v5
