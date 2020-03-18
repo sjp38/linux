@@ -22,7 +22,8 @@ DAMON-based optimization achieved up to 2.55x speedup), 2) light-weight enough
 to be applied online (compared to a straightforward access monitoring scheme,
 DAMON is up to 94,242.42x lighter) and 3) keeps predefined upper-bound overhead
 regardless of the size of target workloads (thus scalable).  Refer to 'Appendix
-C' if you interested in how it is possible.
+C' if you interested in how it is possible, and 'Appendix F' to know how the
+numbers collected.
 
 DAMON has mainly designed for the kernel's memory management mechanisms.
 However, because it is implemented as a standalone kernel module and provides
@@ -116,45 +117,23 @@ implemented in the kernel space.
 Evaluations
 ===========
 
-A prototype of DAMON has evaluated on an Intel Xeon E7-8837 machine using 20
-benchmarks that picked from SPEC CPU 2006, NAS, Tensorflow Benchmark,
-SPLASH-2X, and PARSEC 3 benchmark suite.  Nonethless, this section provides
-only summary of the results.  For more detail, please refer to the slides used
-for the introduction of DAMON at the Linux Plumbers Conference 2019[1] or the
-MIDDLEWARE'19 industrial track paper[2].
+We evaluated DAMON's overhead, monitoring quality and usefulness using 25
+realistic workloads on my QEMU/KVM based virtual machine.
 
+DAMON is lightweight.  It consumes only -0.08% more system memory and up to 1%
+CPU time.  It makes target worloads only 0.76% slower.
 
-Quality
--------
+DAMON is accurate and useful for memory management optimizations.  An
+experimental DAMON-based operation scheme for THP removes 83.66% of THP memory
+overheads while preserving 40.67% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation reduced 22.42% of system
+memory usage and 88.86% of residential sets while incurring only 3.07% runtime
+overhead in best case.
 
-We first traced and visualized the data access pattern of each workload.  We
-were able to confirm that the visualized results are reasonably accurate by
-manually comparing those with the source code of the workloads.
+NOTE that the experimentail THP optimization and proactive reclamation are not
+for production, just only for proof of concepts.
 
-To see the usefulness of the monitoring, we optimized 9 memory intensive
-workloads among them for memory pressure situations using the DAMON outputs.
-In detail, we identified frequently accessed memory regions in each workload
-based on the DAMON results and protected them with ``mlock()`` system calls by
-manually modifying the source code.  The optimized versions consistently show
-speedup (2.55x in best case, 1.65x in average) under artificial memory
-pressures.  We use cgroups for the pressure.
-
-
-Overhead
---------
-
-We also measured the overhead of DAMON.  The upperbound we set was kept as
-expected.  Besides, it was much lower (0.6 percent of the bound in best case,
-13.288 percent of the bound in average).  This reduction of the overhead is
-mainly resulted from its core mechanism called adaptive regions adjustment.
-Refer to 'Appendix D' for more detail about the mechanism.  We also compared
-the overhead of DAMON with that of a straightforward periodic PTE Accessed bit
-checking based monitoring.  DAMON's overhead was smaller than it by 94,242.42x
-in best case, 3,159.61x in average.
-
-The latest version of DAMON running with its default configuration consumes
-only up to 1% of CPU time when applied to realistic workloads in PARSEC3 and
-SPLASH-2X and makes no visible slowdown to the target processes.
+Please refer to 'Appendix E' for detailed evaluation setup and results.
 
 
 References
