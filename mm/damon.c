@@ -672,50 +672,77 @@ static void damon_merge_two_regions(struct damon_region *l,
 	damon_destroy_region(r);
 }
 
+static inline void set_last_area(struct damon_region *r, struct region *last)
+{
+	r->last_vm_start = last->start;
+	r->last_vm_end = last->end;
+}
+
+static inline void get_last_area(struct damon_region *r, struct region *last)
+{
+	last->start = r->last_vm_start;
+	last->end = r->last_vm_end;
+}
+
 /*
  * Merge adjacent regions having similar access frequencies
  *
  * t		task that merge operation will make change
  * thres	merge regions having '->nr_accesses' diff smaller than this
+ *
+ * After each merge, the biggest merger region becomes the last shape of the
+ * new region.  If two regions splitted from one region at the end of previous
+ * aggregation interval are merged into one region, we handle the two regions
+ * as one bit merger, because it can lead to unproper last shape record
+ * if we don't do so.
+ *
+ * To understand why we take special care for regions splitted from one region,
+ * suppose that a region of size 10 has splitted into two regions of size 4 and
+ * 6.  Two regions show similar access frequency for next aggregation interval
+ * and thus now be merged into one region again.  Because the split is made
+ * regardless of the access pattern, DAMON should say the region of size 10 had
+ * no area change for last aggregation interval.  However, if the two mergers
+ * are handled seperatively, DAMON will say the merged region has changed its
+ * size from 6 to 10.
  */
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 {
 	struct damon_region *r, *prev = NULL, *next;
-	unsigned long sz_subregion, last_last_vm = 0;
-	unsigned long sz_biggest = 0;	/* size of the biggest subregion */
-	struct region last_biggest;	/* last region of the biggest sub */
+	struct region biggest_merger;	/* the biggest region being merged */
+	unsigned long sz_biggest = 0;	/* size of the biggest_merger */
+	unsigned long sz_merger = 0;	/* size of current merger */
 
 	damon_for_each_region_safe(r, next, t) {
 		if (!prev || prev->vm_end != r->vm_start ||
 		    diff_of(prev->nr_accesses, r->nr_accesses) > thres) {
-			if (sz_biggest) {
-				sz_biggest = 0;
-				prev->last_vm_start = last_biggest.start;
-				prev->last_vm_end = last_biggest.end;
-			}
+			if (sz_biggest)
+				set_last_area(prev, &biggest_merger);
+
 			prev = r;
+			sz_biggest = sz_damon_region(prev);
+			get_last_area(prev, &biggest_merger);
 			continue;
 		}
-		if (!sz_biggest) {
-			sz_biggest = sz_damon_region(prev);
-			last_biggest.start = prev->last_vm_start;
-			last_biggest.end = prev->last_vm_end;
+
+
+		/* Set size of current merger and biggest merger */
+		sz_merger += sz_damon_region(r);
+		if (sz_merger > sz_biggest) {
+			sz_biggest = sz_merger;
+			get_last_area(r, &biggest_merger);
 		}
-		if (last_last_vm != r->last_vm_start)
-			sz_subregion = 0;
-		sz_subregion += sz_damon_region(r);
-		last_last_vm = r->last_vm_start;
-		if (sz_subregion > sz_biggest) {
-			sz_biggest = sz_subregion;
-			last_biggest.start = r->last_vm_start;
-			last_biggest.end = r->last_vm_end;
-		}
+
+		/*
+		 * If next region and current region is not originated from
+		 * same region, initialize the size of merger.
+		 */
+		if (r->last_vm_start != next->last_vm_start)
+			sz_merger = 0;
+
 		damon_merge_two_regions(prev, r);
 	}
-	if (sz_biggest) {
-		prev->last_vm_start = last_biggest.start;
-		prev->last_vm_end = last_biggest.end;
-	}
+	if (sz_biggest)
+		set_last_area(prev, &biggest_merger);
 }
 
 /*
