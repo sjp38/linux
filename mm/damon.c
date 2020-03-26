@@ -189,21 +189,21 @@ static struct damos *damon_new_scheme(
 		unsigned int min_age_region, unsigned int max_age_region,
 		enum damos_action action)
 {
-	struct damos *ret;
+	struct damos *scheme;
 
-	ret = kmalloc(sizeof(struct damos), GFP_KERNEL);
-	if (!ret)
+	scheme = kmalloc(sizeof(*scheme), GFP_KERNEL);
+	if (!scheme)
 		return NULL;
-	ret->min_sz_region = min_sz_region;
-	ret->max_sz_region = max_sz_region;
-	ret->min_nr_accesses = min_nr_accesses;
-	ret->max_nr_accesses = max_nr_accesses;
-	ret->min_age_region = min_age_region;
-	ret->max_age_region = max_age_region;
-	ret->action = action;
-	INIT_LIST_HEAD(&ret->list);
+	scheme->min_sz_region = min_sz_region;
+	scheme->max_sz_region = max_sz_region;
+	scheme->min_nr_accesses = min_nr_accesses;
+	scheme->max_nr_accesses = max_nr_accesses;
+	scheme->min_age_region = min_age_region;
+	scheme->max_age_region = max_age_region;
+	scheme->action = action;
+	INIT_LIST_HEAD(&scheme->list);
 
-	return ret;
+	return scheme;
 }
 
 static void damon_add_scheme(struct damon_ctx *ctx, struct damos *s)
@@ -1402,6 +1402,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 				s->action);
 		if (!rc)
 			return -ENOMEM;
+
 		written += rc;
 	}
 	return written;
@@ -1412,20 +1413,20 @@ static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
 	char *kbuf;
-	ssize_t ret;
+	ssize_t len;
 
 	kbuf = kmalloc(count, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
 
-	ret = sprint_schemes(ctx, kbuf, count);
-	if (ret < 0)
+	len = sprint_schemes(ctx, kbuf, count);
+	if (len < 0)
 		goto out;
-	ret = simple_read_from_buffer(buf, count, ppos, kbuf, ret);
+	len = simple_read_from_buffer(buf, count, ppos, kbuf, len);
 
 out:
 	kfree(kbuf);
-	return ret;
+	return len;
 }
 
 static void free_schemes_arr(struct damos **schemes, ssize_t nr_schemes)
@@ -1462,7 +1463,6 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 		ret = sscanf(&str[pos], "%u %u %u %u %u %u %d%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
 				&min_age, &max_age, &action, &parsed);
-		pos += parsed;
 		if (ret != 7)
 			break;
 		if (action >= DAMOS_ACTION_LEN) {
@@ -1470,6 +1470,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 			goto fail;
 		}
 
+		pos += parsed;
 		scheme = damon_new_scheme(min_sz, max_sz, min_nr_a, max_nr_a,
 				min_age, max_age, action);
 		if (!scheme)
@@ -1493,6 +1494,7 @@ static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 	char *kbuf;
 	struct damos **schemes;
 	ssize_t nr_schemes = 0, ret;
+	int err;
 
 	if (*ppos)
 		return -EINVAL;
@@ -1508,17 +1510,18 @@ static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 	schemes = str_to_schemes(kbuf, ret, &nr_schemes);
 
 	mutex_lock(&ctx->kdamond_lock);
-	if (ctx->kdamond)
-		goto monitor_running;
+	if (ctx->kdamond) {
+		ret = -EBUSY;
+		goto unlock_out;
+	}
 
-	damon_set_schemes(ctx, schemes, nr_schemes);
+	err = damon_set_schemes(ctx, schemes, nr_schemes);
+	if (err)
+		ret = err;
+	else
+		nr_schemes = 0;
+unlock_out:
 	mutex_unlock(&ctx->kdamond_lock);
-	goto out;
-
-monitor_running:
-	mutex_unlock(&ctx->kdamond_lock);
-	pr_err("%s: kdamond is running. Turn it off first.\n", __func__);
-	ret = -EINVAL;
 	free_schemes_arr(schemes, nr_schemes);
 out:
 	kfree(kbuf);
