@@ -300,19 +300,15 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	return 0;
 }
 
-struct region {
-	unsigned long start;
-	unsigned long end;
-};
-
-static unsigned long sz_region(struct region *r)
+static unsigned long sz_range(struct damon_addr_range *r)
 {
 	return r->end - r->start;
 }
 
-static void swap_regions(struct region *r1, struct region *r2)
+static void swap_ranges(struct damon_addr_range *r1,
+			struct damon_addr_range *r2)
 {
-	struct region tmp;
+	struct damon_addr_range tmp;
 
 	tmp = *r1;
 	*r1 = *r2;
@@ -323,7 +319,7 @@ static void swap_regions(struct region *r1, struct region *r2)
  * Find three regions seperated by two biggest unmapped regions
  *
  * vma		the head vma of the target address space
- * regions	an array of three 'struct region's that results will be saved
+ * regions	an array of three address ranges that results will be saved
  *
  * This function receives an address space and finds three regions in it which
  * separated by the two biggest unmapped regions in the space.  Please refer to
@@ -333,9 +329,9 @@ static void swap_regions(struct region *r1, struct region *r2)
  * Returns 0 if success, or negative error code otherwise.
  */
 static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
-		struct region regions[3])
+		struct damon_addr_range regions[3])
 {
-	struct region gap = {0}, first_gap = {0}, second_gap = {0};
+	struct damon_addr_range gap = {0}, first_gap = {0}, second_gap = {0};
 	struct vm_area_struct *last_vma = NULL;
 	unsigned long start = 0;
 
@@ -348,20 +344,20 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 		}
 		gap.start = last_vma->vm_end;
 		gap.end = vma->vm_start;
-		if (sz_region(&gap) > sz_region(&second_gap)) {
-			swap_regions(&gap, &second_gap);
-			if (sz_region(&second_gap) > sz_region(&first_gap))
-				swap_regions(&second_gap, &first_gap);
+		if (sz_range(&gap) > sz_range(&second_gap)) {
+			swap_ranges(&gap, &second_gap);
+			if (sz_range(&second_gap) > sz_range(&first_gap))
+				swap_ranges(&second_gap, &first_gap);
 		}
 		last_vma = vma;
 	}
 
-	if (!sz_region(&second_gap) || !sz_region(&first_gap))
+	if (!sz_range(&second_gap) || !sz_range(&first_gap))
 		return -EINVAL;
 
 	/* Sort the two biggest gaps by address */
 	if (first_gap.start > second_gap.start)
-		swap_regions(&first_gap, &second_gap);
+		swap_ranges(&first_gap, &second_gap);
 
 	/* Store the result */
 	regions[0].start = ALIGN(start, MIN_REGION);
@@ -380,7 +376,7 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
  * Returns 0 on success, negative error code otherwise.
  */
 static int damon_three_regions_of(struct damon_task *t,
-				struct region regions[3])
+				struct damon_addr_range regions[3])
 {
 	struct mm_struct *mm;
 	int rc;
@@ -442,7 +438,7 @@ static int damon_three_regions_of(struct damon_task *t,
 static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
 {
 	struct damon_region *r, *m = NULL;
-	struct region regions[3];
+	struct damon_addr_range regions[3];
 	int i;
 
 	if (damon_three_regions_of(t, regions)) {
@@ -865,18 +861,6 @@ static void damon_merge_two_regions(struct damon_region *l,
 	damon_destroy_region(r);
 }
 
-static inline void set_last_area(struct damon_region *r, struct region *last)
-{
-	r->last_ar.start = last->start;
-	r->last_ar.end = last->end;
-}
-
-static inline void get_last_area(struct damon_region *r, struct region *last)
-{
-	last->start = r->last_ar.start;
-	last->end = r->last_ar.end;
-}
-
 /*
  * Merge adjacent regions having similar access frequencies
  *
@@ -901,7 +885,7 @@ static inline void get_last_area(struct damon_region *r, struct region *last)
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 {
 	struct damon_region *r, *prev = NULL, *next;
-	struct region biggest_mergee;	/* the biggest region being merged */
+	struct damon_addr_range biggest_mergee;
 	unsigned long sz_biggest = 0;	/* size of the biggest_mergee */
 	unsigned long sz_mergee = 0;	/* size of current mergee */
 
@@ -909,11 +893,11 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		if (!prev || prev->ar.end != r->ar.start ||
 		    diff_of(prev->nr_accesses, r->nr_accesses) > thres) {
 			if (sz_biggest)
-				set_last_area(prev, &biggest_mergee);
+				prev->last_ar = biggest_mergee;
 
 			prev = r;
 			sz_biggest = sz_damon_region(prev);
-			get_last_area(prev, &biggest_mergee);
+			biggest_mergee = prev->ar;
 			continue;
 		}
 
@@ -922,7 +906,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		sz_mergee += sz_damon_region(r);
 		if (sz_mergee > sz_biggest) {
 			sz_biggest = sz_mergee;
-			get_last_area(r, &biggest_mergee);
+			biggest_mergee = r->ar;
 		}
 
 		/*
@@ -935,7 +919,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		damon_merge_two_regions(prev, r);
 	}
 	if (sz_biggest)
-		set_last_area(prev, &biggest_mergee);
+		prev->last_ar = biggest_mergee;
 }
 
 /*
@@ -1038,13 +1022,11 @@ static bool kdamond_need_update_regions(struct damon_ctx *ctx)
 }
 
 /*
- * Check whether regions are intersecting
- *
- * Note that this function checks 'struct damon_region' and 'struct region'.
+ * Check whether a region is intersecting an address range
  *
  * Returns true if it is.
  */
-static bool damon_intersect(struct damon_region *r, struct region *re)
+static bool damon_intersect(struct damon_region *r, struct damon_addr_range *re)
 {
 	return !(r->ar.end <= re->start || re->end <= r->ar.start);
 }
@@ -1056,7 +1038,7 @@ static bool damon_intersect(struct damon_region *r, struct region *re)
  * bregions	the three big regions of the task
  */
 static void damon_apply_three_regions(struct damon_ctx *ctx,
-		struct damon_task *t, struct region bregions[3])
+		struct damon_task *t, struct damon_addr_range bregions[3])
 {
 	struct damon_region *r, *next;
 	unsigned int i = 0;
@@ -1075,7 +1057,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 	for (i = 0; i < 3; i++) {
 		struct damon_region *first = NULL, *last;
 		struct damon_region *newr;
-		struct region *br;
+		struct damon_addr_range *br;
 
 		br = &bregions[i];
 		/* Get the first and last regions which intersects with br */
@@ -1108,7 +1090,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
  */
 static void kdamond_update_regions(struct damon_ctx *ctx)
 {
-	struct region three_regions[3];
+	struct damon_addr_range three_regions[3];
 	struct damon_task *t;
 
 	damon_for_each_task(ctx, t) {
