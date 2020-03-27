@@ -65,6 +65,9 @@
 /* Get a random number in [l, r) */
 #define damon_rand(ctx, l, r) (l + prandom_u32() % (r - l))
 
+static void kdamond_init_vm_regions(struct damon_ctx *ctx);
+static void kdamond_update_vm_regions(struct damon_ctx *ctx);
+
 /* A monitoring context for debugfs interface users. */
 static struct damon_ctx damon_user_ctx = {
 	.sample_interval = 5 * 1000,
@@ -72,6 +75,9 @@ static struct damon_ctx damon_user_ctx = {
 	.regions_update_interval = 1000 * 1000,
 	.min_nr_regions = 10,
 	.max_nr_regions = 1000,
+
+	.init_target_regions = kdamond_init_vm_regions,
+	.update_target_regions = kdamond_update_vm_regions,
 };
 
 /*
@@ -323,7 +329,7 @@ static void swap_ranges(struct damon_addr_range *r1,
  *
  * This function receives an address space and finds three regions in it which
  * separated by the two biggest unmapped regions in the space.  Please refer to
- * below comments of 'damon_init_regions_of()' function to know why this is
+ * below comments of 'damon_init_vm_regions_of()' function to know why this is
  * necessary.
  *
  * Returns 0 if success, or negative error code otherwise.
@@ -435,7 +441,7 @@ static int damon_three_regions_of(struct damon_task *t,
  *   <BIG UNMAPPED REGION 2>
  *   <stack>
  */
-static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
+static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 {
 	struct damon_region *r, *m = NULL;
 	struct damon_addr_range regions[3];
@@ -466,12 +472,12 @@ static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
 }
 
 /* Initialize '->regions_list' of every task */
-static void kdamond_init_regions(struct damon_ctx *ctx)
+static void kdamond_init_vm_regions(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 
 	damon_for_each_task(ctx, t)
-		damon_init_regions_of(ctx, t);
+		damon_init_vm_regions_of(ctx, t);
 }
 
 static void damon_mkold(struct mm_struct *mm, unsigned long addr)
@@ -1090,7 +1096,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 /*
  * Update regions for current memory mappings
  */
-static void kdamond_update_regions(struct damon_ctx *ctx)
+static void kdamond_update_vm_regions(struct damon_ctx *ctx)
 {
 	struct damon_addr_range three_regions[3];
 	struct damon_task *t;
@@ -1142,7 +1148,7 @@ static int kdamond_fn(void *data)
 	unsigned int max_nr_accesses = 0;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
-	kdamond_init_regions(ctx);
+	ctx->init_target_regions(ctx);
 	while (!kdamond_need_stop(ctx)) {
 		kdamond_prepare_access_checks(ctx);
 		if (ctx->sample_cb)
@@ -1163,7 +1169,7 @@ static int kdamond_fn(void *data)
 		}
 
 		if (kdamond_need_update_regions(ctx))
-			kdamond_update_regions(ctx);
+			ctx->update_target_regions(ctx);
 	}
 	damon_flush_rbuffer(ctx);
 	damon_for_each_task(ctx, t) {
