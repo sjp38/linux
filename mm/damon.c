@@ -307,12 +307,12 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	return 0;
 }
 
-static unsigned long sz_region(struct damon_addr_range *r)
+static unsigned long sz_range(struct damon_addr_range *r)
 {
 	return r->end - r->start;
 }
 
-static void swap_regions(struct damon_addr_range *r1,
+static void swap_ranges(struct damon_addr_range *r1,
 			struct damon_addr_range *r2)
 {
 	struct damon_addr_range tmp;
@@ -351,20 +351,20 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 		}
 		gap.start = last_vma->vm_end;
 		gap.end = vma->vm_start;
-		if (sz_region(&gap) > sz_region(&second_gap)) {
-			swap_regions(&gap, &second_gap);
-			if (sz_region(&second_gap) > sz_region(&first_gap))
-				swap_regions(&second_gap, &first_gap);
+		if (sz_range(&gap) > sz_range(&second_gap)) {
+			swap_ranges(&gap, &second_gap);
+			if (sz_range(&second_gap) > sz_range(&first_gap))
+				swap_ranges(&second_gap, &first_gap);
 		}
 		last_vma = vma;
 	}
 
-	if (!sz_region(&second_gap) || !sz_region(&first_gap))
+	if (!sz_range(&second_gap) || !sz_range(&first_gap))
 		return -EINVAL;
 
 	/* Sort the two biggest gaps by address */
 	if (first_gap.start > second_gap.start)
-		swap_regions(&first_gap, &second_gap);
+		swap_ranges(&first_gap, &second_gap);
 
 	/* Store the result */
 	regions[0].start = start;
@@ -837,20 +837,6 @@ static void damon_merge_two_regions(struct damon_region *l,
 	damon_destroy_region(r);
 }
 
-static inline void set_last_area(struct damon_region *r,
-				struct damon_addr_range *last)
-{
-	r->last_ar.start = last->start;
-	r->last_ar.end = last->end;
-}
-
-static inline void get_last_area(struct damon_region *r,
-				struct damon_addr_range *last)
-{
-	last->start = r->last_ar.start;
-	last->end = r->last_ar.end;
-}
-
 /*
  * Merge adjacent regions having similar access frequencies
  *
@@ -883,11 +869,11 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		if (!prev || prev->ar.end != r->ar.start ||
 		    diff_of(prev->nr_accesses, r->nr_accesses) > thres) {
 			if (sz_biggest)
-				set_last_area(prev, &biggest_mergee);
+				prev->last_ar = biggest_mergee;
 
 			prev = r;
 			sz_biggest = sz_damon_region(prev);
-			get_last_area(prev, &biggest_mergee);
+			biggest_mergee = prev->ar;
 			continue;
 		}
 
@@ -896,7 +882,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		sz_mergee += sz_damon_region(r);
 		if (sz_mergee > sz_biggest) {
 			sz_biggest = sz_mergee;
-			get_last_area(r, &biggest_mergee);
+			biggest_mergee = r->ar;
 		}
 
 		/*
@@ -909,7 +895,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		damon_merge_two_regions(prev, r);
 	}
 	if (sz_biggest)
-		set_last_area(prev, &biggest_mergee);
+		prev->last_ar = biggest_mergee;
 }
 
 /*
