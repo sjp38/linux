@@ -96,6 +96,8 @@ struct damon_ctx {
 	int nr_damos_fails;
 
 	/* callbacks */
+	void (*init_target_regions)(struct damon_ctx *context);
+	void (*update_target_regions)(struct damon_ctx *context);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
