@@ -59,6 +59,7 @@
 
 static void kdamond_init_vm_regions(struct damon_ctx *ctx);
 static void kdamond_update_vm_regions(struct damon_ctx *ctx);
+static unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
 
 /* A monitoring context for debugfs interface users. */
 static struct damon_ctx damon_user_ctx = {
@@ -70,6 +71,7 @@ static struct damon_ctx damon_user_ctx = {
 
 	.init_target_regions = kdamond_init_vm_regions,
 	.update_target_regions = kdamond_update_vm_regions,
+	.check_accesses = kdamond_check_vm_accesses,
 };
 
 /*
@@ -516,7 +518,7 @@ static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
  */
-static void kdamond_check_access(struct damon_ctx *ctx,
+static void damon_check_vm_access(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
 	static struct mm_struct *last_mm;
@@ -560,6 +562,28 @@ prepare_next_check:
 
 	damon_pte_pmd_mkold(pte, pmd);
 	spin_unlock(ptl);
+}
+
+static unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
+{
+	struct damon_task *t;
+	struct mm_struct *mm;
+	struct damon_region *r;
+	unsigned int max_nr_accesses = 0;
+
+	damon_for_each_task(ctx, t) {
+		mm = damon_get_mm(t);
+		if (!mm)
+			continue;
+		damon_for_each_region(r, t) {
+			damon_check_vm_access(ctx, mm, r);
+			max_nr_accesses = max(r->nr_accesses,
+					max_nr_accesses);
+		}
+		mmput(mm);
+	}
+
+	return max_nr_accesses;
 }
 
 /*
@@ -1099,24 +1123,13 @@ static int kdamond_fn(void *data)
 	struct damon_ctx *ctx = data;
 	struct damon_task *t;
 	struct damon_region *r, *next;
-	struct mm_struct *mm;
 	unsigned int max_nr_accesses;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 	ctx->init_target_regions(ctx);
 	while (!kdamond_need_stop(ctx)) {
-		max_nr_accesses = 0;
-		damon_for_each_task(ctx, t) {
-			mm = damon_get_mm(t);
-			if (!mm)
-				continue;
-			damon_for_each_region(r, t) {
-				kdamond_check_access(ctx, mm, r);
-				max_nr_accesses = max(r->nr_accesses,
-						max_nr_accesses);
-			}
-			mmput(mm);
-		}
+		max_nr_accesses = ctx->check_accesses(ctx);
+
 		if (ctx->sample_cb)
 			ctx->sample_cb(ctx);
 
