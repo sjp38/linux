@@ -120,15 +120,15 @@ Evaluations
 We evaluated DAMON's overhead, monitoring quality and usefulness using 25
 realistic workloads on my QEMU/KVM based virtual machine.
 
-DAMON is lightweight.  It consumes only -0.08% more system memory and up to 1%
-CPU time.  It makes target worloads only 0.76% slower.
+DAMON is lightweight.  It consumes only 0.08% more system memory and up to 1%
+CPU time.  It makes target worloads only 0.25% slower.
 
 DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP removes 83.66% of THP memory
-overheads while preserving 40.67% of THP speedup.  Another experimental
-DAMON-based 'proactive reclamation' implementation reduced 22.42% of system
-memory usage and 88.86% of residential sets while incurring only 3.07% runtime
-overhead in best case.
+experimental DAMON-based operation scheme for THP removes 100% of THP memory
+overheads while preserving 39.67% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation reduced 22.96% of system
+memory footprint and 89.49% of residential sets while incurring only 2.45%
+runtime overhead in best case (parsec3/freqmine).
 
 NOTE that the experimentail THP optimization and proactive reclamation are not
 for production, just only for proof of concepts.
