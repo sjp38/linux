@@ -206,6 +206,10 @@ https://github.com/sjp38/linux/releases/tag/damon/patches/v7
 Patch History
 =============
 
+Changes from v7
+(https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
+ - Rebase on v5.6
+
 Changes from v6
 (https://lore.kernel.org/linux-mm/20200224123047.32506-1-sjpark@amazon.com/)
  - Wordsmith cover letter (Shakeel Butt)
