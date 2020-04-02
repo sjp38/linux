@@ -208,7 +208,14 @@ Patch History
 
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
+ - Cleanup variable names (Jonathan Cameron)
+ - Split sampling address setup from access_check() (Jonathan Cameron)
+ - Make sampling address to always locate in the region (Jonathan Cameron)
+ - Make initial region's sampling addr to be old (Jonathan Cameron)
+ - Split kdamond on/off function to seperate functions (Jonathan Cameron)
+ - Fix wrong kernel doc comments (Jonathan Cameron)
  - Rebase on v5.6
+ - Initialize 'last_accessed' to false in kdamond_check_access() correctly
 
 Changes from v6
 (https://lore.kernel.org/linux-mm/20200224123047.32506-1-sjpark@amazon.com/)
