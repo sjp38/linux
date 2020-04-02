@@ -61,7 +61,6 @@ static struct damon_region *damon_new_region(struct damon_ctx *ctx,
 	region->vm_start = vm_start;
 	region->vm_end = vm_end;
 	region->nr_accesses = 0;
-	region->sampling_addr = damon_rand(ctx, vm_start, vm_end);
 	INIT_LIST_HEAD(&region->list);
 
 	return region;
@@ -207,7 +206,7 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 		struct damon_region *r, unsigned int nr_pieces)
 {
 	unsigned long sz_orig, sz_piece, orig_end;
-	struct damon_region *piece = NULL, *next;
+	struct damon_region *n = NULL, *next;
 	unsigned long start;
 
 	if (!r || !nr_pieces)
@@ -224,13 +223,13 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	next = damon_next_region(r);
 	for (start = r->vm_end; start + sz_piece <= orig_end;
 			start += sz_piece) {
-		piece = damon_new_region(ctx, start, start + sz_piece);
-		damon_insert_region(piece, r, next);
-		r = piece;
+		n = damon_new_region(ctx, start, start + sz_piece);
+		damon_insert_region(n, r, next);
+		r = n;
 	}
 	/* complement last region for possible rounding error */
-	if (piece)
-		piece->vm_end = orig_end;
+	if (n)
+		n->vm_end = orig_end;
 
 	return 0;
 }
@@ -403,17 +402,6 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
 		damon_init_regions_of(ctx, t);
 }
 
-static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd)
-{
-	if (pte && pte_young(*pte))
-		return true;
-#ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd && pmd_young(*pmd))
-		return true;
-#endif /* CONFIG_TRANSPARENT_HUGEPAGE */
-	return false;
-}
-
 static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
 {
 	if (pte) {
@@ -435,13 +423,56 @@ static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
+static void damon_prepare_access_check(struct damon_ctx *ctx,
+			struct mm_struct *mm, struct damon_region *r)
+{
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
+
+	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		return;
+
+	damon_pte_pmd_mkold(pte, pmd);
+	spin_unlock(ptl);
+}
+
+static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
+{
+	struct damon_task *t;
+	struct mm_struct *mm;
+	struct damon_region *r;
+
+	damon_for_each_task(ctx, t) {
+		mm = damon_get_mm(t);
+		if (!mm)
+			continue;
+		damon_for_each_region(r, t)
+			damon_prepare_access_check(ctx, mm, r);
+		mmput(mm);
+	}
+}
+
+static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd)
+{
+	if (pte && pte_young(*pte))
+		return true;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	if (pmd && pmd_young(*pmd))
+		return true;
+#endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
+	return false;
+}
+
 /*
  * Check whether the region accessed and prepare for next check
  *
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
  */
-static void kdamond_check_access(struct damon_ctx *ctx,
+static void damon_check_access(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
 	static struct mm_struct *last_mm;
@@ -461,6 +492,7 @@ static void kdamond_check_access(struct damon_ctx *ctx,
 		return;
 	}
 
+	last_accessed = false;
 	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
 		goto prepare_next_check;
 
@@ -477,17 +509,25 @@ prepare_next_check:
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	last_page_sz = pte ? PAGE_SIZE : ((1UL) << HPAGE_PMD_SHIFT);
 #endif
-
-	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
-	pte = NULL, pmd = NULL;
-	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
-		return;
-
-	damon_pte_pmd_mkold(pte, pmd);
-	spin_unlock(ptl);
 }
 
-/*
+static void kdamond_check_accesses(struct damon_ctx *ctx)
+{
+	struct damon_task *t;
+	struct mm_struct *mm;
+	struct damon_region *r;
+
+	damon_for_each_task(ctx, t) {
+		mm = damon_get_mm(t);
+		if (!mm)
+			continue;
+		damon_for_each_region(r, t)
+			damon_check_access(ctx, mm, r);
+		mmput(mm);
+	}
+}
+
+/**
  * damon_check_reset_time_interval() - Check if a time interval is elapsed.
  * @baseline:	the time to check whether the interval has elapsed since
  * @interval:	the time interval (microseconds)
@@ -570,24 +610,18 @@ static int kdamond_fn(void *data)
 	struct damon_ctx *ctx = data;
 	struct damon_task *t;
 	struct damon_region *r, *next;
-	struct mm_struct *mm;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 	kdamond_init_regions(ctx);
 	while (!kdamond_need_stop(ctx)) {
-		damon_for_each_task(ctx, t) {
-			mm = damon_get_mm(t);
-			if (!mm)
-				continue;
-			damon_for_each_region(r, t)
-				kdamond_check_access(ctx, mm, r);
-			mmput(mm);
-		}
+		kdamond_prepare_access_checks(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx))
 			kdamond_reset_aggregated(ctx);
 
 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);
+
+		kdamond_check_accesses(ctx);
 	}
 	damon_for_each_task(ctx, t) {
 		damon_for_each_region_safe(r, next, t)
@@ -616,22 +650,38 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
 	return running;
 }
 
-/*
- * Start or stop the kdamond
+/**
+ * damon_start() - Starts monitoring with given context.
+ * @ctx:	monitoring context
  *
- * Returns 0 if success, negative error code otherwise.
+ * Return: 0 on success, negative error code otherwise.
  */
-static int damon_turn_kdamond(struct damon_ctx *ctx, bool on)
+int damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
 
 	mutex_lock(&ctx->kdamond_lock);
-	if (!ctx->kdamond && on) {
+	if (!ctx->kdamond) {
 		err = 0;
 		ctx->kdamond = kthread_run(kdamond_fn, ctx, "kdamond");
 		if (IS_ERR(ctx->kdamond))
 			err = PTR_ERR(ctx->kdamond);
-	} else if (ctx->kdamond && !on) {
+	}
+	mutex_unlock(&ctx->kdamond_lock);
+
+	return err;
+}
+
+/**
+ * damon_stop() - Stops monitoring of given context.
+ * @ctx:	monitoring context
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_stop(struct damon_ctx *ctx)
+{
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond) {
 		mutex_unlock(&ctx->kdamond_lock);
 		kthread_stop(ctx->kdamond);
 		while (damon_kdamond_running(ctx))
@@ -641,32 +691,10 @@ static int damon_turn_kdamond(struct damon_ctx *ctx, bool on)
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
-	return err;
+	return -EBUSY;
 }
 
-/*
- * damon_start() - Starts monitoring with given context.
- * @ctx:	monitoring context
- *
- * Return: 0 on success, negative error code otherwise.
- */
-int damon_start(struct damon_ctx *ctx)
-{
-	return damon_turn_kdamond(ctx, true);
-}
-
-/*
- * damon_stop() - Stops monitoring of given context.
- * @ctx:	monitoring context
- *
- * Return: 0 on success, negative error code otherwise.
- */
-int damon_stop(struct damon_ctx *ctx)
-{
-	return damon_turn_kdamond(ctx, false);
-}
-
-/*
+/**
  * damon_set_pids() - Set monitoring target processes.
  * @ctx:	monitoring context
  * @pids:	array of target processes pids
@@ -696,7 +724,7 @@ int damon_set_pids(struct damon_ctx *ctx, unsigned long *pids, ssize_t nr_pids)
 	return 0;
 }
 
-/*
+/**
  * damon_set_attrs() - Set attributes for the monitoring.
  * @ctx:		monitoring context
  * @sample_int:		time interval between samplings
