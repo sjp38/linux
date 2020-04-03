@@ -402,8 +402,18 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
 		damon_init_regions_of(ctx, t);
 }
 
-static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
+static void kdamond_prepare_sampling(struct damon_ctx *ctx,
+			struct mm_struct *mm, struct damon_region *r)
 {
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
+
+	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
+
+	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		return;
+
 	if (pte) {
 		if (pte_young(*pte)) {
 			clear_page_idle(pte_page(*pte));
@@ -421,21 +431,6 @@ static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
 		*pmd = pmd_mkold(*pmd);
 	}
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
-}
-
-static void kdamond_prepare_sampling(struct damon_ctx *ctx,
-			struct mm_struct *mm, struct damon_region *r)
-{
-	pte_t *pte = NULL;
-	pmd_t *pmd = NULL;
-	spinlock_t *ptl;
-
-	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
-
-	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
-		return;
-
-	damon_pte_pmd_mkold(pte, pmd);
 	spin_unlock(ptl);
 }
 
