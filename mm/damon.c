@@ -11,6 +11,7 @@
 
 #include <linux/damon.h>
 #include <linux/delay.h>
+#include <linux/hugetlb.h>
 #include <linux/kthread.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -19,6 +20,8 @@
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <linux/slab.h>
+
+#include <asm/tlb.h>
 
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
@@ -408,6 +411,9 @@ static void kdamond_prepare_sampling(struct damon_ctx *ctx,
 	pte_t *pte = NULL;
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
+	struct vm_area_struct *vma;
+	unsigned long tlb_start;
+	unsigned long tlb_size = PAGE_SIZE;
 
 	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
 
@@ -420,18 +426,29 @@ static void kdamond_prepare_sampling(struct damon_ctx *ctx,
 			set_page_young(pte_page(*pte));
 		}
 		*pte = pte_mkold(*pte);
-		return;
 	}
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd) {
+	else if (pmd) {
 		if (pmd_young(*pmd)) {
 			clear_page_idle(pmd_page(*pmd));
 			set_page_young(pmd_page(*pmd));
 		}
 		*pmd = pmd_mkold(*pmd);
+		tlb_size = ((1UL) << HPAGE_PMD_SHIFT);
 	}
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 	spin_unlock(ptl);
+
+	tlb_start = ALIGN(r->sampling_addr, tlb_size);
+
+	down_read(&mm->mmap_sem);
+	vma = find_vma(mm, r->sampling_addr);
+	if (!vma || (r->sampling_addr < vma->vm_start))
+		goto out;
+	flush_tlb_range(vma, tlb_start, tlb_start + tlb_size);
+
+out:
+	up_read(&mm->mmap_sem);
 }
 
 static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd)
