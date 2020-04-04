@@ -402,8 +402,15 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
 		damon_init_regions_of(ctx, t);
 }
 
-static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
+static void damon_mkold(struct mm_struct *mm, unsigned long addr)
 {
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
+
+	if (follow_pte_pmd(mm, addr, NULL, &pte, &pmd, &ptl))
+		return;
+
 	if (pte) {
 		if (pte_young(*pte)) {
 			clear_page_idle(pte_page(*pte));
@@ -427,14 +434,9 @@ static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
 static void damon_prepare_access_check(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
-	pte_t *pte = NULL;
-	pmd_t *pmd = NULL;
-	spinlock_t *ptl;
-
 	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
 
-	if (!follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
-		damon_pte_pmd_mkold(pte, pmd, ptl);
+	damon_mkold(mm, r->sampling_addr);
 }
 
 static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
@@ -453,10 +455,18 @@ static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
 	}
 }
 
-static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
+static bool damon_young(struct mm_struct *mm, unsigned long addr,
+			unsigned long *page_sz)
 {
+	pte_t *pte = NULL;
+	pmd_t *pmd = NULL;
+	spinlock_t *ptl;
 	bool young = false;
 
+	if (follow_pte_pmd(mm, addr, NULL, &pte, &pmd, &ptl))
+		return false;
+
+	*page_sz = PAGE_SIZE;
 	if (pte) {
 		young = pte_young(*pte);
 		pte_unmap_unlock(pte, ptl);
@@ -466,6 +476,7 @@ static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	young = pmd_young(*pmd);
 	spin_unlock(ptl);
+	*page_sz = ((1UL) << HPAGE_PMD_SHIFT);
 #endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
 
 	return young;
@@ -482,12 +493,8 @@ static void damon_check_access(struct damon_ctx *ctx,
 {
 	static struct mm_struct *last_mm;
 	static unsigned long last_addr;
-	static int last_page_sz = PAGE_SIZE;
+	static unsigned long last_page_sz = PAGE_SIZE;
 	static bool last_accessed;
-
-	pte_t *pte = NULL;
-	pmd_t *pmd = NULL;
-	spinlock_t *ptl;
 
 	/* If the region is in the last checked page, reuse the result */
 	if (mm == last_mm && (ALIGN_DOWN(last_addr, last_page_sz) ==
@@ -497,22 +504,12 @@ static void damon_check_access(struct damon_ctx *ctx,
 		return;
 	}
 
-	last_accessed = false;
-	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
-		goto prepare_next_check;
-
-	/* Read the page table access bit of the page */
-	if (damon_pte_pmd_young(pte, pmd, ptl)) {
-		last_accessed = true;
+	last_accessed = damon_young(mm, r->sampling_addr, &last_page_sz);
+	if (last_accessed)
 		r->nr_accesses++;
-	}
 
-prepare_next_check:
 	last_mm = mm;
 	last_addr = r->sampling_addr;
-#ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	last_page_sz = pte ? PAGE_SIZE : ((1UL) << HPAGE_PMD_SHIFT);
-#endif
 }
 
 static void kdamond_check_accesses(struct damon_ctx *ctx)
