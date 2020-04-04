@@ -402,7 +402,7 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
 		damon_init_regions_of(ctx, t);
 }
 
-static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
+static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
 {
 	if (pte) {
 		if (pte_young(*pte)) {
@@ -410,16 +410,17 @@ static void damon_pte_pmd_mkold(pte_t *pte, pmd_t *pmd)
 			set_page_young(pte_page(*pte));
 		}
 		*pte = pte_mkold(*pte);
+		pte_unmap_unlock(pte, ptl);
 		return;
 	}
+
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd) {
-		if (pmd_young(*pmd)) {
-			clear_page_idle(pmd_page(*pmd));
-			set_page_young(pmd_page(*pmd));
-		}
-		*pmd = pmd_mkold(*pmd);
+	if (pmd_young(*pmd)) {
+		clear_page_idle(pmd_page(*pmd));
+		set_page_young(pmd_page(*pmd));
 	}
+	*pmd = pmd_mkold(*pmd);
+	spin_unlock(ptl);
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
@@ -432,11 +433,8 @@ static void damon_prepare_access_check(struct damon_ctx *ctx,
 
 	r->sampling_addr = damon_rand(ctx, r->vm_start, r->vm_end);
 
-	if (follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
-		return;
-
-	damon_pte_pmd_mkold(pte, pmd);
-	spin_unlock(ptl);
+	if (!follow_pte_pmd(mm, r->sampling_addr, NULL, &pte, &pmd, &ptl))
+		damon_pte_pmd_mkold(pte, pmd, ptl);
 }
 
 static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
@@ -455,15 +453,22 @@ static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
 	}
 }
 
-static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd)
+static bool damon_pte_pmd_young(pte_t *pte, pmd_t *pmd, spinlock_t *ptl)
 {
-	if (pte && pte_young(*pte))
-		return true;
+	bool young = false;
+
+	if (pte) {
+		young = pte_young(*pte);
+		pte_unmap_unlock(pte, ptl);
+		return young;
+	}
+
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd && pmd_young(*pmd))
-		return true;
+	young = pmd_young(*pmd);
+	spin_unlock(ptl);
 #endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
-	return false;
+
+	return young;
 }
 
 /*
@@ -497,11 +502,10 @@ static void damon_check_access(struct damon_ctx *ctx,
 		goto prepare_next_check;
 
 	/* Read the page table access bit of the page */
-	if (damon_pte_pmd_young(pte, pmd)) {
+	if (damon_pte_pmd_young(pte, pmd, ptl)) {
 		last_accessed = true;
 		r->nr_accesses++;
 	}
-	spin_unlock(ptl);
 
 prepare_next_check:
 	last_mm = mm;
