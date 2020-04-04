@@ -617,12 +617,13 @@ static int kdamond_fn(void *data)
 	while (!kdamond_need_stop(ctx)) {
 		kdamond_prepare_access_checks(ctx);
 
-		if (kdamond_aggregate_interval_passed(ctx))
-			kdamond_reset_aggregated(ctx);
-
 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);
 
 		kdamond_check_accesses(ctx);
+
+		if (kdamond_aggregate_interval_passed(ctx))
+			kdamond_reset_aggregated(ctx);
+
 	}
 	damon_for_each_task(ctx, t) {
 		damon_for_each_region_safe(r, next, t)
