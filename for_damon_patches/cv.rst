@@ -120,14 +120,14 @@ Evaluations
 We evaluated DAMON's overhead, monitoring quality and usefulness using 25
 realistic workloads on my QEMU/KVM based virtual machine.
 
-DAMON is lightweight.  It consumes only 0.08% more system memory and up to 1%
-CPU time.  It makes target worloads only 0.25% slower.
+DAMON is lightweight.  It consumes only -0.08% more system memory and up to 1%
+CPU time.  It makes target worloads only 0.45% slower.
 
 DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP removes 100% of THP memory
-overheads while preserving 39.67% of THP speedup.  Another experimental
-DAMON-based 'proactive reclamation' implementation reduced 22.96% of system
-memory footprint and 89.49% of residential sets while incurring only 2.45%
+experimental DAMON-based operation scheme for THP removes 68.22% of THP memory
+overheads while preserving 51.88% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation reduced 17.91% of system
+memory footprint and 71.44% of residential sets while incurring only 1.25%
 runtime overhead in best case (parsec3/freqmine).
 
 NOTE that the experimentail THP optimization and proactive reclamation are not
@@ -197,10 +197,10 @@ Finally, the last patch (15th) updates the MAINTAINERS file.
 The patches are based on the v5.5.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v7
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v8
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v7
+https://github.com/sjp38/linux/releases/tag/damon/patches/v8
 
 
 Patch History
@@ -214,8 +214,8 @@ Changes from v7
  - Make initial region's sampling addr to be old (Jonathan Cameron)
  - Split kdamond on/off function to seperate functions (Jonathan Cameron)
  - Fix wrong kernel doc comments (Jonathan Cameron)
+ - Reset 'last_accessed' to false in kdamond_check_access() if necessary
  - Rebase on v5.6
- - Initialize 'last_accessed' to false in kdamond_check_access() correctly
 
 Changes from v6
 (https://lore.kernel.org/linux-mm/20200224123047.32506-1-sjpark@amazon.com/)
