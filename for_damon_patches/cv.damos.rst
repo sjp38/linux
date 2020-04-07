@@ -266,6 +266,7 @@ Changes from RFC v5
  - Rebase on DAMON v8 patchset
  - Update test results
  - Fix DAMON userspace tool crash on signal handling
+ - Fix checkpatch warnings
 
 Changes from RFC v4
 (https://lore.kernel.org/linux-mm/20200303121406.20954-1-sjpark@amazon.com/)
