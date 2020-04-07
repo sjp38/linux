@@ -245,17 +245,16 @@ The web is also available:
 https://github.com/sjp38/linux/releases/tag/damos/rfc/v6
 
 
-[1] https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/
+[1] https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/
 [2] https://lore.kernel.org/linux-mm/20200302193630.68771-2-minchan@kernel.org/
 
 The first patch allows DAMON to reuse ``madvise()`` code for the actions.  The
 second patch accounts age of each region.  The third patch implements the
 handling of the schemes in DAMON and exports a kernel space programming
-interface for it.  The fourth patch implements a debugfs interface for
-privileged people and programs.  The fifth and sixth patches each adds
-kunittests and selftests for these changes, and finally the seventhe patch
-modifies the user space tool for DAMON to support description and applying of
-schemes in human freiendly way.
+interface for it.  The fourth patch implements a debugfs interface for the
+privileged people and programs.  The fifth and sixth patches each adds kunit
+tests and selftests for these changes, and finally the seventhe patch adds
+human friendly schemes support to the user space tool for DAMON.
 
 
 Patch History
