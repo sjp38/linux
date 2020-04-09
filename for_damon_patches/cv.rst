@@ -206,6 +206,10 @@ https://github.com/sjp38/linux/releases/tag/damon/patches/v8
 Patch History
 =============
 
+Changes from v8
+(https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/)
+ - Remove unnecessary sampling_addr setting in 2nd patch
+
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
  - Cleanup variable names (Jonathan Cameron)
