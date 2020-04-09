@@ -10,6 +10,7 @@
 --cc=colin.king@canonical.com \
 --cc=corbet@lwn.net \
 --cc=dwmw@amazon.com \
+--cc=irogers@google.com \
 --cc=jolsa@redhat.com \
 --cc=kirill@shutemov.name \
 --cc=mark.rutland@arm.com \
