@@ -17,6 +17,8 @@ This RFC patchset makes DAMON to handle such data access monitoring-based
 operation schemes.  With this change, users can do the data access awared
 optimizations by simply specifying their schemes to DAMON.
 
+[1] https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/
+
 
 Evaluations
 ===========
@@ -232,8 +234,9 @@ With parsec3/freqmine, 'prcl' reduced 17.91% of system memory usage and 71.44%
 of residential sets while incurring only 1.25% runtime overhead.
 
 
-Sequence Of Patches
-===================
+Baseline and Complete Git Tree
+==============================
+
 
 The patches are based on the v5.6 plus v8 DAMON patchset[1] and Minchan's
 ``do_madvise()`` patch[2].  Minchan's patch was necessary for reuse of
@@ -247,6 +250,10 @@ https://github.com/sjp38/linux/releases/tag/damos/rfc/v6
 
 [1] https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/
 [2] https://lore.kernel.org/linux-mm/20200302193630.68771-2-minchan@kernel.org/
+
+
+Sequence Of Patches
+===================
 
 The first patch allows DAMON to reuse ``madvise()`` code for the actions.  The
 second patch accounts age of each region.  The third patch implements the
