@@ -4,6 +4,7 @@
 --cc=acme@kernel.org \
 --cc=alexander.shishkin@linux.intel.com \
 --cc=amit@kernel.org \
+--cc=benh@kernel.crashing.org \
 --cc=brendan.d.gregg@gmail.com \
 --cc=brendanhiggins@google.com \
 --cc=cai@lca.pw \
@@ -23,6 +24,7 @@
 --cc=riel@surriel.com \
 --cc=rientjes@google.com \
 --cc=rostedt@goodmis.org \
+--cc=sblbir@amazon.com \
 --cc=shakeelb@google.com \
 --cc=shuah@kernel.org \
 --cc=sj38.park@gmail.com \
