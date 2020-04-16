@@ -1,4 +1,4 @@
-DAMON: Make Configurable for Support of Various Address Spaces
+DAMON: Make Configurable for Various Address Spaces Including Physical Memory
 
 DAMON[1] is currently supporing only virtual memory address spaces of several
 target processes.  Therefore, the user of DAMON should first select the target
