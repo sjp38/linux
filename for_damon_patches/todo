@@ -1,0 +1,21 @@
+TODOs
+=====
+
+- Export the functions for modules
+- Add cleanup callback
+- Do not generate 'null' when record is disabled
+
+
+Done
+====
+
+- Export page_lock_anon_vma_read, rmap_walk, and page_rmapping for module build
+- Refine the functions export commit messages for Brendan's questions (what
+  commit really require the changes?)
+- Refine the DAMOS commit message for Breandan's questions (DAMOS alternatives
+  and targets)
+- Implement real 'min_nr_regions'
+  Dynamically set max size of region based on this will also avoid the
+  thunderings.
+- Apply Varad's optimization
+- Clean up debugfs code
