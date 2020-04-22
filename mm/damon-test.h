@@ -78,8 +78,8 @@ static void damon_test_regions(struct kunit *test)
 	struct damon_task *t;
 
 	r = damon_new_region(&damon_user_ctx, 1, 2);
-	KUNIT_EXPECT_EQ(test, 1ul, r->vm_start);
-	KUNIT_EXPECT_EQ(test, 2ul, r->vm_end);
+	KUNIT_EXPECT_EQ(test, 1ul, r->ar.start);
+	KUNIT_EXPECT_EQ(test, 2ul, r->ar.end);
 	KUNIT_EXPECT_EQ(test, 0u, r->nr_accesses);
 
 	t = damon_new_task(42);
@@ -255,7 +255,7 @@ static void damon_test_aggregate(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 3, it);
 
 	/* The aggregated information should be written in the buffer */
-	sr = sizeof(r->vm_start) + sizeof(r->vm_end) + sizeof(r->nr_accesses);
+	sr = sizeof(r->ar.start) + sizeof(r->ar.end) + sizeof(r->nr_accesses);
 	sp = sizeof(t->pid) + sizeof(unsigned int) + 3 * sr;
 	sz = sizeof(struct timespec64) + sizeof(unsigned int) + 3 * sp;
 	KUNIT_EXPECT_EQ(test, (unsigned int)sz, ctx->rbuf_offset);
@@ -338,8 +338,8 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 
 	for (i = 0; i < nr_expected / 2; i++) {
 		r = __nth_region_of(t, i);
-		KUNIT_EXPECT_EQ(test, r->vm_start, expected[i * 2]);
-		KUNIT_EXPECT_EQ(test, r->vm_end, expected[i * 2 + 1]);
+		KUNIT_EXPECT_EQ(test, r->ar.start, expected[i * 2]);
+		KUNIT_EXPECT_EQ(test, r->ar.end, expected[i * 2 + 1]);
 	}
 
 	damon_cleanup_global_state();
@@ -458,8 +458,8 @@ static void damon_test_split_evenly(struct kunit *test)
 
 	i = 0;
 	damon_for_each_region(r, t) {
-		KUNIT_EXPECT_EQ(test, r->vm_start, i++ * 10);
-		KUNIT_EXPECT_EQ(test, r->vm_end, i * 10);
+		KUNIT_EXPECT_EQ(test, r->ar.start, i++ * 10);
+		KUNIT_EXPECT_EQ(test, r->ar.end, i * 10);
 	}
 	damon_free_task(t);
 
@@ -473,11 +473,11 @@ static void damon_test_split_evenly(struct kunit *test)
 	damon_for_each_region(r, t) {
 		if (i == 4)
 			break;
-		KUNIT_EXPECT_EQ(test, r->vm_start, 5 + 10 * i++);
-		KUNIT_EXPECT_EQ(test, r->vm_end, 5 + 10 * i);
+		KUNIT_EXPECT_EQ(test, r->ar.start, 5 + 10 * i++);
+		KUNIT_EXPECT_EQ(test, r->ar.end, 5 + 10 * i);
 	}
-	KUNIT_EXPECT_EQ(test, r->vm_start, 5 + 10 * i);
-	KUNIT_EXPECT_EQ(test, r->vm_end, 59ul);
+	KUNIT_EXPECT_EQ(test, r->ar.start, 5 + 10 * i);
+	KUNIT_EXPECT_EQ(test, r->ar.end, 59ul);
 	damon_free_task(t);
 
 	t = damon_new_task(42);
@@ -487,8 +487,8 @@ static void damon_test_split_evenly(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 1u);
 
 	damon_for_each_region(r, t) {
-		KUNIT_EXPECT_EQ(test, r->vm_start, 5ul);
-		KUNIT_EXPECT_EQ(test, r->vm_end, 6ul);
+		KUNIT_EXPECT_EQ(test, r->ar.start, 5ul);
+		KUNIT_EXPECT_EQ(test, r->ar.end, 6ul);
 	}
 	damon_free_task(t);
 }
@@ -502,12 +502,12 @@ static void damon_test_split_at(struct kunit *test)
 	r = damon_new_region(&damon_user_ctx, 0, 100);
 	damon_add_region(r, t);
 	damon_split_region_at(&damon_user_ctx, r, 25);
-	KUNIT_EXPECT_EQ(test, r->vm_start, 0ul);
-	KUNIT_EXPECT_EQ(test, r->vm_end, 25ul);
+	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
+	KUNIT_EXPECT_EQ(test, r->ar.end, 25ul);
 
 	r = damon_next_region(r);
-	KUNIT_EXPECT_EQ(test, r->vm_start, 25ul);
-	KUNIT_EXPECT_EQ(test, r->vm_end, 100ul);
+	KUNIT_EXPECT_EQ(test, r->ar.start, 25ul);
+	KUNIT_EXPECT_EQ(test, r->ar.end, 100ul);
 
 	damon_free_task(t);
 }
@@ -527,8 +527,8 @@ static void damon_test_merge_two(struct kunit *test)
 	damon_add_region(r2, t);
 
 	damon_merge_two_regions(r, r2);
-	KUNIT_EXPECT_EQ(test, r->vm_start, 0ul);
-	KUNIT_EXPECT_EQ(test, r->vm_end, 300ul);
+	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
+	KUNIT_EXPECT_EQ(test, r->ar.end, 300ul);
 	KUNIT_EXPECT_EQ(test, r->nr_accesses, 16u);
 
 	i = 0;
@@ -567,11 +567,10 @@ static void damon_test_merge_regions_of(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 5u);
 	for (i = 0; i < 5; i++) {
 		r = __nth_region_of(t, i);
-		KUNIT_EXPECT_EQ(test, r->vm_start, saddrs[i]);
-		KUNIT_EXPECT_EQ(test, r->vm_end, eaddrs[i]);
-		KUNIT_EXPECT_EQ(test, r->last_vm_start, lsa[i]);
-		KUNIT_EXPECT_EQ(test, r->last_vm_end, lea[i]);
-
+		KUNIT_EXPECT_EQ(test, r->ar.start, saddrs[i]);
+		KUNIT_EXPECT_EQ(test, r->ar.end, eaddrs[i]);
+		KUNIT_EXPECT_EQ(test, r->last_ar.start, lsa[i]);
+		KUNIT_EXPECT_EQ(test, r->last_ar.end, lea[i]);
 	}
 	damon_free_task(t);
 }
