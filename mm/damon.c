@@ -2,7 +2,7 @@
 /*
  * Data Access Monitor
  *
- * Copyright 2019 Amazon.com, Inc. or its affiliates.  All rights reserved.
+ * Copyright 2019-2020 Amazon.com, Inc. or its affiliates.
  *
  * Author: SeongJae Park <sjpark@amazon.de>
  */
@@ -36,7 +36,7 @@
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
 
 /* Get a random number in [l, r) */
-#define damon_rand(ctx, l, r) (l + prandom_u32_state(&ctx->rndseed) % (r - l))
+#define damon_rand(ctx, l, r) (l + prandom_u32() % (r - l))
 
 /*
  * Construct a damon_region struct
@@ -95,7 +95,7 @@ static void damon_destroy_region(struct damon_region *r)
  *
  * Returns the pointer to the new struct if success, or NULL otherwise
  */
-static struct damon_task *damon_new_task(unsigned long pid)
+static struct damon_task *damon_new_task(int pid)
 {
 	struct damon_task *t;
 
@@ -107,20 +107,6 @@ static struct damon_task *damon_new_task(unsigned long pid)
 	INIT_LIST_HEAD(&t->regions_list);
 
 	return t;
-}
-
-/* Returns n-th damon_region of the given task */
-struct damon_region *damon_nth_region_of(struct damon_task *t, unsigned int n)
-{
-	struct damon_region *r;
-	unsigned int i = 0;
-
-	damon_for_each_region(r, t) {
-		if (i++ == n)
-			return r;
-	}
-
-	return NULL;
 }
 
 static void damon_add_task(struct damon_ctx *ctx, struct damon_task *t)

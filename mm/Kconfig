@@ -749,5 +749,6 @@ config DAMON
 	  memory access pattern of specific user-space processes.  It aims to
 	  be 1) accurate enough to be useful for performance-centric domains,
 	  and 2) sufficiently light-weight so that it can be applied online.
+	  If unsure, say N.
 
 endmenu
