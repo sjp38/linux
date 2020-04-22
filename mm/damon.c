@@ -1198,12 +1198,11 @@ static ssize_t debugfs_pids_read(struct file *file,
  * Returns an array of unsigned long integers if the conversion success, or
  * NULL otherwise.
  */
-static unsigned long *str_to_pids(const char *str, ssize_t len,
-				ssize_t *nr_pids)
+static int *str_to_pids(const char *str, ssize_t len, ssize_t *nr_pids)
 {
-	unsigned long *pids;
+	int *pids;
 	const int max_nr_pids = 32;
-	unsigned long pid;
+	int pid;
 	int pos = 0, parsed, ret;
 
 	*nr_pids = 0;
@@ -1211,7 +1210,7 @@ static unsigned long *str_to_pids(const char *str, ssize_t len,
 	if (!pids)
 		return NULL;
 	while (*nr_pids < max_nr_pids && pos < len) {
-		ret = sscanf(&str[pos], "%lu%n", &pid, &parsed);
+		ret = sscanf(&str[pos], "%d%n", &pid, &parsed);
 		pos += parsed;
 		if (ret != 1)
 			break;
@@ -1231,7 +1230,7 @@ static ssize_t debugfs_pids_write(struct file *file,
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
 	char *kbuf;
-	unsigned long *targets;
+	int *targets;
 	ssize_t nr_targets;
 	ssize_t ret;
 	int err;
