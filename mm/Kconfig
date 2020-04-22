@@ -880,4 +880,15 @@ config DAMON
 	  more information.
 	  If unsure, say N.
 
+config DAMON_KUNIT_TEST
+	bool "Test for damon"
+	depends on DAMON=y && KUNIT
+	help
+	  This builds the DAMON Kunit test suite.
+
+	  For more information on KUnit and unit tests in general, please refer
+	  to the KUnit documentation.
+
+	  If unsure, say N.
+
 endmenu
