@@ -69,6 +69,8 @@
 
 static void kdamond_init_vm_regions(struct damon_ctx *ctx);
 static void kdamond_update_vm_regions(struct damon_ctx *ctx);
+static void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
+static unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
 
 /* A monitoring context for debugfs interface users. */
 static struct damon_ctx damon_user_ctx = {
@@ -80,6 +82,8 @@ static struct damon_ctx damon_user_ctx = {
 
 	.init_target_regions = kdamond_init_vm_regions,
 	.update_target_regions = kdamond_update_vm_regions,
+	.prepare_access_checks = kdamond_prepare_vm_access_checks,
+	.check_accesses = kdamond_check_vm_accesses,
 };
 
 /*
@@ -509,7 +513,7 @@ static void damon_mkold(struct mm_struct *mm, unsigned long addr)
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
-static void damon_prepare_access_check(struct damon_ctx *ctx,
+static void damon_prepare_vm_access_check(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
 	r->sampling_addr = damon_rand(r->ar.start, r->ar.end);
@@ -517,7 +521,7 @@ static void damon_prepare_access_check(struct damon_ctx *ctx,
 	damon_mkold(mm, r->sampling_addr);
 }
 
-static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
+static void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 	struct mm_struct *mm;
@@ -528,7 +532,7 @@ static void kdamond_prepare_access_checks(struct damon_ctx *ctx)
 		if (!mm)
 			continue;
 		damon_for_each_region(r, t)
-			damon_prepare_access_check(ctx, mm, r);
+			damon_prepare_vm_access_check(ctx, mm, r);
 		mmput(mm);
 	}
 }
@@ -566,7 +570,7 @@ static bool damon_young(struct mm_struct *mm, unsigned long addr,
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
  */
-static void damon_check_access(struct damon_ctx *ctx,
+static void damon_check_vm_access(struct damon_ctx *ctx,
 			       struct mm_struct *mm, struct damon_region *r)
 {
 	static struct mm_struct *last_mm;
@@ -590,7 +594,7 @@ static void damon_check_access(struct damon_ctx *ctx,
 	last_addr = r->sampling_addr;
 }
 
-static unsigned int kdamond_check_accesses(struct damon_ctx *ctx)
+static unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 	struct mm_struct *mm;
@@ -602,12 +606,12 @@ static unsigned int kdamond_check_accesses(struct damon_ctx *ctx)
 		if (!mm)
 			continue;
 		damon_for_each_region(r, t) {
-			damon_check_access(ctx, mm, r);
+			damon_check_vm_access(ctx, mm, r);
 			max_nr_accesses = max(r->nr_accesses, max_nr_accesses);
 		}
-
 		mmput(mm);
 	}
+
 	return max_nr_accesses;
 }
 
@@ -1150,13 +1154,13 @@ static int kdamond_fn(void *data)
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 	ctx->init_target_regions(ctx);
 	while (!kdamond_need_stop(ctx)) {
-		kdamond_prepare_access_checks(ctx);
+		ctx->prepare_access_checks(ctx);
 		if (ctx->sample_cb)
 			ctx->sample_cb(ctx);
 
 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);
 
-		max_nr_accesses = kdamond_check_accesses(ctx);
+		max_nr_accesses = ctx->check_accesses(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			kdamond_merge_regions(ctx, max_nr_accesses / 10);
