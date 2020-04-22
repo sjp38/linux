@@ -17,26 +17,26 @@
 static void damon_test_str_to_pids(struct kunit *test)
 {
 	char *question;
-	unsigned long *answers;
-	unsigned long expected[] = {12, 35, 46};
+	int *answers;
+	int expected[] = {12, 35, 46};
 	ssize_t nr_integers = 0, i;
 
 	question = "123";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);
-	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);
+	KUNIT_EXPECT_EQ(test, 123, answers[0]);
 	kfree(answers);
 
 	question = "123abc";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);
-	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);
+	KUNIT_EXPECT_EQ(test, 123, answers[0]);
 	kfree(answers);
 
 	question = "a123";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, answers, (unsigned long *)NULL);
+	KUNIT_EXPECT_PTR_EQ(test, answers, (int *)NULL);
 
 	question = "12 35";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
@@ -62,13 +62,13 @@ static void damon_test_str_to_pids(struct kunit *test)
 	question = "";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, (unsigned long *)NULL, answers);
+	KUNIT_EXPECT_PTR_EQ(test, (int *)NULL, answers);
 	kfree(answers);
 
 	question = "\n";
 	answers = str_to_pids(question, strnlen(question, 128), &nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, (unsigned long *)NULL, answers);
+	KUNIT_EXPECT_PTR_EQ(test, (int *)NULL, answers);
 	kfree(answers);
 }
 
@@ -100,7 +100,7 @@ static void damon_test_tasks(struct kunit *test)
 	struct damon_task *t;
 
 	t = damon_new_task(42);
-	KUNIT_EXPECT_EQ(test, 42ul, t->pid);
+	KUNIT_EXPECT_EQ(test, 42, t->pid);
 	KUNIT_EXPECT_EQ(test, 0u, nr_damon_tasks(c));
 
 	damon_add_task(&damon_user_ctx, t);
@@ -113,7 +113,7 @@ static void damon_test_tasks(struct kunit *test)
 static void damon_test_set_pids(struct kunit *test)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
-	unsigned long pids[] = {1, 2, 3};
+	int pids[] = {1, 2, 3};
 	char buf[64];
 
 	damon_set_pids(ctx, pids, 3);
@@ -124,11 +124,11 @@ static void damon_test_set_pids(struct kunit *test)
 	damon_sprint_pids(ctx, buf, 64);
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");
 
-	damon_set_pids(ctx, (unsigned long []){1, 2}, 2);
+	damon_set_pids(ctx, (int []){1, 2}, 2);
 	damon_sprint_pids(ctx, buf, 64);
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2\n");
 
-	damon_set_pids(ctx, (unsigned long []){2}, 1);
+	damon_set_pids(ctx, (int []){2}, 1);
 	damon_sprint_pids(ctx, buf, 64);
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "2\n");
 
@@ -216,7 +216,7 @@ static void damon_cleanup_global_state(void)
 static void damon_test_aggregate(struct kunit *test)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
-	unsigned long pids[] = {1, 2, 3};
+	int pids[] = {1, 2, 3};
 	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };
 	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };
 	unsigned long accesses[][3] = {{42, 95, 84}, {10, 20, 30}, {0, 1, 2} };
@@ -282,6 +282,19 @@ static void damon_test_write_rbuf(struct kunit *test)
 	damon_set_recording(&damon_user_ctx, 0, "damon.data");
 }
 
+static struct damon_region *__nth_region_of(struct damon_task *t, int idx)
+{
+	struct damon_region *r;
+	unsigned int i = 0;
+
+	damon_for_each_region(r, t) {
+		if (i++ == idx)
+			return r;
+	}
+
+	return NULL;
+}
+
 /*
  * Test 'damon_apply_three_regions()'
  *
@@ -324,7 +337,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 	damon_apply_three_regions(&damon_user_ctx, t, three_regions);
 
 	for (i = 0; i < nr_expected / 2; i++) {
-		r = damon_nth_region_of(t, i);
+		r = __nth_region_of(t, i);
 		KUNIT_EXPECT_EQ(test, r->vm_start, expected[i * 2]);
 		KUNIT_EXPECT_EQ(test, r->vm_end, expected[i * 2 + 1]);
 	}
@@ -551,7 +564,7 @@ static void damon_test_merge_regions_of(struct kunit *test)
 	/* 0-112, 114-130, 130-156, 156-170 */
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 5u);
 	for (i = 0; i < 5; i++) {
-		r = damon_nth_region_of(t, i);
+		r = __nth_region_of(t, i);
 		KUNIT_EXPECT_EQ(test, r->vm_start, saddrs[i]);
 		KUNIT_EXPECT_EQ(test, r->vm_end, eaddrs[i]);
 	}
