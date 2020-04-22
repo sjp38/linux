@@ -1,0 +1,39 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Avoid conflict between concurrent DAMON users
+  There could be several strategy
+  1. Unconditionally mutual exclusive
+  2. Contitionally mutual exclusive
+     Make only contexts from different users mutual exclusive: The user will
+     make each of the context to not interfere somehow.
+
+     How to determine whether contexts are requested by same user or not?
+     1. Make group id concept
+     2. Receive multiple contexts from the beginning
+  3. Finest grained conflict check
+     Ask users to specify more informations including
+
+     1. Maximum address ranges it will monitor
+     2. Type of the monitoring target (struct pid, paddr, ...)
+
+     And judge conflicts as finest as we can.
+
+
+Done
+====
+
+- Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
+- Support large record file (Alkaid)
+- Update evaluation result with v20 DAMON-based damon/next branch
+- Change evaluation setup from desktop to i3.metal
+- Add 'cleanup' callback and do 'put_pid()' for vaddr recording in the callback
+
+
+Pending
+=======
+- Reduce unnecessary filp_(open|close)() (Alkaid)
+  Users can increase the in-memory buffer size to reduce this overhead.
