@@ -1,0 +1,10 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Place 'CREATE_TRACE_POINTS' after include statements (Steven Rostedt)
+
+Done
+====
