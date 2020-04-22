@@ -7,11 +7,29 @@ import argparse
 import struct
 import sys
 
+fmt_version = 0
+
+def set_fmt_version(f):
+    global fmt_version
+
+    mark = f.read(16)
+    if mark == b'damon_recfmt_ver':
+        fmt_version = struct.unpack('i', f.read(4))[0]
+    else:
+        fmt_version = 0
+        f.seek(0)
+    return fmt_version
+
+def read_pid(f):
+    if fmt_version == 0:
+        pid = struct.unpack('L', f.read(8))[0]
+    else:
+        pid = struct.unpack('i', f.read(4))[0]
 def err_percent(val, expected):
     return abs(val - expected) / expected * 100
 
 def chk_task_info(f):
-    pid = struct.unpack('i', f.read(4))[0]
+    pid = read_pid(f)
     nr_regions = struct.unpack('I', f.read(4))[0]
 
     if nr_regions > max_nr_regions:
@@ -64,6 +82,7 @@ def main():
     sint, aint, rint, min_nr, max_nr_regions = attrs
 
     with open(file_path, 'rb') as f:
+        set_fmt_version(f)
         last_aggr_time = None
         while True:
             timebin = f.read(16)
