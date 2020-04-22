@@ -1,0 +1,13 @@
+TODOs
+=====
+
+- Add cleanup callback
+- Organize the doc again
+- Remove png blobs in the patch
+
+
+Done
+====
+
+- Set default wss '--thres' value as 1
+- Use kthread_create()/wake_up_process() for damon deamon run
