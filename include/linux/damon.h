@@ -46,6 +46,7 @@ struct damon_ctx {
 	struct timespec64 last_aggregation;
 
 	struct task_struct *kdamond;
+	bool kdamond_stop;
 	struct mutex kdamond_lock;
 
 	struct list_head tasks_list;	/* 'damon_task' objects */

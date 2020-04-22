@@ -584,7 +584,9 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	struct task_struct *task;
 	bool stop;
 
-	stop = kthread_should_stop();
+	mutex_lock(&ctx->kdamond_lock);
+	stop = ctx->kdamond_stop;
+	mutex_unlock(&ctx->kdamond_lock);
 	if (stop)
 		return true;
 
@@ -630,7 +632,7 @@ static int kdamond_fn(void *data)
 	ctx->kdamond = NULL;
 	mutex_unlock(&ctx->kdamond_lock);
 
-	return 0;
+	do_exit(0);
 }
 
 /*
@@ -661,6 +663,7 @@ int damon_start(struct damon_ctx *ctx)
 	mutex_lock(&ctx->kdamond_lock);
 	if (!ctx->kdamond) {
 		err = 0;
+		ctx->kdamond_stop = false;
 		ctx->kdamond = kthread_run(kdamond_fn, ctx, "kdamond");
 		if (IS_ERR(ctx->kdamond))
 			err = PTR_ERR(ctx->kdamond);
@@ -680,7 +683,7 @@ int damon_stop(struct damon_ctx *ctx)
 {
 	mutex_lock(&ctx->kdamond_lock);
 	if (ctx->kdamond) {
-		kthread_stop(ctx->kdamond);
+		ctx->kdamond_stop = true;
 		mutex_unlock(&ctx->kdamond_lock);
 		while (damon_kdamond_running(ctx))
 			usleep_range(ctx->sample_interval,
