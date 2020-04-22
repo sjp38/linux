@@ -51,7 +51,7 @@ struct damon_ctx {
 	struct list_head tasks_list;	/* 'damon_task' objects */
 };
 
-int damon_set_pids(struct damon_ctx *ctx, unsigned long *pids, ssize_t nr_pids);
+int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long min_nr_reg);
 int damon_start(struct damon_ctx *ctx);
