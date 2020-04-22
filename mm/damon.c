@@ -1157,6 +1157,14 @@ static void pr_reset_damos_stat(void)
 	}
 }
 
+static void kdamond_write_record_header(struct damon_ctx *ctx)
+{
+	int recfmt_ver = 1;
+
+	damon_write_rbuf(ctx, "damon_recfmt_ver", 16);
+	damon_write_rbuf(ctx, &recfmt_ver, sizeof(recfmt_ver));
+}
+
 /*
  * The monitoring daemon that runs as a kernel thread
  */
@@ -1169,6 +1177,9 @@ static int kdamond_fn(void *data)
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 	ctx->init_target_regions(ctx);
+
+	kdamond_write_record_header(ctx);
+
 	while (!kdamond_need_stop(ctx)) {
 		ctx->prepare_access_checks(ctx);
 		if (ctx->sample_cb)
