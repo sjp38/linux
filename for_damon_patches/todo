@@ -1,0 +1,18 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Minimize fixed granularity overhead
+- Support cgroups
+- Support multi contexts from user space
+- Charge kdamond usage to requesting user space process
+
+
+Done
+====
+
+- paddr: Fix 'put_page()' leaks
+  (https://lore.kernel.org/linux-mm/CAJFQjcOCDFGq7pNgYWpKbrhBM5FQo76d274H8UU1ma_8TWjvuQ@mail.gmail.com/)
+- Support unmapped physical memory address
