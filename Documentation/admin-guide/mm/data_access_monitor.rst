@@ -211,12 +211,12 @@ again::
     # cat pids
     42 4242
 
-Note that setting the pids doesn't starts the monitoring.
+Note that setting the pids doesn't start the monitoring.
 
 Record
 ------
 
-DAMON support direct monitoring result record feature.  The recorded results
+DAMON supports direct monitoring result record feature.  The recorded results
 are first written to a buffer and flushed to a file in batch.  Users can set
 the size of the buffer and the path to the result file by reading from and
 writing to the ``record`` file.  For example, below commands set the buffer to
@@ -233,7 +233,7 @@ Turning On/Off
 You can check current status, start and stop the monitoring by reading from and
 writing to the ``monitor_on`` file.  Writing ``on`` to the file starts DAMON to
 monitor the target processes with the attributes.  Writing ``off`` to the file
-stops DAMON.  DAMON also stops if every target processes is be terminated.
+stops DAMON.  DAMON also stops if every target processes is terminated.
 Below example commands turn on, off, and check status of DAMON::
 
     # cd <debugfs>/damon
