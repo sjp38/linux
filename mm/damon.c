@@ -710,6 +710,13 @@ static bool kdamond_need_update_regions(struct damon_ctx *ctx)
 			ctx->regions_update_interval);
 }
 
+/*
+ * Check whether regions are intersecting
+ *
+ * Note that this function checks 'struct damon_region' and 'struct region'.
+ *
+ * Returns true if it is.
+ */
 static bool damon_intersect(struct damon_region *r, struct region *re)
 {
 	return !(r->vm_end <= re->start || re->end <= r->vm_start);
@@ -727,7 +734,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 	struct damon_region *r, *next;
 	unsigned int i = 0;
 
-	/* Remove regions which isn't in the three big regions now */
+	/* Remove regions which are not in the three big regions now */
 	damon_for_each_region_safe(r, next, t) {
 		for (i = 0; i < 3; i++) {
 			if (damon_intersect(r, &bregions[i]))
@@ -756,11 +763,15 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 		}
 		if (!first) {
 			/* no damon_region intersects with this big region */
-			newr = damon_new_region(ctx, br->start, br->end);
+			newr = damon_new_region(ctx,
+					ALIGN_DOWN(br->start, MIN_REGION),
+					ALIGN(br->end, MIN_REGION));
+			if (!newr)
+				continue;
 			damon_insert_region(newr, damon_prev_region(r), r);
 		} else {
-			first->vm_start = br->start;
-			last->vm_end = br->end;
+			first->vm_start = ALIGN_DOWN(br->start, MIN_REGION);
+			last->vm_end = ALIGN(br->end, MIN_REGION);
 		}
 	}
 }

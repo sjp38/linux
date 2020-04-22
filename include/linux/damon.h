@@ -36,7 +36,7 @@ struct damon_task {
  * not.  It aggregates and keeps the access information (number of accesses to
  * each region) for 'aggr_interval' time.  DAMON also checks whether the memory
  * mapping of the target tasks has changed (e.g., by mmap() calls from the
- * application) and applies the changes. for each 'regions_update_interval'.
+ * application) and applies the changes for each 'regions_update_interval'.
  *
  * All time intervals are in micro-seconds.
  */
