@@ -19,6 +19,8 @@ import subprocess
 import sys
 import tempfile
 
+import _recfile
+
 class HeatSample:
     space_idx = None
     sz_time_space = None
@@ -54,7 +56,7 @@ def to_idx(value, min_, unit):
     return (value - min_) // unit
 
 def read_task_heats(f, pid, aunit, amin, amax):
-    pid_ = struct.unpack('i', f.read(4))[0]
+    pid_ = _recfile.pid(f)
     nr_regions = struct.unpack('I', f.read(4))[0]
     if pid_ != pid:
         f.read(20 * nr_regions)
@@ -151,6 +153,7 @@ def pr_heats(args):
     amax = amin + aunit * ares
 
     with open(binfile, 'rb') as f:
+        _recfile.set_fmt_version(f)
         __pr_heats(f, pid, tunit, tmin, tmax, aunit, amin, amax)
 
 class GuideInfo:
@@ -219,6 +222,7 @@ def get_guide_info(binfile):
     "Read file, return the set of guide information objects of the data"
     guides = {}
     with open(binfile, 'rb') as f:
+        _recfile.set_fmt_version(f)
         while True:
             timebin = f.read(16)
             if len(timebin) != 16:
@@ -226,7 +230,7 @@ def get_guide_info(binfile):
             monitor_time = parse_time(timebin)
             nr_tasks = struct.unpack('I', f.read(4))[0]
             for t in range(nr_tasks):
-                pid = struct.unpack('i', f.read(4))[0]
+                pid = _recfile.pid(f)
                 nr_regions = struct.unpack('I', f.read(4))[0]
                 if not pid in guides:
                     guides[pid] = GuideInfo(pid, monitor_time)

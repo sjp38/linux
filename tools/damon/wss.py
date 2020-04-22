@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 import _dist
+import _recfile
 
 def set_argparser(parser):
     parser.add_argument('--input', '-i', type=str, metavar='<file>',
@@ -38,6 +39,7 @@ def main(args=None):
 
     pid_pattern_map = {}
     with open(file_path, 'rb') as f:
+        _recfile.set_fmt_version(f)
         start_time = None
         while True:
             timebin = f.read(16)
@@ -45,7 +47,7 @@ def main(args=None):
                 break
             nr_tasks = struct.unpack('I', f.read(4))[0]
             for t in range(nr_tasks):
-                pid = struct.unpack('i', f.read(4))[0]
+                pid = _recfile.pid(f)
                 if not pid in pid_pattern_map:
                     pid_pattern_map[pid] = []
                 pid_pattern_map[pid].append(_dist.access_patterns(f))

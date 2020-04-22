@@ -6,6 +6,8 @@ import os
 import struct
 import sys
 
+import _recfile
+
 def parse_time(bindat):
     "bindat should be 16 bytes"
     sec = struct.unpack('l', bindat[0:8])[0]
@@ -20,7 +22,7 @@ def pr_region(f):
             (saddr, eaddr, eaddr - saddr, nr_accesses))
 
 def pr_task_info(f):
-    pid = struct.unpack('i', f.read(4))[0]
+    pid = _recfile.pid(f)
     print("pid: ", pid)
     nr_regions = struct.unpack('I', f.read(4))[0]
     print("nr_regions: ", nr_regions)
@@ -44,6 +46,7 @@ def main(args=None):
         exit(1)
 
     with open(file_path, 'rb') as f:
+        _recfile.set_fmt_version(f)
         start_time = None
         while True:
             timebin = f.read(16)
