@@ -25,7 +25,11 @@
 #include <trace/events/damon.h>
 
 /* Minimal region size */
+#ifndef CONFIG_DAMON_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
+#else
+#define MIN_REGION 1
+#endif
 
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
