@@ -20,7 +20,9 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 
-/* Minimal region size */
+/*
+ * Minimal region size.  Every region will be aligned by this value.
+ */
 #define MIN_REGION PAGE_SIZE
 
 #define damon_get_task_struct(t) \
@@ -289,12 +291,12 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 		swap_regions(&first_gap, &second_gap);
 
 	/* Store the result */
-	regions[0].start = start;
-	regions[0].end = first_gap.start;
-	regions[1].start = first_gap.end;
-	regions[1].end = second_gap.start;
-	regions[2].start = second_gap.end;
-	regions[2].end = last_vma->vm_end;
+	regions[0].start = ALIGN(start, MIN_REGION);
+	regions[0].end = ALIGN(first_gap.start, MIN_REGION);
+	regions[1].start = ALIGN(first_gap.end, MIN_REGION);
+	regions[1].end = ALIGN(second_gap.start, MIN_REGION);
+	regions[2].start = ALIGN(second_gap.end, MIN_REGION);
+	regions[2].end = ALIGN(last_vma->vm_end, MIN_REGION);
 
 	return 0;
 }
@@ -333,7 +335,7 @@ static int damon_three_regions_of(struct damon_task *t,
  * tracking every mapping is not strictly required but could even incur a high
  * overhead if the mapping frequently changes or the number of mappings is
  * high.  The adaptive regions adjustment mechanism will further help to deal
- * with the noises by simply identifying the unmapped areas as a region that
+ * with the noise by simply identifying the unmapped areas as a region that
  * has no access.  Moreover, applying the real mappings that would have many
  * unmapped areas inside will make the adaptive mechanism quite complex.  That
  * said, too huge unmapped areas inside the monitoring target should be removed
@@ -377,9 +379,7 @@ static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
 
 	/* Set the initial three regions of the task */
 	for (i = 0; i < 3; i++) {
-		r = damon_new_region(c,
-				ALIGN_DOWN(regions[i].start, MIN_REGION),
-				ALIGN(regions[i].end, MIN_REGION));
+		r = damon_new_region(c, regions[i].start, regions[i].end);
 		if (!r) {
 			pr_err("%d'th init region creation failed\n", i);
 			return;
@@ -600,8 +600,8 @@ static void damon_merge_two_regions(struct damon_region *l,
 /*
  * Merge adjacent regions having similar access frequencies
  *
- * t		task that merge operation will make change
- * thres	merge regions having '->nr_accesses' diff smaller than this
+ * t		task affected by merge operation
+ * thres	'->nr_accesses' diff threshold for the merge
  */
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 {
@@ -620,7 +620,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 /*
  * Merge adjacent regions having similar access frequencies
  *
- * threshold	merge regions havind nr_accesses diff larger than this
+ * threshold	merge regions having nr_accesses diff larger than this
  *
  * This function merges monitoring target regions which are adjacent and their
  * access frequencies are similar.  This is for minimizing the monitoring
@@ -636,13 +636,13 @@ static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold)
 }
 
 /*
- * Split a region into two small regions
+ * Split a region in two
  *
  * r		the region to be split
  * sz_r		size of the first sub-region that will be made
  */
 static void damon_split_region_at(struct damon_ctx *ctx,
-		struct damon_region *r, unsigned long sz_r)
+				  struct damon_region *r, unsigned long sz_r)
 {
 	struct damon_region *new;
 
@@ -652,30 +652,34 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 	damon_insert_region(new, r, damon_next_region(r));
 }
 
+/* Split every region in the given task into two randomly-sized regions */
 static void damon_split_regions_of(struct damon_ctx *ctx, struct damon_task *t)
 {
 	struct damon_region *r, *next;
-	unsigned long sz_left_region;
+	unsigned long sz_orig_region, sz_left_region;
 
 	damon_for_each_region_safe(r, next, t) {
+		sz_orig_region = r->vm_end - r->vm_start;
+
 		/*
 		 * Randomly select size of left sub-region to be at least
 		 * 10 percent and at most 90% of original region
 		 */
-		sz_left_region = (prandom_u32_state(&ctx->rndseed) % 9 + 1) *
-			(r->vm_end - r->vm_start) / 10;
+		sz_left_region = ALIGN_DOWN(damon_rand(1, 10) * sz_orig_region
+					    / 10, MIN_REGION);
 		/* Do not allow blank region */
-		if (sz_left_region == 0)
+		if (sz_left_region == 0 || sz_left_region >= sz_orig_region)
 			continue;
+
 		damon_split_region_at(ctx, r, sz_left_region);
 	}
 }
 
 /*
- * splits every target regions into two randomly-sized regions
+ * splits every target region into two randomly-sized regions
  *
- * This function splits every target regions into two random-sized regions if
- * current total number of the regions is smaller than the half of the
+ * This function splits every target region into two random-sized regions if
+ * current total number of the regions is equal or smaller than half of the
  * user-specified maximum number of regions.  This is for maximizing the
  * monitoring accuracy under the dynamically changeable access patterns.  If a
  * split was unnecessarily made, later 'kdamond_merge_regions()' will revert
@@ -864,16 +868,16 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  * Return: 0 on success, negative error code otherwise.
  */
 int damon_set_attrs(struct damon_ctx *ctx,
-			unsigned long sample_int, unsigned long aggr_int,
-			unsigned long min_nr_reg, unsigned long max_nr_reg)
+		    unsigned long sample_int, unsigned long aggr_int,
+		    unsigned long min_nr_reg, unsigned long max_nr_reg)
 {
 	if (min_nr_reg < 3) {
 		pr_err("min_nr_regions (%lu) must be at least 3\n",
 				min_nr_reg);
 		return -EINVAL;
 	}
-	if (min_nr_reg >= ctx->max_nr_regions) {
-		pr_err("invalid nr_regions.  min (%lu) >= max (%lu)\n",
+	if (min_nr_reg > ctx->max_nr_regions) {
+		pr_err("invalid nr_regions.  min (%lu) > max (%lu)\n",
 				min_nr_reg, max_nr_reg);
 		return -EINVAL;
 	}
