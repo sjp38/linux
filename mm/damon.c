@@ -36,7 +36,11 @@
 #include <trace/events/damon.h>
 
 /* Minimal region size.  Every damon_region is aligned by this. */
+#ifndef CONFIG_DAMON_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
+#else
+#define MIN_REGION 1
+#endif
 
 /*
  * Functions and macros for DAMON data structures
@@ -1608,3 +1612,5 @@ module_exit(damon_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("SeongJae Park <sjpark@amazon.de>");
 MODULE_DESCRIPTION("DAMON: Data Access MONitor");
+
+#include "damon-test.h"
