@@ -1167,7 +1167,7 @@ static ssize_t damon_sprint_pids(struct damon_ctx *ctx, char *buf, ssize_t len)
 	int rc;
 
 	damon_for_each_task(ctx, t) {
-		rc = snprintf(&buf[written], len - written, "%lu ", t->pid);
+		rc = snprintf(&buf[written], len - written, "%d ", t->pid);
 		if (!rc)
 			return -ENOMEM;
 		written += rc;
