@@ -1,0 +1,14 @@
+TODOs
+=====
+
+- Export the functions for modules
+- Add cleanup callback
+
+
+Done
+====
+
+- Wordsmith the doc
+- Check recording disablement condition properly
+- Print 'Press Ctrl+C to stop' for schemes, either
+- Make tools initial code based on DAMOS code
