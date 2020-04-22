@@ -15,17 +15,21 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 
-/* Represents a monitoring target region of [vm_start, vm_end) */
+/* Represents a region of [start, end) */
+struct damon_addr_range {
+	unsigned long start;
+	unsigned long end;
+};
+
+/* Represents a monitoring target region on the virtual address space */
 struct damon_region {
-	unsigned long vm_start;
-	unsigned long vm_end;
+	struct damon_addr_range ar;
 	unsigned long sampling_addr;
 	unsigned int nr_accesses;
 	struct list_head list;
 
 	unsigned int age;
-	unsigned long last_vm_start;
-	unsigned long last_vm_end;
+	struct damon_addr_range last_ar;
 	unsigned int last_nr_accesses;
 };
 
