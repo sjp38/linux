@@ -1439,7 +1439,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 	int written = 0;
 	int rc;
 
-	damon_for_each_schemes(c, s) {
+	damon_for_each_scheme(c, s) {
 		rc = snprintf(&buf[written], len - written,
 				"%u %u %u %u %u %u %d\n",
 				s->min_sz_region, s->max_sz_region,
@@ -1497,7 +1497,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 	const int max_nr_schemes = 256;
 	int pos = 0, parsed, ret;
 	unsigned int min_sz, max_sz, min_nr_a, max_nr_a, min_age, max_age;
-	int action;
+	unsigned int action;
 
 	schemes = kmalloc_array(max_nr_schemes, sizeof(scheme),
 			GFP_KERNEL);
@@ -1506,7 +1506,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 
 	*nr_schemes = 0;
 	while (pos < len && *nr_schemes < max_nr_schemes) {
-		ret = sscanf(&str[pos], "%u %u %u %u %u %u %d%n",
+		ret = sscanf(&str[pos], "%u %u %u %u %u %u %u%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
 				&min_age, &max_age, &action, &parsed);
 		if (ret != 7)
