@@ -681,12 +681,13 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
  */
 static void damon_do_count_age(struct damon_region *r, unsigned int threshold)
 {
-	unsigned long sz_threshold = (r->vm_end - r->vm_start) / 5;
+	unsigned long region_threshold = (r->vm_end - r->vm_start) / 4;
+	unsigned long region_diff = diff_of(r->vm_start, r->last_vm_start) +
+			diff_of(r->vm_end, r->last_vm_end);
+	unsigned int nr_accesses_diff = diff_of(r->nr_accesses,
+			r->last_nr_accesses);
 
-	if (diff_of(r->vm_start, r->last_vm_start) +
-			diff_of(r->vm_end, r->last_vm_end) > sz_threshold)
-		r->age = 0;
-	else if (diff_of(r->nr_accesses, r->last_nr_accesses) > threshold)
+	if (region_diff > region_threshold || nr_accesses_diff > threshold)
 		r->age = 0;
 	else
 		r->age++;
@@ -739,7 +740,7 @@ static inline void get_last_area(struct damon_region *r, struct region *last)
  * thres	'->nr_accesses' diff threshold for the merge
  *
  * After each merge, the biggest mergee region becomes the last shape of the
- * new region.  If two regions are split from one region at the end of previous
+ * new region.  If two regions split from one region at the end of previous
  * aggregation interval are merged into one region, we handle the two regions
  * as one big mergee, because it can lead to unproper last shape record if we
  * don't do so.
@@ -750,7 +751,7 @@ static inline void get_last_area(struct damon_region *r, struct region *last)
  * thus now be merged into one region again.  Because the split is made
  * regardless of the access pattern, DAMON should say the region of size 10 had
  * no area change for last aggregation interval.  However, if the two mergees
- * are handled seperatively, DAMON will say the merged region has changed its
+ * are handled seperately, DAMON will say the merged region has changed its
  * size from 6 to 10.
  */
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
