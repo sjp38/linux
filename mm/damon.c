@@ -1435,7 +1435,6 @@ static int __init damon_init_user_ctx(void)
 
 	mutex_init(&ctx->kdamond_lock);
 
-	prandom_seed_state(&ctx->rndseed, 42);
 	INIT_LIST_HEAD(&ctx->tasks_list);
 
 	return 0;
