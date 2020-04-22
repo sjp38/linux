@@ -20,6 +20,9 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 
+/* Minimal region size */
+#define MIN_REGION PAGE_SIZE
+
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
 
@@ -165,7 +168,7 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 /*
  * Get the mm_struct of the given task
  *
- * Caller should put the mm_struct after use, unless it is NULL.
+ * Caller _must_ put the mm_struct after use, unless it is NULL.
  *
  * Returns the mm_struct of the task on success, NULL on failure
  */
@@ -200,7 +203,7 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 
 	orig_end = r->vm_end;
 	sz_orig = r->vm_end - r->vm_start;
-	sz_piece = sz_orig / nr_pieces;
+	sz_piece = ALIGN_DOWN(sz_orig / nr_pieces, MIN_REGION);
 
 	if (!sz_piece)
 		return -EINVAL;
@@ -210,6 +213,8 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	for (start = r->vm_end; start + sz_piece <= orig_end;
 			start += sz_piece) {
 		n = damon_new_region(ctx, start, start + sz_piece);
+		if (!n)
+			return -ENOMEM;
 		damon_insert_region(n, r, next);
 		r = n;
 	}
@@ -240,7 +245,7 @@ static void swap_regions(struct region *r1, struct region *r2)
 }
 
 /*
- * Find the three regions in an address space
+ * Find three regions seperated by two biggest unmapped regions
  *
  * vma		the head vma of the target address space
  * regions	an array of three 'struct region's that results will be saved
@@ -255,7 +260,7 @@ static void swap_regions(struct region *r1, struct region *r2)
 static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 		struct region regions[3])
 {
-	struct region gap = {0,}, first_gap = {0,}, second_gap = {0,};
+	struct region gap = {0}, first_gap = {0}, second_gap = {0};
 	struct vm_area_struct *last_vma = NULL;
 	unsigned long start = 0;
 
@@ -332,7 +337,7 @@ static int damon_three_regions_of(struct damon_task *t,
  * make this more sense.
  *
  * For the reason, we convert the complex mappings to three distinct regions
- * that cover every mapped areas of the address space.  Also the two gaps
+ * that cover every mapped area of the address space.  Also the two gaps
  * between the three regions are the two biggest unmapped areas in the given
  * address space.  In detail, this function first identifies the start and the
  * end of the mappings and the two biggest unmapped areas of the address space.
@@ -358,24 +363,31 @@ static int damon_three_regions_of(struct damon_task *t,
  */
 static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
 {
-	struct damon_region *r;
+	struct damon_region *r, *m = NULL;
 	struct region regions[3];
 	int i;
 
 	if (damon_three_regions_of(t, regions)) {
-		pr_err("Failed to get three regions of task %lu\n", t->pid);
+		pr_err("Failed to get three regions of task %d\n", t->pid);
 		return;
 	}
 
 	/* Set the initial three regions of the task */
 	for (i = 0; i < 3; i++) {
-		r = damon_new_region(c, regions[i].start, regions[i].end);
+		r = damon_new_region(c,
+				ALIGN_DOWN(regions[i].start, MIN_REGION),
+				ALIGN(regions[i].end, MIN_REGION));
+		if (!r) {
+			pr_err("%d'th init region creation failed\n", i);
+			return;
+		}
 		damon_add_region(r, t);
+		if (i == 1)
+			m = r;
 	}
 
 	/* Split the middle region into 'min_nr_regions - 2' regions */
-	r = damon_nth_region_of(t, 1);
-	if (damon_split_region_evenly(c, r, c->min_nr_regions - 2))
+	if (damon_split_region_evenly(c, m, c->min_nr_regions - 2))
 		pr_warn("Init middle region failed to be split\n");
 }
 
@@ -469,13 +481,13 @@ static bool damon_young(struct mm_struct *mm, unsigned long addr,
 }
 
 /*
- * Check whether the region accessed and prepare for next check
+ * Check whether the region was accessed and prepare for next check
  *
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
  */
 static void damon_check_access(struct damon_ctx *ctx,
-			struct mm_struct *mm, struct damon_region *r)
+			       struct mm_struct *mm, struct damon_region *r)
 {
 	static struct mm_struct *last_mm;
 	static unsigned long last_addr;
@@ -563,8 +575,8 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 /*
  * Check whether current monitoring should be stopped
  *
- * If users asked to stop, need stop.  Even though no user has asked to stop,
- * need stop if every target task has dead.
+ * The monitoring is stopped when either the user requested to stop, or all
+ * monitoring target tasks are dead.
  *
  * Returns true if need to stop current monitoring.
  */
@@ -594,7 +606,7 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
  */
 static int kdamond_fn(void *data)
 {
-	struct damon_ctx *ctx = data;
+	struct damon_ctx *ctx = (struct damon_ctx *)data;
 	struct damon_task *t;
 	struct damon_region *r, *next;
 
@@ -670,8 +682,8 @@ int damon_stop(struct damon_ctx *ctx)
 {
 	mutex_lock(&ctx->kdamond_lock);
 	if (ctx->kdamond) {
-		mutex_unlock(&ctx->kdamond_lock);
 		kthread_stop(ctx->kdamond);
+		mutex_unlock(&ctx->kdamond_lock);
 		while (damon_kdamond_running(ctx))
 			usleep_range(ctx->sample_interval,
 					ctx->sample_interval * 2);
@@ -679,7 +691,7 @@ int damon_stop(struct damon_ctx *ctx)
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
-	return -EBUSY;
+	return -EPERM;
 }
 
 /**
@@ -690,7 +702,7 @@ int damon_stop(struct damon_ctx *ctx)
  *
  * This function should not be called while the kdamond is running.
  *
- * Return: 0 on usccess, negative error code otherwise.
+ * Return: 0 on success, negative error code otherwise.
  */
 int damon_set_pids(struct damon_ctx *ctx, unsigned long *pids, ssize_t nr_pids)
 {
@@ -728,7 +740,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long min_nr_reg)
 {
 	if (min_nr_reg < 3) {
-		pr_err("min_nr_regions (%lu) should be bigger than 2\n",
+		pr_err("min_nr_regions (%lu) must be at least 3\n",
 				min_nr_reg);
 		return -EINVAL;
 	}
