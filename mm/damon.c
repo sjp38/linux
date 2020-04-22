@@ -53,10 +53,10 @@
 #define damon_for_each_task_safe(ctx, t, next) \
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
 
-#define damon_for_each_schemes(ctx, r) \
+#define damon_for_each_scheme(ctx, r) \
 	list_for_each_entry(r, &(ctx)->schemes_list, list)
 
-#define damon_for_each_schemes_safe(ctx, s, next) \
+#define damon_for_each_scheme_safe(ctx, s, next) \
 	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
 
 #define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
@@ -798,7 +798,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 	struct damos *s;
 	unsigned long sz;
 
-	damon_for_each_schemes(c, s) {
+	damon_for_each_scheme(c, s) {
 		sz = r->vm_end - r->vm_start;
 		if ((s->min_sz_region && sz < s->min_sz_region) ||
 				(s->max_sz_region && s->max_sz_region < sz))
@@ -1249,7 +1249,7 @@ int damon_set_schemes(struct damon_ctx *ctx, struct damos **schemes,
 	struct damos *s, *next;
 	ssize_t i;
 
-	damon_for_each_schemes_safe(ctx, s, next)
+	damon_for_each_scheme_safe(ctx, s, next)
 		damon_destroy_scheme(s);
 	for (i = 0; i < nr_schemes; i++)
 		damon_add_scheme(ctx, schemes[i]);
