@@ -38,7 +38,11 @@
 #include <trace/events/damon.h>
 
 /* Minimal region size.  Every damon_region is aligned by this. */
+#ifndef CONFIG_DAMON_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
+#else
+#define MIN_REGION 1
+#endif
 
 /*
  * Functions and macros for DAMON data structures
@@ -1670,3 +1674,5 @@ static int __init damon_init(void)
 }
 
 module_init(damon_init);
+
+#include "damon-test.h"
