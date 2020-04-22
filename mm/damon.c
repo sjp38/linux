@@ -1385,7 +1385,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 				min_nr_reg);
 		return -EINVAL;
 	}
-	if (min_nr_reg > ctx->max_nr_regions) {
+	if (min_nr_reg > max_nr_reg) {
 		pr_err("invalid nr_regions.  min (%lu) > max (%lu)\n",
 				min_nr_reg, max_nr_reg);
 		return -EINVAL;
