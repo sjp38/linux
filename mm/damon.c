@@ -46,6 +46,7 @@
 #define damon_for_each_task_safe(ctx, t, next) \
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
 
+#define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
 #define MAX_RFILE_PATH_LEN	256
 
 /* Get a random number in [l, r) */
@@ -574,24 +575,23 @@ static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)
 static void damon_flush_rbuffer(struct damon_ctx *ctx)
 {
 	ssize_t sz;
-	loff_t pos;
+	loff_t pos = 0;
 	struct file *rfile;
 
+	rfile = filp_open(ctx->rfile_path, O_CREAT | O_RDWR | O_APPEND, 0644);
+	if (IS_ERR(rfile)) {
+		pr_err("Cannot open the result file %s\n",
+				ctx->rfile_path);
+		return;
+	}
+
 	while (ctx->rbuf_offset) {
-		pos = 0;
-		rfile = filp_open(ctx->rfile_path, O_CREAT | O_RDWR | O_APPEND,
-				0644);
-		if (IS_ERR(rfile)) {
-			pr_err("Cannot open the result file %s\n",
-					ctx->rfile_path);
-			return;
-		}
-
 		sz = kernel_write(rfile, ctx->rbuf, ctx->rbuf_offset, &pos);
-		filp_close(rfile, NULL);
-
+		if (sz < 0)
+			break;
 		ctx->rbuf_offset -= sz;
 	}
+	filp_close(rfile, NULL);
 }
 
 /*
@@ -612,7 +612,7 @@ static void damon_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
  * Flush the aggregated monitoring results to the result buffer
  *
  * Stores current tracking results to the result buffer and reset 'nr_accesses'
- * of each regions.  The format for the result buffer is as below:
+ * of each region.  The format for the result buffer is as below:
  *
  *   <time> <number of tasks> <array of task infos>
  *
@@ -1034,13 +1034,13 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  * Return: 0 on success, negative error code otherwise.
  */
 int damon_set_recording(struct damon_ctx *ctx,
-				unsigned int rbuf_len, char *rfile_path)
+			unsigned int rbuf_len, char *rfile_path)
 {
 	size_t rfile_path_len;
 
-	if (rbuf_len > 4 * 1024 * 1024) {
+	if (rbuf_len > MAX_RECORD_BUFFER_LEN) {
 		pr_err("too long (>%d) result buffer length\n",
-				4 * 1024 * 1024);
+				MAX_RECORD_BUFFER_LEN);
 		return -EINVAL;
 	}
 	rfile_path_len = strnlen(rfile_path, MAX_RFILE_PATH_LEN);
