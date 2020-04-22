@@ -1,0 +1,15 @@
+TODOs
+=====
+
+- Export the functions for modules
+- Support physical memory monitoring in DAMO
+- Add cleanup callback
+- Do not generate 'null' when record is disabled
+- Rename 'min_nr_regions' into 'init_nr_regions'
+- Implement real 'min_nr_regions'
+- Consider simply reuse page_idle.c
+- Document about the THP monitoring output?
+
+
+Done
+====
