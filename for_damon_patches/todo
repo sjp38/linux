@@ -1,0 +1,25 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+
+
+Done
+====
+
+- Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
+- Support large record file (Alkaid)
+- Place 'put_pid()' of virtual monitoring targets in 'cleanup' callback
+- Avoid conflict between concurrent DAMON users
+- Update evaluation result document
+
+- paddr: Use fake target id for paddr as 42 instead of -1
+- paddr: Fix typo
+
+
+Pending
+=======
+- Reduce unnecessary filp_(open|close)() (Alkaid)
+  Users can increase the in-memory buffer size to reduce this overhead.
