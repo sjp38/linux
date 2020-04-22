@@ -1016,7 +1016,7 @@ int damon_stop(struct damon_ctx *ctx)
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_set_pids(struct damon_ctx *ctx, unsigned long *pids, ssize_t nr_pids)
+int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
 {
 	ssize_t i;
 	struct damon_task *t, *next;

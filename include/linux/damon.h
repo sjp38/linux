@@ -65,7 +65,7 @@ struct damon_ctx {
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
 
-int damon_set_pids(struct damon_ctx *ctx, unsigned long *pids, ssize_t nr_pids);
+int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long regions_update_int,
 		unsigned long min_nr_reg, unsigned long max_nr_reg);
