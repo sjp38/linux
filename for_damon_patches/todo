@@ -1,0 +1,19 @@
+TODOs
+=====
+
+- Export the functions for modules
+- Support physical memory monitoring in DAMO
+- Add cleanup callback
+- Do not generate 'null' when record is disabled
+- Rename 'min_nr_regions' into 'init_nr_regions'
+- Implement real 'min_nr_regions'
+- Add documentation of 'init_regions' debugfs file
+- Add documentation of 'paddr\n' for 'pids' debugfs file
+- Remove the 3 regions rule in the record validation
+
+
+Done
+====
+
+- DAMOS: Fix wrong description of DAMOS conditions (inclusive condition ranges)
+- Support physical memory monitoring (api and debugfs interface)
