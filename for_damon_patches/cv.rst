@@ -206,9 +206,25 @@ https://github.com/sjp38/linux/releases/tag/damon/patches/v8
 Patch History
 =============
 
+The most biggest change in this version is support of minimal region size,
+which defaults to 'PAGE_SIZE'.  This change will reduce unnecessary region
+splits and thus improve the quality of the output.  In a future, we will be
+able to make this configurable for support of various access check primitives
+such as PMUs.
+
 Changes from v8
 (https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/)
+ - Make regions always aligned by minimal region size that can be changed
+   (Stefan Nuernberger)
+ - Store binary format version in the recording file (Stefan Nuernberger)
+ - Use 'int' for pid instead of 'unsigned long' (Stefan Nuernberger)
+ - Fix a race condition in damon thread termination (Stefan Nuernberger)
+ - Optimize random value generation and recording (Stefan Nuernberger)
+ - Clean up commit messages and comments (Stefan Nuernberger)
+ - Clean up code (Stefan Nuernberger)
+ - Use explicit signalling and 'do_exit()' for damon thread termination 
  - Remove unnecessary sampling_addr setting in 2nd patch
+ - Add more typos to spelling.txt
 
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
