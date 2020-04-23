@@ -159,6 +159,22 @@ introduced by an LWN artice[4].
     News (LWN), Feb 2020. https://lwn.net/Articles/812707/
 
 
+Baseline and Complete Git Trees
+===============================
+
+The patches are based on the v5.6.  You can also clone the complete git
+tree:
+
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v9
+
+The web is also available:
+https://github.com/sjp38/linux/releases/tag/damon/patches/v9
+
+This patchset contains patches for the stabled main logic of DAMON only.  The
+latest DAMON development tree is also available at:
+https://github.com/sjp38/linux/tree/damon/master
+
+
 Sequence Of Patches
 ===================
 
@@ -193,14 +209,6 @@ Next two patches are for tests.  The 13th and 14th patches provide unit tests
 (based on kunit) and user space tests (based on kselftest), respectively.
 
 Finally, the last patch (15th) updates the MAINTAINERS file.
-
-The patches are based on the v5.5.  You can also clone the complete git
-tree:
-
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v8
-
-The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v8
 
 
 Patch History
