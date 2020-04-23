@@ -158,8 +158,15 @@ struct damos {
  * @tasks_list:		Head of monitoring target tasks (&damon_task) list.
  * @schemes_list:	Head of schemes (&damos) list.
  *
+ * @init_target_regions:	Constructs initial monitoring target regions.
+ * @update_target_regions:	Updates monitoring target regions.
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
+ *
+ * The monitoring thread calls @init_target_regions before starting the
+ * monitoring, @update_target_regions for each @regions_update_interval.  By
+ * setting these callbacks to appropriate functions, therefore, users can
+ * monitor specific range of virtual address space.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
@@ -190,6 +197,8 @@ struct damon_ctx {
 	struct list_head schemes_list;	/* 'damos' objects */
 
 	/* callbacks */
+	void (*init_target_regions)(struct damon_ctx *context);
+	void (*update_target_regions)(struct damon_ctx *context);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
