@@ -28,10 +28,12 @@
 --cc=shakeelb@google.com \
 --cc=shuah@kernel.org \
 --cc=sj38.park@gmail.com \
+--cc=snu@amazon.de \
 --cc=vbabka@suse.cz \
 --cc=vdavydov.dev@gmail.com \
 --cc=yang.shi@linux.alibaba.com \
 --cc=ying.huang@intel.com \
+--cc=linux-damon@amazon.com \
 --cc=linux-mm@kvack.org \
 --cc=linux-doc@vger.kernel.org \
 --cc=linux-kernel@vger.kernel.org

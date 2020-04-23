@@ -159,6 +159,22 @@ introduced by an LWN artice[4].
     News (LWN), Feb 2020. https://lwn.net/Articles/812707/
 
 
+Baseline and Complete Git Trees
+===============================
+
+The patches are based on the v5.6.  You can also clone the complete git
+tree:
+
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v9
+
+The web is also available:
+https://github.com/sjp38/linux/releases/tag/damon/patches/v9
+
+This patchset contains patches for the stabled main logic of DAMON only.  The
+latest DAMON development tree is also available at:
+https://github.com/sjp38/linux/tree/damon/master
+
+
 Sequence Of Patches
 ===================
 
@@ -194,21 +210,29 @@ Next two patches are for tests.  The 13th and 14th patches provide unit tests
 
 Finally, the last patch (15th) updates the MAINTAINERS file.
 
-The patches are based on the v5.5.  You can also clone the complete git
-tree:
-
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v8
-
-The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v8
-
 
 Patch History
 =============
 
+The most biggest change in this version is support of minimal region size,
+which defaults to 'PAGE_SIZE'.  This change will reduce unnecessary region
+splits and thus improve the quality of the output.  In a future, we will be
+able to make this configurable for support of various access check primitives
+such as PMUs.
+
 Changes from v8
 (https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/)
+ - Make regions always aligned by minimal region size that can be changed
+   (Stefan Nuernberger)
+ - Store binary format version in the recording file (Stefan Nuernberger)
+ - Use 'int' for pid instead of 'unsigned long' (Stefan Nuernberger)
+ - Fix a race condition in damon thread termination (Stefan Nuernberger)
+ - Optimize random value generation and recording (Stefan Nuernberger)
+ - Clean up commit messages and comments (Stefan Nuernberger)
+ - Clean up code (Stefan Nuernberger)
+ - Use explicit signalling and 'do_exit()' for damon thread termination 
  - Remove unnecessary sampling_addr setting in 2nd patch
+ - Add more typos to spelling.txt
 
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
