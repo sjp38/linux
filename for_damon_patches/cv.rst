@@ -37,10 +37,10 @@ convenient data access pattern awared memory managements by itself.  Refer to
 Visualized Outputs of DAMON
 ===========================
 
-For intuitively understanding of DAMON, I made web pages[1-8] showing the
-visualized dynamic data access pattern of various realistic workloads, which I
-picked up from PARSEC3 and SPLASH-2X bechmark suites.  The figures are
-generated using the user space tool in 10th patch of this patchset.
+For intuitive understanding of DAMON, I made web pages[1-8] showing the
+visualized dynamic data access pattern of various realistic workloads in
+PARSEC3 and SPLASH-2X bechmark suites.  The figures are generated using the
+user space tool in 10th patch of this patchset.
 
 There are pages showing the heatmap format dynamic access pattern of each
 workload for heap area[1], mmap()-ed area[2], and stack[3] area.  I splitted
@@ -65,36 +65,48 @@ distribution of the numbers[6] and how it changes chronologically[7].
 [7] https://damonitor.github.io/reports/latest/by_image/nr_regions_time.png.html
 
 
-Data Access Monitoring-based Operation Schemes
-==============================================
+Future Plans
+============
 
-As 'Appendix D' describes, DAMON can be used for data access monitoring-based
-operation schemes (DAMOS).  RFC patchsets for DAMOS are already available
-(https://lore.kernel.org/linux-mm/20200218085309.18346-1-sjpark@amazon.com/).
+This patchset is only for the first stage of DAMON development.  As soon as
+this patchset is merged, patchsets for below future plans will be posted.
+
+
+Automate Data Access Pattern-aware Memory Management
+----------------------------------------------------
+
+Though DAMON provides the monitoring feature, implementing data access pattern
+aware memory management schemes could be difficult to beginners.  DAMON will be
+able to do most of the work by itself in near future.  Users will be required
+to only describe what kind of data access monitoring-based operation schemes
+they want.
 
 By applying a very simple scheme for THP promotion/demotion with a latest
 version of the patchset (not posted yet), DAMON achieved 18x lower memory space
 overhead compared to THP while preserving about 50% of the THP performance
 benefit with SPLASH-2X benchmark suite.
 
-The detailed setup and number will be posted soon with the next RFC patchset
-for DAMOS.  The posting is currently scheduled for tomorrow.
+An RFC patchset for this plan is already available
+(https://lore.kernel.org/linux-mm/20200407100007.3894-1-sjpark@amazon.com/).
+
+
+Support Various Address Spaces
+------------------------------
+
+Currently, DAMON supports virtual memory address spaces using PTE Accessed bits
+as its access checking primitive.  However, the core design of DAMON is not
+dependent to such implementation details.  In a future, DAMON will decouple the
+details from the logic and support various address spaces including physical
+memory.  It will further allow users to implement and configure the primitives
+by themselves for their special usecase.  Monitoring of page cache, NUMA nodes,
+files, or block devices would be such examples.
+
+An RFC patchset for this plan is already available
+(https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/).
 
 
 Frequently Asked Questions
 ==========================
-
-Q: Why DAMON is not integrated with perf?
-A: From the perspective of perf like profilers, DAMON can be thought of as a
-data source in kernel, like the tracepoints, the pressure stall information
-(psi), or the idle page tracking.  Thus, it is easy to integrate DAMON with the
-profilers.  However, this patchset doesn't provide a fancy perf integration
-because current step of DAMON development is focused on its core logic only.
-That said, DAMON already provides two interfaces for user space programs, which
-based on debugfs and tracepoint, respectively.  Using the tracepoint interface,
-you can use DAMON with perf.  This patchset also provides a debugfs interface
-based user space tool for DAMON.  It can be used to record, visualize, and
-analyze data access patterns of target processes in a convenient way.
 
 Q: Why a new module, instead of extending perf or other tools?
 A: First, DAMON aims to be used by other programs including the kernel.
@@ -107,11 +119,13 @@ would be the kernel module that most seems similar to DAMON.  However, its own
 interface is not compatible with DAMON.  Also, the internal implementation of
 it has no common part to be reused by DAMON.
 
-Q: Can 'perf mem' provide the data required for DAMON?
-A: On the systems supporting 'perf mem', yes.  DAMON is using the PTE Accessed
-bits in low level.  Other H/W or S/W features that can be used for the purpose
-could be used.  However, as explained with above question, DAMON need to be
-implemented in the kernel space.
+Q: Can 'perf mem' or PMUs used instead of DAMON?
+A: No.  Roughly speaking, DAMON has two seperate layers.  The low layer is
+access check of pages, and the higher layer is its core mechanisms for overhead
+controlling.  For the low layer, DAMON is now using the PTE Accessed bits.
+Other H/W or S/W features that can be used for the access check of pages, such
+as 'perf mem', PMU, or even page idle, could be used instead in the layer.
+However, those could not alternate the high layer of DAMON.
 
 
 Evaluations

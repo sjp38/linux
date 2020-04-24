@@ -175,61 +175,8 @@ offline, but also online.  Also, there is no reason to limit such optimizations
 to the user space.  Several parts of the kernel's memory management mechanisms
 could be also optimized using DAMON. The reclamation, the THP (de)promotion
 decisions, and the compaction would be such a candidates.  DAMON will continue
-its development to be highly optimized for the online/in-kernel uses.
-
-
-A Future Plan: Data Access Monitoring-based Operation Schemes
--------------------------------------------------------------
-
-As described in the above section, DAMON could be helpful for actual access
-based memory management optimizations.  Nevertheless, users who want to do such
-optimizations should run DAMON, read the traced data (either online or
-offline), analyze it, plan a new memory management scheme, and apply the new
-scheme by themselves.  It must be easier than the past, but could still require
-some level of efforts.  In its next development stage, DAMON will reduce some
-of such efforts by allowing users to specify some access based memory
-management rules for their specific processes.
-
-Because this is just a plan, the specific interface is not fixed yet, but for
-example, users will be allowed to write their desired memory management rules
-to a special file in a DAMON specific format.  The rules will be something like
-'if a memory region of size in a range is keeping a range of hotness for more
-than a duration, apply specific memory management rule using madvise() or
-mlock() to the region'.  For example, we can imagine rules like below:
-
-    # format is: <min/max size> <min/max frequency (0-99)> <duration> <action>
-
-    # if a region of a size keeps a very high access frequency for more than
-    # 100ms, lock the region in the main memory (call mlock()). But, if the
-    # region is larger than 500 MiB, skip it. The exception might be helpful
-    # if the system has only, say, 600 MiB of DRAM, a region of size larger
-    # than 600 MiB cannot be locked in the DRAM at all.
-    na 500M 90 99 100ms mlock
-
-    # if a region keeps a high access frequency for more than 100ms, put the
-    # region on the head of the LRU list (call madvise() with MADV_WILLNEED).
-    na na 80 90 100ms madv_willneed
-
-    # if a region keeps a low access frequency for more than 100ms, put the
-    # region on the tail of the LRU list (call madvise() with MADV_COLD).
-    na na 10 20 100ms madv_cold
-
-    # if a region keeps a very low access frequency for more than 100ms, swap
-    # out the region immediately (call madvise() with MADV_PAGEOUT).
-    na na 0 10 100ms madv_pageout
-
-    # if a region of a size bigger than 2MB keeps a very high access frequency
-    # for more than 100ms, let the region to use huge pages (call madvise()
-    # with MADV_HUGEPAGE).
-    2M na 90 99 100ms madv_hugepage
-
-    # If a regions of a size bigger than > 2MB keeps no high access frequency
-    # for more than 100ms, avoid the region from using huge pages (call
-    # madvise() with MADV_NOHUGEPAGE).
-    2M na 0 25 100ms madv_nohugepage
-
-An RFC patchset for this is available:
-https://lore.kernel.org/linux-mm/20200218085309.18346-1-sjpark@amazon.com/
+its development to be highly optimized for the online/in-kernel uses.  We will
+further automate the optimization for many usecases.
 
 
 Appendix E: Evaluations
