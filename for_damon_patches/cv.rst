@@ -245,9 +245,9 @@ Changes from v8
  - Clean up commit messages and comments (Stefan Nuernberger)
  - Clean up code (Stefan Nuernberger)
  - Use explicit signalling and 'do_exit()' for damon thread termination 
- - Remove unnecessary sampling_addr setting in 2nd patch
  - Add more typos to spelling.txt
  - Update the performance evaluation results
+ - Describe future plans in the cover letter
 
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
