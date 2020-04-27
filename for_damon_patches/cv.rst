@@ -34,8 +34,8 @@ convenient data access pattern awared memory managements by itself.  Refer to
 'Appendix D' for more detailed expected usages of DAMON.
 
 
-Visualized Outputs of DAMON
-===========================
+Boring? Here Are Something Colorful
+===================================
 
 For intuitive understanding of DAMON, I made web pages[1-8] showing the
 visualized dynamic data access pattern of various realistic workloads in
@@ -68,8 +68,8 @@ distribution of the numbers[6] and how it changes chronologically[7].
 Future Plans
 ============
 
-This patchset is only for the first stage of DAMON development.  As soon as
-this patchset is merged, patchsets for below future plans will be posted.
+This patchset is only for the first stage of DAMON.  As soon as this patchset
+is merged, official patchsets for below future plans will be posted.
 
 
 Automate Data Access Pattern-aware Memory Management
@@ -95,11 +95,11 @@ Support Various Address Spaces
 
 Currently, DAMON supports virtual memory address spaces using PTE Accessed bits
 as its access checking primitive.  However, the core design of DAMON is not
-dependent to such implementation details.  In a future, DAMON will decouple the
-details from the logic and support various address spaces including physical
-memory.  It will further allow users to implement and configure the primitives
-by themselves for their special usecase.  Monitoring of page cache, NUMA nodes,
-files, or block devices would be such examples.
+dependent to such implementation details.  In a future, DAMON will decouple
+those and support various address spaces including physical memory.  It will
+further allow users to configure and even implement the primitives by
+themselves for their special usecase.  Monitoring of page cache, NUMA nodes,
+specific files, or block devices would be examples of such usecases.
 
 An RFC patchset for this plan is already available
 (https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/).
@@ -134,15 +134,15 @@ Evaluations
 We evaluated DAMON's overhead, monitoring quality and usefulness using 25
 realistic workloads on my QEMU/KVM based virtual machine.
 
-DAMON is lightweight.  It consumes only -0.08% more system memory and up to 1%
-CPU time.  It makes target worloads only 0.45% slower.
+DAMON is lightweight.  It consumes only -0.18% more system memory and up to 1%
+CPU time.  It makes target worloads only 0.55% slower.
 
 DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP removes 68.22% of THP memory
-overheads while preserving 51.88% of THP speedup.  Another experimental
-DAMON-based 'proactive reclamation' implementation reduced 17.91% of system
-memory footprint and 71.44% of residential sets while incurring only 1.25%
-runtime overhead in best case (parsec3/freqmine).
+experimental DAMON-based operation scheme for THP removes 66.2% of THP memory
+overheads while preserving 54.78% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation reduced 88.15% of
+residentail sets and 22.30% of system memory footprint while incurring only
+2.91% runtime overhead in best case (parsec3/freqmine).
 
 NOTE that the experimentail THP optimization and proactive reclamation are not
 for production, just only for proof of concepts.
@@ -247,6 +247,7 @@ Changes from v8
  - Use explicit signalling and 'do_exit()' for damon thread termination 
  - Remove unnecessary sampling_addr setting in 2nd patch
  - Add more typos to spelling.txt
+ - Update the performance evaluation results
 
 Changes from v7
 (https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
