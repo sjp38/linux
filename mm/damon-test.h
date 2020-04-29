@@ -595,8 +595,15 @@ static void damon_test_split_regions_of(struct kunit *test)
 	t = damon_new_task(42);
 	r = damon_new_region(&damon_user_ctx, 0, 22);
 	damon_add_region(r, t);
-	damon_split_regions_of(&damon_user_ctx, t);
+	damon_split_regions_of(&damon_user_ctx, t, 2);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 2u);
+	damon_free_task(t);
+
+	t = damon_new_task(42);
+	r = damon_new_region(&damon_user_ctx, 0, 220);
+	damon_add_region(r, t);
+	damon_split_regions_of(&damon_user_ctx, t, 4);
+	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 4u);
 	damon_free_task(t);
 }
 
