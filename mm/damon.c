@@ -650,26 +650,32 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 	damon_insert_region(new, r, damon_next_region(r));
 }
 
-/* Split every region in the given task into two randomly-sized regions */
-static void damon_split_regions_of(struct damon_ctx *ctx, struct damon_task *t)
+/* Split every region in the given task into 'nr_subs' regions */
+static void damon_split_regions_of(struct damon_ctx *ctx,
+				     struct damon_task *t, int nr_subs)
 {
 	struct damon_region *r, *next;
-	unsigned long sz_orig_region, sz_left_region;
+	unsigned long sz_region, sz_sub = 0;
+	int i;
 
 	damon_for_each_region_safe(r, next, t) {
-		sz_orig_region = r->vm_end - r->vm_start;
+		sz_region = r->vm_end - r->vm_start;
 
-		/*
-		 * Randomly select size of left sub-region to be at least
-		 * 10 percent and at most 90% of original region
-		 */
-		sz_left_region = ALIGN_DOWN(damon_rand(1, 10) * sz_orig_region
-					    / 10, MIN_REGION);
-		/* Do not allow blank region */
-		if (sz_left_region == 0 || sz_left_region >= sz_orig_region)
-			continue;
+		for (i = 0; i < nr_subs - 1 &&
+				sz_region > 2 * MIN_REGION; i++) {
+			/*
+			 * Randomly select size of left sub-region to be at
+			 * least 10 percent and at most 90% of original region
+			 */
+			sz_sub = ALIGN_DOWN(damon_rand(1, 10) *
+					sz_region / 10, MIN_REGION);
+			/* Do not allow blank region */
+			if (sz_sub == 0 || sz_sub >= sz_region)
+				continue;
 
-		damon_split_region_at(ctx, r, sz_left_region);
+			damon_split_region_at(ctx, r, sz_sub);
+			sz_region = sz_sub;
+		}
 	}
 }
 
@@ -687,14 +693,25 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 	unsigned int nr_regions = 0;
+	static unsigned int last_nr_regions;
+	int nr_subregions = 2;
 
 	damon_for_each_task(t, ctx)
 		nr_regions += nr_damon_regions(t);
+
 	if (nr_regions > ctx->max_nr_regions / 2)
 		return;
 
+	/* If number of regions is not changed, we are maybe in corner case */
+	if (last_nr_regions == nr_regions &&
+			nr_regions < ctx->max_nr_regions / 3)
+		nr_subregions = 3;
+
 	damon_for_each_task(t, ctx)
-		damon_split_regions_of(ctx, t);
+		damon_split_regions_of(ctx, t, nr_subregions);
+
+	if (!last_nr_regions)
+		last_nr_regions = nr_regions;
 }
 
 /*
