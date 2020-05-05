@@ -179,10 +179,10 @@ Baseline and Complete Git Trees
 The patches are based on the v5.6.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v9
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v10
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v9
+https://github.com/sjp38/linux/releases/tag/damon/patches/v10
 
 This patchset contains patches for the stabled main logic of DAMON only.  The
 latest DAMON development tree is also available at:
