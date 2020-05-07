@@ -1026,8 +1026,8 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 	if (nr_regions > ctx->max_nr_regions / 2)
 		return;
 
-	if (nr_regions < ctx->max_nr_regions / 4)
-		nr_subregions = 4;
+	if (nr_regions < ctx->max_nr_regions / 3)
+		nr_subregions = 3;
 
 	damon_for_each_task(ctx, t)
 		damon_split_regions_of(ctx, t, nr_subregions);
