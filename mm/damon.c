@@ -822,11 +822,20 @@ static int damos_do_action(struct damon_task *task, struct damon_region *r,
 	return damos_madvise(task, r, madv_action);
 }
 
+static unsigned int stat_min_age, stat_max_age, stat_sum_ages, stat_nr_ages;
+
 static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 				struct damon_region *r)
 {
 	struct damos *s;
 	unsigned long sz;
+
+	if (stat_min_age == 0 || r->age < stat_min_age)
+		stat_min_age = r->age;
+	if (stat_max_age == 0 || r->age > stat_max_age)
+		stat_max_age = r->age;
+	stat_sum_ages += r->age;
+	stat_nr_ages++;
 
 	damon_for_each_scheme(c, s) {
 		sz = r->ar.end - r->ar.start;
@@ -1182,6 +1191,13 @@ static void pr_reset_damos_stat(void)
 	}
 }
 
+static void pr_reset_age_stat(void)
+{
+	pr_info("min/max/avg/nr: %u %u %u %u\n", stat_min_age, stat_max_age,
+			stat_sum_ages / stat_nr_ages, stat_nr_ages);
+	stat_min_age = stat_max_age = stat_sum_ages = stat_nr_ages = 0;
+}
+
 /*
  * The monitoring daemon that runs as a kernel thread
  */
@@ -1229,6 +1245,7 @@ static int kdamond_fn(void *data)
 	ctx->kdamond = NULL;
 	mutex_unlock(&ctx->kdamond_lock);
 	pr_reset_damos_stat();
+	pr_reset_age_stat();
 
 	do_exit(0);
 }
