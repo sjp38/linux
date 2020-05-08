@@ -1194,7 +1194,8 @@ static void pr_reset_damos_stat(void)
 static void pr_reset_age_stat(void)
 {
 	pr_info("min/max/avg/nr: %u %u %u %u\n", stat_min_age, stat_max_age,
-			stat_sum_ages / stat_nr_ages, stat_nr_ages);
+			stat_nr_ages ? stat_sum_ages / stat_nr_ages : 0,
+			stat_nr_ages);
 	stat_min_age = stat_max_age = stat_sum_ages = stat_nr_ages = 0;
 }
 
