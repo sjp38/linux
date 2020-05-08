@@ -1019,18 +1019,25 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 	unsigned int nr_regions = 0;
+	static unsigned int last_nr_regions;
 	int nr_subregions = 2;
 
 	damon_for_each_task(ctx, t)
 		nr_regions += nr_damon_regions(t);
+
 	if (nr_regions > ctx->max_nr_regions / 2)
 		return;
 
-	if (nr_regions < ctx->max_nr_regions / 3)
+	/* If number of regions is not changed, we are maybe in corner case */
+	if (last_nr_regions == nr_regions &&
+			nr_regions < ctx->max_nr_regions / 3)
 		nr_subregions = 3;
 
 	damon_for_each_task(ctx, t)
 		damon_split_regions_of(ctx, t, nr_subregions);
+
+	if (!last_nr_regions)
+		last_nr_regions = nr_regions;
 }
 
 /*
