@@ -726,6 +726,29 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 	}
 }
 
+static unsigned int stat_age_dists[10];
+
+static unsigned int stat_min_age, stat_max_age, stat_sum_ages, stat_nr_ages;
+
+static void set_age_stat(unsigned int age)
+{
+	int i;
+
+	if (stat_min_age == 0 || age < stat_min_age)
+		stat_min_age = age;
+	if (stat_max_age == 0 || age > stat_max_age)
+		stat_max_age = age;
+	stat_sum_ages += age;
+	stat_nr_ages++;
+
+	for (i = 0; i < 10; i++) {
+		if (age < 1 << i) {
+			stat_age_dists[i]++;
+			break;
+		}
+	}
+}
+
 #define diff_of(a, b) (a > b ? a - b : b - a)
 
 /*
@@ -742,10 +765,12 @@ static void damon_do_count_age(struct damon_region *r, unsigned int threshold)
 	unsigned int nr_accesses_diff = diff_of(r->nr_accesses,
 			r->last_nr_accesses);
 
-	if (region_diff > region_threshold || nr_accesses_diff > threshold)
+	if (region_diff > region_threshold || nr_accesses_diff > threshold) {
+		set_age_stat(r->age);
 		r->age = 0;
-	else
+	} else {
 		r->age++;
+	}
 }
 
 static void kdamond_count_age(struct damon_ctx *c, unsigned int threshold)
@@ -822,20 +847,11 @@ static int damos_do_action(struct damon_task *task, struct damon_region *r,
 	return damos_madvise(task, r, madv_action);
 }
 
-static unsigned int stat_min_age, stat_max_age, stat_sum_ages, stat_nr_ages;
-
 static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 				struct damon_region *r)
 {
 	struct damos *s;
 	unsigned long sz;
-
-	if (stat_min_age == 0 || r->age < stat_min_age)
-		stat_min_age = r->age;
-	if (stat_max_age == 0 || r->age > stat_max_age)
-		stat_max_age = r->age;
-	stat_sum_ages += r->age;
-	stat_nr_ages++;
 
 	damon_for_each_scheme(c, s) {
 		sz = r->ar.end - r->ar.start;
@@ -851,6 +867,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 				 s->max_age_region < r->age))
 			continue;
 		damos_do_action(t, r, s->action);
+		set_age_stat(r->age);
 		r->age = 0;
 	}
 }
@@ -1193,10 +1210,19 @@ static void pr_reset_damos_stat(void)
 
 static void pr_reset_age_stat(void)
 {
+	int i;
+
 	pr_info("min/max/avg/nr: %u %u %u %u\n", stat_min_age, stat_max_age,
 			stat_nr_ages ? stat_sum_ages / stat_nr_ages : 0,
 			stat_nr_ages);
 	stat_min_age = stat_max_age = stat_sum_ages = stat_nr_ages = 0;
+
+	pr_cont("age dist: ");
+	for (i = 0; i < 10; i++) {
+		pr_cont("%u\t", stat_age_dists[i]);
+		stat_age_dists[i] = 0;
+	}
+	pr_cont("\n");
 }
 
 /*
