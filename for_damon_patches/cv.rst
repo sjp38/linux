@@ -234,6 +234,10 @@ splits and thus improve the quality of the output.  In a future, we will be
 able to make this configurable for support of various access check primitives
 such as PMUs.
 
+Changes from v10
+(https://lore.kernel.org/linux-mm/20200505110815.10532-1-sjpark@amazon.com/)
+ - Reduce split overhead which introduced by v9
+
 Changes from v9
 (https://lore.kernel.org/linux-mm/20200427120442.24179-1-sjpark@amazon.com/)
  - Split each region into 4 subregions if possible (Jonathan Cameraon)
