@@ -426,3 +426,59 @@ made.
 
 Users can specify the resolution of the distribution (``--range``).  It also
 supports 'gnuplot' based simple visualization (``--plot``) of the distribution.
+
+
+DAMON-based Operation Schemes
+-----------------------------
+
+The ``schemes`` subcommand applies given data access pattern based operation
+schemes to the given target processes.  The target processes are described
+using the command to spawn the processes or pid of running processes, as
+similar to that of ``record`` subcommand.  Meanwhile, the operation schemes
+should be saved in a text file using below format and passed to ``schemes``
+subcommand via ``--schemes`` option.
+
+    min-size max-size min-acc max-acc min-age max-age action
+
+The format also supports comments, several units for size and age of regions,
+and human readable action names.  Currently supported operation actions are
+WILLNEED, COLD, PAGEOUT, HUGEPAGE, and NOHUGEPAGE.  Each of the actions works
+as same to that of madvise() system call.  Below is an example schemes file.
+Please also note that 0 for max values means infinite.
+
+    # format is:
+    # <min/max size> <min/max frequency (0-99)> <min/max age> <action>
+    #
+    # B/K/M/G/T for Bytes/KiB/MiB/GiB/TiB
+    # us/ms/s/m/h/d for micro-seconds/milli-seconds/seconds/minutes/hours/days
+    # 'null' means zero for size and age.
+
+    # if a region keeps a high access frequency for more than 100ms, put the
+    # region on the head of the LRU list (call madvise() with MADV_WILLNEED).
+    null    null    80      null    100ms   0s      willneed
+
+    # if a region keeps a low access frequency for more than 200ms and less
+    # than one hour, put the # region on the tail of the LRU list (call
+    # madvise() with MADV_COLD).
+    0B      0B      10      20      200ms   1h cold
+
+    # if a region keeps a very low access frequency for more than 1 minute,
+    # swap out the region immediately (call madvise() with MADV_PAGEOUT).
+    0B      null    0       10      60s     0s pageout
+
+    # if a region of a size bigger than 2MiB keeps a very high access frequency
+    # for more than 100ms, let the region to use huge pages (call madvise()
+    # with MADV_HUGEPAGE).
+    2M      null    90      99      100ms   0s hugepage
+
+    # If a regions of a size bigger than 2MiB keeps small access frequency for
+    # more than 100ms, avoid the region using huge pages (call madvise() with
+    # MADV_NOHUGEPAGE).
+    2M      null    0       25      100ms   0s nohugepage
+
+For example, you can make a running process named 'foo' to use THP for memory
+regions keeping 2MB or larger size and having very high access frequency for
+more than 100 milliseconds using below commands:
+
+    $ echo "2M null 90 99 100ms 0s hugepage" > my_thp_scheme
+    $ ./damo schemes --schemes my_thp_scheme `pidof foo`
