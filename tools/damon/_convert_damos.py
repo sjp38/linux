@@ -3,37 +3,8 @@
 
 """
 Change human readable data access monitoring-based operation schemes to the low
-level input for the '<debugfs>/damon/schemes' file.  Below is an example of the
-schemes written in the human readable format:
-
-# format is: <min/max size> <min/max frequency (0-100)> <min/max age> <action>
-# lines starts with '#' or blank are ignored.
-# B/K/M/G/T for Bytes/KiB/MiB/GiB/TiB
-# us/ms/s/m/h/d for micro-seconds/milli-seconds/seconds/minutes/hours/days
-# 'null' means zero, which passes the check
-
-# if a region (no matter of its size) keeps a high access frequency for more
-# than 100ms, put the region on the head of the LRU list (call madvise() with
-# MADV_WILLNEED).
-null	null	80	null	100ms	null	willneed
-
-# if a region keeps a low access frequency for more than 100ms, put the
-# region on the tail of the LRU list (call madvise() with MADV_COLD).
-0B	0B	10	20	200ms	1h cold
-
-# if a region keeps a very low access frequency for more than 100ms, swap
-# out the region immediately (call madvise() with MADV_PAGEOUT).
-0B	null	0	10	100ms	2h pageout
-
-# if a region of a size bigger than 2MiB keeps a very high access frequency
-# for more than 100ms, let the region to use huge pages (call madvise()
-# with MADV_HUGEPAGE).
-2M	null	90	99	100ms	2h hugepage
-
-# If a regions of a size bigger than 2MiB keeps no high access frequency
-# for more than 100ms, avoid the region from using huge pages (call
-# madvise() with MADV_NOHUGEPAGE).
-2M	null	0	25	100ms	2h nohugepage
+level input for the '<debugfs>/damon/schemes' file.  Refer to
+Documentation/admin-guide/mm/data_access_monitor.rst for detail of the format.
 """
 
 import argparse
