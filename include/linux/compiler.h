@@ -204,7 +204,7 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
  * atomicity or dependency ordering guarantees. Note that this may result
  * in tears!
  */
-#define __READ_ONCE(x)	(*(const volatile typeof(x) *)&(x))
+#define __READ_ONCE(x)	(*(const volatile __unqual_scalar_typeof(x) *)&(x))
 
 #define __READ_ONCE_SCALAR(x)						\
 ({									\
@@ -212,10 +212,10 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 	kcsan_check_atomic_read(__xp, sizeof(*__xp));			\
 	__kcsan_disable_current();					\
 	({								\
-		typeof(x) __x = __READ_ONCE(*__xp);			\
+		__unqual_scalar_typeof(x) __x = __READ_ONCE(*__xp);	\
 		__kcsan_enable_current();				\
 		smp_read_barrier_depends();				\
-		__x;							\
+		(typeof(x))__x;						\
 	});								\
 })
 
