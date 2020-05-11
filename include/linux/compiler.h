@@ -199,6 +199,26 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 #include <linux/kasan-checks.h>
 #include <linux/kcsan-checks.h>
 
+/**
+ * data_race - mark an expression as containing intentional data races
+ *
+ * This data_race() macro is useful for situations in which data races
+ * should be forgiven.  One example is diagnostic code that accesses
+ * shared variables but is not a part of the core synchronization design.
+ *
+ * This macro *does not* affect normal code generation, but is a hint
+ * to tooling that data races here are to be ignored.
+ */
+#define data_race(expr)							\
+({									\
+	__kcsan_disable_current();					\
+	({								\
+		__unqual_scalar_typeof(({ expr; })) __v = ({ expr; });	\
+		__kcsan_enable_current();				\
+		__v;							\
+	});								\
+})
+
 /*
  * Use __READ_ONCE() instead of READ_ONCE() if you do not require any
  * atomicity or dependency ordering guarantees. Note that this may result
@@ -209,14 +229,10 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 #define __READ_ONCE_SCALAR(x)						\
 ({									\
 	typeof(x) *__xp = &(x);						\
+	__unqual_scalar_typeof(x) __x = data_race(__READ_ONCE(*__xp));	\
 	kcsan_check_atomic_read(__xp, sizeof(*__xp));			\
-	__kcsan_disable_current();					\
-	({								\
-		__unqual_scalar_typeof(x) __x = __READ_ONCE(*__xp);	\
-		__kcsan_enable_current();				\
-		smp_read_barrier_depends();				\
-		(typeof(x))__x;						\
-	});								\
+	smp_read_barrier_depends();					\
+	(typeof(x))__x;							\
 })
 
 #define READ_ONCE(x)							\
@@ -234,9 +250,7 @@ do {									\
 do {									\
 	typeof(x) *__xp = &(x);						\
 	kcsan_check_atomic_write(__xp, sizeof(*__xp));			\
-	__kcsan_disable_current();					\
-	__WRITE_ONCE(*__xp, val);					\
-	__kcsan_enable_current();					\
+	data_race(({ __WRITE_ONCE(*__xp, val); 0; }));			\
 } while (0)
 
 #define WRITE_ONCE(x, val)						\
@@ -303,26 +317,6 @@ unsigned long read_word_at_a_time(const void *addr)
 	kasan_check_read(addr, 1);
 	return *(unsigned long *)addr;
 }
-
-/**
- * data_race - mark an expression as containing intentional data races
- *
- * This data_race() macro is useful for situations in which data races
- * should be forgiven.  One example is diagnostic code that accesses
- * shared variables but is not a part of the core synchronization design.
- *
- * This macro *does not* affect normal code generation, but is a hint
- * to tooling that data races here are to be ignored.
- */
-#define data_race(expr)							\
-({									\
-	__kcsan_disable_current();					\
-	({								\
-		__unqual_scalar_typeof(({ expr; })) __v = ({ expr; });	\
-		__kcsan_enable_current();				\
-		__v;							\
-	});								\
-})
 
 #endif /* __KERNEL__ */
 
