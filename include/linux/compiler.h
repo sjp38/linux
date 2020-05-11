@@ -331,7 +331,6 @@ unsigned long read_word_at_a_time(const void *addr)
 		kcsan_enable_current();                                        \
 		__val;                                                         \
 	})
-#else
 
 #endif /* __KERNEL__ */
 
