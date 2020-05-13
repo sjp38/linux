@@ -19,7 +19,6 @@ do_test() {
 	RUNTIME=$1
 
 	./fin_ack_lat | tee $tmpfile &
-	PID=$!
 
 	sleep $RUNTIME
 	NR_SPIKES=$(wc -l $tmpfile | awk '{print $1}')
