@@ -9,6 +9,20 @@ user space tool.  Please note that this document describes only a part of the
 features for brevity.  Please refer to :doc:`usage` for more details.
 
 
+TL; DR
+======
+
+Simply follow below 5 lines of code.  Don't forget replacing ``<your
+workload>`` with your *real* workload, though. ::
+
+    $ git clone https://github.com/sjp38/linux -b damon/master
+    /* build the kernel with CONFIG_DAMON=y, install, reboot */
+    $ cd linux/tools/damon
+    $ ./damo record $(pidof <your workload>)
+    $ ./damo report heats --heatmap access_pattern.pdf
+    $ ./damo report wss --range 0 101 1 --plot wss_dist.pdf
+
+
 Prerequisites
 =============
 
