@@ -62,7 +62,7 @@ Recording Data Access Patterns
 
 Below commands record memory access pattern of a program, ``masim`` and save it
 in a file, ``damon.data``.  The program will access two 100 MiB memory regions
-one by one.::
+one by one. ::
 
     $ git clone https://github.com/sjp38/masim
     $ cd masim; make; ./masim ./configs/zigzag.cfg &
@@ -78,7 +78,7 @@ Visualizing Recorded Patterns
 
 Below three commands visualize the recorded access patterns into three
 image files, ``access_pattern_heatmap.png``, ``wss_dist.png`` and
-``wss_chron_change.png``.::
+``wss_chron_change.png``. ::
 
     $ damo report heats --heatmap -i damon.data access_pattern_heatmap.png
     $ damo report wss --range 0 101 1 --plot wss_dist.png
