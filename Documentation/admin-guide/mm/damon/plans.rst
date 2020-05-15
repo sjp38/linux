@@ -29,15 +29,18 @@ Support Various Address Spaces
 ==============================
 
 Currently, DAMON supports only virtual memory address spaces because it
-utilizes PTE Accessed bits as its low level access check primitive.  However,
-the core design of DAMON is in separated higher layer.  In a future, therefore,
-DAMON will entirely decouple those layers and make the lower level configurable
-so that it can support various address spaces including physical memory.  The
-configuration will be highly flexible so that users can assemble the primitives
-implemented by themselves for their special usecase.
+utilizes PTE Accessed bits as its low level access check primitive and ``struct
+vma`` as a way to address the monitoring target regions.  However, the core
+idea of DAMON is in separated higher layer.  Therefore, DAMON can support other
+various address spaces by chaning the two low primitives to others for the
+address spaces.
 
-Monitoring of clean/dirty/entire page cache, NUMA nodes, specific files, or
-block devices would be examples of such usecases.
+In a future, DAMON will make the lower level primitives configurable so that it
+can support various address spaces including physical memory.  The
+configuration will be highly flexible so that users can even implement the
+primitives by themselves for their special usecase.  Monitoring of
+clean/dirty/entire page cache, NUMA nodes, specific files, or block devices
+would be examples of such usecases.
 
 An RFC patchset for this plan is available [3]_.
 
