@@ -51,8 +51,12 @@ generator program in a binary file, ``damon.data``.  The program will access
 two 100 MiB memory regions in rotation.::
 
     $ git clone https://github.com/sjp38/masim
-    $ cd masim; make; ./masim ./configs/zigzag.cfg
-    $ damo record -o damon.data $(pidof masim)
+    $ cd masim; make; ./masim ./configs/zigzag.cfg &
+    $ sudo damo record -o damon.data $(pidof masim)
+
+The first two lines of commands start the artificial memory access generator in
+background.  You can substitute this with your real workload.  The last line
+asks ``damo`` to record the data access pattern of it by giving the process id.
 
 
 Visualizing The Recorded Access Patterns
