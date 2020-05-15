@@ -234,6 +234,12 @@ splits and thus improve the quality of the output.  In a future, we will be
 able to make this configurable for support of various access check primitives
 such as PMUs.
 
+Changes from v11
+(https://lore.kernel.org/linux-mm/20200511123302.12520-1-sjpark@amazon.com/)
+ - Rewrite the document (Stefan Nuernberger)
+ - Make 'damon_for_each_*' argument order consistent (Leonard Foerster)
+ - Fix wrong comment in 'kdamond_merge_regions()' (Leonard Foerster)
+
 Changes from v10
 (https://lore.kernel.org/linux-mm/20200505110815.10532-1-sjpark@amazon.com/)
  - Reduce aggressive split overhead by doing it only if required

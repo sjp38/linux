@@ -268,6 +268,11 @@ patch documents this new feature in the document.
 Patch History
 =============
 
+Changes from RFC v8
+(https://lore.kernel.org/linux-mm/20200512115343.27699-1-sjpark@amazon.com/)
+ - Rewrite the document (Stefan Nuernberger)
+ - Make 'damon_for_each_*' argument order consistent (Leonard Foerster)
+
 Changes from RFC v7
 (https://lore.kernel.org/linux-mm/20200429124540.32232-1-sjpark@amazon.com/)
  - Rebase on DAMON v11 patchset
