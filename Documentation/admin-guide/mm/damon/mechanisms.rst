@@ -6,20 +6,20 @@ Mechanisms
 
 This document describes the core mechanisms of DAMON and the five knobs for
 tuning.  The knobs are ``sampling interval``, ``aggregation interval``,
-``regions update interval``, ``minimum number of regions`` and ``maximum number
-of regions``.
+``regions update interval``, ``minimum number of regions``, and ``maximum
+number of regions``.
 
 
 Basic Access Check
 ==================
 
 The output of DAMON says what pages are how frequently accessed for a given
-duration.  The resolution of the access frequency is controlled by setting two
-time intervals, ``sampling interval`` and ``aggregation interval``.  In detail,
+duration.  The resolution of the access frequency is controlled by setting
+``sampling interval`` and ``aggregation interval``.  In detail,
 DAMON checks access to each page per ``sampling interval``, aggregates the
 results.  In other words, counts the number of the accesses to each page.
 After each ``aggregation interval`` passes, DAMON signals users to read and
-save the aggregated access freuqency if they want and then clears those.  For
+save the aggregated access frequency if they want and then clears those.  For
 the access check of each page, DAMON uses the Accessed bits of PTEs.  This can
 be described in below simple pseudo-code::
 
@@ -32,22 +32,22 @@ be described in below simple pseudo-code::
                 nr_accesses[page] = 0
         sleep(sampling interval)
 
-The monitoring overhead of this mechanism will arbitrarily increases as the
+The monitoring overhead of this mechanism will arbitrarily increase as the
 size of the target workload grows.
 
 
 Region Based Sampling
 =====================
 
-To avoid the unbounded increase of the overhead, DAMON groups a number of
-adjacent pages that assumed to have same access frequencies into a region.  As
-long as the assumption (pages in a region have same access frequencies) is
-kept, only one page in the region is required to be checked.  Thus, for each
-``sampling interval``, DAMON randomly picks one page in each region, wait for
-one ``sampling interval``, checks whether the page is accessed meanwhile and
+To avoid the unbounded increase of the overhead, DAMON groups adjacent pages
+that assumed to have the same access frequencies into a region.  As long as the
+assumption (pages in a region have the same access frequencies) is kept, only
+one page in the region is required to be checked.  Thus, for each ``sampling
+interval``, DAMON randomly picks one page in each region, waits for one
+``sampling interval``, checks whether the page is accessed meanwhile, and
 increases the access frequency of the region if so.  Therefore, the monitoring
 overhead is controllable by setting the number of regions.  DAMON allows users
-to set the minimum and maximum number of regions for the trade-off.
+to set the minimum and the maximum number of regions for the trade-off.
 
 This scheme, however, cannot preserve the quality of the output if the
 assumption is not guaranteed.
@@ -58,10 +58,10 @@ Adaptive Regions Adjustment
 
 At the beginning of the monitoring, DAMON constructs the initial regions by
 evenly splitting the monitoring target memory region into the user-specified
-minimum number of regions.  In this initial state, the regions assumption is
-normally not kept and therefore the quality would be low.  To keep the
-assumption as much as possible, DAMON adaptively merges and splits each region
-based on their access frequency.
+minimum number of regions.  In this initial state, the assumption is normally
+not kept and therefore the quality would be low.  To keep the assumption as
+much as possible, DAMON adaptively merges and splits each region based on their
+access frequency.
 
 For each ``aggregation interval``, it compares the access frequencies of
 adjacent regions and merges those if the frequency difference is small.  Then,
