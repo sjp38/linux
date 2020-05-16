@@ -10,8 +10,8 @@ Why a new module, instead of extending perf or other user space tools?
 First, because it needs to be lightweight as much as possible so that it can be
 used online, any unnecessary overhead such as kernel - user space context
 switching cost should be avoided.  Second, DAMON aims to be used by other
-programs including the kernel.  Therefore, having dependency to specific tools
-like perf is not desirable.  These are the two most biggest reasons why DAMON
+programs including the kernel.  Therefore, having a dependency on specific
+tools like perf is not desirable.  These are the two biggest reasons why DAMON
 is implemented in the kernel space.
  
 
