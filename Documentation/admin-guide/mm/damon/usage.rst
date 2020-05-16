@@ -7,30 +7,30 @@ Detailed Usages
 DAMON provides below three interfaces for various use cases.
 
 - *DAMON user space tool.*
-  This is for privileged people such as system administrators who want
-  just-working human-friendly interface.  Acutally, this interface is a
-  reference implementation of the DAMON debugfs wrapper user space tool.  Using
-  this tool, you can easily use the DAMON’s major features in human-friendly
-  way, though it may not be highly tuned for your specific use-cases.
+  This is for privileged people such as system administrators who want a
+  just-working human-friendly interface.  This interface is a reference
+  implementation of the DAMON debugfs wrapper user space tool.  Using this
+  tool, you can easily use the DAMON’s major features in a human-friendly way,
+  though it may not be highly tuned for your specific use-cases.
 - *debugfs interface.*
   This is for user space programmers who want optimized use of DAMON. Using
   this interface, you can use DAMON’s major features by reading from and
   writing to specific debugfs files.  Of course, you can write and use your
   personalized DAMON debugfs wrapper user space tool that reads/writes the
-  debugfs files instead of you and provides more human friendly interface.
+  debugfs files instead of you and provides a more human-friendly interface.
 - *Kernel Space Programming Interface.*
   This is for kernel space programmers.  Using this, you can utilize every
-  feature of DAMON in most flexible and efficient way by writing kernel space
+  feature of DAMON most flexibly and efficiently by writing kernel space
   DAMON application programs for you.
 
 We recommend you to start with the DAMON user space tool and move to debugfs
-interface only if the real requirement is found, and prohibit use of the kernel
-space programming interface unless you really need it, for following reasons.
-First of all, there will be no big difference between the overheads of these
-three interfaces, unless the use case is so special.  Also, all these three
-interfaces support all major features of DAMON.
+interface only if the real requirement is found, and prohibit the use of the
+kernel space programming interface unless you need it, for the following
+reasons.  First of all, there will be no big difference between the overheads
+of these three interfaces, unless the use case is so special.  Also, all these
+three interfaces support all major features of DAMON.
 
-This document therefore does not describe the kernel space programming
+This document, therefore, does not describe the kernel space programming
 interface in detail.  For the programming interface, please refer to :doc:`api`
 or ``include/linux/damon.h`` file in the kernel source tree.
 
@@ -39,15 +39,15 @@ or ``include/linux/damon.h`` file in the kernel source tree.
 User Space Tool for DAMON
 =========================
 
-A reference implementation of DAMON user space tool which provides a convenient
-user interface is located at ``tools/damon/damo`` in the kernel source tree.
-Please note that this is initially aimed to be used for minimal reference of
-the DAMON's debugfs interfaces and for tests of the DAMON itself.  Based on the
-debugfs interface, you can create another cool and more convenient user space
-tools.
+A reference implementation of the DAMON user space tool which provides a
+convenient user interface is located at ``tools/damon/damo`` in the kernel
+source tree.  Please note that this is initially aimed to be used for minimal
+reference of the DAMON's debugfs interfaces and for tests of the DAMON itself.
+Based on the debugfs interface, you can create another cool and more convenient
+user space tools.
 
 The interface of the tool is basically subcommand based.  You can almost always
-use ``-h`` option to get help of the use of each subcommand.  Currently, it
+use ``-h`` option to get the help of the use of each subcommand.  Currently, it
 supports two subcommands, ``record`` and ``report``.
 
 Below example commands assume you set ``$PATH`` to points ``tools/damon/`` for
@@ -57,9 +57,9 @@ brevity.  It is not mandatory for use of ``damo``, though.
 Recording Data Access Pattern
 -----------------------------
 
-The ``record`` subcommand records the data access pattern of target process in
-a file (``./damon.data`` by default).  You can specify the target as either pid
-of running target or a command for an execution of the process.  Below example
+The ``record`` subcommand records the data access pattern of target processes
+in a file (``./damon.data`` by default).  You can specify the target as either
+pid of running target or a command for execution of the process.  Below example
 shows a command target usage::
 
     # cd <kernel>/tools/damon/
@@ -81,15 +81,15 @@ Analyzing Data Access Pattern
 
 The ``report`` subcommand reads a data access pattern record file (if not
 explicitly specified, reads ``./damon.data`` file by default) and generates
-human readable reports of various types.  You can specify what type of report
-you want using a sub-subcommand to ``report`` subcommand.  ``raw``, ``heats``
+human-readable reports of various types.  You can specify what type of report
+you want using a sub-subcommand to ``report`` subcommand.  ``raw``, ``heats``,
 and ``wss`` report types are supported for now.
 
 
 raw
 ~~~
 
-``raw`` sub-subcommand simply transforms the binary record to human readable
+``raw`` sub-subcommand simply transforms the binary record into human-readable
 text.  For example::
 
     $ damo report raw
@@ -114,14 +114,14 @@ text.  For example::
     7fbdffb66d99-7fbdffbb5000(    320103):  1
     7ffea0dc0000-7ffea0dfd000(    249856):  0
 
-The first line shows recording started timestamp (nanosecond).  Records of data
-access patterns are following this.  Each record is sperated by a blank line.
-Each record first specifies the recorded time (``rel time``), number of
-monitored tasks in this record (``nr_tasks``).  Multiple number of records of
-data access pattern for each task follow.  Each data access pattern for each
-task shows it's pid (``pid``) and number of monitored virtual address regions
-in this access pattern (``nr_regions``) first.  After that, each line shows
-start/end address, size, and number of monitored accesses to the region for
+The first line shows the recording started timestamp (nanosecond).  Records of
+data access patterns are following this.  Each record is separated by a blank
+line.  Each record first specifies the recorded time (``rel time``), the number
+of monitored tasks in this record (``nr_tasks``).  A numbers of records of data
+access patterns for each task follow.  Each data access pattern for each task
+shows it's pid (``pid``) and a number of monitored virtual address regions in
+this access pattern (``nr_regions``) first.  After that, each line shows the
+start/end address, size, and the number of monitored accesses to the region for
 each of the regions.
 
 
@@ -148,10 +148,10 @@ and start/end point of each axis (``--tmin``, ``--tmax``, ``--amin``, and
 
 This command shows a recorded access pattern in heatmap of 3x3 resolution.
 Therefore it shows 9 data points in total.  Each line shows each of the data
-points.  The three numbers in each line represents time in nanosecond, virtual
-address in byte, and the observed access frequency.
+points.  The three numbers in each line represent time in nanosecond, virtual
+address in bytes, and the observed access frequency.
 
-Users can easily convert this text output into heatmap image (represent z-axis
+Users can easily convert this text output into a heatmap image (represent z-axis
 values with colors) or other 3D representations using various tools such as
 'gnuplot'.  ``heats`` sub-subcommand also provides 'gnuplot' based heatmap
 image creation.  For this, you can use ``--heatmap`` option.  Also, note that
@@ -165,8 +165,8 @@ Creates ``heatmap.png`` file containing the heatmap image.  It supports
 
 If the target address space is virtual memory address space and you plot the
 entire address space, the huge unmapped regions will make the picture looks
-only black.  Therefore you shoud do proper zoom in / zoom out using the axis
-boundary setting optional arguments.  To make this effort minimal, you can use
+only black.  Therefore you should do proper zoom in / zoom out using the axis
+boundary-setting optional arguments.  To make this effort minimal, you can use
 ``--guide`` option.  For example::
 
     $ ./damo report heats --guide
@@ -177,10 +177,10 @@ boundary setting optional arguments.  To make this effort minimal, you can use
     region   2: 00000140731597193216-00000140731597443072 (249856)
 
 The output shows unions of monitored regions (start and end addresses in byte)
-and union of monitored time duration (start and end time in nanosecond) of each
-target task.  Therefore, it would be wise to plot the data points in each
-union.  If no axis boundary option is given, it will automatically find biggest
-union in ``--guide`` output and plot for it.
+and union of monitored time duration (start and end time in nanoseconds) of
+each target task.  Therefore, it would be wise to plot the data points in each
+union.  If no axis boundary option is given, it will automatically find the
+biggest union in ``--guide`` output and plot for it.
 
 
 wss
@@ -200,10 +200,10 @@ changes from the records.  For example::
     100     1920615
 
 Without any option, it shows the distribution of the working set sizes as
-above.  Basically it shows 0th, 25th, 50th, 75th, and 100th percentile and
-average of the measured working set sizes in the access pattern records.  In
-this case, the working set size was zero for 75th percentile but 1,920,615
-bytes in max and 66,228 bytes in average.
+above.  It shows 0th, 25th, 50th, 75th, and 100th percentile and the average of
+the measured working set sizes in the access pattern records.  In this case,
+the working set size was zero for 75th percentile but 1,920,615 bytes in max
+and 66,228 bytes on average.
 
 By setting the sort key of the percentile using '--sortby', you can show how
 the working set size has chronologically changed.  For example::
@@ -232,15 +232,15 @@ DAMON-based Operation Schemes
 -----------------------------
 
 The ``schemes`` subcommand allows users to do DAMON-based memory management
-optimizations in few seconds.  Similar to ``record``, it receives monitoring
+optimizations in a few seconds.  Similar to ``record``, it receives monitoring
 attributes and target.  However, in addition to those, ``schemes`` receives
-data access pattern based memory operation schemes, which describes what memory
-operation action shoud be applied to memory regions showing specific data
+data access pattern-based memory operation schemes, which describes what memory
+operation action should be applied to memory regions showing specific data
 access pattern.  Then, it starts the data access monitoring and automatically
 applies the schemes to the targets.
 
 The operation schemes should be saved in a text file in below format and passed
-to ``schemes`` subcommand via ``--schemes`` option.::
+to ``schemes`` subcommand via ``--schemes`` option. ::
 
     min-size max-size min-acc max-acc min-age max-age action
 
@@ -249,7 +249,7 @@ and human readable action names.  Currently supported operation actions are
 ``willneed``, ``cold``, ``pageout``, ``hugepage`` and ``nohugepage``.  Each of
 the actions works same to the madvise() system call hints having the name.
 Below is an example schemes.  Please also note that ``0`` for max values means
-infinite.::
+infinite. ::
 
     # format is:
     # <min/max size> <min/max frequency (0-99)> <min/max age> <action>
@@ -263,7 +263,7 @@ infinite.::
     null    null    80      null    100ms   0s      willneed
 
     # if a region keeps a low access frequency for more than 200ms and less
-    # than one hour, put the # region on the tail of the LRU list (call
+    # than one hour put the # region on the tail of the LRU list (call
     # madvise() with MADV_COLD).
     0B      0B      10      20      200ms   1h cold
 
@@ -276,7 +276,7 @@ infinite.::
     # with MADV_HUGEPAGE).
     2M      null    90      99      100ms   0s hugepage
 
-    # If a regions of a size bigger than 2MiB keeps small access frequency for
+    # If a region of a size bigger than 2MiB keeps small access frequency for
     # more than 100ms, avoid the region using huge pages (call madvise() with
     # MADV_NOHUGEPAGE).
     2M      null    0       25      100ms   0s nohugepage
@@ -331,11 +331,11 @@ Record
 ------
 
 This debugfs file allows you to record monitored access patterns in a regular
-binary file.  The recorded results are first written to a in-memory buffer and
+binary file.  The recorded results are first written to an in-memory buffer and
 flushed to a file in batch.  Users can get and set the size of the buffer and
 the path to the result file by reading from and writing to the ``record`` file.
 For example, below commands set the buffer to be 4 KiB and the result to be
-saved in ``/damon.data``.::
+saved in ``/damon.data``. ::
 
     # cd <debugfs>/damon
     # echo "4096 /damon.data" > record
@@ -346,24 +346,24 @@ saved in ``/damon.data``.::
 Schemes
 -------
 
-For usual DAMON-based data access awared memory management optimizations, users
+For usual DAMON-based data access aware memory management optimizations, users
 would simply want the system to apply a memory management action to a memory
 region of a specific size having a specific access frequency for a specific
-time.  DAMON receives such formalized operation schemes from user and applies
-those to the target processes.
+time.  DAMON receives such formalized operation schemes from the user and
+applies those to the target processes.
 
 Users can get and set the schemes by reading from and writing to ``schemes``
-debugfs file.  To the file, each of the schemes should represented in each line
-in below form:
+debugfs file.  To the file, each of the schemes should be represented in each
+line in below form:
 
     min-size max-size min-acc max-acc min-age max-age action
 
-Bytes for size of regions (``min-size`` and ``max-size``), number of monitored
-accesses per aggregate interval for access frequency (``min-acc`` and
-``max-acc``), number of aggregate intervals for age of regions (``min-age`` and
-``max-age``), and predefined integer for memory management actions should be
-used.  ``madvise()`` system call with specific hint are currently available.
-The numbers and their representing memory hints are as below::
+Bytes for the size of regions (``min-size`` and ``max-size``), number of
+monitored accesses per aggregate interval for access frequency (``min-acc`` and
+``max-acc``), number of aggregate intervals for the age of regions (``min-age``
+and ``max-age``), and a predefined integer for memory management actions should
+be used.  ``madvise()`` system calls with specific hints are currently
+available.  The numbers and their representing memory hints are as below::
 
     0   MADV_WILLNEED
     1   MADV_COLD
@@ -371,11 +371,11 @@ The numbers and their representing memory hints are as below::
     3   MADV_HUGEPAGE
     4   MADV_NOHUGEPAGE
 
-You can disable schemes by simply writing empty string to the file.  For
+You can disable schemes by simply writing an empty string to the file.  For
 example, below commands applies a scheme saying "If a memory region larger than
 4 KiB (4096 0) is showing less than 5 accesses per aggregate interval (0 5) for
 more than 5 aggregate interval (5 0), page out the region (2)", check the
-entered scheme again, and finally remove the scheme.::
+entered scheme again, and finally remove the scheme. ::
 
     # cd <debugfs>/damon
     # echo "4096 0 0 5 5 0 2" > schemes
@@ -386,14 +386,14 @@ entered scheme again, and finally remove the scheme.::
 Turning On/Off
 --------------
 
-Setting the attributes and schemes as described above doesn't make effect
+Setting the attributes and schemes as described above doesn't incur effect
 unless you explicitly start the monitoring.  You can start, stop, and check
-current status of the monitoring by writing to and reading from the
-``monitor_on`` file.  Writing ``on`` to the file make DAMON to start monitoring
+the current status of the monitoring by writing to and reading from the
+``monitor_on`` file.  Writing ``on`` to the file make DAMON start monitoring
 of the target processes with the attributes.  Recording and schemes applying
 will also start if requested before.  Writing ``off`` to the file stops those.
-DAMON also stops if every target processes is terminated.  Below example
-commands turn on, off, and check status of DAMON::
+DAMON also stops if every target process is terminated.  Below example
+commands turn on, off, and check the status of DAMON::
 
     # cd <debugfs>/damon
     # echo on > monitor_on
