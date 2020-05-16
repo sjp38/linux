@@ -12,35 +12,35 @@ Automate Data Access Monitoring-based Memory Operation Schemes Execution
 
 The ultimate goal of DAMON is being used as a building block of the data access
 pattern aware kernel memory management subsystem optimization.  However, as
-always, some users having very special workloads will want to do their own
+always, some users having very special workloads will want to do their
 optimization.  DAMON will automate most of the tasks for such manual
-optimizations in near future.  Users will be required to only describe what
-kind of data access pattern based operation schemes they want in simple form.
+optimizations soon.  Users will be required to only describe what kind of data
+access pattern-based operation schemes they want in a simple form.
 
 By applying a very simple scheme for THP promotion/demotion with a prototype
 implementation, DAMON reduced 60% of THP memory footprint overhead while
 preserving 50% of the THP performance benefit.  The detailed results can be
-seen in an external web page [1]_.
+seen on an external web page [1]_.
 
-Several RFC patchsets for this plan is available [2]_.
+Several RFC patchsets for this plan are available [2]_.
 
 
 Support Various Address Spaces
 ==============================
 
 Currently, DAMON supports only virtual memory address spaces because it
-utilizes PTE Accessed bits as its low level access check primitive and ``struct
+utilizes PTE Accessed bits as its low-level access check primitive and ``struct
 vma`` as a way to address the monitoring target regions.  However, the core
-idea of DAMON is in separated higher layer.  Therefore, DAMON can support other
-various address spaces by chaning the two low primitives to others for the
-address spaces.
+idea of DAMON is in a separate higher layer.  Therefore, DAMON can support
+other various address spaces by changing the two low primitives to others for
+the address spaces.
 
-In a future, DAMON will make the lower level primitives configurable so that it
-can support various address spaces including physical memory.  The
+In the future, DAMON will make the lower level primitives configurable so that
+it can support various address spaces including physical memory.  The
 configuration will be highly flexible so that users can even implement the
-primitives by themselves for their special usecase.  Monitoring of
+primitives by themselves for their special use case.  Monitoring of
 clean/dirty/entire page cache, NUMA nodes, specific files, or block devices
-would be examples of such usecases.
+would be examples of such use cases.
 
 An RFC patchset for this plan is available [3]_.
 
