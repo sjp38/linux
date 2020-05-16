@@ -7,13 +7,13 @@ Frequently Asked Questions
 Why a new module, instead of extending perf or other user space tools?
 ======================================================================
 
-First, DAMON aims to be used by other programs including the kernel.
-Therefore, having a dependency on specific tools like perf is not desirable.
-Second, because it needs to be lightweight as much as possible so that it can
-be used online, any unnecessary overhead such as kernel - user space context
-switching cost should be avoided.  These are the two biggest reasons why
-DAMON is implemented in the kernel space.
-  
+First, because it needs to be lightweight as much as possible so that it can be
+used online, any unnecessary overhead such as kernel - user space context
+switching cost should be avoided.  Second, DAMON aims to be used by other
+programs including the kernel.  Therefore, having dependency to specific tools
+like perf is not desirable.  These are the two most biggest reasons why DAMON
+is implemented in the kernel space.
+ 
 
 Can 'idle pages tracking' or 'perf mem' substitute DAMON?
 =========================================================
@@ -32,5 +32,8 @@ Does DAMON support virtual memory only?
 ========================================
 
 For now, yes.  But, DAMON will be able to support various address spaces
-including physical memory soon.  Please refer :doc:`plans` for a detailed plan
+including physical memory in near future.  An RFC patchset [1]_ for this
+extension is already available.  Please refer :doc:`plans` for detailed plan
 for this.
+
+.. [1] https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/

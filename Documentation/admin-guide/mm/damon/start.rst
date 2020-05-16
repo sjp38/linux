@@ -12,8 +12,8 @@ features for brevity.  Please refer to :doc:`usage` for more details.
 TL; DR
 ======
 
-Simply follow below 5 lines of code.  Don't forget replacing ``<your
-workload>`` with your *real* workload, though. ::
+Simply follow below 5 commands.  Don't forget replacing ``<your workload>``
+with your *real* workload, though. ::
 
     $ git clone https://github.com/sjp38/linux -b damon/master
     /* build the kernel with CONFIG_DAMON=y, install, reboot */

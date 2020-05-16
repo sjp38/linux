@@ -5,9 +5,9 @@ Mechanisms
 ==========
 
 This document describes the core mechanisms of DAMON and the five knobs for
-tuning.  The knobs are ``sampling interval``, ``aggregation interval``,
-``regions update interval``, ``minimum number of regions``, and ``maximum
-number of regions``.
+tuning, that is, ``sampling interval``, ``aggregation interval``, ``regions
+update interval``, ``minimum number of regions``, and ``maximum number of
+regions``.
 
 
 Basic Access Check
@@ -73,11 +73,12 @@ In this way, DAMON provides its best-effort quality and minimal overhead while
 keeping the bounds users set for their trade-off.
 
 
-Handling Complex and Dynamic Virtual Memory Mappings
-====================================================
+Handling Virtual Memory Mappings
+================================
 
-This is for monitoring of virtual memory address space only, which is the only
-one address space that supported by DAMON as of now.
+This is for monitoring of virtual memory address space only.  It is the only
+one address space that supported by DAMON as of now, but other address spaces
+will be supported in a future.
 
 Only a number of small parts in the super-huge virtual address space of the
 processes is mapped to physical memory and accessed.  Thus, tracking the
