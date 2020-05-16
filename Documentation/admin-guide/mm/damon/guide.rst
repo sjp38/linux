@@ -4,9 +4,9 @@
 The Beginner's Guide
 ====================
 
-This document is to help you estimating amount of benefit that you could get
-from DAMON, and to let you know how you could maximize the improvement.  You
-are assumed to already read :doc:`start`.
+This document is to help you estimating the amount of benefit that you could
+get from DAMON, and to let you know how you could maximize the improvement.
+You are assumed to already read :doc:`start`.
 
 
 Check The Signs
@@ -14,26 +14,26 @@ Check The Signs
 
 DAMON cannot provide the same amount of benefit to every workload.  Therefore
 you should first guess how much improvements you could get using DAMON.  If
-some of below conditions match to your situation, you could consider use of
-DAMON.
+some of the below conditions match your situation, you could consider the use
+of DAMON.
 
 
-- *Low IPC and High Cache Miss Ratios.*  Low IPC means most of CPU time is
-  spend waiting for completion of time consuming operations such as memory
-  access, while high cache miss ratios means the caches doesn't help it well.
-  DAMON is not for cache level optimization, but for DRAM level.  However,
+- *Low IPC and High Cache Miss Ratios.*  Low IPC means most of the CPU time is
+  spent waiting for the completion of time-consuming operations such as memory
+  access, while high cache miss ratios mean the caches don't help it well.
+  DAMON is not for cache level optimization, but DRAM level.  However,
   improving DRAM management will also help this case by reducing the memory
   operation latency.
 - *Memory Over-commitment and Unknown Users.*  If you are doing memory
-  overcommitment and you cannot control every user of your system, memory bank
-  run could happen at anytime.  You can estimate when it will happen based on
-  DAMON's monitoring results and act earlier to avoid or deal better with the
-  crisis.
-- *Frequent Memory Pressure.*  Frequent memory pressure means wrong
-  configuration or existance of memory hogs.  DAMON will help you finding right
-  configuration and/or the criminals.
+  overcommitment and you cannot control every user of your system, a memory
+  bank run could happen at any time.  You can estimate when it will happen
+  based on DAMON's monitoring results and act earlier to avoid or deal better
+  with the crisis.
+- *Frequent Memory Pressure.*  Frequent memory pressure means the wrong
+  configuration or existence of memory hogs.  DAMON will help you find the
+  right configuration and/or the criminals.
 - *Heterogeneous Memory System.*  If your system is utilizing memory devices
-  that placed between DRAM and traditional hard disk, such as non-volatile
+  that placed between DRAM and traditional hard disks, such as non-volatile
   memory or fast SSDs, DAMON could help you utilizing the devices more
   efficiently.
 
@@ -41,9 +41,9 @@ DAMON.
 Profile
 =======
 
-If you found some positive signals, you could start from profiling your
-workloads using DAMON.  Find major workloads on your systems and analyze their
-data access pattern to find something wrong or can be improved.  The DAMON user
+If you found some positive signals, you could start by profiling your workloads
+using DAMON.  Find major workloads on your systems and analyze their data
+access pattern to find something wrong or can be improved.  The DAMON user
 space tool (``damo``) will be enough for this.
 
 We recommend you to start from working set size distribution check using ``damo
@@ -51,30 +51,30 @@ report wss``.  If the distribution is ununiform or quite different from what
 you estimated, you could consider `Memory Configuration`_ optimization.
 
 Then, review the overall access pattern in heatmap form using ``damo report
-heats``.  If it shows a simple pattern consists with small number of memory
+heats``.  If it shows a simple pattern consists of a small number of memory
 regions having high contrast of access temperature, you could consider `Manual
 Program Optimization`_.
 
 If the access pattern is very frequently changing so that you cannot figure out
 what is the performance important region using your human eye, `Automated
-DAMON-based Memory Operations`_ might help owing to its machine level micro
-scope view.
+DAMON-based Memory Operations`_ might help the case owing to its machine-level
+microscope view.
 
-You don't need to take only one approach among above plans, but you could use
-multiple of above approaches to maximize the benefit.  If you still want to
-absorb more benefit, you should develop `Personalized DAMON Application`_ for
-your special case.
+You don't need to take only one approach among the above plans, but you could
+use multiple of the above approaches to maximize the benefit.  If you still
+want to absorb more benefits, you should develop `Personalized DAMON
+Application`_ for your special case.
 
 
 Optimize
 ========
 
-If the profiling result also says it's worth to try some optimization, you
-could consider below approaches.  Note that most of below approaches assume
-that your systems are configured with swap device or other types of auxiliary
-memory so that you don't need to accommodate whole working set in the main
-memory.  Most of the detailed optimization should be made on your concrete
-understanding about your swap and/or your auxiliary memory performance.
+If the profiling result also says it's worth trying some optimization, you
+could consider the below approaches.  Note that some of the below approaches
+assume that your systems are configured with swap devices or other types of
+auxiliary memory so that you don't need to accommodate the whole working set in
+the main memory.  Most of the detailed optimization should be made on your
+concrete understanding of your swap and/or your auxiliary memory performance.
 
 
 Memory Configuration
@@ -82,17 +82,17 @@ Memory Configuration
 
 DRAM is highly performance critical but expensive and heavily consumes the
 power.  However, knowing the real important working set size is hard and thus
-people usually equips unnecessarily large or too small DRAM.  Actually, so many
-problems come from such wrong configurations.
+people usually equips unnecessarily large or too small DRAM.  So many problems
+come from such wrong configurations.
 
 Using the working set size distribution report provided by ``damo report wss``,
 you can know the real needs and make reasonable tradeoffs.  For example,
-roughly speaking, if you care only 95 percentile latency, you don't need to
-equip DRAM of size larger than 95 percentile working set size.  If you were
-suffered from frequent memory pressure, you will also easily know how much DRAM
-you should buy.
+roughly speaking, if you worry about only 95 percentile latency, you don't need
+to equip DRAM of a size larger than 95 percentile working set size.  If you
+were suffered from frequent memory pressure, you will also easily know how much
+DRAM you should buy.
 
-Let's see a realistic example.  Below is the heatmap and the working set size
+Let's see a real example.  Below are the heatmap and the working set size
 distributions/changes of ``freqmine`` workload in PARSEC3 benchmark suite.  The
 working set size spikes up to 700 MiB, but keeps smaller than 100 MiB for more
 than 95% of the time.  Even though you give only 100 MiB of memory space to the
@@ -124,21 +124,21 @@ Program Modification
 --------------------
 
 If the data access pattern heatmap plotted using ``damo report heats`` is quite
-simple and clear, you could be able to know how thing is going in the workload,
-and how you could make optimize memory management.
+simple and clear, you could be able to know how the thing is going in the
+workload, and how you could make optimize memory management.
 
 For example, suppose that the workload has two big memory object but only one
 object is frequently accessed while the other is only occasionally scanned.
-Than, you could modify the program source code to invoke ``mlock()`` or
+Then, you could modify the program source code to invoke ``mlock()`` or
 ``madvise()`` with ``WILLNEED`` system call for the hot object.  Or, you could
 use ``madvise()`` with ``MADV_COLD`` or ``MADV_PAGEOUT`` for the cold objects.
-Using both together would be also worth to try.
+Using both together would be also worth trying.
 
 A previous work [1]_ using the ``mlock()`` achieved up to 2.55x performance
 speedup.
 
 Let's see another realistic example access pattern for this kind of
-optimizations.  Below are the visualized access pattern of streamcluster
+optimizations.  Below are the visualized access patterns of streamcluster
 workload in PARSEC3 benchmark suite.  We can easily see a 100 MiB sized memory
 object is the hot object.
 
@@ -169,21 +169,21 @@ Automated DAMON-based Memory Operations
 Though `Manual Program Optimization` works well in many cases and DAMON can
 help it, modifying the source code is not a good option in many cases.  First
 of all, the source code could be too old or unavailable.  And, many workloads
-will have complex data access pattern that even hard to distinguish hot memory
-objects and cold memory objects with human eye.  Finding the mapping from the
-visualized access pattern to the source code and injecting the hinting system
-calls inside the code will also be quite challenging.
+will have complex data access patterns that even hard to distinguish hot memory
+objects and cold memory objects with the human eye.  Finding the mapping from
+the visualized access pattern to the source code and injecting the hinting
+system calls inside the code will also be quite challenging.
 
 By using DAMON-based operation schemes (DAMOS) via ``damo schemes``, you will
-be able to easily optimize your workload in such a cases.  Our example schemes
+be able to easily optimize your workload in such a case.  Our example schemes
 called 'efficient THP' and 'proactive reclamation' achieved significant speedup
-and memory space save against 25 realistic workloads [2]_, [3]_.
+and memory space saves against 25 realistic workloads [2]_, [3]_.
 
 That said, note that you need careful tune of the schemes (e.g., target region
-size and age) and monitoring attributes for successful use of this approach.
-Because the optimal values of the parameters will be dependent on each system
-and workload, misconfiguring the parameters could result in worse memory
-management.
+size and age) and monitoring attributes for the successful use of this
+approach.  Because the optimal values of the parameters will be dependent on
+each system and workload, misconfiguring the parameters could result in worse
+memory management.
 
 For the tuning, you could measure the performance metrics such as IPC, TLB
 misses, and swap in/out events for varying parameters.  Writing a program
@@ -199,18 +199,18 @@ optimizations are available.
 
 If this is the case, it might be the time to forget the comfortable use of the
 user space tool and dive into the debugfs interface (refer to :doc:`usage` for
-the detail) of DAMON.  Using the interface, you can control the DAMON in more
-flexible way.  Therefore, you can write your personalized DAMON application
-that controls the monitoring via the debugfs interface, analyzes the result,
-and apply complex optimizations itself.  Using this, you will be able to make
-more creative and wise optimizations.
+the detail) of DAMON.  Using the interface, you can control the DAMON more
+flexibly.  Therefore, you can write your personalized DAMON application that
+controls the monitoring via the debugfs interface, analyzes the result, and
+apply complex optimizations itself.  Using this, you will be able to make more
+creative and wise optimizations.
 
 If you are kernel space programmer, writing kernel space DAMON applications
 using the API (refer to :doc:`api` for more detail) would be also an option.
 
 
-Previous Practices for References
-=================================
+Reference Practices
+===================
 
 Referencing previously done successful practices could help you getting the
 sense for this kind of optimizations.  There is an academic paper [1]_
