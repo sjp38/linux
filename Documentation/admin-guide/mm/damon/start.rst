@@ -4,8 +4,8 @@
 Getting Started
 ===============
 
-This document briefly describes how you can use DAMON by demonstrating use of a
-user space tool.  Please note that this document describes only a part of the
+This document briefly describes how you can use DAMON by demonstrating the user
+space tool.  Please note that this document describes only a part of the
 features for brevity.  Please refer to :doc:`usage` for more details.
 
 
@@ -39,11 +39,11 @@ first::
 User Space Tool
 ---------------
 
-For the demonstration, we will use a user space tool for convenient use of
+For the demonstration, we will use a user space tool for the convenient use of
 DAMON, called DAMON Operator (DAMO).  It is located at ``tools/damon/damo`` of
 the kernel source tree.  We assume that you set ``$PATH`` to point it.  The
-``$PATH`` setting is not mandatory but we make the assumption here for brevity
-of below examples.
+``$PATH`` setting is not mandatory but we make the assumption here for the
+brevity of the below examples.
 
 Because DAMO is using the debugfs interface (refer to :doc:`usage` for the
 detail) of DAMON, you should also ensure debugfs is mounted.  Mount it manually
@@ -60,39 +60,39 @@ automatically mount debugfs from next booting::
 Recording Data Access Patterns
 ==============================
 
-Below commands record memory access pattern of a program, ``masim`` and save it
-in a file, ``damon.data``.  The program will access two 100 MiB memory regions
-one by one. ::
+Below commands record memory access pattern of a program, ``masim``, and save
+it in a file, ``damon.data``.  The program will access two 100 MiB memory
+regions one by one. ::
 
     $ git clone https://github.com/sjp38/masim
     $ cd masim; make; ./masim ./configs/zigzag.cfg &
     $ sudo damo record -o damon.data $(pidof masim)
 
-The first two lines of commands start the monitoring target process in
+The first two lines of commands start the monitoring target process in the
 background.  You can substitute this with your real workload.  The last line
-asks ``damo record`` to record the access pattern by passing the process id.
+asks ``damo record`` to record the access pattern.
 
 
 Visualizing Recorded Patterns
 =============================
 
 Below three commands visualize the recorded access patterns into three
-image files, ``access_pattern_heatmap.png``, ``wss_dist.png`` and
+image files, ``access_pattern_heatmap.png``, ``wss_dist.png``, and
 ``wss_chron_change.png``. ::
 
     $ damo report heats --heatmap -i damon.data access_pattern_heatmap.png
     $ damo report wss --range 0 101 1 --plot wss_dist.png
     $ damo report wss --range 0 101 1 --sortby time --plot wss_chron_change.png
 
-- ``access_pattern_heatmap.png`` will show the data access pattern in heatmap,
-  which shows when (x-axis) what memory region (y-axis) is how frequently
-  accessed (color).
+- ``access_pattern_heatmap.png`` will show the data access pattern in a
+  heatmap, which shows when (x-axis) what memory region (y-axis) is how
+  frequently accessed (color).
 - ``wss_dist.png`` will show the distribution of the working set size.
 - ``wss_chron_change.png`` will show how the working set size has
   chronologically changed.
 
 Below are the three images.  You can show those made with other realistic
-workloads at external web pages [1]_, [2]_, [3]_.
+workloads at external web pages [1]_ [2]_ [3]_.
 
 .. list-table::
 
