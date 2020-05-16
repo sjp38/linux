@@ -38,7 +38,7 @@ the address spaces.
 In the future, DAMON will make the lower level primitives configurable so that
 it can support various address spaces including physical memory.  The
 configuration will be highly flexible so that users can even implement the
-primitives by themselves for their special use case.  Monitoring of
+primitives by themselves for their special use cases.  Monitoring of
 clean/dirty/entire page cache, NUMA nodes, specific files, or block devices
 would be examples of such use cases.
 
