@@ -78,19 +78,18 @@ Handling Virtual Memory Mappings
 
 This is for monitoring of virtual memory address space only.  It is the only
 one address space that supported by DAMON as of now, but other address spaces
-will be supported in a future.
+will be supported in the future.
 
-Only a number of small parts in the super-huge virtual address space of the
-processes is mapped to physical memory and accessed.  Thus, tracking the
-unmapped address regions is just wasteful.  However, because DAMON can deal
-with some level of noises using the adaptive regions adjustment mechanism,
-tracking every mapping is not strictly required but could even incur a high
-overhead in somce cases.  That said, too huge unmapped areas inside the
-monitoring target should be removed to not take the time for the adaptive
-mechanism.
+Only small parts in the super-huge virtual address space of the processes are
+mapped to physical memory and accessed.  Thus, tracking the unmapped address
+regions is just wasteful.  However, because DAMON can deal with some level of
+noise using the adaptive regions adjustment mechanism, tracking every mapping
+is not strictly required but could even incur a high overhead in some cases.
+That said, too huge unmapped areas inside the monitoring target should be
+removed to not take the time for the adaptive mechanism.
 
 For the reason, DAMON converts the complex mappings to three distinct regions
-that cover every mapped areas of the address space.  Also the two gaps between
+that cover every mapped area of the address space.  Also, the two gaps between
 the three regions are the two biggest unmapped areas in the given address
 space.  The two biggest unmapped areas might be the gap between the heap and
 the uppermost mmap()-ed region, and the gap between the lowermost mmap()-ed
@@ -107,6 +106,6 @@ this in detail::
     <BIG UNMAPPED REGION 2>
     <stack>
 
-To further minimize dynamic mapping changes applying overhead, DAMON check the
+To further minimize dynamic mapping changes applying overhead, DAMON checks the
 dynamic memory mapping changes and applies it to the abstracted target area
 only for each of a user-specified time interval (``regions update interval``).
