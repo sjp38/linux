@@ -75,112 +75,7 @@ overhead and high quality of output, repectively.  To show how DAMON promises
 those, refer to 'Mechanisms of DAMON' section below.
 
 
-Appendix C: Mechanisms of DAMON
-===============================
-
-
-Basic Access Check
-------------------
-
-DAMON basically reports what pages are how frequently accessed.  The report is
-passed to users in binary format via a ``result file`` which users can set it's
-path.  Note that the frequency is not an absolute number of accesses, but a
-relative frequency among the pages of the target workloads.
-
-Users can also control the resolution of the reports by setting two time
-intervals, ``sampling interval`` and ``aggregation interval``.  In detail,
-DAMON checks access to each page per ``sampling interval``, aggregates the
-results (counts the number of the accesses to each page), and reports the
-aggregated results per ``aggregation interval``.  For the access check of each
-page, DAMON uses the Accessed bits of PTEs.
-
-This is thus similar to the previously mentioned periodic access checks based
-mechanisms, which overhead is increasing as the size of the target process
-grows.
-
-
-Region Based Sampling
----------------------
-
-To avoid the unbounded increase of the overhead, DAMON groups a number of
-adjacent pages that assumed to have same access frequencies into a region.  As
-long as the assumption (pages in a region have same access frequencies) is
-kept, only one page in the region is required to be checked.  Thus, for each
-``sampling interval``, DAMON randomly picks one page in each region and clears
-its Accessed bit.  After one more ``sampling interval``, DAMON reads the
-Accessed bit of the page and increases the access frequency of the region if
-the bit has set meanwhile.  Therefore, the monitoring overhead is controllable
-by setting the number of regions.  DAMON allows users to set the minimal and
-maximum number of regions for the trade-off.
-
-Except the assumption, this is almost same with the above-mentioned
-miniature-like static region based sampling.  In other words, this scheme
-cannot preserve the quality of the output if the assumption is not guaranteed.
-
-
-Adaptive Regions Adjustment
----------------------------
-
-At the beginning of the monitoring, DAMON constructs the initial regions by
-evenly splitting the memory mapped address space of the process into the
-user-specified minimal number of regions.  In this initial state, the
-assumption is normally not kept and thus the quality could be low.  To keep the
-assumption as much as possible, DAMON adaptively merges and splits each region.
-For each ``aggregation interval``, it compares the access frequencies of
-adjacent regions and merges those if the frequency difference is small.  Then,
-after it reports and clears the aggregated access frequency of each region, it
-splits each region into two regions if the total number of regions is smaller
-than the half of the user-specified maximum number of regions.
-
-In this way, DAMON provides its best-effort quality and minimal overhead while
-keeping the bounds users set for their trade-off.
-
-
-Applying Dynamic Memory Mappings
---------------------------------
-
-Only a number of small parts in the super-huge virtual address space of the
-processes is mapped to physical memory and accessed.  Thus, tracking the
-unmapped address regions is just wasteful.  However, tracking every memory
-mapping change might incur an overhead.  For the reason, DAMON applies the
-dynamic memory mapping changes to the tracking regions only for each of an
-user-specified time interval (``regions update interval``).
-
-
-Appendix D: Expected Use-cases
-==============================
-
-A straightforward usecase of DAMON would be the program behavior analysis.
-With the DAMON output, users can confirm whether the program is running as
-intended or not.  This will be useful for debuggings and tests of design
-points.
-
-The monitored results can also be useful for counting the dynamic working set
-size of workloads.  For the administration of memory overcommitted systems or
-selection of the environments (e.g., containers providing different amount of
-memory) for your workloads, this will be useful.
-
-If you are a programmer, you can optimize your program by managing the memory
-based on the actual data access pattern.  For example, you can identify the
-dynamic hotness of your data using DAMON and call ``mlock()`` to keep your hot
-data in DRAM, or call ``madvise()`` with ``MADV_PAGEOUT`` to proactively
-reclaim cold data.  Even though your program is guaranteed to not encounter
-memory pressure, you can still improve the performance by applying the DAMON
-outputs for call of ``MADV_HUGEPAGE`` and ``MADV_NOHUGEPAGE``.  More creative
-optimizations would be possible.  Our evaluations of DAMON includes a
-straightforward optimization using the ``mlock()``.  Please refer to the below
-Evaluation section for more detail.
-
-As DAMON incurs very low overhead, such optimizations can be applied not only
-offline, but also online.  Also, there is no reason to limit such optimizations
-to the user space.  Several parts of the kernel's memory management mechanisms
-could be also optimized using DAMON. The reclamation, the THP (de)promotion
-decisions, and the compaction would be such a candidates.  DAMON will continue
-its development to be highly optimized for the online/in-kernel uses.  We will
-further automate the optimization for many usecases.
-
-
-Appendix E: Evaluations
+Appendix C: Evaluations
 =======================
 
 Setup
@@ -391,7 +286,7 @@ With parsec3/freqmine, 'prcl' reduced 85.85% of residential sets and 21.98% of
 system memory usage while incurring only 2.42% runtime overhead.
 
 
-Appendix F: Prototype Evaluations
+Appendix D: Prototype Evaluations
 =================================
 
 A prototype of DAMON has evaluated on an Intel Xeon E7-8837 machine using 20

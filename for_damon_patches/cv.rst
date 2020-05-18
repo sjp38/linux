@@ -3,129 +3,62 @@ Subject: Introduce Data Access MONitor (DAMON)
 Introduction
 ============
 
-Memory management decisions can be improved if finer data access information is
-available.  However, because such finer information usually comes with higher
-overhead, most systems including Linux forgives the potential benefit and rely
-on only coarse information or some light-weight heuristics.  The pseudo-LRU and
-the aggressive THP promotions are such examples.
+The memory management is supposed to provide optimal placement of data objects
+under accurate predictions of future data accesses.  The predictions should be
+made on fine information about current accesses, but most of those are relying
+on only coarse ones, to keep the instrumentation overhead minimal.  As a
+consequence, a number of finer access information based memory management
+optimization works consistently pointed out the predictions are far from
+optimal.  That said, most of such optimization works have failed being merged
+into the mainline Linux kernel mainly due to the high overhead of their data
+access pattern instrumentation.
 
-A number of data access pattern awared memory management optimizations (refer
-to 'Appendix A' for more details) consistently say the potential benefit is not
-small.  However, none of those has successfully merged to the mainline Linux
-kernel mainly due to the absence of a scalable and efficient data access
-monitoring mechanism.  Refer to 'Appendix B' to see the limitations of existing
-memory monitoring mechanisms.
+From here, we can list up below three requirements for the data access
+information instrumentation that must be fulfilled to be adopted in a wide
+range of production environments.
 
-DAMON is a data access monitoring subsystem for the problem.  It is 1) accurate
-enough to be used for the DRAM level memory management (a straightforward
-DAMON-based optimization achieved up to 2.55x speedup), 2) light-weight enough
-to be applied online (compared to a straightforward access monitoring scheme,
-DAMON is up to 94,242.42x lighter) and 3) keeps predefined upper-bound overhead
-regardless of the size of target workloads (thus scalable).  Refer to 'Appendix
-C' if you interested in how it is possible, and 'Appendix F' to know how the
-numbers collected.
+- accuracy.  The instrumented information should be useful for DRAM level
+  memory management.  Cache-level accuracy would not highly required, though.
+- light-weight overhead.  The instrumentation overhead should be low enough
+  to be applied online while making no impact on the performance of the main
+  workloads.
+- scalability.  Environmental changes such as the size of instrumentation
+  target workloads should not be able to make the instrumentation overhead
+  arbitrarily increase.
 
-DAMON has mainly designed for the kernel's memory management mechanisms.
-However, because it is implemented as a standalone kernel module and provides
-several interfaces, it can be used by a wide range of users including kernel
-space programs, user space programs, programmers, and administrators.  DAMON
-is now supporting the monitoring only, but it will also provide simple and
-convenient data access pattern awared memory managements by itself.  Refer to
-'Appendix D' for more detailed expected usages of DAMON.
-
-
-Boring? Here Are Something Colorful
-===================================
-
-For intuitive understanding of DAMON, I made web pages[1-8] showing the
-visualized dynamic data access pattern of various realistic workloads in
-PARSEC3 and SPLASH-2X bechmark suites.  The figures are generated using the
-user space tool in 10th patch of this patchset.
-
-There are pages showing the heatmap format dynamic access pattern of each
-workload for heap area[1], mmap()-ed area[2], and stack[3] area.  I splitted
-the entire address space to the three area because there are huge unmapped
-regions between the areas.
-
-You can also show how the dynamic working set size of each workload is
-distributed[4], and how it is chronologically changing[5].
-
-The most important characteristic of DAMON is its promise of the upperbound of
-the monitoring overhead.  To show whether DAMON keeps the promise well, I
-visualized the number of monitoring operations required for each 5
-milliseconds, which is configured to not exceed 1000.  You can show the
-distribution of the numbers[6] and how it changes chronologically[7].
-
-[1] https://damonitor.github.io/reports/latest/by_image/heatmap.0.png.html
-[2] https://damonitor.github.io/reports/latest/by_image/heatmap.1.png.html
-[3] https://damonitor.github.io/reports/latest/by_image/heatmap.2.png.html
-[4] https://damonitor.github.io/reports/latest/by_image/wss_sz.png.html
-[5] https://damonitor.github.io/reports/latest/by_image/wss_time.png.html
-[6] https://damonitor.github.io/reports/latest/by_image/nr_regions_sz.png.html
-[7] https://damonitor.github.io/reports/latest/by_image/nr_regions_time.png.html
+DAMON is a data access monitoring framework subsystem for the Linux kernel.
+The core mechanisms of DAMON called 'region based sampling' and adaptive
+regions adjustment' (refer to :doc:`mechanisms` for the detail) make it fulfill
+the requirements.  Using this framework, therefore, the kernel's core memory
+management mechanisms including reclamation and THP can be optimized for better
+memory management.  The above-mentioned memory management optimization works
+that have not merged into the mainline will be able to have another try.  In
+user space, meanwhile, users who have some special workloads will be able to
+write personalized tools or applications for more understanding and specialized
+optimizations of their systems using the DAMON as a framework.
 
 
-Future Plans
-============
+More Information
+================
 
-This patchset is only for the first stage of DAMON.  As soon as this patchset
-is merged, official patchsets for below future plans will be posted.
+We prepared a showcase web site[1] thay you can get more information of DAMON.
+There are
 
+- the official documentation of DAMON[2],
+- the heatmap format dynamic access pattern of various realistic workloads for
+  heap area[3], mmap()-ed area[4], and stack[5] area,
+- the dynamic working set size distribution[6] and chronological working set
+  size changes[7], and
+- the latest performance test results[8].
 
-Automate Data Access Pattern-aware Memory Management
-----------------------------------------------------
-
-Though DAMON provides the monitoring feature, implementing data access pattern
-aware memory management schemes could be difficult to beginners.  DAMON will be
-able to do most of the work by itself in near future.  Users will be required
-to only describe what kind of data access monitoring-based operation schemes
-they want.
-
-By applying a very simple scheme for THP promotion/demotion with a latest
-version of the patchset (not posted yet), DAMON achieved 18x lower memory space
-overhead compared to THP while preserving about 50% of the THP performance
-benefit with SPLASH-2X benchmark suite.
-
-An RFC patchset for this plan is already available
-(https://lore.kernel.org/linux-mm/20200429124540.32232-1-sjpark@amazon.com/).
-
-
-Support Various Address Spaces
-------------------------------
-
-Currently, DAMON supports virtual memory address spaces using PTE Accessed bits
-as its access checking primitive.  However, the core design of DAMON is not
-dependent to such implementation details.  In a future, DAMON will decouple
-those and support various address spaces including physical memory.  It will
-further allow users to configure and even implement the primitives by
-themselves for their special usecase.  Monitoring of page cache, NUMA nodes,
-specific files, or block devices would be examples of such usecases.
-
-An RFC patchset for this plan is already available
-(https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/).
-
-
-Frequently Asked Questions
-==========================
-
-Q: Why a new module, instead of extending perf or other tools?
-A: First, DAMON aims to be used by other programs including the kernel.
-Therefore, having dependency to specific tools like perf is not desirable.
-Second, because it need to be lightweight as much as possible so that it can be
-used online, any unnecessary overhead such as kernel - user space context
-switching cost should be avoided.  These are the two most biggest reasons why
-DAMON is implemented in the kernel space.  The idle page tracking subsystem
-would be the kernel module that most seems similar to DAMON.  However, its own
-interface is not compatible with DAMON.  Also, the internal implementation of
-it has no common part to be reused by DAMON.
-
-Q: Can 'perf mem' or PMUs used instead of DAMON?
-A: No.  Roughly speaking, DAMON has two seperate layers.  The low layer is
-access check of pages, and the higher layer is its core mechanisms for overhead
-controlling.  For the low layer, DAMON is now using the PTE Accessed bits.
-Other H/W or S/W features that can be used for the access check of pages, such
-as 'perf mem', PMU, or even page idle, could be used instead in the layer.
-However, those could not alternate the high layer of DAMON.
+[1] https://damonitor.github.io
+[2] https://damonitor.github.io/doc/html/latest
+[3] https://damonitor.github.io/test/result/visual/latest/heatmap.0.html
+[4] https://damonitor.github.io/test/result/visual/latest/heatmap.1.html
+[5] https://damonitor.github.io/test/result/visual/latest/heatmap.2.html
+[6] https://damonitor.github.io/test/result/visual/latest/wss_sz.html
+[7] https://damonitor.github.io/test/result/visual/latest/wss_time.html
+[8] https://damonitor.github.io/test/result/perf/latest/html/index.html
 
 
 Evaluations
@@ -147,7 +80,7 @@ residentail sets and 21.98% of system memory footprint while incurring only
 NOTE that the experimentail THP optimization and proactive reclamation are not
 for production, just only for proof of concepts.
 
-Please refer to 'Appendix E' for detailed evaluation setup and results.
+Please refer to 'Appendix C' for detailed evaluation setup and results.
 
 
 References
@@ -172,22 +105,23 @@ introduced by an LWN artice[4].
 [4] Jonathan Corbet, Memory-management optimization with DAMON. In Linux Weekly
     News (LWN), Feb 2020. https://lwn.net/Articles/812707/
 
-
 Baseline and Complete Git Trees
 ===============================
 
 The patches are based on the v5.6.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v11
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v12
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v11
+https://github.com/sjp38/linux/releases/tag/damon/patches/v12
 
-This patchset contains patches for the stabled main logic of DAMON only.  The
-latest DAMON development tree is also available at:
-https://github.com/sjp38/linux/tree/damon/master
+There are a couple of trees for entire DAMON patchset series.  The first one[1]
+contains the changes for latest release, while the other one[2] contains the
+changes for next release.
 
+[1] https://github.com/sjp38/linux/tree/damon/master
+[2] https://github.com/sjp38/linux/tree/damon/next
 
 Sequence Of Patches
 ===================
@@ -224,15 +158,11 @@ Next two patches are for tests.  The 14th and 15th patches provide unit tests
 
 Finally, the last patch (16th) updates the MAINTAINERS file.
 
-
 Patch History
 =============
 
-The most biggest change in this version is support of minimal region size,
-which defaults to 'PAGE_SIZE'.  This change will reduce unnecessary region
-splits and thus improve the quality of the output.  In a future, we will be
-able to make this configurable for support of various access check primitives
-such as PMUs.
+Below are main changes for recent 5 versions of this patchset.  Please refer to
+oldest patchset listed here to get older history.
 
 Changes from v11
 (https://lore.kernel.org/linux-mm/20200511123302.12520-1-sjpark@amazon.com/)
@@ -274,72 +204,3 @@ Changes from v7
  - Fix wrong kernel doc comments (Jonathan Cameron)
  - Reset 'last_accessed' to false in kdamond_check_access() if necessary
  - Rebase on v5.6
-
-Changes from v6
-(https://lore.kernel.org/linux-mm/20200224123047.32506-1-sjpark@amazon.com/)
- - Wordsmith cover letter (Shakeel Butt)
- - Cleanup code and commit messages (Jonathan Cameron)
- - Avoid kthread_run() under spinlock critical section (Jonathan Cameron)
- - Use kthread_stop() (Jonathan Cameron)
- - Change tracepoint to trace regions (Jonathan Cameron)
- - Implement API from the beginning (Jonathan Cameron)
- - Fix typos (Jonathan Cameron)
- - Fix access checking to properly handle regions smaller than single page
-   (Jonathan Cameron)
- - Add found typos to 'scripts/spelling.txt'
- - Add recent evaluation results including DAMON-based Operation Schemes
-
-Changes from v5
-(https://lore.kernel.org/linux-mm/20200217103110.30817-1-sjpark@amazon.com/)
- - Fix minor bugs (sampling, record attributes, debugfs and user space tool)
- - selftests: Add debugfs interface tests for the bugs
- - Modify the user space tool to use its self default values for parameters
- - Fix pmg huge page access check
-
-Changes from v4
-(https://lore.kernel.org/linux-mm/20200210144812.26845-1-sjpark@amazon.com/)
- - Add 'Reviewed-by' for the kunit tests patch (Brendan Higgins)
- - Make the unit test to depedns on 'DAMON=y' (Randy Dunlap and kbuild bot)
-   Reported-by: kbuild test robot <lkp@intel.com>
- - Fix m68k module build issue
-   Reported-by: kbuild test robot <lkp@intel.com>
- - Add selftests
- - Seperate patches for low level users from core logics for better reading
- - Clean up debugfs interface
- - Trivial nitpicks
-
-Changes from v3
-(https://lore.kernel.org/linux-mm/20200204062312.19913-1-sj38.park@gmail.com/)
- - Fix i386 build issue
-   Reported-by: kbuild test robot <lkp@intel.com>
- - Increase the default size of the monitoring result buffer to 1 MiB
- - Fix misc bugs in debugfs interface
-
-Changes from v2
-(https://lore.kernel.org/linux-mm/20200128085742.14566-1-sjpark@amazon.com/)
- - Move MAINTAINERS changes to last commit (Brendan Higgins)
- - Add descriptions for kunittest: why not only entire mappings and what the 4
-   input sets are trying to test (Brendan Higgins)
- - Remove 'kdamond_need_stop()' test (Brendan Higgins)
- - Discuss about the 'perf mem' and DAMON (Peter Zijlstra)
- - Make CV clearly say what it actually does (Peter Zijlstra)
- - Answer why new module (Qian Cai)
- - Diable DAMON by default (Randy Dunlap)
- - Change the interface: Seperate recording attributes
-   (attrs, record, rules) and allow multiple kdamond instances
- - Implement kernel API interface
-
-Changes from v1
-(https://lore.kernel.org/linux-mm/20200120162757.32375-1-sjpark@amazon.com/)
- - Rebase on v5.5
- - Add a tracepoint for integration with other tracers (Kirill A. Shutemov)
- - document: Add more description for the user space tool (Brendan Higgins)
- - unittest: Improve readability (Brendan Higgins)
- - unittest: Use consistent name and helpers function (Brendan Higgins)
- - Update PG_Young to avoid reclaim logic interference (Yunjae Lee)
-
-Changes from RFC
-(https://lore.kernel.org/linux-mm/20200110131522.29964-1-sjpark@amazon.com/)
- - Specify an ambiguous plan of access pattern based mm optimizations
- - Support loadable module build
- - Cleanup code
