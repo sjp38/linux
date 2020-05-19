@@ -1,8 +1,11 @@
-For the next DAMON release
---------------------------
+Essential for the next DAMON release
+------------------------------------
 
 Just future works
 -----------------
 
 - Export the functions for modules
 - Support physical memory
+- Implement regions stat querying
+  Receive queries of regions with specific range of nr_accesses, size, and age
+  Provide numbers and total size of regions fulfilling the query conditions
