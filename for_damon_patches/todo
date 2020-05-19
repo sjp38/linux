@@ -6,3 +6,5 @@ Just future works
 
 - Export the functions for modules
 - Support physical memory
+- Reset age for only significant access frequency change.  Let the size-based
+  age recalculation compensate the age, meanwhile.
