@@ -524,7 +524,7 @@ static void kdamond_check_accesses(struct damon_ctx *ctx)
 	}
 }
 
-/**
+/*
  * damon_check_reset_time_interval() - Check if a time interval is elapsed.
  * @baseline:	the time to check whether the interval has elapsed since
  * @interval:	the time interval (microseconds)
