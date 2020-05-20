@@ -65,11 +65,11 @@ struct damon_task {
  * enum damos_action - Represents an action of a Data Access Monitoring-based
  * Operation Scheme.
  *
- * @DAMOS_WILLNEED:	Call madvise() for the region with MADV_WILLNEED.
- * @DAMOS_COLD:		Call madvise() for the region with MADV_COLD.
- * @DAMOS_PAGEOUT:	Call madvise() for the region with MADV_PAGEOUT.
- * @DAMOS_HUGEPAGE:	Call madvise() for the region with MADV_HUGEPAGE.
- * @DAMOS_NOHUGEPAGE:	Call madvise() for the region with MADV_NOHUGEPAGE.
+ * @DAMOS_WILLNEED:	Call ``madvise()`` for the region with MADV_WILLNEED.
+ * @DAMOS_COLD:		Call ``madvise()`` for the region with MADV_COLD.
+ * @DAMOS_PAGEOUT:	Call ``madvise()`` for the region with MADV_PAGEOUT.
+ * @DAMOS_HUGEPAGE:	Call ``madvise()`` for the region with MADV_HUGEPAGE.
+ * @DAMOS_NOHUGEPAGE:	Call ``madvise()`` for the region with MADV_NOHUGEPAGE.
  * @DAMOS_STAT:		Do nothing but count the stat.
  * @DAMOS_ACTION_LEN:	Number of supported actions.
  */
@@ -87,8 +87,8 @@ enum damos_action {
  * struct damos - Represents a Data Access Monitoring-based Operation Scheme.
  * @min_sz_region:	Minimum size of target regions.
  * @max_sz_region:	Maximum size of target regions.
- * @min_nr_accesses:	Minimum '->nr_accesses' of target regions.
- * @max_nr_accesses:	Maximum '->nr_accesses' of target regions.
+ * @min_nr_accesses:	Minimum ``->nr_accesses`` of target regions.
+ * @max_nr_accesses:	Maximum ``->nr_accesses`` of target regions.
  * @min_age_region:	Minimum age of target regions.
  * @max_age_region:	Maximum age of target regions.
  * @action:		'damo_action' to be applied to the target regions.
@@ -117,7 +117,7 @@ struct damos {
  * main interface that allows users set the attributes and get the results of
  * the monitoring.
  *
- * For each monitoring request (``start_damon()``), a kernel thread for the
+ * For each monitoring request (damon_start()), a kernel thread for the
  * monitoring is created.  The pointer to the thread is stored in @kdamond.
  *
  * @sample_interval:		Time between each access sampling.
@@ -129,10 +129,9 @@ struct damos {
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
  * each region) for @aggr_interval time.  DAMON also checks whether the target
- * memory regions need update (e.g., by mmap() calls from the application, in
- * case of virtual memory monitoring) and applies the changes for each
- * @regions_update_interval.
- * All time intervals are in micro-seconds.
+ * memory regions need update (e.g., by ``mmap()`` calls from the application,
+ * in case of virtual memory monitoring) and applies the changes for each
+ * @regions_update_interval.  All time intervals are in micro-seconds.
  *
  * @rbuf: In-memory buffer for monitoring result recording.
  * @rbuf_len: The length of @rbuf.
