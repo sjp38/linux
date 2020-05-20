@@ -1433,7 +1433,9 @@ static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 	if (!kbuf)
 		return -ENOMEM;
 
+	mutex_lock(&ctx->kdamond_lock);
 	len = sprint_schemes(ctx, kbuf, count);
+	mutex_unlock(&ctx->kdamond_lock);
 	if (len < 0)
 		goto out;
 	len = simple_read_from_buffer(buf, count, ppos, kbuf, len);
