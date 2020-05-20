@@ -274,6 +274,7 @@ Changes from RFC v8
  - Make 'damon_for_each_*' argument order consistent (Leonard Foerster)
  - Implement schemes application stat
  - Avoid races between debugfs readers and writers
+ - Reset age for only significant access frequency change
 
 Changes from RFC v7
 (https://lore.kernel.org/linux-mm/20200429124540.32232-1-sjpark@amazon.com/)
