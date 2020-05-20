@@ -4,6 +4,13 @@
 API Reference
 =============
 
+Structures
+==========
+
 .. kernel-doc:: include/linux/damon.h
+
+
+Functions
+=========
 
 .. kernel-doc:: mm/damon.c
