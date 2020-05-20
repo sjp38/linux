@@ -7,13 +7,11 @@ Evaluation
 Setup
 =====
 
-On my personal QEMU/KVM based virtual machine on an Intel i7 host machine
-running Ubuntu 18.04, I measure runtime and consumed system memory while
-running various realistic workloads with several configurations.  I use 13 and
-12 workloads in PARSEC3 [3]_ and SPLASH-2X [4]_ benchmark suites, respectively.  I
-personally use another wrapper scripts [5]_ for setup and run of the workloads.
-On top of this patchset, we also applied the DAMON-based operation schemes
-patchset [6]_ for this evaluation.
+On a QEMU/KVM based virtual machine hosted by an Intel i7 host machine running
+Ubuntu 18.04, I measure runtime and consumed system memory while running
+various realistic workloads with several configurations.  I use 13 and 12
+workloads in PARSEC3 [3]_ and SPLASH-2X [4]_ benchmark suites, respectively.  I
+use another wrapper scripts [5]_ for convenient setup and run of the workloads.
 
 Measurement
 -----------
@@ -21,8 +19,7 @@ Measurement
 For the measurement of the amount of consumed memory in system global scope, I
 drop caches before starting each of the workloads and monitor 'MemFree' in the
 '/proc/meminfo' file.  To make results more stable, I repeat the runs 5 times
-and average results.  You can get stdev, min, and max of the numbers among the
-repeated runs in appendix below.
+and average results.
 
 Configurations
 --------------
@@ -32,14 +29,14 @@ The configurations I use are as below.
 - orig: Linux v5.5 with 'madvise' THP policy
 - rec: 'orig' plus DAMON running with record feature
 - thp: same with 'orig', but use 'always' THP policy
-- ethp: 'orig' plus a DAMON operation scheme [6]_, 'efficient THP'
-- prcl: 'orig' plus a DAMON operation scheme, 'proactive reclaim [7]_'
+- ethp: 'orig' plus a DAMON operation scheme, 'efficient THP'
+- prcl: 'orig' plus a DAMON operation scheme, 'proactive reclaim [6]_'
 
 I use 'rec' for measurement of DAMON overheads to target workloads and system
 memory.  The remaining configs including 'thp', 'ethp', and 'prcl' are for
 measurement of DAMON monitoring accuracy.
 
-'ethp' and 'prcl' is simple DAMON-based operation schemes developed for
+'ethp' and 'prcl' are simple DAMON-based operation schemes developed for
 proof of concepts of DAMON.  'ethp' reduces memory space waste of THP by using
 DAMON for decision of promotions and demotion for huge pages, while 'prcl' is
 as similar as the original work.  Those are implemented as below::
@@ -56,8 +53,7 @@ as similar as the original work.  Those are implemented as below::
 Note that both 'ethp' and 'prcl' are designed with my only straightforward
 intuition, because those are for only proof of concepts and monitoring accuracy
 of DAMON.  In other words, those are not for production.  For production use,
-those should be tuned more.
-
+those should be more tuned.
 
 .. [1] "Redis latency problems troubleshooting", https://redis.io/topics/latency
 .. [2] "Disable Transparent Huge Pages (THP)",
@@ -65,23 +61,20 @@ those should be tuned more.
 .. [3] "The PARSEC Becnhmark Suite", https://parsec.cs.princeton.edu/index.htm
 .. [4] "SPLASH-2x", https://parsec.cs.princeton.edu/parsec3-doc.htm#splash2x
 .. [5] "parsec3_on_ubuntu", https://github.com/sjp38/parsec3_on_ubuntu
-.. [6] "[RFC v4 0/7] Implement Data Access Monitoring-based Memory Operation
-    Schemes",
-    https://lore.kernel.org/linux-mm/20200303121406.20954-1-sjpark@amazon.com/
-.. [7] "Proactively reclaiming idle memory", https://lwn.net/Articles/787611/
+.. [6] "Proactively reclaiming idle memory", https://lwn.net/Articles/787611/
 
 Results
 =======
 
-DAMON is lightweight.  It consumes only 0.03% more system memory and up to 1%
-CPU time.  It makes target worloads only 0.7% slower.
+DAMON is lightweight.  It increases system memory usage by only 0.03% and
+consumes less than 1% CPU time.  It slows target worloads down by only 0.7%.
 
-DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP removes 63.12% of THP memory
-overheads while preserving 49.15% of THP speedup.  Another experimental
-DAMON-based 'proactive reclamation' implementation reduces 85.85% of
-residentail sets and 21.98% of system memory footprint while incurring only
-2.42% runtime overhead in best case (parsec3/freqmine).
+DAMON is accurate and useful for memory management optimizations.  The
+experimental DAMON-based operation scheme for THP, 'ethp', removes 63.12% of
+THP memory overheads while preserving 49.15% of THP speedup.  Another
+experimental DAMON-based 'proactive reclamation' implementation, 'prcl',
+reduces 85.85% of residentail sets and 21.98% of system memory footprint while
+incurring only 2.42% runtime overhead in best case (parsec3/freqmine).
 
 Below two tables show the measurement results.  The runtimes are in seconds
 while the memory usages are in KiB.  Each configurations except 'orig' shows
