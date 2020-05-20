@@ -614,7 +614,7 @@ static unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
-/**
+/*
  * damon_check_reset_time_interval() - Check if a time interval is elapsed.
  * @baseline:	the time to check whether the interval has elapsed since
  * @interval:	the time interval (microseconds)
