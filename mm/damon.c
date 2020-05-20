@@ -1209,7 +1209,9 @@ static ssize_t debugfs_pids_read(struct file *file,
 	ssize_t len;
 	char pids_buf[320];
 
+	mutex_lock(&ctx->kdamond_lock);
 	len = damon_sprint_pids(ctx, pids_buf, 320);
+	mutex_unlock(&ctx->kdamond_lock);
 	if (len < 0)
 		return len;
 
@@ -1297,8 +1299,10 @@ static ssize_t debugfs_record_read(struct file *file,
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
+	mutex_lock(&ctx->kdamond_lock);
 	ret = snprintf(record_buf, ARRAY_SIZE(record_buf), "%u %s\n",
 			ctx->rbuf_len, ctx->rfile_path);
+	mutex_unlock(&ctx->kdamond_lock);
 	return simple_read_from_buffer(buf, count, ppos, record_buf, ret);
 }
 
@@ -1350,10 +1354,12 @@ static ssize_t debugfs_attrs_read(struct file *file,
 	char kbuf[128];
 	int ret;
 
+	mutex_lock(&ctx->kdamond_lock);
 	ret = snprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",
 			ctx->sample_interval, ctx->aggr_interval,
 			ctx->regions_update_interval, ctx->min_nr_regions,
 			ctx->max_nr_regions);
+	mutex_unlock(&ctx->kdamond_lock);
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
