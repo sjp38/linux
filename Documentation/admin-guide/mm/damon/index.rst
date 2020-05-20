@@ -47,4 +47,5 @@ optimizations of their systems using the DAMON as a framework.
    api
    faq
    mechanisms
+   eval
    plans
