@@ -105,7 +105,7 @@ struct damos {
 	unsigned int min_nr_accesses;
 	unsigned int max_nr_accesses;
 	unsigned int min_age_region;
-	nunsigned int max_age_region;
+	unsigned int max_age_region;
 	enum damos_action action;
 	unsigned long stat_count;
 	unsigned long stat_sz;
