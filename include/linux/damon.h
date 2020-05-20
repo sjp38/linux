@@ -33,8 +33,6 @@ struct damon_region {
 	struct list_head list;
 
 	unsigned int age;
-	unsigned long last_vm_start;
-	unsigned long last_vm_end;
 	unsigned int last_nr_accesses;
 };
 
