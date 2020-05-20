@@ -165,7 +165,7 @@ static void damon_test_set_pids(struct kunit *test)
  */
 static void damon_test_three_regions_in_vmas(struct kunit *test)
 {
-	struct region regions[3] = {0,};
+	struct damon_addr_range regions[3] = {0,};
 	/* 10-20-25, 200-210-220, 300-305, 307-330 */
 	struct vm_area_struct vmas[] = {
 		(struct vm_area_struct) {.vm_start = 10, .vm_end = 20},
@@ -319,7 +319,7 @@ static struct damon_region *__nth_region_of(struct damon_task *t, int idx)
  */
 static void damon_do_test_apply_three_regions(struct kunit *test,
 				unsigned long *regions, int nr_regions,
-				struct region *three_regions,
+				struct damon_addr_range *three_regions,
 				unsigned long *expected, int nr_expected)
 {
 	struct damon_task *t;
@@ -357,10 +357,10 @@ static void damon_test_apply_three_regions1(struct kunit *test)
 	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,
 				70, 80, 80, 90, 90, 100};
 	/* 5-27, 45-55, 73-104 */
-	struct region new_three_regions[3] = {
-		(struct region){.start = 5, .end = 27},
-		(struct region){.start = 45, .end = 55},
-		(struct region){.start = 73, .end = 104} };
+	struct damon_addr_range new_three_regions[3] = {
+		(struct damon_addr_range){.start = 5, .end = 27},
+		(struct damon_addr_range){.start = 45, .end = 55},
+		(struct damon_addr_range){.start = 73, .end = 104} };
 	/* 5-20-27, 45-55, 73-80-90-104 */
 	unsigned long expected[] = {5, 20, 20, 27, 45, 55,
 				73, 80, 80, 90, 90, 104};
@@ -379,10 +379,10 @@ static void damon_test_apply_three_regions2(struct kunit *test)
 	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,
 				70, 80, 80, 90, 90, 100};
 	/* 5-27, 56-57, 65-104 */
-	struct region new_three_regions[3] = {
-		(struct region){.start = 5, .end = 27},
-		(struct region){.start = 56, .end = 57},
-		(struct region){.start = 65, .end = 104} };
+	struct damon_addr_range new_three_regions[3] = {
+		(struct damon_addr_range){.start = 5, .end = 27},
+		(struct damon_addr_range){.start = 56, .end = 57},
+		(struct damon_addr_range){.start = 65, .end = 104} };
 	/* 5-20-27, 56-57, 65-80-90-104 */
 	unsigned long expected[] = {5, 20, 20, 27, 56, 57,
 				65, 80, 80, 90, 90, 104};
@@ -403,10 +403,10 @@ static void damon_test_apply_three_regions3(struct kunit *test)
 	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,
 				70, 80, 80, 90, 90, 100};
 	/* 5-27, 61-63, 65-104 */
-	struct region new_three_regions[3] = {
-		(struct region){.start = 5, .end = 27},
-		(struct region){.start = 61, .end = 63},
-		(struct region){.start = 65, .end = 104} };
+	struct damon_addr_range new_three_regions[3] = {
+		(struct damon_addr_range){.start = 5, .end = 27},
+		(struct damon_addr_range){.start = 61, .end = 63},
+		(struct damon_addr_range){.start = 65, .end = 104} };
 	/* 5-20-27, 61-63, 65-80-90-104 */
 	unsigned long expected[] = {5, 20, 20, 27, 61, 63,
 				65, 80, 80, 90, 90, 104};
@@ -428,10 +428,10 @@ static void damon_test_apply_three_regions4(struct kunit *test)
 	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,
 				70, 80, 80, 90, 90, 100};
 	/* 5-7, 30-32, 65-68 */
-	struct region new_three_regions[3] = {
-		(struct region){.start = 5, .end = 7},
-		(struct region){.start = 30, .end = 32},
-		(struct region){.start = 65, .end = 68} };
+	struct damon_addr_range new_three_regions[3] = {
+		(struct damon_addr_range){.start = 5, .end = 7},
+		(struct damon_addr_range){.start = 30, .end = 32},
+		(struct damon_addr_range){.start = 65, .end = 68} };
 	/* expect 5-7, 30-32, 65-68 */
 	unsigned long expected[] = {5, 7, 30, 32, 65, 68};
 
