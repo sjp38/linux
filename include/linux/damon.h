@@ -16,11 +16,9 @@
 #include <linux/types.h>
 
 /**
- * struct damon_addr_range - Represents an address region.
+ * struct damon_addr_range - Represents an address region of [@start, @end).
  * @start:	Start address of the region (Inclusive).
  * @end:	End address of the region (Exclusive).
- *
- * Note that this is a half-open interval of [start, end).
  */
 struct damon_addr_range {
 	unsigned long start;
@@ -30,14 +28,16 @@ struct damon_addr_range {
 /**
  * struct damon_region - Represents a monitoring target region.
  * @ar:			Address range of the region.
- * @sampling_addr:	Address of the sample for access check.
+ * @sampling_addr:	Address of the sample for next access check.
  * @nr_accesses:	Access frequency of this region.
+ * @list:		List head for sibling regions.
  * @age:		Age of this region.
  * @last_nr_accesses:	Internal value for age calculation.
  *
- * Age of the region is initially zero, increased for each aggregation
- * interval, and reset if the access frequency is significantly changed.  In
- * case of merge, age is calculated again with size-weighted way.
+ * @age is initially zero, increased for each aggregation interval, and reset
+ * to zero again if the access frequency is significantly changed.  If two
+ * regions are merged into a new region, both @nr_accesses and @age of the new
+ * region are set as region size-weighted average of those of the two regions.
  */
 struct damon_region {
 	struct damon_addr_range ar;
@@ -49,8 +49,11 @@ struct damon_region {
 	unsigned int last_nr_accesses;
 };
 
-/** struct damon_task - Represents a monitoring target task.
- * @pid:	Process id of the task.
+/**
+ * struct damon_task - Represents a monitoring target task.
+ * @pid:		Process id of the task.
+ * @regions_list:	Head of the monitoring target regions of this task.
+ * @list:		List head for sibling tasks.
  */
 struct damon_task {
 	int pid;
@@ -68,6 +71,7 @@ struct damon_task {
  * @DAMOS_HUGEPAGE:	Call madvise() for the region with MADV_HUGEPAGE.
  * @DAMOS_NOHUGEPAGE:	Call madvise() for the region with MADV_NOHUGEPAGE.
  * @DAMOS_STAT:		Do nothing but count the stat.
+ * @DAMOS_ACTION_LEN:	Number of supported actions.
  */
 enum damos_action {
 	DAMOS_WILLNEED,
@@ -91,6 +95,9 @@ enum damos_action {
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
  * @list:		Link for sibling schemes.
+ *
+ * For each aggregation interval, DAMON applies @action to monitoring target
+ * regions fit in the condition and updates the statistics.
  */
 struct damos {
 	unsigned int min_sz_region;
@@ -109,6 +116,9 @@ struct damos {
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users set the attributes and get the results of
  * the monitoring.
+ *
+ * For each monitoring request (``start_damon()``), a kernel thread for the
+ * monitoring is created.  The pointer to the thread is stored in @kdamond.
  *
  * @sample_interval:		Time between each access sampling.
  * @aggr_interval:		Time between monitoring results aggregation.
@@ -136,6 +146,15 @@ struct damos {
  * @kdamond_stop:	Notifies whether kdamond should stop.
  * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
  *
+ * The monitoring thread sets @kdamond to NULL when it terminates.  Therefore,
+ * users can know whether the monitoring is ongoing or terminated by reading
+ * @kdamond.  Also, users can ask @kdamond to be terminated by writing non-zero
+ * to @kdamond_stop.  Reads and writes to @kdamond and @kdamond_stop from
+ * outside of the monitoring thread must be protected by @kdamond_lock.
+ *
+ * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
+ * @kdamond_lock.  Accesses to other fields must be protected by themselves.
+ *
  * @tasks_list:		Head of 'struct damon_task' list.
  * @schemes_list:	Head of 'struct damos' list.
  *
@@ -146,14 +165,19 @@ struct damos {
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
  *
- * By setting @init_target_regions, @update_target_regions,
- * @prepare_access_checks, and @check_accesses to appropriate functions, users
- * can monitor any address space with special handling.
+ * The monitoring thread calls @init_target_regions before starting the
+ * monitoring, @update_target_regions for each @regions_update_interval, and
+ * @prepare_access_checks and @check_accesses for each @sample_interval.  By
+ * setting these callbacks to appropriate functions, therefore, users can
+ * monitor any address space with special handling.  If these are not
+ * explicitly configured, the functions for virtual memory address space
+ * monitoring are used.
  *
- * @sample_cb and @aggregate_cb are the recommended place for access to of the
- * monitorin results.  Because these callbacks are called by @kdamond, users
- * can access the monitoring results via @tasks_list without additional
- * protection of @kdamond_lock.
+ * @sample_cb and @aggregate_cb are called from @kdamond for each of the
+ * sampling intervals and aggregation intervals, respectively.  Therefore,
+ * users can safely access to the monitoring results via @tasks_list without
+ * additional protection of @kdamond_lock.  For the reason, users are
+ * recommended to use these callback for the accesses to the results.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
