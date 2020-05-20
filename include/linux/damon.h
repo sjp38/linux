@@ -94,7 +94,7 @@ enum damos_action {
  * @action:		'damo_action' to be applied to the target regions.
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
- * @list:		Link for sibling schemes.
+ * @list:		List head for sibling schemes.
  *
  * For each aggregation interval, DAMON applies @action to monitoring target
  * regions fit in the condition and updates the statistics.
