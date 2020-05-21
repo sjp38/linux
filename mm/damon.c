@@ -727,36 +727,6 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 	}
 }
 
-#define diff_of(a, b) (a > b ? a - b : b - a)
-
-/*
- * Increase or reset the age of the given monitoring target region
- *
- * If '->nr_accesses' has changed significantly, reset the '->age'.  Else,
- * increase the age.
- */
-static void damon_do_count_age(struct damon_region *r, unsigned int threshold)
-{
-	unsigned int nr_accesses_diff = diff_of(r->nr_accesses,
-			r->last_nr_accesses);
-
-	if (nr_accesses_diff > threshold)
-		r->age = 0;
-	else
-		r->age++;
-}
-
-static void kdamond_count_age(struct damon_ctx *c, unsigned int threshold)
-{
-	struct damon_task *t;
-	struct damon_region *r;
-
-	damon_for_each_task(t, c) {
-		damon_for_each_region(r, t)
-			damon_do_count_age(r, threshold);
-	}
-}
-
 #ifndef CONFIG_ADVISE_SYSCALLS
 static int damos_madvise(struct damon_task *task, struct damon_region *r,
 			int behavior)
@@ -874,6 +844,8 @@ static void damon_merge_two_regions(struct damon_region *l,
 	damon_destroy_region(r);
 }
 
+#define diff_of(a, b) (a > b ? a - b : b - a)
+
 /*
  * Merge adjacent regions having similar access frequencies
  *
@@ -885,6 +857,11 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 	struct damon_region *r, *prev = NULL, *next;
 
 	damon_for_each_region_safe(r, next, t) {
+		if (diff_of(r->nr_accesses, r->last_nr_accesses) > thres)
+			r->age = 0;
+		else
+			r->age++;
+
 		if (prev && prev->ar.end == r->ar.start &&
 		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres)
 			damon_merge_two_regions(prev, r);
