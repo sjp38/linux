@@ -27,8 +27,8 @@ struct damon_addr_range {
 
 /**
  * struct damon_region - Represents a monitoring target region.
- * @ar:			Address range of the region.
- * @sampling_addr:	Address of the sample for next access check.
+ * @ar:			The address range of the region.
+ * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
  * @list:		List head for sibling regions.
  * @age:		Age of this region.
@@ -114,17 +114,17 @@ struct damos {
 
 /**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
- * main interface that allows users set the attributes and get the results of
- * the monitoring.
+ * main interface that allows users to set the attributes and get the results
+ * of the monitoring.
  *
  * For each monitoring request (damon_start()), a kernel thread for the
  * monitoring is created.  The pointer to the thread is stored in @kdamond.
  *
- * @sample_interval:		Time between each access sampling.
- * @aggr_interval:		Time between monitoring results aggregation.
- * @regions_update_interval:	Time between monitoring target region update.
- * @min_nr_regions:		Number of initial monitoring target regions.
- * @max_nr_regions:		Maximum number of monitoring target regions.
+ * @sample_interval:		The time between access samplings.
+ * @aggr_interval:		The time between monitor results aggregations.
+ * @regions_update_interval:	The time between monitor regions updates.
+ * @min_nr_regions:		The number of initial monitoring regions.
+ * @max_nr_regions:		The maximum number of monitoring regions.
  *
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
