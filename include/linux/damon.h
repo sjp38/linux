@@ -30,7 +30,7 @@ struct damon_addr_range {
  * @ar:			The address range of the region.
  * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
- * @list:		List head for sibling regions.
+ * @list:		List head for siblings.
  * @age:		Age of this region.
  * @last_nr_accesses:	Internal value for age calculation.
  *
@@ -53,7 +53,7 @@ struct damon_region {
  * struct damon_task - Represents a monitoring target task.
  * @pid:		Process id of the task.
  * @regions_list:	Head of the monitoring target regions of this task.
- * @list:		List head for sibling tasks.
+ * @list:		List head for siblings.
  */
 struct damon_task {
 	int pid;
@@ -91,10 +91,10 @@ enum damos_action {
  * @max_nr_accesses:	Maximum ``->nr_accesses`` of target regions.
  * @min_age_region:	Minimum age of target regions.
  * @max_age_region:	Maximum age of target regions.
- * @action:		'damo_action' to be applied to the target regions.
+ * @action:		&damo_action to be applied to the target regions.
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
- * @list:		List head for sibling schemes.
+ * @list:		List head for siblings.
  *
  * For each aggregation interval, DAMON applies @action to monitoring target
  * regions fit in the condition and updates the statistics.
@@ -154,8 +154,8 @@ struct damos {
  * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
  * @kdamond_lock.  Accesses to other fields must be protected by themselves.
  *
- * @tasks_list:		Head of 'struct damon_task' list.
- * @schemes_list:	Head of 'struct damos' list.
+ * @tasks_list:		Head of monitring target tasks (&damon_task) list.
+ * @schemes_list:	Head of schemes (&damos) list.
  *
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @update_target_regions:	Updates monitoring target regions.
