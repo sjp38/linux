@@ -992,8 +992,8 @@ static int kdamond_fn(void *data)
 		max_nr_accesses = kdamond_check_accesses(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
-			kdamond_merge_regions(ctx, max_nr_accesses / 10);
 			kdamond_count_age(ctx, max_nr_accesses / 10);
+			kdamond_merge_regions(ctx, max_nr_accesses / 10);
 			if (ctx->aggregate_cb)
 				ctx->aggregate_cb(ctx);
 			kdamond_reset_aggregated(ctx);
