@@ -186,8 +186,11 @@ each system and workload, misconfiguring the parameters could result in worse
 memory management.
 
 For the tuning, you could measure the performance metrics such as IPC, TLB
-misses, and swap in/out events for varying parameters.  Writing a program
-automating this optimal parameter could be an option.
+misses, and swap in/out events and adjusts the parameters based on their
+changes.  The total number and the total size of the regions that each scheme
+is applied, which are provided via the debugfs interface and the programming
+interface can also be useful.  Writing a program automating this optimal
+parameter could be an option.
 
 
 Personalized DAMON Application
