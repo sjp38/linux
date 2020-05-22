@@ -15,6 +15,12 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 
+/* Represents a region of [start, end) */
+struct damon_addr_range {
+	unsigned long start;
+	unsigned long end;
+};
+
 /**
  * struct damon_region - Represents a monitoring target region of
  * [@vm_start, @vm_end).
@@ -33,8 +39,7 @@
  * region are set as region size-weighted average of those of the two regions.
  */
 struct damon_region {
-	unsigned long vm_start;
-	unsigned long vm_end;
+	struct damon_addr_range ar;
 	unsigned long sampling_addr;
 	unsigned int nr_accesses;
 	struct list_head list;
