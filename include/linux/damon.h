@@ -159,13 +159,18 @@ struct damos {
  *
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @update_target_regions:	Updates monitoring target regions.
+ * @prepare_access_checks:	Prepares next access check of target regions.
+ * @check_accesses:		Checks the access of target regions.
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
  *
  * The monitoring thread calls @init_target_regions before starting the
- * monitoring, @update_target_regions for each @regions_update_interval.  By
+ * monitoring, @update_target_regions for each @regions_update_interval, and
+ * @prepare_access_checks and @check_accesses for each @sample_interval.  By
  * setting these callbacks to appropriate functions, therefore, users can
- * monitor specific range of virtual address space.
+ * monitor any address space with special handling.  If these are not
+ * explicitly configured, the functions for virtual memory address space
+ * monitoring are used.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
