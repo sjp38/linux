@@ -13,7 +13,16 @@
 #include <linux/random.h>
 #include <linux/types.h>
 
-/* Represents a monitoring target region of [vm_start, vm_end) */
+/**
+ * struct damon_region - Represents a monitoring target region of
+ * [@vm_start, @vm_end).
+ *
+ * @vm_start:		Start address of the region (inclusive).
+ * @vm_end:		End address of the region (exclusive).
+ * @sampling_addr:	Address of the sample for the next access check.
+ * @nr_accesses:	Access frequency of this region.
+ * @list:		List head for siblings.
+ */
 struct damon_region {
 	unsigned long vm_start;
 	unsigned long vm_end;
@@ -22,13 +31,22 @@ struct damon_region {
 	struct list_head list;
 };
 
-/* Represents a monitoring target task */
+/**
+ * struct damon_task - Represents a monitoring target task.
+ * @pid:		Process id of the task.
+ * @regions_list:	Head of the monitoring target regions of this task.
+ * @list:		List head for siblings.
+ */
 struct damon_task {
 	int pid;
 	struct list_head regions_list;
 	struct list_head list;
 };
 
+/**
+ * struct damon_ctx - Represents a context for each monitoring.
+ * @tasks_list:		Head of monitring target tasks (&damon_task) list.
+ */
 struct damon_ctx {
 	struct list_head tasks_list;	/* 'damon_task' objects */
 };
