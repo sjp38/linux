@@ -9,7 +9,13 @@
  * Copyright (C) 2009 Provigent Ltd.
  */
 
+#include <linux/bits.h>
+#include <linux/compiler_types.h>
+#include <linux/completion.h>
+#include <linux/dev_printk.h>
+#include <linux/errno.h>
 #include <linux/i2c.h>
+#include <linux/types.h>
 
 #define DW_IC_DEFAULT_FUNCTIONALITY (I2C_FUNC_I2C |			\
 					I2C_FUNC_SMBUS_BYTE |		\
@@ -170,6 +176,9 @@
 					 DW_IC_TX_ABRT_TXDATA_NOACK | \
 					 DW_IC_TX_ABRT_GCALL_NOACK)
 
+struct clk;
+struct device;
+struct reset_control;
 
 /**
  * struct dw_i2c_dev - private i2c-designware data
@@ -232,7 +241,6 @@ struct dw_i2c_dev {
 	struct reset_control	*rst;
 	struct i2c_client		*slave;
 	u32			(*get_clk_rate_khz) (struct dw_i2c_dev *dev);
-	struct dw_pci_controller *controller;
 	int			cmd_err;
 	struct i2c_msg		*msgs;
 	int			msgs_num;
@@ -350,4 +358,14 @@ static inline void i2c_dw_configure(struct dw_i2c_dev *dev)
 extern int i2c_dw_probe_lock_support(struct dw_i2c_dev *dev);
 #else
 static inline int i2c_dw_probe_lock_support(struct dw_i2c_dev *dev) { return 0; }
+#endif
+
+int i2c_dw_validate_speed(struct dw_i2c_dev *dev);
+
+#if IS_ENABLED(CONFIG_ACPI)
+int i2c_dw_acpi_configure(struct device *device);
+void i2c_dw_acpi_adjust_bus_speed(struct device *device);
+#else
+static inline int i2c_dw_acpi_configure(struct device *device) { return -ENODEV; }
+static inline void i2c_dw_acpi_adjust_bus_speed(struct device *device) {}
 #endif

@@ -46,12 +46,10 @@ struct dw_scl_sda_cfg {
 
 struct dw_pci_controller {
 	u32 bus_num;
-	u32 tx_fifo_depth;
-	u32 rx_fifo_depth;
-	u32 clk_khz;
 	u32 flags;
 	struct dw_scl_sda_cfg *scl_sda_cfg;
 	int (*setup)(struct pci_dev *pdev, struct dw_pci_controller *c);
+	u32 (*get_clk_rate_khz)(struct dw_i2c_dev *dev);
 };
 
 /* Merrifield HCNT/LCNT/SDA hold time */
@@ -79,6 +77,11 @@ static struct dw_scl_sda_cfg hsw_config = {
 	.fs_lcnt = 0xa0,
 	.sda_hold = 0x9,
 };
+
+static u32 mfld_get_clk_rate_khz(struct dw_i2c_dev *dev)
+{
+	return 25000;
+}
 
 static int mfld_setup(struct pci_dev *pdev, struct dw_pci_controller *c)
 {
@@ -120,45 +123,38 @@ static int mrfld_setup(struct pci_dev *pdev, struct dw_pci_controller *c)
 	return -ENODEV;
 }
 
+static u32 ehl_get_clk_rate_khz(struct dw_i2c_dev *dev)
+{
+	return 100000;
+}
+
 static struct dw_pci_controller dw_pci_controllers[] = {
 	[medfield] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
-		.clk_khz      = 25000,
 		.setup = mfld_setup,
+		.get_clk_rate_khz = mfld_get_clk_rate_khz,
 	},
 	[merrifield] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 64,
-		.rx_fifo_depth = 64,
 		.scl_sda_cfg = &mrfld_config,
 		.setup = mrfld_setup,
 	},
 	[baytrail] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.scl_sda_cfg = &byt_config,
 	},
 	[haswell] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.scl_sda_cfg = &hsw_config,
 	},
 	[cherrytrail] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
 		.flags = MODEL_CHERRYTRAIL,
 		.scl_sda_cfg = &byt_config,
 	},
 	[elkhartlake] = {
 		.bus_num = -1,
-		.tx_fifo_depth = 32,
-		.rx_fifo_depth = 32,
-		.clk_khz = 100000,
+		.get_clk_rate_khz = ehl_get_clk_rate_khz,
 	},
 };
 
@@ -187,11 +183,6 @@ static int i2c_dw_pci_resume(struct device *dev)
 
 static UNIVERSAL_DEV_PM_OPS(i2c_dw_pm_ops, i2c_dw_pci_suspend,
 			    i2c_dw_pci_resume, NULL);
-
-static u32 i2c_dw_get_clk_rate_khz(struct dw_i2c_dev *dev)
-{
-	return dev->controller->clk_khz;
-}
 
 static int i2c_dw_pci_probe(struct pci_dev *pdev,
 			    const struct pci_device_id *id)
@@ -233,8 +224,7 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	if (r < 0)
 		return r;
 
-	dev->controller = controller;
-	dev->get_clk_rate_khz = i2c_dw_get_clk_rate_khz;
+	dev->get_clk_rate_khz = controller->get_clk_rate_khz;
 	dev->timings.bus_freq_hz = I2C_MAX_FAST_MODE_FREQ;
 	dev->base = pcim_iomap_table(pdev)[0];
 	dev->dev = &pdev->dev;
@@ -251,6 +241,17 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 		}
 	}
 
+	i2c_dw_acpi_adjust_bus_speed(&pdev->dev);
+
+	if (has_acpi_companion(&pdev->dev))
+		i2c_dw_acpi_configure(&pdev->dev);
+
+	r = i2c_dw_validate_speed(dev);
+	if (r) {
+		pci_free_irq_vectors(pdev);
+		return r;
+	}
+
 	i2c_dw_configure(dev);
 
 	if (controller->scl_sda_cfg) {
@@ -261,9 +262,6 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 		dev->fs_lcnt = cfg->fs_lcnt;
 		dev->sda_hold_time = cfg->sda_hold;
 	}
-
-	dev->tx_fifo_depth = controller->tx_fifo_depth;
-	dev->rx_fifo_depth = controller->rx_fifo_depth;
 
 	adap = &dev->adapter;
 	adap->owner = THIS_MODULE;
