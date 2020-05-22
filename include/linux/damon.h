@@ -15,18 +15,19 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 
-/* Represents a region of [start, end) */
+/**
+ * struct damon_addr_range - Represents an address region of [@start, @end).
+ * @start:	Start address of the region (Inclusive).
+ * @end:	End address of the region (Exclusive).
+ */
 struct damon_addr_range {
 	unsigned long start;
 	unsigned long end;
 };
 
 /**
- * struct damon_region - Represents a monitoring target region of
- * [@vm_start, @vm_end).
- *
- * @vm_start:		Start address of the region (inclusive).
- * @vm_end:		End address of the region (exclusive).
+ * struct damon_region - Represents a monitoring target region.
+ * @ar:			The address range of the region.
  * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
  * @list:		List head for siblings.
