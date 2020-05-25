@@ -44,6 +44,7 @@
 #include <asm/asm.h>
 #include <asm/smap.h>
 #include <asm/frame.h>
+#include <asm/trapnr.h>
 #include <asm/nospec-branch.h>
 
 #include "calling.h"
@@ -726,10 +727,42 @@
 
 .Lend_\@:
 .endm
+
+/**
+ * idtentry - Macro to generate entry stubs for simple IDT entries
+ * @vector:		Vector number
+ * @asmsym:		ASM symbol for the entry point
+ * @cfunc:		C function to be called
+ * @has_error_code:	Hardware pushed error code on stack
+ * @sane:		Compatibility flag with 64bit
+ */
+.macro idtentry vector asmsym cfunc has_error_code:req sane=0
+SYM_CODE_START(\asmsym)
+	ASM_CLAC
+	cld
+
+	.if \has_error_code == 0
+		pushl	$0		/* Clear the error code */
+	.endif
+
+	/* Push the C-function address into the GS slot */
+	pushl	$\cfunc
+	/* Invoke the common exception entry */
+	jmp	handle_exception
+SYM_CODE_END(\asmsym)
+.endm
+
+/*
+ * Include the defines which emit the idt entries which are shared
+ * shared between 32 and 64 bit.
+ */
+#include <asm/idtentry.h>
+
 /*
  * %eax: prev task
  * %edx: next task
  */
+.pushsection .text, "ax"
 SYM_CODE_START(__switch_to_asm)
 	/*
 	 * Save callee-saved registers
@@ -776,6 +809,7 @@ SYM_CODE_START(__switch_to_asm)
 
 	jmp	__switch_to
 SYM_CODE_END(__switch_to_asm)
+.popsection
 
 /*
  * The unwinder expects the last frame on the stack to always be at the same
@@ -784,6 +818,7 @@ SYM_CODE_END(__switch_to_asm)
  * asmlinkage function so its argument has to be pushed on the stack.  This
  * wrapper creates a proper "end of stack" frame header before the call.
  */
+.pushsection .text, "ax"
 SYM_FUNC_START(schedule_tail_wrapper)
 	FRAME_BEGIN
 
@@ -794,6 +829,8 @@ SYM_FUNC_START(schedule_tail_wrapper)
 	FRAME_END
 	ret
 SYM_FUNC_END(schedule_tail_wrapper)
+.popsection
+
 /*
  * A newly forked process directly context switches into this address.
  *
@@ -801,6 +838,7 @@ SYM_FUNC_END(schedule_tail_wrapper)
  * ebx: kernel thread func (NULL for user thread)
  * edi: kernel thread arg
  */
+.pushsection .text, "ax"
 SYM_CODE_START(ret_from_fork)
 	call	schedule_tail_wrapper
 
@@ -811,12 +849,11 @@ SYM_CODE_START(ret_from_fork)
 	/* When we fork, we trace the syscall return in the child, too. */
 	movl    %esp, %eax
 	call    syscall_return_slowpath
-	STACKLEAK_ERASE
-	jmp     restore_all
+	jmp     .Lsyscall_32_done
 
 	/* kernel thread */
 1:	movl	%edi, %eax
-	CALL_NOSPEC %ebx
+	CALL_NOSPEC ebx
 	/*
 	 * A kernel thread is allowed to return here after successfully
 	 * calling do_execve().  Exit to userspace to complete the execve()
@@ -825,6 +862,7 @@ SYM_CODE_START(ret_from_fork)
 	movl	$0, PT_EAX(%esp)
 	jmp	2b
 SYM_CODE_END(ret_from_fork)
+.popsection
 
 /*
  * Return to user mode is not as complex as all this looks,
@@ -855,7 +893,7 @@ ret_from_intr:
 	TRACE_IRQS_OFF
 	movl	%esp, %eax
 	call	prepare_exit_to_usermode
-	jmp	restore_all
+	jmp	restore_all_switch_stack
 SYM_CODE_END(ret_from_exception)
 
 SYM_ENTRY(__begin_SYSENTER_singlestep_region, SYM_L_GLOBAL, SYM_A_NONE)
@@ -960,12 +998,6 @@ SYM_FUNC_START(entry_SYSENTER_32)
 	jnz	.Lsysenter_fix_flags
 .Lsysenter_flags_fixed:
 
-	/*
-	 * User mode is traced as though IRQs are on, and SYSENTER
-	 * turned them off.
-	 */
-	TRACE_IRQS_OFF
-
 	movl	%esp, %eax
 	call	do_fast_syscall_32
 	/* XEN PV guests always use IRET path */
@@ -974,8 +1006,7 @@ SYM_FUNC_START(entry_SYSENTER_32)
 
 	STACKLEAK_ERASE
 
-/* Opportunistic SYSEXIT */
-	TRACE_IRQS_ON			/* User mode traces as IRQs on. */
+	/* Opportunistic SYSEXIT */
 
 	/*
 	 * Setup entry stack - we keep the pointer in %eax and do the
@@ -1075,20 +1106,12 @@ SYM_FUNC_START(entry_INT80_32)
 
 	SAVE_ALL pt_regs_ax=$-ENOSYS switch_stacks=1	/* save rest */
 
-	/*
-	 * User mode is traced as though IRQs are on, and the interrupt gate
-	 * turned them off.
-	 */
-	TRACE_IRQS_OFF
-
 	movl	%esp, %eax
 	call	do_int80_syscall_32
 .Lsyscall_32_done:
-
 	STACKLEAK_ERASE
 
-restore_all:
-	TRACE_IRQS_ON
+restore_all_switch_stack:
 	SWITCH_TO_ENTRY_STACK
 	CHECK_AND_APPLY_ESPFIX
 
@@ -1124,9 +1147,9 @@ restore_all_kernel:
 	jmp	.Lirq_return
 
 .section .fixup, "ax"
-SYM_CODE_START(iret_exc)
+SYM_CODE_START(asm_iret_error)
 	pushl	$0				# no error code
-	pushl	$do_iret_error
+	pushl	$iret_error
 
 #ifdef CONFIG_DEBUG_ENTRY
 	/*
@@ -1140,10 +1163,10 @@ SYM_CODE_START(iret_exc)
 	popl	%eax
 #endif
 
-	jmp	common_exception
-SYM_CODE_END(iret_exc)
+	jmp	handle_exception
+SYM_CODE_END(asm_iret_error)
 .previous
-	_ASM_EXTABLE(.Lirq_return, iret_exc)
+	_ASM_EXTABLE(.Lirq_return, asm_iret_error)
 SYM_FUNC_END(entry_INT80_32)
 
 .macro FIXUP_ESPFIX_STACK
@@ -1267,115 +1290,12 @@ SYM_FUNC_END(name)
 /* The include is where all of the SMP etc. interrupts come from */
 #include <asm/entry_arch.h>
 
-SYM_CODE_START(coprocessor_error)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_coprocessor_error
-	jmp	common_exception
-SYM_CODE_END(coprocessor_error)
-
-SYM_CODE_START(simd_coprocessor_error)
-	ASM_CLAC
-	pushl	$0
-#ifdef CONFIG_X86_INVD_BUG
-	/* AMD 486 bug: invd from userspace calls exception 19 instead of #GP */
-	ALTERNATIVE "pushl	$do_general_protection",	\
-		    "pushl	$do_simd_coprocessor_error",	\
-		    X86_FEATURE_XMM
-#else
-	pushl	$do_simd_coprocessor_error
-#endif
-	jmp	common_exception
-SYM_CODE_END(simd_coprocessor_error)
-
-SYM_CODE_START(device_not_available)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_device_not_available
-	jmp	common_exception
-SYM_CODE_END(device_not_available)
-
 #ifdef CONFIG_PARAVIRT
 SYM_CODE_START(native_iret)
 	iret
-	_ASM_EXTABLE(native_iret, iret_exc)
+	_ASM_EXTABLE(native_iret, asm_iret_error)
 SYM_CODE_END(native_iret)
 #endif
-
-SYM_CODE_START(overflow)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_overflow
-	jmp	common_exception
-SYM_CODE_END(overflow)
-
-SYM_CODE_START(bounds)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_bounds
-	jmp	common_exception
-SYM_CODE_END(bounds)
-
-SYM_CODE_START(invalid_op)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_invalid_op
-	jmp	common_exception
-SYM_CODE_END(invalid_op)
-
-SYM_CODE_START(coprocessor_segment_overrun)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_coprocessor_segment_overrun
-	jmp	common_exception
-SYM_CODE_END(coprocessor_segment_overrun)
-
-SYM_CODE_START(invalid_TSS)
-	ASM_CLAC
-	pushl	$do_invalid_TSS
-	jmp	common_exception
-SYM_CODE_END(invalid_TSS)
-
-SYM_CODE_START(segment_not_present)
-	ASM_CLAC
-	pushl	$do_segment_not_present
-	jmp	common_exception
-SYM_CODE_END(segment_not_present)
-
-SYM_CODE_START(stack_segment)
-	ASM_CLAC
-	pushl	$do_stack_segment
-	jmp	common_exception
-SYM_CODE_END(stack_segment)
-
-SYM_CODE_START(alignment_check)
-	ASM_CLAC
-	pushl	$do_alignment_check
-	jmp	common_exception
-SYM_CODE_END(alignment_check)
-
-SYM_CODE_START(divide_error)
-	ASM_CLAC
-	pushl	$0				# no error code
-	pushl	$do_divide_error
-	jmp	common_exception
-SYM_CODE_END(divide_error)
-
-#ifdef CONFIG_X86_MCE
-SYM_CODE_START(machine_check)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_mce
-	jmp	common_exception
-SYM_CODE_END(machine_check)
-#endif
-
-SYM_CODE_START(spurious_interrupt_bug)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_spurious_interrupt_bug
-	jmp	common_exception
-SYM_CODE_END(spurious_interrupt_bug)
 
 #ifdef CONFIG_XEN_PV
 SYM_FUNC_START(xen_hypervisor_callback)
@@ -1429,7 +1349,7 @@ SYM_FUNC_START(xen_failsafe_callback)
 	popl	%eax
 	lea	16(%esp), %esp
 	jz	5f
-	jmp	iret_exc
+	jmp	asm_iret_error
 5:	pushl	$-1				/* orig_ax = -1 => not a system call */
 	SAVE_ALL
 	ENCODE_FRAME_POINTER
@@ -1501,7 +1421,7 @@ SYM_CODE_START_LOCAL_NOALIGN(common_exception_read_cr2)
 
 	TRACE_IRQS_OFF
 	movl	%esp, %eax			# pt_regs pointer
-	CALL_NOSPEC %edi
+	CALL_NOSPEC edi
 	jmp	ret_from_exception
 SYM_CODE_END(common_exception_read_cr2)
 
@@ -1522,22 +1442,53 @@ SYM_CODE_START_LOCAL_NOALIGN(common_exception)
 
 	TRACE_IRQS_OFF
 	movl	%esp, %eax			# pt_regs pointer
-	CALL_NOSPEC %edi
+	CALL_NOSPEC edi
 	jmp	ret_from_exception
 SYM_CODE_END(common_exception)
 
-SYM_CODE_START(debug)
-	/*
-	 * Entry from sysenter is now handled in common_exception
-	 */
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_debug
-	jmp	common_exception
-SYM_CODE_END(debug)
+SYM_CODE_START_LOCAL_NOALIGN(handle_exception)
+	/* the function address is in %gs's slot on the stack */
+	SAVE_ALL switch_stacks=1 skip_gs=1 unwind_espfix=1
+	ENCODE_FRAME_POINTER
 
-#ifdef CONFIG_DOUBLEFAULT
-SYM_CODE_START(double_fault)
+	/* fixup %gs */
+	GS_TO_REG %ecx
+	movl	PT_GS(%esp), %edi		# get the function address
+	REG_TO_PTGS %ecx
+	SET_KERNEL_GS %ecx
+
+	/* fixup orig %eax */
+	movl	PT_ORIG_EAX(%esp), %edx		# get the error code
+	movl	$-1, PT_ORIG_EAX(%esp)		# no syscall to restart
+
+	movl	%esp, %eax			# pt_regs pointer
+	CALL_NOSPEC edi
+
+#ifdef CONFIG_VM86
+	movl	PT_EFLAGS(%esp), %eax		# mix EFLAGS and CS
+	movb	PT_CS(%esp), %al
+	andl	$(X86_EFLAGS_VM | SEGMENT_RPL_MASK), %eax
+#else
+	/*
+	 * We can be coming here from child spawned by kernel_thread().
+	 */
+	movl	PT_CS(%esp), %eax
+	andl	$SEGMENT_RPL_MASK, %eax
+#endif
+	cmpl	$USER_RPL, %eax			# returning to v8086 or userspace ?
+	jnb	ret_to_user
+
+	PARANOID_EXIT_TO_KERNEL_MODE
+	BUG_IF_WRONG_CR3
+	RESTORE_REGS 4
+	jmp	.Lirq_return
+
+ret_to_user:
+	movl	%esp, %eax
+	jmp	restore_all_switch_stack
+SYM_CODE_END(handle_exception)
+
+SYM_CODE_START(asm_exc_double_fault)
 1:
 	/*
 	 * This is a task gate handler, not an interrupt gate handler.
@@ -1575,8 +1526,7 @@ SYM_CODE_START(double_fault)
 1:
 	hlt
 	jmp 1b
-SYM_CODE_END(double_fault)
-#endif
+SYM_CODE_END(asm_exc_double_fault)
 
 /*
  * NMI is doubly nasty.  It can happen on the first instruction of
@@ -1585,7 +1535,7 @@ SYM_CODE_END(double_fault)
  * switched stacks.  We handle both conditions by simply checking whether we
  * interrupted kernel code running on the SYSENTER stack.
  */
-SYM_CODE_START(nmi)
+SYM_CODE_START(asm_exc_nmi)
 	ASM_CLAC
 
 #ifdef CONFIG_X86_ESPFIX32
@@ -1614,7 +1564,7 @@ SYM_CODE_START(nmi)
 	jb	.Lnmi_from_sysenter_stack
 
 	/* Not on SYSENTER stack. */
-	call	do_nmi
+	call	exc_nmi
 	jmp	.Lnmi_return
 
 .Lnmi_from_sysenter_stack:
@@ -1624,7 +1574,7 @@ SYM_CODE_START(nmi)
 	 */
 	movl	%esp, %ebx
 	movl	PER_CPU_VAR(cpu_current_top_of_stack), %esp
-	call	do_nmi
+	call	exc_nmi
 	movl	%ebx, %esp
 
 .Lnmi_return:
@@ -1678,29 +1628,9 @@ SYM_CODE_START(nmi)
 	lss	(1+5+6)*4(%esp), %esp			# back to espfix stack
 	jmp	.Lirq_return
 #endif
-SYM_CODE_END(nmi)
+SYM_CODE_END(asm_exc_nmi)
 
-SYM_CODE_START(int3)
-	ASM_CLAC
-	pushl	$0
-	pushl	$do_int3
-	jmp	common_exception
-SYM_CODE_END(int3)
-
-SYM_CODE_START(general_protection)
-	ASM_CLAC
-	pushl	$do_general_protection
-	jmp	common_exception
-SYM_CODE_END(general_protection)
-
-#ifdef CONFIG_KVM_GUEST
-SYM_CODE_START(async_page_fault)
-	ASM_CLAC
-	pushl	$do_async_page_fault
-	jmp	common_exception_read_cr2
-SYM_CODE_END(async_page_fault)
-#endif
-
+.pushsection .text, "ax"
 SYM_CODE_START(rewind_stack_do_exit)
 	/* Prevent any naive code from trying to unwind to our caller. */
 	xorl	%ebp, %ebp
@@ -1711,3 +1641,4 @@ SYM_CODE_START(rewind_stack_do_exit)
 	call	do_exit
 1:	jmp 1b
 SYM_CODE_END(rewind_stack_do_exit)
+.popsection

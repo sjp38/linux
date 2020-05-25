@@ -51,13 +51,16 @@ struct idt_data {
 #define TSKG(_vector, _gdt)				\
 	G(_vector, NULL, DEFAULT_STACK, GATE_TASK, DPL0, _gdt << 3)
 
+
+static bool idt_setup_done __initdata;
+
 /*
  * Early traps running on the DEFAULT_STACK because the other interrupt
  * stacks work only after cpu_init().
  */
 static const __initconst struct idt_data early_idts[] = {
-	INTG(X86_TRAP_DB,		debug),
-	SYSG(X86_TRAP_BP,		int3),
+	INTG(X86_TRAP_DB,		asm_exc_debug),
+	SYSG(X86_TRAP_BP,		asm_exc_int3),
 #ifdef CONFIG_X86_32
 	INTG(X86_TRAP_PF,		page_fault),
 #endif
@@ -70,33 +73,33 @@ static const __initconst struct idt_data early_idts[] = {
  * set up TSS.
  */
 static const __initconst struct idt_data def_idts[] = {
-	INTG(X86_TRAP_DE,		divide_error),
-	INTG(X86_TRAP_NMI,		nmi),
-	INTG(X86_TRAP_BR,		bounds),
-	INTG(X86_TRAP_UD,		invalid_op),
-	INTG(X86_TRAP_NM,		device_not_available),
-	INTG(X86_TRAP_OLD_MF,		coprocessor_segment_overrun),
-	INTG(X86_TRAP_TS,		invalid_TSS),
-	INTG(X86_TRAP_NP,		segment_not_present),
-	INTG(X86_TRAP_SS,		stack_segment),
-	INTG(X86_TRAP_GP,		general_protection),
-	INTG(X86_TRAP_SPURIOUS,		spurious_interrupt_bug),
-	INTG(X86_TRAP_MF,		coprocessor_error),
-	INTG(X86_TRAP_AC,		alignment_check),
-	INTG(X86_TRAP_XF,		simd_coprocessor_error),
+	INTG(X86_TRAP_DE,		asm_exc_divide_error),
+	INTG(X86_TRAP_NMI,		asm_exc_nmi),
+	INTG(X86_TRAP_BR,		asm_exc_bounds),
+	INTG(X86_TRAP_UD,		asm_exc_invalid_op),
+	INTG(X86_TRAP_NM,		asm_exc_device_not_available),
+	INTG(X86_TRAP_OLD_MF,		asm_exc_coproc_segment_overrun),
+	INTG(X86_TRAP_TS,		asm_exc_invalid_tss),
+	INTG(X86_TRAP_NP,		asm_exc_segment_not_present),
+	INTG(X86_TRAP_SS,		asm_exc_stack_segment),
+	INTG(X86_TRAP_GP,		asm_exc_general_protection),
+	INTG(X86_TRAP_SPURIOUS,		asm_exc_spurious_interrupt_bug),
+	INTG(X86_TRAP_MF,		asm_exc_coprocessor_error),
+	INTG(X86_TRAP_AC,		asm_exc_alignment_check),
+	INTG(X86_TRAP_XF,		asm_exc_simd_coprocessor_error),
 
 #ifdef CONFIG_X86_32
 	TSKG(X86_TRAP_DF,		GDT_ENTRY_DOUBLEFAULT_TSS),
 #else
-	INTG(X86_TRAP_DF,		double_fault),
+	INTG(X86_TRAP_DF,		asm_exc_double_fault),
 #endif
-	INTG(X86_TRAP_DB,		debug),
+	INTG(X86_TRAP_DB,		asm_exc_debug),
 
 #ifdef CONFIG_X86_MCE
-	INTG(X86_TRAP_MC,		&machine_check),
+	INTG(X86_TRAP_MC,		asm_exc_machine_check),
 #endif
 
-	SYSG(X86_TRAP_OF,		overflow),
+	SYSG(X86_TRAP_OF,		asm_exc_overflow),
 #if defined(CONFIG_IA32_EMULATION)
 	SYSG(IA32_SYSCALL_VECTOR,	entry_INT80_compat),
 #elif defined(CONFIG_X86_32)
@@ -161,7 +164,7 @@ static const __initconst struct idt_data early_pf_idts[] = {
  * stack set to DEFAULT_STACK (0). Required for NMI trap handling.
  */
 static const __initconst struct idt_data dbg_idts[] = {
-	INTG(X86_TRAP_DB,	debug),
+	INTG(X86_TRAP_DB,		asm_exc_debug),
 };
 #endif
 
@@ -182,11 +185,11 @@ gate_desc debug_idt_table[IDT_ENTRIES] __page_aligned_bss;
  * cpu_init() when the TSS has been initialized.
  */
 static const __initconst struct idt_data ist_idts[] = {
-	ISTG(X86_TRAP_DB,	debug,		IST_INDEX_DB),
-	ISTG(X86_TRAP_NMI,	nmi,		IST_INDEX_NMI),
-	ISTG(X86_TRAP_DF,	double_fault,	IST_INDEX_DF),
+	ISTG(X86_TRAP_DB,	asm_exc_debug,		IST_INDEX_DB),
+	ISTG(X86_TRAP_NMI,	asm_exc_nmi,		IST_INDEX_NMI),
+	ISTG(X86_TRAP_DF,	asm_exc_double_fault,	IST_INDEX_DF),
 #ifdef CONFIG_X86_MCE
-	ISTG(X86_TRAP_MC,	&machine_check,	IST_INDEX_MCE),
+	ISTG(X86_TRAP_MC,	asm_exc_machine_check,	IST_INDEX_MCE),
 #endif
 };
 
@@ -318,11 +321,16 @@ void __init idt_setup_apic_and_irq_gates(void)
 
 #ifdef CONFIG_X86_LOCAL_APIC
 	for_each_clear_bit_from(i, system_vectors, NR_VECTORS) {
-		set_bit(i, system_vectors);
+		/*
+		 * Don't set the non assigned system vectors in the
+		 * system_vectors bitmap. Otherwise they show up in
+		 * /proc/interrupts.
+		 */
 		entry = spurious_entries_start + 8 * (i - FIRST_SYSTEM_VECTOR);
 		set_intr_gate(i, entry);
 	}
 #endif
+	idt_setup_done = true;
 }
 
 /**
@@ -352,16 +360,14 @@ void idt_invalidate(void *addr)
 	load_idt(&idt);
 }
 
-void __init update_intr_gate(unsigned int n, const void *addr)
+void __init alloc_intr_gate(unsigned int n, const void *addr)
 {
-	if (WARN_ON_ONCE(!test_bit(n, system_vectors)))
+	if (WARN_ON(n < FIRST_SYSTEM_VECTOR))
 		return;
-	set_intr_gate(n, addr);
-}
 
-void alloc_intr_gate(unsigned int n, const void *addr)
-{
-	BUG_ON(n < FIRST_SYSTEM_VECTOR);
-	if (!test_and_set_bit(n, system_vectors))
+	if (WARN_ON(idt_setup_done))
+		return;
+
+	if (!WARN_ON(test_and_set_bit(n, system_vectors)))
 		set_intr_gate(n, addr);
 }
