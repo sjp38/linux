@@ -87,7 +87,8 @@ enum damos_action {
  * @list:		List head for siblings.
  *
  * For each aggregation interval, DAMON applies @action to monitoring target
- * regions fit in the condition and updates the statistics.
+ * regions fit in the condition and updates the statistics.  Note that both
+ * the minimums and the maximums are inclusive.
  */
 struct damos {
 	unsigned int min_sz_region;
