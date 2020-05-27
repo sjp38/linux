@@ -45,7 +45,7 @@ struct damon_task {
 
 /**
  * struct damon_ctx - Represents a context for each monitoring.
- * @tasks_list:		Head of monitring target tasks (&damon_task) list.
+ * @tasks_list:		Head of monitoring target tasks (&damon_task) list.
  */
 struct damon_ctx {
 	struct list_head tasks_list;	/* 'damon_task' objects */
