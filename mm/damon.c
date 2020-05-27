@@ -710,8 +710,7 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 	damon_for_each_task(t, ctx)
 		damon_split_regions_of(ctx, t, nr_subregions);
 
-	if (!last_nr_regions)
-		last_nr_regions = nr_regions;
+	last_nr_regions = nr_regions;
 }
 
 /*
