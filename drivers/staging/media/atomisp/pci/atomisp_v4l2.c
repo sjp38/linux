@@ -1092,10 +1092,11 @@ static int atomisp_subdev_probe(struct atomisp_device *isp)
 	/* FIXME: should return -EPROBE_DEFER if not all subdevs were probed */
 	for (count = 0; count < SUBDEV_WAIT_TIMEOUT_MAX_COUNT; count++) {
 		int camera_count = 0;
+
 		for (subdevs = pdata->subdevs; subdevs->type; ++subdevs) {
 			if (subdevs->type == RAW_CAMERA ||
 			    subdevs->type == SOC_CAMERA)
-				camera_count ++;
+				camera_count++;
 		}
 		if (camera_count)
 			break;
@@ -1571,6 +1572,7 @@ static int init_atomisp_wdts(struct atomisp_device *isp)
 
 	for (i = 0; i < isp->num_of_streams; i++) {
 		struct atomisp_sub_device *asd = &isp->asd[i];
+
 		if (!atomisp_hw_is_isp2401)
 			timer_setup(&asd->wdt, atomisp_wdt, 0);
 		else {
