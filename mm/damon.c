@@ -1263,6 +1263,9 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 		return true;
 
 	damon_for_each_task(t, ctx) {
+		if (t->pid == -1)
+			return false;
+
 		task = damon_get_task_struct(t);
 		if (task) {
 			put_task_struct(task);
@@ -1795,6 +1798,23 @@ static ssize_t debugfs_pids_write(struct file *file,
 	ret = simple_write_to_buffer(kbuf, count, ppos, buf, count);
 	if (ret < 0)
 		goto out;
+
+	if (!strncmp(kbuf, "paddr\n", count)) {
+		/* Configure the context for physical memory monitoring */
+		ctx->init_target_regions = kdamond_init_phys_regions;
+		ctx->update_target_regions = kdamond_update_phys_regions;
+		ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
+		ctx->check_accesses = kdamond_check_phys_accesses;
+
+		/* Set the fake target task pid as -1 */
+		snprintf(kbuf, count, "-1");
+	} else {
+		/* Configure the context for virtual memory monitoring */
+		ctx->init_target_regions = kdamond_init_vm_regions;
+		ctx->update_target_regions = kdamond_update_vm_regions;
+		ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+		ctx->check_accesses = kdamond_check_vm_accesses;
+	}
 
 	targets = str_to_pids(kbuf, ret, &nr_targets);
 	if (!targets) {
