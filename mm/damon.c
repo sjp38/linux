@@ -1236,6 +1236,11 @@ static void kdamond_update_vm_regions(struct damon_ctx *ctx)
 	}
 }
 
+static void kdamond_update_phys_regions(struct damon_ctx *ctx)
+{
+	return;
+}
+
 /*
  * Check whether current monitoring should be stopped
  *
@@ -1257,6 +1262,9 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 		return true;
 
 	damon_for_each_task(t, ctx) {
+		if (t->pid == -1)
+			return false;
+
 		task = damon_get_task_struct(t);
 		if (task) {
 			put_task_struct(task);
@@ -1789,6 +1797,17 @@ static ssize_t debugfs_pids_write(struct file *file,
 	ret = simple_write_to_buffer(kbuf, count, ppos, buf, count);
 	if (ret < 0)
 		goto out;
+
+	if (!strncmp(kbuf, "paddr\n", count)) {
+		ctx->update_target_regions = kdamond_update_phys_regions;
+		ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
+		ctx->check_accesses = kdamond_check_phys_accesses;
+		snprintf(kbuf, count, "-1");
+	} else {
+		ctx->update_target_regions = kdamond_update_vm_regions;
+		ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+		ctx->check_accesses = kdamond_check_vm_accesses;
+	}
 
 	targets = str_to_pids(kbuf, ret, &nr_targets);
 	if (!targets) {
