@@ -479,7 +479,7 @@ static bool damon_young(struct mm_struct *mm, unsigned long addr,
 }
 
 /*
- * Check whether the region was accessed and prepare for next check
+ * Check whether the region was accessed after the last preparation
  *
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
