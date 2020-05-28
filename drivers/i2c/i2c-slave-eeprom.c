@@ -5,10 +5,9 @@
  * Copyright (C) 2014 by Wolfram Sang, Sang Engineering <wsa@sang-engineering.com>
  * Copyright (C) 2014 by Renesas Electronics Corporation
  *
- * Because most IP blocks can only detect one I2C slave address anyhow, this
- * driver does not support simulating EEPROM types which take more than one
- * address. It is prepared to simulate bigger EEPROMs with an internal 16 bit
- * pointer, yet implementation is deferred until the need actually arises.
+ * Because most slave IP cores can only detect one I2C slave address anyhow,
+ * this driver does not support simulating EEPROM types which take more than
+ * one address.
  */
 
 /*
@@ -152,7 +151,6 @@ static int i2c_slave_eeprom_probe(struct i2c_client *client, const struct i2c_de
 	if (!eeprom)
 		return -ENOMEM;
 
-	eeprom->idx_write_cnt = 0;
 	eeprom->num_address_bytes = flag_addr16 ? 2 : 1;
 	eeprom->address_mask = size - 1;
 	eeprom->read_only = FIELD_GET(I2C_SLAVE_FLAG_RO, id->driver_data);
