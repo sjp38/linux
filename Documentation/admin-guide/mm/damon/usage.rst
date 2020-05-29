@@ -58,9 +58,11 @@ Recording Data Access Pattern
 -----------------------------
 
 The ``record`` subcommand records the data access pattern of target processes
-in a file (``./damon.data`` by default).  You can specify the target as either
-pid of running target or a command for execution of the process.  Below example
-shows a command target usage::
+in a file (``./damon.data`` by default).  You can specify the target with 1)
+the command for execution of the monitoring target process, 2) pid of running
+target process, or 3) the special keyword, 'paddr', if you want to monitor the
+system's physical memory address space.  Below example shows a command target
+usage::
 
     # cd <kernel>/tools/damon/
     # damo record "sleep 5"
@@ -70,6 +72,15 @@ of the process.  Below example shows a pid target usage::
 
     # sleep 5 &
     # damo record `pidof sleep`
+
+Finally, below example shows the use of the special keyword, 'paddr'::
+
+    # damo record paddr
+
+In this case, the monitoring target regions defaults to the largetst 'System
+RAM' region specified in '/proc/iomem' file.  Note that the initial monitoring
+target region is maintained rather than dynamically updated like the virtual
+memory address spaces monitoring mode.
 
 You can tune this by setting the monitoring attributes and path to the record
 file using optional arguments to the subcommand.  To know about the monitoring
@@ -314,14 +325,24 @@ check it again::
 Target PIDs
 -----------
 
-Users can get and set the pids of monitoring target processes by reading from
-and writing to the ``pids`` file.  For example, below commands set processes
-having pids 42 and 4242 as the processes to be monitored and check it again::
+To monitor the virtual memory address spaces of specific processes, users can
+get and set the pids of monitoring target processes by reading from and writing
+to the ``pids`` file.  For example, below commands set processes having pids 42
+and 4242 as the processes to be monitored and check it again::
 
     # cd <debugfs>/damon
     # echo 42 4242 > pids
     # cat pids
     42 4242
+
+Users can also monitor the physical memory address space of the system by
+writing a special keyword, "``paddr\n``" to the file.  In this case, reading the
+file will show ``-1``, as below::
+
+    # cd <debugfs>/damon
+    # echo paddr > pids
+    # cat pids
+    -1
 
 Note that setting the pids doesn't start the monitoring.
 
@@ -329,12 +350,17 @@ Note that setting the pids doesn't start the monitoring.
 Initial Monitoring Target Regions
 ---------------------------------
 
-DAMON automatically sets and updates the monitoring target regions so that
-entire memory mappings of target processes can be covered.  However, users
-might want to limit the monitoring region to specific address ranges, such as
-the heap, the stack, or specific file-mapped area.  Or, some users might know
-the initial access pattern of their workloads and therefore want to set optimal
-initial regions for the 'adaptive regions adjustment'.
+In case of the virtual memory monitoring, DAMON automatically sets and updates
+the monitoring target regions so that entire memory mappings of target
+processes can be covered.  However, users might want to limit the monitoring
+region to specific address ranges, such as the heap, the stack, or specific
+file-mapped area.  Or, some users might know the initial access pattern of
+their workloads and therefore want to set optimal initial regions for the
+'adaptive regions adjustment'.
+
+In contrast, DAMON do not automatically sets and updates the monitoring target
+regions in case of physical memory monitoring.  Therefore, users should set the
+monitoring target regions by themselves.
 
 In such cases, users can explicitly set the initial monitoring target regions
 as they want, by writing proper values to the ``init_regions`` file.  Each line
@@ -354,10 +380,11 @@ region of process 42, and another couple of address ranges, ``20-40`` and
             4242 20      40
             4242 50      100" > init_regions
 
-Note that this sets the initial monitoring target regions only.  DAMON will
-automatically updates the boundary of the regions after one ``regions update
-interval``.  Therefore, users should set the ``regions update interval`` large
-enough.
+Note that this sets the initial monitoring target regions only.  In case of
+virtual memory monitoring, DAMON will automatically updates the boundary of the
+regions after one ``regions update interval``.  Therefore, users should set the
+``regions update interval`` large enough in this case, if they don't want the
+update.
 
 
 Record
