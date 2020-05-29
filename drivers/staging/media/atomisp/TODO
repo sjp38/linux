@@ -161,6 +161,9 @@ TODO
     for this driver until the other work is done, as there will be a lot
     of code churn until this driver becomes functional again.
 
+16. Fix the compat32 code and remove the comment preventing it to be
+    called.
+
 Limitations
 ===========
 
