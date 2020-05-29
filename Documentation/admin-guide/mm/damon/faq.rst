@@ -45,10 +45,9 @@ constructions and actual access checks can be implemented and configured on the
 DAMON core by the users.  In this way, DAMON users can monitor any address
 space with any access check technique.
 
-Nonetheless, DAMON provides a vma tracking and PTE Accessed bit check based
-implementation of the address space dependent functions for the virtual memory
-by default, for a reference and convenient use.  In near future, we will also
-provide that for physical memory address space.
+Nonetheless, DAMON provides vma/rmap tracking and PTE Accessed bit check based
+implementations of the address space dependent functions for the virtual memory
+and the physical memory by default, for a reference and convenient use.
 
 
 Can I simply monitor page granularity?
