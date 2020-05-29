@@ -33,4 +33,3 @@ optimizations of their systems.
    faq
    mechanisms
    eval
-   plans

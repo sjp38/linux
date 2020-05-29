@@ -38,9 +38,13 @@ separate document, :doc:`guide`.  Please refer to that.
 Does DAMON support virtual memory only?
 ========================================
 
-For now, yes.  But, DAMON will be able to support various address spaces
-including physical memory in near future.  An RFC patchset [1]_ for this
-extension is already available.  Please refer :doc:`plans` for detailed plan
-for this.
+No.  DAMON supports the virtual memory address spaces and the physical memory
+address space for now.  However, it can be extended to support any address
+space, because the core logic of the DAMON can be configured with the low level
+primitives for each address space.
 
-.. [1] https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/
+In other words, DAMON provides the reference implementations of the low level
+primitives for the virtual memory address spaces and the physical memory
+address spaces.  The programming interface users can further implement their
+own low level primitives for their special use cases and configure those in
+DAMON if they need.
