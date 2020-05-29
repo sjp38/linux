@@ -325,7 +325,7 @@ and 4242 as the processes to be monitored and check it again::
     42 4242
 
 Users can also monitor the physical memory address space of the system by
-writing a special keyword, ``paddr\n`` to the file.  In this case, reading the
+writing a special keyword, "``paddr\n``" to the file.  In this case, reading the
 file will show ``-1``, as below::
 
     # cd <debugfs>/damon
