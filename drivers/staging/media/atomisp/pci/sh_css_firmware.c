@@ -314,6 +314,7 @@ sh_css_load_firmware(struct device *dev, const char *fw_data,
 				"binary #%-2d type %s: %s\n",
 				i, fw_type_name[bd.header.type],
 				bd.name);
+			break;
 		default:
 			if (bd.header.info.isp.type > IA_CSS_ACC_STANDALONE) {
 				dev_err(dev,
