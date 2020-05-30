@@ -18,6 +18,7 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
+#include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_data/i2c-designware.h>
@@ -25,6 +26,7 @@
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
 #include <linux/property.h>
+#include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -44,7 +46,7 @@ static const struct acpi_device_id dw_i2c_acpi_match[] = {
 	{ "INT3432", 0 },
 	{ "INT3433", 0 },
 	{ "80860F41", ACCESS_NO_IRQ_SUSPEND },
-	{ "808622C1", ACCESS_NO_IRQ_SUSPEND | MODEL_CHERRYTRAIL },
+	{ "808622C1", ACCESS_NO_IRQ_SUSPEND },
 	{ "AMD0010", ACCESS_INTR_MASK },
 	{ "AMDI0010", ACCESS_INTR_MASK },
 	{ "AMDI0510", 0 },
@@ -58,6 +60,63 @@ MODULE_DEVICE_TABLE(acpi, dw_i2c_acpi_match);
 #endif
 
 #ifdef CONFIG_OF
+#define BT1_I2C_CTL			0x100
+#define BT1_I2C_CTL_ADDR_MASK		GENMASK(7, 0)
+#define BT1_I2C_CTL_WR			BIT(8)
+#define BT1_I2C_CTL_GO			BIT(31)
+#define BT1_I2C_DI			0x104
+#define BT1_I2C_DO			0x108
+
+static int bt1_i2c_read(void *context, unsigned int reg, unsigned int *val)
+{
+	struct dw_i2c_dev *dev = context;
+	int ret;
+
+	/*
+	 * Note these methods shouldn't ever fail because the system controller
+	 * registers are memory mapped. We check the return value just in case.
+	 */
+	ret = regmap_write(dev->sysmap, BT1_I2C_CTL,
+			   BT1_I2C_CTL_GO | (reg & BT1_I2C_CTL_ADDR_MASK));
+	if (ret)
+		return ret;
+
+	return regmap_read(dev->sysmap, BT1_I2C_DO, val);
+}
+
+static int bt1_i2c_write(void *context, unsigned int reg, unsigned int val)
+{
+	struct dw_i2c_dev *dev = context;
+	int ret;
+
+	ret = regmap_write(dev->sysmap, BT1_I2C_DI, val);
+	if (ret)
+		return ret;
+
+	return regmap_write(dev->sysmap, BT1_I2C_CTL,
+		BT1_I2C_CTL_GO | BT1_I2C_CTL_WR | (reg & BT1_I2C_CTL_ADDR_MASK));
+}
+
+static struct regmap_config bt1_i2c_cfg = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+	.fast_io = true,
+	.reg_read = bt1_i2c_read,
+	.reg_write = bt1_i2c_write,
+	.max_register = DW_IC_COMP_TYPE,
+};
+
+static int bt1_i2c_request_regs(struct dw_i2c_dev *dev)
+{
+	dev->sysmap = syscon_node_to_regmap(dev->dev->of_node->parent);
+	if (IS_ERR(dev->sysmap))
+		return PTR_ERR(dev->sysmap);
+
+	dev->map = devm_regmap_init(dev->dev, NULL, dev, &bt1_i2c_cfg);
+	return PTR_ERR_OR_ZERO(dev->map);
+}
+
 #define MSCC_ICPU_CFG_TWI_DELAY		0x0
 #define MSCC_ICPU_CFG_TWI_DELAY_ENABLE	BIT(0)
 #define MSCC_ICPU_CFG_TWI_SPIKE_FILTER	0x4
@@ -90,10 +149,16 @@ static int dw_i2c_of_configure(struct platform_device *pdev)
 static const struct of_device_id dw_i2c_of_match[] = {
 	{ .compatible = "snps,designware-i2c", },
 	{ .compatible = "mscc,ocelot-i2c", .data = (void *)MODEL_MSCC_OCELOT },
+	{ .compatible = "baikal,bt1-sys-i2c", .data = (void *)MODEL_BAIKAL_BT1 },
 	{},
 };
 MODULE_DEVICE_TABLE(of, dw_i2c_of_match);
 #else
+static int bt1_i2c_request_regs(struct dw_i2c_dev *dev)
+{
+	return -ENODEV;
+}
+
 static inline int dw_i2c_of_configure(struct platform_device *pdev)
 {
 	return -ENODEV;
@@ -106,6 +171,24 @@ static void dw_i2c_plat_pm_cleanup(struct dw_i2c_dev *dev)
 
 	if (dev->shared_with_punit)
 		pm_runtime_put_noidle(dev->dev);
+}
+
+static int dw_i2c_plat_request_regs(struct dw_i2c_dev *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev->dev);
+	int ret;
+
+	switch (dev->flags & MODEL_MASK) {
+	case MODEL_BAIKAL_BT1:
+		ret = bt1_i2c_request_regs(dev);
+		break;
+	default:
+		dev->base = devm_platform_ioremap_resource(pdev, 0);
+		ret = PTR_ERR_OR_ZERO(dev->base);
+		break;
+	}
+
+	return ret;
 }
 
 static int dw_i2c_plat_probe(struct platform_device *pdev)
@@ -124,13 +207,14 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	if (!dev)
 		return -ENOMEM;
 
-	dev->base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(dev->base))
-		return PTR_ERR(dev->base);
-
+	dev->flags = (uintptr_t)device_get_match_data(&pdev->dev);
 	dev->dev = &pdev->dev;
 	dev->irq = irq;
 	platform_set_drvdata(pdev, dev);
+
+	ret = dw_i2c_plat_request_regs(dev);
+	if (ret)
+		return ret;
 
 	dev->rst = devm_reset_control_get_optional_exclusive(&pdev->dev, NULL);
 	if (IS_ERR(dev->rst))
@@ -145,8 +229,6 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 		i2c_parse_fw_timings(&pdev->dev, t, false);
 
 	i2c_dw_acpi_adjust_bus_speed(&pdev->dev);
-
-	dev->flags |= (uintptr_t)device_get_match_data(&pdev->dev);
 
 	if (pdev->dev.of_node)
 		dw_i2c_of_configure(pdev);
