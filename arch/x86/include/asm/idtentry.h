@@ -283,6 +283,22 @@ __visible noinstr void func(struct pt_regs *regs)			\
 									\
 static __always_inline void __##func(struct pt_regs *regs)
 
+/**
+ * DECLARE_IDTENTRY_XENCB - Declare functions for XEN HV callback entry point
+ * @vector:	Vector number (ignored for C)
+ * @func:	Function name of the entry point
+ *
+ * Declares three functions:
+ * - The ASM entry point: asm_##func
+ * - The XEN PV trap entry point: xen_##func (maybe unused)
+ * - The C handler called from the ASM entry point
+ *
+ * Maps to DECLARE_IDTENTRY(). Distinct entry point to handle the 32/64-bit
+ * difference
+ */
+#define DECLARE_IDTENTRY_XENCB(vector, func)				\
+	DECLARE_IDTENTRY(vector, func)
+
 #ifdef CONFIG_X86_64
 /**
  * DECLARE_IDTENTRY_IST - Declare functions for IST handling IDT entry points
@@ -432,6 +448,9 @@ __visible noinstr void func(struct pt_regs *regs,			\
 # define DECLARE_IDTENTRY_DF(vector, func)				\
 	idtentry_df vector asm_##func func
 
+# define DECLARE_IDTENTRY_XENCB(vector, func)				\
+	DECLARE_IDTENTRY(vector, func)
+
 #else
 # define DECLARE_IDTENTRY_MCE(vector, func)				\
 	DECLARE_IDTENTRY(vector, func)
@@ -441,6 +460,9 @@ __visible noinstr void func(struct pt_regs *regs,			\
 
 /* No ASM emitted for DF as this goes through a C shim */
 # define DECLARE_IDTENTRY_DF(vector, func)
+
+/* No ASM emitted for XEN hypervisor callback */
+# define DECLARE_IDTENTRY_XENCB(vector, func)
 
 #endif
 
@@ -558,7 +580,7 @@ DECLARE_IDTENTRY_XEN(X86_TRAP_DB,	debug);
 DECLARE_IDTENTRY_DF(X86_TRAP_DF,	exc_double_fault);
 
 #ifdef CONFIG_XEN_PV
-DECLARE_IDTENTRY(X86_TRAP_OTHER,	exc_xen_hypervisor_callback);
+DECLARE_IDTENTRY_XENCB(X86_TRAP_OTHER,	exc_xen_hypervisor_callback);
 #endif
 
 /* Device interrupts common/spurious */

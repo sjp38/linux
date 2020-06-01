@@ -1167,8 +1167,11 @@ SYM_CODE_END(native_iret)
 #ifdef CONFIG_XEN_PV
 /*
  * See comment in entry_64.S for further explanation
+ *
+ * Note: This is not an actual IDT entry point. It's a XEN specific entry
+ * point and therefore named to match the 64-bit trampoline counterpart.
  */
-SYM_FUNC_START(exc_xen_hypervisor_callback)
+SYM_FUNC_START(xen_asm_exc_xen_hypervisor_callback)
 	/*
 	 * Check to see if we got the event in the critical
 	 * region in xen_iret_direct, after we've reenabled
@@ -1189,7 +1192,7 @@ SYM_FUNC_START(exc_xen_hypervisor_callback)
 	mov	%esp, %eax
 	call	xen_pv_evtchn_do_upcall
 	jmp	handle_exception_return
-SYM_FUNC_END(exc_xen_hypervisor_callback)
+SYM_FUNC_END(xen_asm_exc_xen_hypervisor_callback)
 
 /*
  * Hypervisor uses this for application faults while it executes.

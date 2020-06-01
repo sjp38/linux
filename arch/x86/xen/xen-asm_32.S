@@ -113,7 +113,7 @@ iret_restore_end:
 	 * Events are masked, so jumping out of the critical region is
 	 * OK.
 	 */
-	je asm_exc_xen_hypervisor_callback
+	je xen_asm_exc_xen_hypervisor_callback
 
 1:	iret
 xen_iret_end_crit:
@@ -127,7 +127,7 @@ SYM_CODE_END(xen_iret)
 	.globl xen_iret_start_crit, xen_iret_end_crit
 
 /*
- * This is called by exc_xen_hypervisor_callback in entry_32.S when it sees
+ * This is called by xen_asm_exc_xen_hypervisor_callback in entry_32.S when it sees
  * that the EIP at the time of interrupt was between
  * xen_iret_start_crit and xen_iret_end_crit.
  *
@@ -144,7 +144,7 @@ SYM_CODE_END(xen_iret)
  *	 eflags		}
  *	 cs		}  nested exception info
  *	 eip		}
- *	 return address	: (into asm_exc_xen_hypervisor_callback)
+ *	 return address	: (into xen_asm_exc_xen_hypervisor_callback)
  *
  * In order to deliver the nested exception properly, we need to discard the
  * nested exception frame such that when we handle the exception, we do it
