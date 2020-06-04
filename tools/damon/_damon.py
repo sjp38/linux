@@ -85,7 +85,10 @@ def current_attrs():
 
     with open(debugfs_schemes, 'r') as f:
         schemes = f.read()
-    attrs.append(schemes)
+
+    # The last two fields in each line are statistics.  Remove those.
+    schemes = [' '.join(x.split()[:-2]) for x in schemes.strip().split('\n')]
+    attrs.append('\n'.join(schemes))
 
     return Attrs(*attrs)
 
