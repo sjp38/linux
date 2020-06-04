@@ -1504,8 +1504,6 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 		schemes[*nr_schemes] = scheme;
 		*nr_schemes += 1;
 	}
-	if (!*nr_schemes)
-		goto fail;
 	return schemes;
 fail:
 	free_schemes_arr(schemes, *nr_schemes);
@@ -1533,6 +1531,10 @@ static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 		goto out;
 
 	schemes = str_to_schemes(kbuf, ret, &nr_schemes);
+	if (!schemes) {
+		ret = -EINVAL;
+		goto out;
+	}
 
 	mutex_lock(&ctx->kdamond_lock);
 	if (ctx->kdamond) {
