@@ -326,8 +326,8 @@ having pids 42 and 4242 as the processes to be monitored and check it again::
 Note that setting the pids doesn't start the monitoring.
 
 
-Initla Monitoring Target Regions
---------------------------------
+Initial Monitoring Target Regions
+---------------------------------
 
 DAMON automatically sets and updates the monitoring target regions so that
 entire memory mappings of target processes can be covered.  However, users
