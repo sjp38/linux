@@ -765,8 +765,7 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 			damon_write_rbuf(c, &r->vm_end, sizeof(r->vm_end));
 			damon_write_rbuf(c, &r->nr_accesses,
 					sizeof(r->nr_accesses));
-			trace_damon_aggregated(t->pid, nr,
-					r->vm_start, r->vm_end, r->nr_accesses);
+			trace_damon_aggregated(t, r, nr);
 			r->nr_accesses = 0;
 		}
 	}
