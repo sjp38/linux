@@ -27,6 +27,7 @@
 #include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
+#include <linux/memory_hotplug.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/page_idle.h>
@@ -749,13 +750,9 @@ unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 /* This code is stollen from page_idle.c */
 static struct page *damon_phys_get_page(unsigned long pfn)
 {
-	struct page *page;
+	struct page *page = pfn_to_online_page(pfn);
 	pg_data_t *pgdat;
 
-	if (!pfn_valid(pfn))
-		return NULL;
-
-	page = pfn_to_page(pfn);
 	if (!page || !PageLRU(page) ||
 	    !get_page_unless_zero(page))
 		return NULL;
