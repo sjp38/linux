@@ -58,9 +58,11 @@ Recording Data Access Pattern
 -----------------------------
 
 The ``record`` subcommand records the data access pattern of target processes
-in a file (``./damon.data`` by default).  You can specify the target as either
-pid of running target or a command for execution of the process.  Below example
-shows a command target usage::
+in a file (``./damon.data`` by default).  You can specify the target with 1)
+the command for execution of the monitoring target process, 2) pid of running
+target process, or 3) the special keyword, 'paddr', if you want to monitor the
+system's physical memory address space.  Below example shows a command target
+usage::
 
     # cd <kernel>/tools/damon/
     # damo record "sleep 5"
@@ -70,6 +72,15 @@ of the process.  Below example shows a pid target usage::
 
     # sleep 5 &
     # damo record `pidof sleep`
+
+Finally, below example shows the use of the special keyword, 'paddr'::
+
+    # damo record paddr
+
+In this case, the monitoring target regions defaults to the largetst 'System
+RAM' region specified in '/proc/iomem' file.  Note that the initial monitoring
+target region is maintained rather than dynamically updated like the virtual
+memory address spaces monitoring mode.
 
 You can tune this by setting the monitoring attributes and path to the record
 file using optional arguments to the subcommand.  To know about the monitoring
