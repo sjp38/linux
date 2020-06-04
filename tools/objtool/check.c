@@ -7,10 +7,10 @@
 #include <stdlib.h>
 
 #include "builtin.h"
-#include "check.h"
-#include "elf.h"
-#include "special.h"
+#include "cfi.h"
 #include "arch.h"
+#include "check.h"
+#include "special.h"
 #include "warn.h"
 
 #include <linux/hashtable.h>
@@ -529,6 +529,7 @@ static const char *uaccess_safe_builtin[] = {
 	"__tsan_write16",
 	/* KCOV */
 	"write_comp_data",
+	"check_kcov_mode",
 	"__sanitizer_cov_trace_pc",
 	"__sanitizer_cov_trace_const_cmp1",
 	"__sanitizer_cov_trace_const_cmp2",
