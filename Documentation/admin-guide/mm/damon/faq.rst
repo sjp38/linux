@@ -28,6 +28,13 @@ substitute DAMON.  Rather than that, DAMON could use those as it's low-level
 primitives.
 
 
+How can I optimize my system's memory management using DAMON?
+=============================================================
+
+Because there are several ways for the DAMON-based optimizations, we wrote a
+separate document, :doc:`guide`.  Please refer to that.
+
+
 Does DAMON support virtual memory only?
 ========================================
 
