@@ -5,6 +5,13 @@
  * Copyright 2019-2020 Amazon.com, Inc. or its affiliates.
  *
  * Author: SeongJae Park <sjpark@amazon.de>
+ *
+ * This file is constructed in below parts.
+ *
+ * - Functions and macros for DAMON data structures
+ * - Functions for the module loading/unloading
+ *
+ * The core parts are not implemented yet.
  */
 
 #define pr_fmt(fmt) "damon: " fmt
@@ -13,6 +20,10 @@
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+
+/*
+ * Functions and macros for DAMON data structures
+ */
 
 #define damon_get_task_struct(t) \
 	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
@@ -155,6 +166,10 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 
 	return nr_regions;
 }
+
+/*
+ * Functions for the module loading/unloading
+ */
 
 static int __init damon_init(void)
 {
