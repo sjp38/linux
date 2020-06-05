@@ -747,7 +747,22 @@ unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 
 /* access check functions for physical address based regions */
 
-/* This code is stollen from page_idle.c */
+/*
+ * Users can put any random pfn here, but we only considers user memory pages.
+ * Pfns for other types of pages will simply reported as not accessed.
+ *
+ * Below comment and the body of this function are stollen from the
+ * 'page_idle_get_page()'.  Maybe we could export it from page_idle.c and reuse
+ * here in future.
+ *
+ * We treat a page as a user memory page if it is on an LRU list, because it is
+ * always safe to pass such a page to rmap_walk(), which is essential for idle
+ * page tracking. With such an indicator of user pages we can skip isolated
+ * pages, but since there are not usually many of them, it will hardly affect
+ * the overall result.
+ *
+ * This function tries to get a user memory page by pfn as described above.
+ */
 static struct page *damon_phys_get_page(unsigned long pfn)
 {
 	struct page *page = pfn_to_online_page(pfn);
