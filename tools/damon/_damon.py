@@ -24,6 +24,8 @@ def set_target(pid, init_regions=[]):
     if rc:
         return rc
 
+    if pid == 'paddr':
+        pid = -1
     string = ' '.join(['%s %d %d' % (pid, r[0], r[1]) for r in init_regions])
     return subprocess.call('echo "%s" > %s' % (string, debugfs_init_regions),
             shell=True, executable='/bin/bash')
