@@ -95,7 +95,7 @@ static struct damon_ctx damon_user_ctx = {
  * Returns the pointer to the new struct if success, or NULL otherwise
  */
 static struct damon_region *damon_new_region(struct damon_ctx *ctx,
-				unsigned long vm_start, unsigned long vm_end)
+				unsigned long start, unsigned long end)
 {
 	struct damon_region *region;
 
@@ -103,8 +103,8 @@ static struct damon_region *damon_new_region(struct damon_ctx *ctx,
 	if (!region)
 		return NULL;
 
-	region->vm_start = vm_start;
-	region->vm_end = vm_end;
+	region->ar.start = start;
+	region->ar.end = end;
 	region->nr_accesses = 0;
 	INIT_LIST_HEAD(&region->list);
 
@@ -296,16 +296,16 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	if (!r || !nr_pieces)
 		return -EINVAL;
 
-	orig_end = r->vm_end;
-	sz_orig = r->vm_end - r->vm_start;
+	orig_end = r->ar.end;
+	sz_orig = r->ar.end - r->ar.start;
 	sz_piece = ALIGN_DOWN(sz_orig / nr_pieces, MIN_REGION);
 
 	if (!sz_piece)
 		return -EINVAL;
 
-	r->vm_end = r->vm_start + sz_piece;
+	r->ar.end = r->ar.start + sz_piece;
 	next = damon_next_region(r);
-	for (start = r->vm_end; start + sz_piece <= orig_end;
+	for (start = r->ar.end; start + sz_piece <= orig_end;
 			start += sz_piece) {
 		n = damon_new_region(ctx, start, start + sz_piece);
 		if (!n)
@@ -315,24 +315,20 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	}
 	/* complement last region for possible rounding error */
 	if (n)
-		n->vm_end = orig_end;
+		n->ar.end = orig_end;
 
 	return 0;
 }
 
-struct region {
-	unsigned long start;
-	unsigned long end;
-};
-
-static unsigned long sz_region(struct region *r)
+static unsigned long sz_range(struct damon_addr_range *r)
 {
 	return r->end - r->start;
 }
 
-static void swap_regions(struct region *r1, struct region *r2)
+static void swap_ranges(struct damon_addr_range *r1,
+			struct damon_addr_range *r2)
 {
-	struct region tmp;
+	struct damon_addr_range tmp;
 
 	tmp = *r1;
 	*r1 = *r2;
@@ -343,7 +339,7 @@ static void swap_regions(struct region *r1, struct region *r2)
  * Find three regions separated by two biggest unmapped regions
  *
  * vma		the head vma of the target address space
- * regions	an array of three 'struct region's that results will be saved
+ * regions	an array of three address ranges that results will be saved
  *
  * This function receives an address space and finds three regions in it which
  * separated by the two biggest unmapped regions in the space.  Please refer to
@@ -353,9 +349,9 @@ static void swap_regions(struct region *r1, struct region *r2)
  * Returns 0 if success, or negative error code otherwise.
  */
 static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
-		struct region regions[3])
+		struct damon_addr_range regions[3])
 {
-	struct region gap = {0}, first_gap = {0}, second_gap = {0};
+	struct damon_addr_range gap = {0}, first_gap = {0}, second_gap = {0};
 	struct vm_area_struct *last_vma = NULL;
 	unsigned long start = 0;
 
@@ -368,20 +364,20 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 		}
 		gap.start = last_vma->vm_end;
 		gap.end = vma->vm_start;
-		if (sz_region(&gap) > sz_region(&second_gap)) {
-			swap_regions(&gap, &second_gap);
-			if (sz_region(&second_gap) > sz_region(&first_gap))
-				swap_regions(&second_gap, &first_gap);
+		if (sz_range(&gap) > sz_range(&second_gap)) {
+			swap_ranges(&gap, &second_gap);
+			if (sz_range(&second_gap) > sz_range(&first_gap))
+				swap_ranges(&second_gap, &first_gap);
 		}
 		last_vma = vma;
 	}
 
-	if (!sz_region(&second_gap) || !sz_region(&first_gap))
+	if (!sz_range(&second_gap) || !sz_range(&first_gap))
 		return -EINVAL;
 
 	/* Sort the two biggest gaps by address */
 	if (first_gap.start > second_gap.start)
-		swap_regions(&first_gap, &second_gap);
+		swap_ranges(&first_gap, &second_gap);
 
 	/* Store the result */
 	regions[0].start = ALIGN(start, MIN_REGION);
@@ -400,7 +396,7 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
  * Returns 0 on success, negative error code otherwise.
  */
 static int damon_three_regions_of(struct damon_task *t,
-				struct region regions[3])
+				struct damon_addr_range regions[3])
 {
 	struct mm_struct *mm;
 	int rc;
@@ -462,7 +458,7 @@ static int damon_three_regions_of(struct damon_task *t,
 static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
 {
 	struct damon_region *r, *m = NULL;
-	struct region regions[3];
+	struct damon_addr_range regions[3];
 	int i;
 
 	if (damon_three_regions_of(t, regions)) {
@@ -504,15 +500,13 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
  */
 
 /*
- * Check whether regions are intersecting
- *
- * Note that this function checks 'struct damon_region' and 'struct region'.
+ * Check whether a region is intersecting an address range
  *
  * Returns true if it is.
  */
-static bool damon_intersect(struct damon_region *r, struct region *re)
+static bool damon_intersect(struct damon_region *r, struct damon_addr_range *re)
 {
-	return !(r->vm_end <= re->start || re->end <= r->vm_start);
+	return !(r->ar.end <= re->start || re->end <= r->ar.start);
 }
 
 /*
@@ -522,7 +516,7 @@ static bool damon_intersect(struct damon_region *r, struct region *re)
  * bregions	the three big regions of the task
  */
 static void damon_apply_three_regions(struct damon_ctx *ctx,
-		struct damon_task *t, struct region bregions[3])
+		struct damon_task *t, struct damon_addr_range bregions[3])
 {
 	struct damon_region *r, *next;
 	unsigned int i = 0;
@@ -541,7 +535,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 	for (i = 0; i < 3; i++) {
 		struct damon_region *first = NULL, *last;
 		struct damon_region *newr;
-		struct region *br;
+		struct damon_addr_range *br;
 
 		br = &bregions[i];
 		/* Get the first and last regions which intersects with br */
@@ -551,7 +545,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 					first = r;
 				last = r;
 			}
-			if (r->vm_start >= br->end)
+			if (r->ar.start >= br->end)
 				break;
 		}
 		if (!first) {
@@ -563,8 +557,8 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 				continue;
 			damon_insert_region(newr, damon_prev_region(r), r);
 		} else {
-			first->vm_start = ALIGN_DOWN(br->start, MIN_REGION);
-			last->vm_end = ALIGN(br->end, MIN_REGION);
+			first->ar.start = ALIGN_DOWN(br->start, MIN_REGION);
+			last->ar.end = ALIGN(br->end, MIN_REGION);
 		}
 	}
 }
@@ -574,7 +568,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
  */
 static void kdamond_update_regions(struct damon_ctx *ctx)
 {
-	struct region three_regions[3];
+	struct damon_addr_range three_regions[3];
 	struct damon_task *t;
 
 	damon_for_each_task(t, ctx) {
@@ -620,7 +614,7 @@ static void damon_mkold(struct mm_struct *mm, unsigned long addr)
 static void damon_prepare_access_check(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
-	r->sampling_addr = damon_rand(r->vm_start, r->vm_end);
+	r->sampling_addr = damon_rand(r->ar.start, r->ar.end);
 
 	damon_mkold(mm, r->sampling_addr);
 }
@@ -824,8 +818,8 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 		nr = nr_damon_regions(t);
 		damon_write_rbuf(c, &nr, sizeof(nr));
 		damon_for_each_region(r, t) {
-			damon_write_rbuf(c, &r->vm_start, sizeof(r->vm_start));
-			damon_write_rbuf(c, &r->vm_end, sizeof(r->vm_end));
+			damon_write_rbuf(c, &r->ar.start, sizeof(r->ar.start));
+			damon_write_rbuf(c, &r->ar.end, sizeof(r->ar.end));
 			damon_write_rbuf(c, &r->nr_accesses,
 					sizeof(r->nr_accesses));
 			trace_damon_aggregated(t, r, nr);
@@ -856,8 +850,8 @@ static int damos_madvise(struct damon_task *task, struct damon_region *r,
 	if (!mm)
 		goto put_task_out;
 
-	ret = do_madvise(t, mm, PAGE_ALIGN(r->vm_start),
-			PAGE_ALIGN(r->vm_end - r->vm_start), behavior);
+	ret = do_madvise(t, mm, PAGE_ALIGN(r->ar.start),
+			PAGE_ALIGN(r->ar.end - r->ar.start), behavior);
 	mmput(mm);
 put_task_out:
 	put_task_struct(t);
@@ -904,7 +898,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 	unsigned long sz;
 
 	damon_for_each_scheme(s, c) {
-		sz = r->vm_end - r->vm_start;
+		sz = r->ar.end - r->ar.start;
 		if ((s->min_sz_region && sz < s->min_sz_region) ||
 				(s->max_sz_region && s->max_sz_region < sz))
 			continue;
@@ -935,7 +929,7 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 	}
 }
 
-#define sz_damon_region(r) (r->vm_end - r->vm_start)
+#define sz_damon_region(r) (r->ar.end - r->ar.start)
 
 /*
  * Merge two adjacent regions into one region
@@ -948,7 +942,7 @@ static void damon_merge_two_regions(struct damon_region *l,
 	l->nr_accesses = (l->nr_accesses * sz_l + r->nr_accesses * sz_r) /
 			(sz_l + sz_r);
 	l->age = (l->age * sz_l + r->age * sz_r) / (sz_l + sz_r);
-	l->vm_end = r->vm_end;
+	l->ar.end = r->ar.end;
 	damon_destroy_region(r);
 }
 
@@ -970,7 +964,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
 		else
 			r->age++;
 
-		if (prev && prev->vm_end == r->vm_start &&
+		if (prev && prev->ar.end == r->ar.start &&
 		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres)
 			damon_merge_two_regions(prev, r);
 		else
@@ -1007,8 +1001,8 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 {
 	struct damon_region *new;
 
-	new = damon_new_region(ctx, r->vm_start + sz_r, r->vm_end);
-	r->vm_end = new->vm_start;
+	new = damon_new_region(ctx, r->ar.start + sz_r, r->ar.end);
+	r->ar.end = new->ar.start;
 
 	new->age = r->age;
 	new->last_nr_accesses = r->last_nr_accesses;
@@ -1025,7 +1019,7 @@ static void damon_split_regions_of(struct damon_ctx *ctx,
 	int i;
 
 	damon_for_each_region_safe(r, next, t) {
-		sz_region = r->vm_end - r->vm_start;
+		sz_region = r->ar.end - r->ar.start;
 
 		for (i = 0; i < nr_subs - 1 &&
 				sz_region > 2 * MIN_REGION; i++) {

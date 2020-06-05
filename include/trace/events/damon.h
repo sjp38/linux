@@ -27,8 +27,8 @@ TRACE_EVENT(damon_aggregated,
 	TP_fast_assign(
 		__entry->pid = t->pid;
 		__entry->nr_regions = nr_regions;
-		__entry->vm_start = r->vm_start;
-		__entry->vm_end = r->vm_end;
+		__entry->vm_start = r->ar.start;
+		__entry->vm_end = r->ar.end;
 		__entry->nr_accesses = r->nr_accesses;
 	),
 
