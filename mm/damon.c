@@ -10,6 +10,7 @@
  *
  * - Functions and macros for DAMON data structures
  * - Functions for the initial monitoring target regions construction
+ * - Functions for the dynamic monitoring target regions update
  * - Functions for the access checking of the regions
  * - Functions for DAMON core logics and features
  * - Functions for the DAMON programming interface
