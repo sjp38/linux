@@ -1723,7 +1723,6 @@ out:
 	return ret;
 }
 
-/* This function should not be called while the monitoring is ongoing */
 static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 {
 	struct damon_task *t;
