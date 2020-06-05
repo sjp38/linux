@@ -9,9 +9,11 @@
  * This file is constructed in below parts.
  *
  * - Functions and macros for DAMON data structures
+ * - Functions for the initial monitoring target regions construction
+ * - Functions for the access checking of the regions
+ * - Functions for DAMON core logics and features
+ * - Functions for the DAMON programming interface
  * - Functions for the module loading/unloading
- *
- * The core parts are not implemented yet.
  */
 
 #define pr_fmt(fmt) "damon: " fmt
@@ -544,7 +546,7 @@ static void kdamond_check_accesses(struct damon_ctx *ctx)
 }
 
 /*
- * DAMON core functions
+ * Functions for DAMON core logics and features
  */
 
 /*
@@ -659,7 +661,7 @@ static int kdamond_fn(void *data)
 }
 
 /*
- * Controller functions
+ * Functions for the DAMON programming interface
  */
 
 static bool damon_kdamond_running(struct damon_ctx *ctx)
