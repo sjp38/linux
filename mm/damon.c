@@ -14,6 +14,7 @@
  * - Functions for the access checking of the regions
  * - Functions for DAMON core logics and features
  * - Functions for the DAMON programming interface
+ * - Functions for the DAMON debugfs interface
  * - Functions for the module loading/unloading
  */
 
@@ -1174,7 +1175,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 }
 
 /*
- * debugfs functions
+ * Functions for the DAMON debugfs interface
  */
 
 static ssize_t debugfs_monitor_on_read(struct file *file,
