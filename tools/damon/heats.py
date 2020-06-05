@@ -307,7 +307,7 @@ def plot_heatmap(data_file, output_file):
     set xrange [0:];
     set yrange [0:];
     set xlabel 'Time (ns)';
-    set ylabel 'Virtual Address (bytes)';
+    set ylabel 'Address (bytes)';
     plot '%s' using 1:2:3 with image;""" % (terminal, output_file, data_file)
     subprocess.call(['gnuplot', '-e', gnuplot_cmd])
     os.remove(data_file)
