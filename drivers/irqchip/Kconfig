@@ -548,7 +548,7 @@ config LOONGSON_HTPIC
 config LOONGSON_HTVEC
 	bool "Loongson3 HyperTransport Interrupt Vector Controller"
 	depends on MACH_LOONGSON64
-	default MACH_LOONGSON64
+	default y
 	select IRQ_DOMAIN_HIERARCHY
 	help
 	  Support for the Loongson3 HyperTransport Interrupt Vector Controller.
@@ -563,7 +563,7 @@ config LOONGSON_PCH_PIC
 	  Support for the Loongson PCH PIC Controller.
 
 config LOONGSON_PCH_MSI
-	bool "Loongson PCH PIC Controller"
+	bool "Loongson PCH MSI Controller"
 	depends on MACH_LOONGSON64 || COMPILE_TEST
 	depends on PCI
 	default MACH_LOONGSON64
