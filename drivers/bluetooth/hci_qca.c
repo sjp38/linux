@@ -289,31 +289,29 @@ static void serial_clock_vote(unsigned long vote, struct hci_uart *hu)
 	case HCI_IBS_TX_VOTE_CLOCK_ON:
 		qca->tx_vote = true;
 		qca->tx_votes_on++;
-		new_vote = true;
 		break;
 
 	case HCI_IBS_RX_VOTE_CLOCK_ON:
 		qca->rx_vote = true;
 		qca->rx_votes_on++;
-		new_vote = true;
 		break;
 
 	case HCI_IBS_TX_VOTE_CLOCK_OFF:
 		qca->tx_vote = false;
 		qca->tx_votes_off++;
-		new_vote = qca->rx_vote | qca->tx_vote;
 		break;
 
 	case HCI_IBS_RX_VOTE_CLOCK_OFF:
 		qca->rx_vote = false;
 		qca->rx_votes_off++;
-		new_vote = qca->rx_vote | qca->tx_vote;
 		break;
 
 	default:
 		BT_ERR("Voting irregularity");
 		return;
 	}
+
+	new_vote = qca->rx_vote | qca->tx_vote;
 
 	if (new_vote != old_vote) {
 		if (new_vote)
@@ -1962,17 +1960,17 @@ static int qca_serdev_probe(struct serdev_device *serdev)
 		}
 
 		qcadev->susclk = devm_clk_get_optional(&serdev->dev, NULL);
-		if (!qcadev->susclk) {
+		if (IS_ERR(qcadev->susclk)) {
 			dev_warn(&serdev->dev, "failed to acquire clk\n");
-		} else {
-			err = clk_set_rate(qcadev->susclk, SUSCLK_RATE_32KHZ);
-			if (err)
-				return err;
-
-			err = clk_prepare_enable(qcadev->susclk);
-			if (err)
-				return err;
+			return PTR_ERR(qcadev->susclk);
 		}
+		err = clk_set_rate(qcadev->susclk, SUSCLK_RATE_32KHZ);
+		if (err)
+			return err;
+
+		err = clk_prepare_enable(qcadev->susclk);
+		if (err)
+			return err;
 
 		err = hci_uart_register_device(&qcadev->serdev_hu, &qca_proto);
 		if (err) {
@@ -2050,6 +2048,7 @@ static int __maybe_unused qca_suspend(struct device *dev)
 	struct hci_uart *hu = &qcadev->serdev_hu;
 	struct qca_data *qca = hu->priv;
 	unsigned long flags;
+	bool tx_pending = false;
 	int ret = 0;
 	u8 cmd;
 
@@ -2083,8 +2082,7 @@ static int __maybe_unused qca_suspend(struct device *dev)
 
 		qca->tx_ibs_state = HCI_IBS_TX_ASLEEP;
 		qca->ibs_sent_slps++;
-
-		qca_wq_serial_tx_clock_vote_off(&qca->ws_tx_vote_off);
+		tx_pending = true;
 		break;
 
 	case HCI_IBS_TX_ASLEEP:
@@ -2101,22 +2099,24 @@ static int __maybe_unused qca_suspend(struct device *dev)
 	if (ret < 0)
 		goto error;
 
-	serdev_device_wait_until_sent(hu->serdev,
-				      msecs_to_jiffies(CMD_TRANS_TIMEOUT_MS));
+	if (tx_pending) {
+		serdev_device_wait_until_sent(hu->serdev,
+					      msecs_to_jiffies(CMD_TRANS_TIMEOUT_MS));
+	}
 
 	/* Wait for HCI_IBS_SLEEP_IND sent by device to indicate its Tx is going
 	 * to sleep, so that the packet does not wake the system later.
 	 */
-
 	ret = wait_event_interruptible_timeout(qca->suspend_wait_q,
 			qca->rx_ibs_state == HCI_IBS_RX_ASLEEP,
 			msecs_to_jiffies(IBS_BTSOC_TX_IDLE_TIMEOUT_MS));
-
-	if (ret > 0)
-		return 0;
-
-	if (ret == 0)
+	if (ret == 0) {
 		ret = -ETIMEDOUT;
+		goto error;
+	}
+
+	qca_wq_serial_tx_clock_vote_off(&qca->ws_tx_vote_off);
+	return 0;
 
 error:
 	clear_bit(QCA_SUSPENDING, &qca->flags);
