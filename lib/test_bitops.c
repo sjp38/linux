@@ -74,7 +74,7 @@ static int __init test_bitops_startup(void)
 	}
 
 #ifdef CONFIG_64BIT
-	for (i = 0; i < ARRAY_SIZE(order_comb); i++) {
+	for (i = 0; i < ARRAY_SIZE(order_comb_long); i++) {
 		if (order_comb_long[i][1] !=
 			       get_count_order_long(order_comb_long[i][0]))
 			pr_warn("get_count_order_long wrong for %lx\n",
