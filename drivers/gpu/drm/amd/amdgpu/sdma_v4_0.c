@@ -1072,6 +1072,7 @@ static uint32_t sdma_v4_0_rb_cntl(struct amdgpu_ring *ring, uint32_t rb_cntl)
 	/* Set ring buffer size in dwords */
 	uint32_t rb_bufsz = order_base_2(ring->ring_size / 4);
 
+	barrier(); /* work around https://bugs.llvm.org/show_bug.cgi?id=42576 */
 	rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_SIZE, rb_bufsz);
 #ifdef __BIG_ENDIAN
 	rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_SWAP_ENABLE, 1);
@@ -1774,7 +1775,7 @@ static int sdma_v4_0_early_init(void *handle)
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 	int r;
 
-	if (adev->asic_type == CHIP_RAVEN || adev->asic_type == CHIP_RENOIR)
+	if (adev->flags & AMD_IS_APU)
 		adev->sdma.num_instances = 1;
 	else if (adev->asic_type == CHIP_ARCTURUS)
 		adev->sdma.num_instances = 8;
@@ -1912,9 +1913,7 @@ static int sdma_v4_0_hw_init(void *handle)
 	int r;
 	struct amdgpu_device *adev = (struct amdgpu_device *)handle;
 
-	if ((adev->asic_type == CHIP_RAVEN && adev->powerplay.pp_funcs &&
-			adev->powerplay.pp_funcs->set_powergating_by_smu) ||
-			(adev->asic_type == CHIP_RENOIR && !adev->in_gpu_reset))
+	if (adev->flags & AMD_IS_APU)
 		amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_SDMA, false);
 
 	if (!amdgpu_sriov_vf(adev))
@@ -1941,9 +1940,7 @@ static int sdma_v4_0_hw_fini(void *handle)
 	sdma_v4_0_ctx_switch_enable(adev, false);
 	sdma_v4_0_enable(adev, false);
 
-	if ((adev->asic_type == CHIP_RAVEN && adev->powerplay.pp_funcs
-			&& adev->powerplay.pp_funcs->set_powergating_by_smu) ||
-			adev->asic_type == CHIP_RENOIR)
+	if (adev->flags & AMD_IS_APU)
 		amdgpu_dpm_set_powergating_by_smu(adev, AMD_IP_BLOCK_TYPE_SDMA, true);
 
 	return 0;
@@ -2202,6 +2199,7 @@ static int sdma_v4_0_set_powergating_state(void *handle,
 
 	switch (adev->asic_type) {
 	case CHIP_RAVEN:
+	case CHIP_RENOIR:
 		sdma_v4_1_update_power_gating(adev,
 				state == AMD_PG_STATE_GATE ? true : false);
 		break;

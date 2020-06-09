@@ -1453,6 +1453,11 @@ void dcn10_init_hw(struct dc *dc)
 	if (dc->clk_mgr->funcs->notify_wm_ranges)
 		dc->clk_mgr->funcs->notify_wm_ranges(dc->clk_mgr);
 
+#ifdef CONFIG_DRM_AMD_DC_DCN3_0
+	if (dc->clk_mgr->funcs->set_hard_max_memclk)
+		dc->clk_mgr->funcs->set_hard_max_memclk(dc->clk_mgr);
+#endif
+
 }
 
 void dcn10_reset_hw_ctx_wrap(
@@ -2576,14 +2581,15 @@ void dcn10_blank_pixel_data(
 		if (stream_res->tg->funcs->set_blank)
 			stream_res->tg->funcs->set_blank(stream_res->tg, blank);
 		if (stream_res->abm) {
-			stream_res->abm->funcs->set_pipe(stream_res->abm, stream_res->tg->inst + 1,
-					stream->link->panel_cntl->inst);
+			dc->hwss.set_pipe(pipe_ctx);
 			stream_res->abm->funcs->set_abm_level(stream_res->abm, stream->abm_level);
 		}
 	} else if (blank) {
 		dc->hwss.set_abm_immediate_disable(pipe_ctx);
-		if (stream_res->tg->funcs->set_blank)
+		if (stream_res->tg->funcs->set_blank) {
+			stream_res->tg->funcs->wait_for_state(stream_res->tg, CRTC_STATE_VBLANK);
 			stream_res->tg->funcs->set_blank(stream_res->tg, blank);
+		}
 	}
 }
 

@@ -495,6 +495,7 @@ struct pptable_funcs {
 	int (*update_pcie_parameters)(struct smu_context *smu, uint32_t pcie_gen_cap, uint32_t pcie_width_cap);
 	int (*i2c_eeprom_init)(struct i2c_adapter *control);
 	void (*i2c_eeprom_fini)(struct i2c_adapter *control);
+	void (*get_unique_id)(struct smu_context *smu);
 	int (*get_dpm_clock_table)(struct smu_context *smu, struct dpm_clocks *clock_table);
 	int (*init_microcode)(struct smu_context *smu);
 	int (*load_microcode)(struct smu_context *smu);
@@ -511,8 +512,6 @@ struct pptable_funcs {
 	int (*populate_smc_tables)(struct smu_context *smu);
 	int (*check_fw_version)(struct smu_context *smu);
 	int (*powergate_sdma)(struct smu_context *smu, bool gate);
-	int (*powergate_vcn)(struct smu_context *smu, bool gate);
-	int (*powergate_jpeg)(struct smu_context *smu, bool gate);
 	int (*set_gfx_cgpg)(struct smu_context *smu, bool enable);
 	int (*write_pptable)(struct smu_context *smu);
 	int (*set_min_dcef_deep_sleep)(struct smu_context *smu);
@@ -530,8 +529,8 @@ struct pptable_funcs {
 	int (*set_power_limit)(struct smu_context *smu, uint32_t n);
 	int (*get_current_clk_freq)(struct smu_context *smu, enum smu_clk_type clk_id, uint32_t *value);
 	int (*init_max_sustainable_clocks)(struct smu_context *smu);
-	int (*start_thermal_control)(struct smu_context *smu);
-	int (*stop_thermal_control)(struct smu_context *smu);
+	int (*enable_thermal_alert)(struct smu_context *smu);
+	int (*disable_thermal_alert)(struct smu_context *smu);
 	int (*set_deep_sleep_dcefclk)(struct smu_context *smu, uint32_t clk);
 	int (*set_active_display_count)(struct smu_context *smu, uint32_t count);
 	int (*store_cc6_data)(struct smu_context *smu, uint32_t separation_time,
@@ -575,6 +574,7 @@ struct pptable_funcs {
 	uint32_t (*get_pptable_power_limit)(struct smu_context *smu);
 	int (*disable_umc_cdr_12gbps_workaround)(struct smu_context *smu);
 	int (*set_power_source)(struct smu_context *smu, enum smu_power_src_type power_src);
+	void (*log_thermal_throttling_event)(struct smu_context *smu);
 };
 
 int smu_load_microcode(struct smu_context *smu);
@@ -675,7 +675,6 @@ int smu_update_table(struct smu_context *smu, enum smu_table_id table_index, int
 		     void *table_data, bool drv2smu);
 
 bool is_support_sw_smu(struct amdgpu_device *adev);
-bool is_support_sw_smu_xgmi(struct amdgpu_device *adev);
 int smu_reset(struct smu_context *smu);
 int smu_common_read_sensor(struct smu_context *smu, enum amd_pp_sensors sensor,
 			   void *data, uint32_t *size);

@@ -1235,6 +1235,8 @@ static const struct amdgpu_gfxoff_quirk amdgpu_gfxoff_quirk_list[] = {
 	{ 0x1002, 0x15dd, 0x103c, 0x83e7, 0xd3 },
 	/* GFXOFF is unstable on C6 parts with a VBIOS 113-RAVEN-114 */
 	{ 0x1002, 0x15dd, 0x1002, 0x15dd, 0xc6 },
+	/* https://bugzilla.kernel.org/show_bug.cgi?id=207899 */
+	{ 0x1002, 0x15dd, 0x103c, 0x83e9, 0xd6 },
 	{ 0, 0, 0, 0, 0 },
 };
 
@@ -1890,7 +1892,7 @@ static int gfx_v9_0_rlc_init(struct amdgpu_device *adev)
 			return r;
 	}
 
-	if (adev->asic_type == CHIP_RAVEN || adev->asic_type == CHIP_RENOIR) {
+	if (adev->flags & AMD_IS_APU) {
 		/* TODO: double check the cp_table_size for RV */
 		adev->gfx.rlc.cp_table_size = ALIGN(96 * 5 * 4, 2048) + (64 * 1024); /* JT + GDS */
 		r = amdgpu_gfx_rlc_init_cpt(adev);
@@ -2384,7 +2386,7 @@ static int gfx_v9_0_sw_fini(void *handle)
 
 	gfx_v9_0_mec_fini(adev);
 	amdgpu_bo_unref(&adev->gfx.rlc.clear_state_obj);
-	if (adev->asic_type == CHIP_RAVEN || adev->asic_type == CHIP_RENOIR) {
+	if (adev->flags & AMD_IS_APU) {
 		amdgpu_bo_free_kernel(&adev->gfx.rlc.cp_table_obj,
 				&adev->gfx.rlc.cp_table_gpu_addr,
 				(void **)&adev->gfx.rlc.cp_table_ptr);
