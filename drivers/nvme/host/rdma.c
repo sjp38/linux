@@ -522,7 +522,7 @@ static int nvme_rdma_create_queue_ib(struct nvme_rdma_queue *queue)
 		if (ret) {
 			dev_err(queue->ctrl->ctrl.device,
 				"failed to initialize PI MR pool sized %d for QID %d\n",
-				queue->queue_size, idx);
+				queue->queue_size, nvme_rdma_queue_idx(queue));
 			goto out_destroy_mr_pool;
 		}
 	}
