@@ -652,10 +652,6 @@ struct amdgpu_fw_vram_usage {
 	u64 size;
 	struct amdgpu_bo *reserved_bo;
 	void *va;
-
-	/* GDDR6 training support flag.
-	*/
-	bool mem_train_support;
 };
 
 /*
@@ -993,6 +989,9 @@ struct amdgpu_device {
 	char				serial[16];
 
 	struct amdgpu_autodump		autodump;
+
+	atomic_t			throttling_logging_enabled;
+	struct ratelimit_state		throttling_logging_rs;
 };
 
 static inline struct amdgpu_device *amdgpu_ttm_adev(struct ttm_bo_device *bdev)

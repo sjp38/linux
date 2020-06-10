@@ -26,7 +26,10 @@
 #include "../dmub_srv.h"
 #include "dmub_dcn20.h"
 #include "dmub_dcn21.h"
-#include "dmub_fw_meta.h"
+#include "dmub_cmd.h"
+#ifdef CONFIG_DRM_AMD_DC_DCN3_0
+#include "dmub_dcn30.h"
+#endif
 #include "os_types.h"
 /*
  * Note: the DMUB service is standalone. No additional headers should be
@@ -47,10 +50,10 @@
 #define DMUB_MAILBOX_SIZE (DMUB_RB_SIZE)
 
 /* Default state size if meta is absent. */
-#define DMUB_FW_STATE_SIZE (1024)
+#define DMUB_FW_STATE_SIZE (64 * 1024)
 
 /* Default tracebuffer size if meta is absent. */
-#define DMUB_TRACE_BUFFER_SIZE (1024)
+#define DMUB_TRACE_BUFFER_SIZE (64 * 1024)
 
 /* Default scratch mem size. */
 #define DMUB_SCRATCH_MEM_SIZE (256)
@@ -62,6 +65,7 @@
 #define DMUB_CW0_BASE (0x60000000)
 #define DMUB_CW1_BASE (0x61000000)
 #define DMUB_CW3_BASE (0x63000000)
+#define DMUB_CW4_BASE (0x64000000)
 #define DMUB_CW5_BASE (0x65000000)
 #define DMUB_CW6_BASE (0x66000000)
 
@@ -98,12 +102,12 @@ dmub_get_fw_meta_info(const struct dmub_srv_region_params *params)
 	uint32_t blob_size = 0;
 	uint32_t meta_offset = 0;
 
-	if (params->fw_bss_data) {
+	if (params->fw_bss_data && params->bss_data_size) {
 		/* Legacy metadata region. */
 		blob = params->fw_bss_data;
 		blob_size = params->bss_data_size;
 		meta_offset = DMUB_FW_META_OFFSET;
-	} else if (params->fw_inst_const) {
+	} else if (params->fw_inst_const && params->inst_const_size) {
 		/* Combined metadata region. */
 		blob = params->fw_inst_const;
 		blob_size = params->inst_const_size;
@@ -132,6 +136,9 @@ static bool dmub_srv_hw_setup(struct dmub_srv *dmub, enum dmub_asic asic)
 	switch (asic) {
 	case DMUB_ASIC_DCN20:
 	case DMUB_ASIC_DCN21:
+#ifdef CONFIG_DRM_AMD_DC_DCN3_0
+	case DMUB_ASIC_DCN30:
+#endif
 		dmub->regs = &dmub_srv_dcn20_regs;
 
 		funcs->reset = dmub_dcn20_reset;
@@ -153,6 +160,15 @@ static bool dmub_srv_hw_setup(struct dmub_srv *dmub, enum dmub_asic asic)
 			funcs->is_auto_load_done = dmub_dcn21_is_auto_load_done;
 			funcs->is_phy_init = dmub_dcn21_is_phy_init;
 		}
+#ifdef CONFIG_DRM_AMD_DC_DCN3_0
+		if (asic == DMUB_ASIC_DCN30) {
+			dmub->regs = &dmub_srv_dcn30_regs;
+
+			funcs->is_auto_load_done = dmub_dcn30_is_auto_load_done;
+			funcs->backdoor_load = dmub_dcn30_backdoor_load;
+			funcs->setup_windows = dmub_dcn30_setup_windows;
+		}
+#endif
 		break;
 
 	default:
@@ -172,6 +188,7 @@ enum dmub_status dmub_srv_create(struct dmub_srv *dmub,
 	dmub->funcs = params->funcs;
 	dmub->user_ctx = params->user_ctx;
 	dmub->asic = params->asic;
+	dmub->fw_version = params->fw_version;
 	dmub->is_virtual = params->is_virtual;
 
 	/* Setup asic dependent hardware funcs. */
@@ -402,7 +419,7 @@ enum dmub_status dmub_srv_hw_init(struct dmub_srv *dmub,
 		cw3.region.top = cw3.region.base + bios_fb->size;
 
 		cw4.offset.quad_part = mail_fb->gpu_addr;
-		cw4.region.base = cw3.region.top + 1;
+		cw4.region.base = DMUB_CW4_BASE;
 		cw4.region.top = cw4.region.base + mail_fb->size;
 
 		inbox1.base = cw4.region.base;

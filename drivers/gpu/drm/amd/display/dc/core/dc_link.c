@@ -521,11 +521,11 @@ static void link_disconnect_remap(struct dc_sink *prev_sink, struct dc_link *lin
 }
 
 #if defined(CONFIG_DRM_AMD_DC_HDCP)
-bool dc_link_is_hdcp14(struct dc_link *link)
+bool dc_link_is_hdcp14(struct dc_link *link, enum signal_type signal)
 {
 	bool ret = false;
 
-	switch (link->connector_signal)	{
+	switch (signal)	{
 	case SIGNAL_TYPE_DISPLAY_PORT:
 	case SIGNAL_TYPE_DISPLAY_PORT_MST:
 		ret = link->hdcp_caps.bcaps.bits.HDCP_CAPABLE;
@@ -545,11 +545,11 @@ bool dc_link_is_hdcp14(struct dc_link *link)
 	return ret;
 }
 
-bool dc_link_is_hdcp22(struct dc_link *link)
+bool dc_link_is_hdcp22(struct dc_link *link, enum signal_type signal)
 {
 	bool ret = false;
 
-	switch (link->connector_signal)	{
+	switch (signal)	{
 	case SIGNAL_TYPE_DISPLAY_PORT:
 	case SIGNAL_TYPE_DISPLAY_PORT_MST:
 		ret = (link->hdcp_caps.bcaps.bits.HDCP_CAPABLE &&
@@ -691,10 +691,9 @@ static bool detect_dp(struct dc_link *link,
 	if (sink_caps->transaction_type == DDC_TRANSACTION_TYPE_I2C_OVER_AUX) {
 		sink_caps->signal = SIGNAL_TYPE_DISPLAY_PORT;
 
-		dpcd_set_source_specific_data(link);
-
 		if (!detect_dp_sink_caps(link))
 			return false;
+		dpcd_set_source_specific_data(link);
 
 		if (is_mst_supported(link)) {
 			sink_caps->signal = SIGNAL_TYPE_DISPLAY_PORT_MST;
@@ -3134,6 +3133,11 @@ void core_link_enable_stream(
 
 	pipe_ctx->stream->link->link_state_valid = true;
 
+#if defined(CONFIG_DRM_AMD_DC_DCN3_0)
+		if (pipe_ctx->stream_res.tg->funcs->set_out_mux)
+					pipe_ctx->stream_res.tg->funcs->set_out_mux(pipe_ctx->stream_res.tg, OUT_MUX_DIO);
+#endif
+
 	if (dc_is_dvi_signal(pipe_ctx->stream->signal))
 		pipe_ctx->stream_res.stream_enc->funcs->dvi_set_stream_attribute(
 			pipe_ctx->stream_res.stream_enc,
@@ -3215,6 +3219,15 @@ void core_link_enable_stream(
 			pipe_ctx->stream_res.tg->funcs->set_test_pattern(pipe_ctx->stream_res.tg,
 					CONTROLLER_DP_TEST_PATTERN_VIDEOMODE,
 					COLOR_DEPTH_UNDEFINED);
+
+		/* This second call is needed to reconfigure the DIG
+		 * as a workaround for the incorrect value being applied
+		 * from transmitter control.
+		 */
+		if (!dc_is_virtual_signal(pipe_ctx->stream->signal))
+			stream->link->link_enc->funcs->setup(
+				stream->link->link_enc,
+				pipe_ctx->stream->signal);
 
 		dc->hwss.enable_stream(pipe_ctx);
 
