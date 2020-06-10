@@ -11,6 +11,7 @@ TODOs
   and targets)
 - Refine the functions export commit messages for Brendan's questions (what
   commit really require the changes?)
+- Export page_lock_anon_vma_read, rmap_walk, and page_rmapping for module build
 
 
 Done
