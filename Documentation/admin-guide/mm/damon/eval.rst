@@ -4,25 +4,26 @@
 Evaluation
 ==========
 
-DAMON is lightweight.  It increases system memory usage by only -0.39% and
+DAMON is lightweight.  It increases system memory usage by only -0.45% and
 consumes less than 1% CPU time in most case.  It slows target workloads down by
-only 0.63%.
+only 0.55%.
 
 DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP, 'ethp', removes 69.43% of
-THP memory overheads while preserving 37.11% of THP speedup.  Another
-experimental DAMON-based 'proactive reclamation' implementation, 'prcl',
-reduces 89.30% of residential sets and 22.40% of system memory footprint while
-incurring only 1.98% runtime overhead in the best case (parsec3/freqmine).
+experimental DAMON-based operation scheme for THP, 'ethp', removes 66.36% of
+THP memory overheads while preserving 54% of THP speedup.  Another experimental
+DAMON-based 'proactive reclamation' implementation, 'prcl', reduces 89.16% of
+residential sets and 25.39% of system memory footprint while incurring only
+2.3% runtime overhead in the best case (parsec3/freqmine).
 
 Setup
 =====
 
-On a QEMU/KVM based virtual machine hosted by an Intel i7 host machine running
-Ubuntu 18.04, I measure runtime and consumed system memory while running
-various realistic workloads with several configurations.  I use 13 and 12
-workloads in PARSEC3 [3]_ and SPLASH-2X [4]_ benchmark suites, respectively.  I
-use another wrapper scripts [5]_ for convenient setup and run of the workloads.
+On a QEMU/KVM based virtual machine utilizing 16GB of RAM and hosted by an
+Intel i7 machine running Ubuntu 18.04, I measure runtime and consumed system
+memory while running various realistic workloads with several configurations.
+I use 13 and 12 workloads in PARSEC3 [3]_ and SPLASH-2X [4]_ benchmark suites,
+respectively.  I use another wrapper scripts [5]_ for convenient setup and run
+of the workloads.
 
 Measurement
 -----------
@@ -38,14 +39,16 @@ Configurations
 The configurations I use are as below.
 
 - orig: Linux v5.5 with 'madvise' THP policy
-- rec: 'orig' plus DAMON running with record feature
+- rec: 'orig' plus DAMON running with virtual memory access recording
+- prec: 'orig' plus DAMON running with physical memory access recording
 - thp: same with 'orig', but use 'always' THP policy
 - ethp: 'orig' plus a DAMON operation scheme, 'efficient THP'
 - prcl: 'orig' plus a DAMON operation scheme, 'proactive reclaim [6]_'
 
 I use 'rec' for measurement of DAMON overheads to target workloads and system
-memory.  The remaining configs including 'thp', 'ethp', and 'prcl' are for
-measurement of DAMON monitoring accuracy.
+memory.  'prec' is for physical memory monitroing and recording.  It monitors
+12GB sized 'System RAM' region.  The remaining configs including 'thp', 'ethp',
+and 'prcl' are for measurement of DAMON monitoring accuracy.
 
 'ethp' and 'prcl' are simple DAMON-based operation schemes developed for
 proof of concepts of DAMON.  'ethp' reduces memory space waste of THP by using
@@ -81,91 +84,94 @@ Below two tables show the measurement results.  The runtimes are in seconds
 while the memory usages are in KiB.  Each configuration except 'orig' shows
 its overhead relative to 'orig' in percent within parenthesizes.::
 
-    runtime                 orig     rec      (overhead) thp      (overhead) ethp     (overhead) prcl     (overhead)
-    parsec3/blackscholes    106.888  108.158  (1.19)     107.082  (0.18)     107.429  (0.51)     115.307  (7.88)
-    parsec3/bodytrack       79.235   79.631   (0.50)     79.379   (0.18)     79.368   (0.17)     80.493   (1.59)
-    parsec3/canneal         139.014  140.668  (1.19)     122.524  (-11.86)   134.214  (-3.45)    143.914  (3.52)
-    parsec3/dedup           11.883   11.933   (0.42)     11.737   (-1.23)    11.904   (0.18)     13.236   (11.39)
-    parsec3/facesim         208.675  209.123  (0.21)     205.758  (-1.40)    207.150  (-0.73)    210.075  (0.67)
-    parsec3/ferret          190.099  191.667  (0.82)     190.354  (0.13)     191.256  (0.61)     192.305  (1.16)
-    parsec3/fluidanimate    211.297  212.724  (0.68)     209.383  (-0.91)    212.653  (0.64)     212.622  (0.63)
-    parsec3/freqmine        290.441  292.775  (0.80)     289.952  (-0.17)    291.501  (0.36)     296.205  (1.98)
-    parsec3/raytrace        119.029  119.661  (0.53)     119.551  (0.44)     120.368  (1.12)     133.943  (12.53)
-    parsec3/streamcluster   323.952  328.647  (1.45)     284.653  (-12.13)   289.881  (-10.52)   328.274  (1.33)
-    parsec3/swaptions       154.964  155.210  (0.16)     155.238  (0.18)     155.839  (0.56)     156.107  (0.74)
-    parsec3/vips            59.052   58.983   (-0.12)    58.950   (-0.17)    58.967   (-0.14)    59.978   (1.57)
-    parsec3/x264            72.536   69.273   (-4.50)    63.240   (-12.82)   71.688   (-1.17)    68.089   (-6.13)
-    splash2x/barnes         80.328   81.241   (1.14)     74.921   (-6.73)    78.784   (-1.92)    110.985  (38.16)
-    splash2x/fft            33.250   33.527   (0.83)     23.007   (-30.81)   32.634   (-1.85)    40.968   (23.21)
-    splash2x/lu_cb          85.438   85.634   (0.23)     85.112   (-0.38)    85.972   (0.63)     90.131   (5.49)
-    splash2x/lu_ncb         92.407   93.775   (1.48)     90.297   (-2.28)    93.443   (1.12)     94.041   (1.77)
-    splash2x/ocean_cp       44.578   44.827   (0.56)     43.087   (-3.35)    43.977   (-1.35)    45.840   (2.83)
-    splash2x/ocean_ncp      82.248   81.990   (-0.31)    51.128   (-37.84)   64.951   (-21.03)   112.929  (37.30)
-    splash2x/radiosity      91.234   91.869   (0.70)     90.466   (-0.84)    91.623   (0.43)     104.004  (14.00)
-    splash2x/radix          31.340   31.533   (0.61)     25.151   (-19.75)   29.634   (-5.44)    41.771   (33.28)
-    splash2x/raytrace       84.232   84.939   (0.84)     82.813   (-1.69)    83.432   (-0.95)    85.422   (1.41)
-    splash2x/volrend        87.056   88.313   (1.44)     86.126   (-1.07)    87.473   (0.48)     88.180   (1.29)
-    splash2x/water_nsquared 232.762  234.777  (0.87)     220.799  (-5.14)    222.883  (-4.24)    235.231  (1.06)
-    splash2x/water_spatial  89.835   89.925   (0.10)     89.730   (-0.12)    89.643   (-0.21)    97.167   (8.16)
-    total                   3001.780 3020.810 (0.63)     2860.450 (-4.71)    2936.640 (-2.17)    3157.220 (5.18)
+    runtime                 orig     rec      (overhead) prec     (overhead) thp      (overhead) ethp     (overhead) prcl     (overhead)
+    parsec3/blackscholes    106.818  107.938  (1.05)     107.104  (0.27)     106.876  (0.05)     106.965  (0.14)     114.997  (7.66)
+    parsec3/bodytrack       78.880   79.904   (1.30)     79.066   (0.24)     78.938   (0.07)     79.048   (0.21)     80.779   (2.41)
+    parsec3/canneal         142.251  145.288  (2.14)     146.524  (3.00)     124.451  (-12.51)   133.523  (-6.14)    152.869  (7.46)
+    parsec3/dedup           11.945   12.012   (0.56)     11.984   (0.32)     11.705   (-2.01)    11.950   (0.04)     13.358   (11.82)
+    parsec3/facesim         210.061  213.836  (1.80)     210.905  (0.40)     205.304  (-2.26)    207.346  (-1.29)    213.990  (1.87)
+    parsec3/ferret          190.955  192.236  (0.67)     192.379  (0.75)     190.720  (-0.12)    191.177  (0.12)     192.925  (1.03)
+    parsec3/fluidanimate    212.457  214.905  (1.15)     215.798  (1.57)     209.373  (-1.45)    213.872  (0.67)     215.930  (1.63)
+    parsec3/freqmine        289.294  290.358  (0.37)     291.275  (0.68)     289.887  (0.20)     290.322  (0.36)     295.961  (2.30)
+    parsec3/raytrace        118.208  119.210  (0.85)     119.725  (1.28)     119.375  (0.99)     118.661  (0.38)     134.613  (13.88)
+    parsec3/streamcluster   330.524  334.900  (1.32)     335.208  (1.42)     283.719  (-14.16)   288.752  (-12.64)   341.505  (3.32)
+    parsec3/swaptions       154.055  154.688  (0.41)     156.273  (1.44)     155.510  (0.94)     155.432  (0.89)     155.115  (0.69)
+    parsec3/vips            58.825   58.981   (0.27)     59.123   (0.51)     59.309   (0.82)     59.029   (0.35)     60.082   (2.14)
+    parsec3/x264            70.905   67.380   (-4.97)    68.890   (-2.84)    73.331   (3.42)     64.857   (-8.53)    65.789   (-7.22)
+    splash2x/barnes         80.632   81.246   (0.76)     81.968   (1.66)     74.138   (-8.05)    80.754   (0.15)     110.976  (37.63)
+    splash2x/fft            33.683   33.916   (0.69)     34.038   (1.05)     25.450   (-24.44)   32.809   (-2.60)    43.372   (28.76)
+    splash2x/lu_cb          85.662   85.634   (-0.03)    86.353   (0.81)     85.208   (-0.53)    86.075   (0.48)     90.356   (5.48)
+    splash2x/lu_ncb         93.915   94.018   (0.11)     94.608   (0.74)     90.005   (-4.16)    95.919   (2.13)     94.573   (0.70)
+    splash2x/ocean_cp       46.004   46.049   (0.10)     46.983   (2.13)     43.075   (-6.37)    46.098   (0.20)     47.242   (2.69)
+    splash2x/ocean_ncp      88.804   89.182   (0.43)     91.497   (3.03)     51.220   (-42.32)   69.361   (-21.89)   137.835  (55.21)
+    splash2x/radiosity      92.037   91.662   (-0.41)    92.526   (0.53)     90.509   (-1.66)    92.623   (0.64)     104.414  (13.45)
+    splash2x/radix          31.823   31.747   (-0.24)    31.965   (0.45)     25.010   (-21.41)   31.272   (-1.73)    46.786   (47.02)
+    splash2x/raytrace       84.642   84.717   (0.09)     84.274   (-0.44)    82.415   (-2.63)    83.926   (-0.85)    85.343   (0.83)
+    splash2x/volrend        87.495   87.546   (0.06)     87.184   (-0.36)    85.760   (-1.98)    87.779   (0.33)     87.924   (0.49)
+    splash2x/water_nsquared 238.413  237.802  (-0.26)    239.113  (0.29)     218.300  (-8.44)    223.854  (-6.11)    240.465  (0.86)
+    splash2x/water_spatial  89.365   89.210   (-0.17)    89.200   (-0.19)    89.371   (0.01)     90.466   (1.23)     96.516   (8.00)
+    total                   3027.640 3044.380 (0.55)     3053.960 (0.87)     2868.960 (-5.24)    2941.860 (-2.83)    3223.720 (6.48)
 
 
-    memused.avg             orig         rec          (overhead) thp          (overhead) ethp         (overhead) prcl         (overhead)
-    parsec3/blackscholes    1820134.000  1830056.000  (0.55)     1820762.000  (0.03)     1833280.400  (0.72)     1620112.200  (-10.99)
-    parsec3/bodytrack       1419200.200  1430358.200  (0.79)     1415382.400  (-0.27)    1431830.400  (0.89)     1428315.400  (0.64)
-    parsec3/canneal         1041700.200  1054783.600  (1.26)     1039941.200  (-0.17)    1049565.600  (0.76)     1051594.600  (0.95)
-    parsec3/dedup           2403454.400  2413097.800  (0.40)     2411733.600  (0.34)     2404252.000  (0.03)     2412274.600  (0.37)
-    parsec3/facesim         539662.800   552780.800   (2.43)     540933.200   (0.24)     550971.400   (2.10)     548370.000   (1.61)
-    parsec3/ferret          320565.800   331712.000   (3.48)     319322.600   (-0.39)    332973.200   (3.87)     331142.000   (3.30)
-    parsec3/fluidanimate    572426.400   584585.200   (2.12)     575249.600   (0.49)     584782.000   (2.16)     574169.400   (0.30)
-    parsec3/freqmine        985943.600   998553.400   (1.28)     1028516.600  (4.32)     998298.000   (1.25)     765104.200   (-22.40)
-    parsec3/raytrace        1747157.200  1757628.000  (0.60)     1743396.200  (-0.22)    1754790.600  (0.44)     1569932.000  (-10.14)
-    parsec3/streamcluster   121307.000   134103.200   (10.55)    118746.200   (-2.11)    133971.600   (10.44)    132233.400   (9.01)
-    parsec3/swaptions       14363.400    26875.400    (87.11)    14055.000    (-2.15)    26496.200    (84.47)    27033.800    (88.21)
-    parsec3/vips            2945431.400  2963379.200  (0.61)     2956226.200  (0.37)     2943295.800  (-0.07)    2957360.400  (0.41)
-    parsec3/x264            3191271.200  3196683.800  (0.17)     3161188.400  (-0.94)    3200352.000  (0.28)     3184628.600  (-0.21)
-    splash2x/barnes         1213799.200  1216094.000  (0.19)     1217834.800  (0.33)     1212186.200  (-0.13)    928636.400   (-23.49)
-    splash2x/fft            9462681.600  9183411.000  (-2.95)    9265091.400  (-2.09)    9166673.600  (-3.13)    9424556.600  (-0.40)
-    splash2x/lu_cb          515952.400   521722.600   (1.12)     520563.600   (0.89)     520948.600   (0.97)     335968.400   (-34.88)
-    splash2x/lu_ncb         515638.000   522689.600   (1.37)     521192.200   (1.08)     523513.600   (1.53)     523046.000   (1.44)
-    splash2x/ocean_cp       3349483.000  3290003.000  (-1.78)    3380084.400  (0.91)     3340689.800  (-0.26)    3292473.200  (-1.70)
-    splash2x/ocean_ncp      3895485.600  3871371.400  (-0.62)    7066323.600  (81.40)    4970278.200  (27.59)    3637734.400  (-6.62)
-    splash2x/radiosity      1472652.200  1470431.600  (-0.15)    1482235.000  (0.65)     1471199.800  (-0.10)    513667.600   (-65.12)
-    splash2x/radix          1692530.000  1686171.200  (-0.38)    1382322.000  (-18.33)   1583722.600  (-6.43)    1892434.400  (11.81)
-    splash2x/raytrace       46488.400    58600.600    (26.05)    51538.200    (10.86)    60059.400    (29.19)    55203.000    (18.75)
-    splash2x/volrend        150022.400   166788.400   (11.18)    151466.000   (0.96)     163678.600   (9.10)     161593.400   (7.71)
-    splash2x/water_nsquared 49073.200    62559.000    (27.48)    60601.800    (23.49)    64762.800    (31.97)    53323.000    (8.66)
-    splash2x/water_spatial  666074.200   672698.600   (0.99)     668054.000   (0.30)     673098.200   (1.05)     536452.200   (-19.46)
-    total                   40152600.000 39997300.000 (-0.39)    42912754.000 (6.87)     40995700.000 (2.10)     37957300.000 (-5.47)
+    memused.avg             orig         rec          (overhead) prec         (overhead) thp          (overhead) ethp         (overhead) prcl         (overhead)
+    parsec3/blackscholes    1802238.200  1806011.800  (0.21)     1800943.200  (-0.07)    1777784.000  (-1.36)    1782858.000  (-1.08)    1555850.600  (-13.67)
+    parsec3/bodytrack       1397968.400  1403989.000  (0.43)     1412880.800  (1.07)     1375692.600  (-1.59)    1383830.400  (-1.01)    1378257.200  (-1.41)
+    parsec3/canneal         1013394.400  1029361.000  (1.58)     1005957.600  (-0.73)    982658.800   (-3.03)    986869.400   (-2.62)    992715.200   (-2.04)
+    parsec3/dedup           2444439.800  2336649.000  (-4.41)    2373152.400  (-2.92)    2403313.600  (-1.68)    2429320.200  (-0.62)    2370761.600  (-3.01)
+    parsec3/facesim         526276.800   536105.800   (1.87)     534458.600   (1.55)     519190.800   (-1.35)    524337.400   (-0.37)    520213.400   (-1.15)
+    parsec3/ferret          305199.200   315198.200   (3.28)     315796.800   (3.47)     295800.600   (-3.08)    304196.600   (-0.33)    303591.400   (-0.53)
+    parsec3/fluidanimate    567214.200   576300.200   (1.60)     574757.800   (1.33)     564007.600   (-0.57)    570454.400   (0.57)     610850.600   (7.69)
+    parsec3/freqmine        963227.600   973483.200   (1.06)     967950.600   (0.49)     945590.000   (-1.83)    951364.600   (-1.23)    718629.200   (-25.39)
+    parsec3/raytrace        1731695.400  1735024.200  (0.19)     1719210.000  (-0.72)    1702991.200  (-1.66)    1710843.000  (-1.20)    1529754.200  (-11.66)
+    parsec3/streamcluster   113578.800   126687.200   (11.54)    128355.200   (13.01)    112044.600   (-1.35)    120691.400   (6.26)     117356.400   (3.33)
+    parsec3/swaptions       8678.800     19770.200    (127.80)   17826.200    (105.40)   5580.400     (-35.70)   14635.000    (68.63)    12494.200    (43.96)
+    parsec3/vips            2921135.800  2936119.800  (0.51)     2929623.400  (0.29)     2856140.400  (-2.22)    2904266.000  (-0.58)    2902977.200  (-0.62)
+    parsec3/x264            3149015.800  3160569.800  (0.37)     3142172.800  (-0.22)    3098789.400  (-1.59)    3111801.200  (-1.18)    3111774.400  (-1.18)
+    splash2x/barnes         1205029.000  1204898.400  (-0.01)    1190710.000  (-1.19)    1209728.200  (0.39)     1200073.800  (-0.41)    911751.200   (-24.34)
+    splash2x/fft            9382596.800  9229500.000  (-1.63)    8462232.000  (-9.81)    9430863.800  (0.51)     9215691.600  (-1.78)    9598278.400  (2.30)
+    splash2x/lu_cb          509417.400   514866.800   (1.07)     504017.600   (-1.06)    511991.800   (0.51)     510458.000   (0.20)     322114.600   (-36.77)
+    splash2x/lu_ncb         508359.400   515627.200   (1.43)     500918.600   (-1.46)    513402.400   (0.99)     511902.000   (0.70)     512092.200   (0.73)
+    splash2x/ocean_cp       3349734.200  3299650.800  (-1.50)    3149056.600  (-5.99)    3379062.800  (0.88)     3294031.800  (-1.66)    3289963.400  (-1.78)
+    splash2x/ocean_ncp      3908069.000  3878726.400  (-0.75)    3802927.600  (-2.69)    7061570.000  (80.69)    5198223.200  (33.01)    3613756.800  (-7.53)
+    splash2x/radiosity      1462249.600  1463372.000  (0.08)     1431969.400  (-2.07)    1474922.600  (0.87)     1458668.400  (-0.24)    493359.600   (-66.26)
+    splash2x/radix          1711385.600  1702230.200  (-0.53)    1627271.600  (-4.91)    1386774.600  (-18.97)   1661159.000  (-2.93)    1988290.600  (16.18)
+    splash2x/raytrace       39448.400    49703.800    (26.00)    47856.400    (21.31)    42644.600    (8.10)     48197.400    (22.18)    40136.600    (1.74)
+    splash2x/volrend        142892.400   155599.400   (8.89)     151978.000   (6.36)     139284.600   (-2.52)    147971.200   (3.55)     148731.000   (4.09)
+    splash2x/water_nsquared 40879.600    50183.000    (22.76)    48930.600    (19.69)    38879.800    (-4.89)    46986.800    (14.94)    43383.600    (6.13)
+    splash2x/water_spatial  662408.800   666122.200   (0.56)     650072.600   (-1.86)    658733.600   (-0.55)    660327.400   (-0.31)    537464.800   (-18.86)
+    total                   39866500.000 39685800.000 (-0.45)    38491200.000 (-3.45)    42487400.000 (6.57)     40749300.000 (2.21)     37624800.000 (-5.62)
 
 
 DAMON Overheads
 ---------------
 
-In total, DAMON recording feature incurs 0.63% runtime overhead and -0.39%
-memory space overhead.
+In total, DAMON virtual memory access recording feature ('rec') incurs 0.55%
+runtime overhead and -0.45% memory space overhead.  Even though the size of the
+monitoring target region becomes much larger with the physical memory access
+recording ('prec'), it still shows only modest amount of overhead ( 0.87% for
+runtime and -3.45% for memory footprint).
 
-For a convenience test run of 'rec', I use a Python wrapper.  The wrapper
-constantly consumes about 10-15MB of memory.  This becomes a high memory
-overhead if the target workload has a small memory footprint.  Nonetheless, the
-overheads are not from DAMON, but from the wrapper, and thus should be ignored.
-This fake memory overhead continues in 'ethp' and 'prcl', as those
-configurations are also using the Python wrapper.
+For a convenience test run of 'rec' and 'prec', I use a Python wrapper.  The
+wrapper constantly consumes about 10-15MB of memory.  This becomes a high
+memory overhead if the target workload has a small memory footprint.
+Nonetheless, the overheads are not from DAMON, but from the wrapper, and thus
+should be ignored.  This fake memory overhead continues in 'ethp' and 'prcl',
+as those configurations are also using the Python wrapper.
 
 
 Efficient THP
 -------------
 
-THP 'always' enabled policy achieves 4.71% speedup but incurs 6.87% memory
-overhead.  It achieves 37.84% speedup in the best case, but 81.40% memory
+THP 'always' enabled policy achieves 5.24% speedup but incurs 6.57% memory
+overhead.  It achieves 42.32% speedup in the best case, but 80.69% memory
 overhead in the worst case.  Interestingly, both the best and worst-case are
 with 'splash2x/ocean_ncp').
 
 The 2-lines implementation of data access monitoring based THP version ('ethp')
-shows 2.17% speedup and 2.10% memory overhead.  In other words, 'ethp' removes
-69.43% of THP memory waste while preserving 46.07% of THP speedup in total.  In
-the case of the 'splash2x/ocean_ncp', 'ethp' removes 66.10% of THP memory waste
-while preserving 55.57% of THP speedup.
+shows 2.83% speedup and 2.21% memory overhead.  In other words, 'ethp' removes
+66.36% of THP memory waste while preserving 54% of THP speedup in total.  In
+the case of the 'splash2x/ocean_ncp', 'ethp' removes 59.09% of THP memory waste
+while preserving 51.72% of THP speedup.
 
 
 Proactive Reclamation
@@ -174,42 +180,42 @@ Proactive Reclamation
 As same to the original work, I use 'zram' swap device for this configuration.
 
 In total, our 1 line implementation of Proactive Reclamation, 'prcl', incurred
-5.18% runtime overhead in total while achieving 5.47% system memory usage
+6.48% runtime overhead in total while achieving 5.62% system memory usage
 reduction.
 
 Nonetheless, as the memory usage is calculated with 'MemFree' in
 '/proc/meminfo', it contains the SwapCached pages.  As the swapcached pages can
 be easily evicted, I also measured the residential set size of the workloads::
 
-    rss.avg                 orig         rec          (overhead) thp          (overhead) ethp         (overhead) prcl         (overhead)
-    parsec3/blackscholes    590255.400   590427.600   (0.03)     592919.200   (0.45)     589924.600   (-0.06)    272620.800   (-53.81)
-    parsec3/bodytrack       32331.400    32280.200    (-0.16)    32304.600    (-0.08)    32295.600    (-0.11)    25386.400    (-21.48)
-    parsec3/canneal         839327.800   840517.600   (0.14)     837729.400   (-0.19)    839485.000   (0.02)     838981.200   (-0.04)
-    parsec3/dedup           1214897.200  1205565.200  (-0.77)    1231421.600  (1.36)     1206902.400  (-0.66)    909662.200   (-25.12)
-    parsec3/facesim         311656.600   310912.800   (-0.24)    314467.200   (0.90)     312564.200   (0.29)     308407.800   (-1.04)
-    parsec3/ferret          99738.600    99711.000    (-0.03)    101068.200   (1.33)     100018.200   (0.28)     90036.000    (-9.73)
-    parsec3/fluidanimate    531879.200   531871.200   (-0.00)    531891.000   (0.00)     532066.000   (0.04)     521523.000   (-1.95)
-    parsec3/freqmine        552169.800   553773.200   (0.29)     556495.800   (0.78)     553485.800   (0.24)     59071.000    (-89.30)
-    parsec3/raytrace        894327.600   894141.000   (-0.02)    890956.000   (-0.38)    892035.400   (-0.26)    303397.200   (-66.08)
-    parsec3/streamcluster   110943.200   110954.000   (0.01)     111407.400   (0.42)     111340.000   (0.36)     109841.000   (-0.99)
-    parsec3/swaptions       5680.000     5563.800     (-2.05)    5660.200     (-0.35)    5658.200     (-0.38)    3846.000     (-32.29)
-    parsec3/vips            31890.400    32098.200    (0.65)     32154.600    (0.83)     32321.600    (1.35)     29437.400    (-7.69)
-    parsec3/x264            81907.200    81854.000    (-0.06)    83120.400    (1.48)     82805.600    (1.10)     81796.200    (-0.14)
-    splash2x/barnes         1216312.800  1215561.000  (-0.06)    1224936.000  (0.71)     1219227.600  (0.24)     576351.600   (-52.61)
-    splash2x/fft            9587848.800  9587352.000  (-0.01)    9646184.400  (0.61)     9625447.600  (0.39)     7134239.600  (-25.59)
-    splash2x/lu_cb          510697.400   510591.800   (-0.02)    514411.400   (0.73)     510292.400   (-0.08)    314724.000   (-38.37)
-    splash2x/lu_ncb         510252.600   510340.200   (0.02)     513900.400   (0.71)     510359.200   (0.02)     510247.400   (-0.00)
-    splash2x/ocean_cp       3411545.800  3408327.400  (-0.09)    3441360.800  (0.87)     3394161.600  (-0.51)    3333649.000  (-2.28)
-    splash2x/ocean_ncp      3931731.200  3921194.600  (-0.27)    7178746.200  (82.58)    5099068.400  (29.69)    3157059.400  (-19.70)
-    splash2x/radiosity      1476138.800  1472629.200  (-0.24)    1485801.000  (0.65)     1477227.000  (0.07)     229545.600   (-84.45)
-    splash2x/radix          1757003.200  1760448.800  (0.20)     1435953.000  (-18.27)   1661870.000  (-5.41)    1456666.000  (-17.09)
-    splash2x/raytrace       23309.600    23310.400    (0.00)     28946.400    (24.18)    26803.600    (14.99)    15641.800    (-32.90)
-    splash2x/volrend        44090.600    44095.800    (0.01)     44491.400    (0.91)     44292.200    (0.46)     32785.000    (-25.64)
-    splash2x/water_nsquared 29437.600    29428.000    (-0.03)    29851.200    (1.41)     29746.600    (1.05)     26154.600    (-11.15)
-    splash2x/water_spatial  656379.400   656150.200   (-0.03)    656559.000   (0.03)     656055.200   (-0.05)    484139.600   (-26.24)
-    total                   28451700.000 28429000.000 (-0.08)    31522759.000 (10.79)    29545600.000 (3.84)     20825100.000 (-26.81)
+    rss.avg                 orig         rec          (overhead) prec         (overhead) thp          (overhead) ethp         (overhead) prcl         (overhead)
+    parsec3/blackscholes    592593.000   593708.000   (0.19)     593353.000   (0.13)     593932.000   (0.23)     593717.000   (0.19)     256305.000   (-56.75)
+    parsec3/bodytrack       32244.200    32322.400    (0.24)     32225.200    (-0.06)    32360.800    (0.36)     32273.800    (0.09)     25276.600    (-21.61)
+    parsec3/canneal         839853.200   838793.400   (-0.13)    840090.200   (0.03)     835110.600   (-0.56)    836953.600   (-0.35)    834654.400   (-0.62)
+    parsec3/dedup           1210068.400  1182739.800  (-2.26)    1222808.200  (1.05)     1239838.800  (2.46)     1190533.000  (-1.61)    926740.600   (-23.41)
+    parsec3/facesim         311302.000   311714.000   (0.13)     311372.800   (0.02)     315277.200   (1.28)     312964.800   (0.53)     303001.600   (-2.67)
+    parsec3/ferret          99505.200    99704.000    (0.20)     99737.800    (0.23)     101184.200   (1.69)     100117.200   (0.62)     91092.400    (-8.45)
+    parsec3/fluidanimate    531842.400   531864.800   (0.00)     531828.800   (-0.00)    531902.400   (0.01)     531760.200   (-0.02)    521562.400   (-1.93)
+    parsec3/freqmine        552939.000   552337.400   (-0.11)    552254.800   (-0.12)    555928.400   (0.54)     553336.800   (0.07)     59944.800    (-89.16)
+    parsec3/raytrace        894300.600   894191.600   (-0.01)    892107.600   (-0.25)    894179.800   (-0.01)    895297.400   (0.11)     311002.000   (-65.22)
+    parsec3/streamcluster   110912.200   110849.200   (-0.06)    110883.200   (-0.03)    111547.800   (0.57)     111880.600   (0.87)     109868.400   (-0.94)
+    parsec3/swaptions       5704.200     5659.000     (-0.79)    5633.000     (-1.25)    5728.200     (0.42)     5712.600     (0.15)     3898.600     (-31.65)
+    parsec3/vips            31818.000    31831.800    (0.04)     31685.400    (-0.42)    31901.600    (0.26)     31794.200    (-0.07)    29020.000    (-8.79)
+    parsec3/x264            81958.200    81745.000    (-0.26)    81600.600    (-0.44)    82696.000    (0.90)     82123.400    (0.20)     81115.200    (-1.03)
+    splash2x/barnes         1216144.200  1216376.600  (0.02)     1216845.400  (0.06)     1227079.400  (0.90)     1218267.200  (0.17)     590483.800   (-51.45)
+    splash2x/fft            9728971.800  9770172.000  (0.42)     9682539.600  (-0.48)    9959336.800  (2.37)     9546560.200  (-1.87)    7291492.600  (-25.05)
+    splash2x/lu_cb          510926.000   509983.000   (-0.18)    510723.600   (-0.04)    514462.000   (0.69)     511226.600   (0.06)     317789.600   (-37.80)
+    splash2x/lu_ncb         510786.600   510748.800   (-0.01)    509392.200   (-0.27)    513945.600   (0.62)     510811.600   (0.00)     509706.600   (-0.21)
+    splash2x/ocean_cp       3398462.800  3406153.600  (0.23)     3409911.800  (0.34)     3444844.400  (1.36)     3384479.200  (-0.41)    3381901.400  (-0.49)
+    splash2x/ocean_ncp      3925272.200  3928702.800  (0.09)     3927020.800  (0.04)     7182825.000  (82.99)    5315597.000  (35.42)    3160177.200  (-19.49)
+    splash2x/radiosity      1474113.200  1476844.800  (0.19)     1470783.000  (-0.23)    1485701.600  (0.79)     1476519.600  (0.16)     215142.000   (-85.41)
+    splash2x/radix          1778255.400  1757130.400  (-1.19)    1779710.800  (0.08)     1447898.600  (-18.58)   1758506.000  (-1.11)    1510297.200  (-15.07)
+    splash2x/raytrace       23268.000    23251.200    (-0.07)    23266.400    (-0.01)    28786.400    (23.72)    27039.200    (16.21)    15778.800    (-32.19)
+    splash2x/volrend        44100.000    44116.200    (0.04)     44076.800    (-0.05)    44611.800    (1.16)     44186.200    (0.20)     32662.200    (-25.94)
+    splash2x/water_nsquared 29409.600    29403.200    (-0.02)    29403.200    (-0.02)    30182.000    (2.63)     29612.200    (0.69)     26038.000    (-11.46)
+    splash2x/water_spatial  657423.600   657594.400   (0.03)     657354.000   (-0.01)    657674.000   (0.04)     657407.000   (-0.00)    503569.800   (-23.40)
+    total                   28592300.000 28597900.000 (0.02)     28566654.000 (-0.09)    31868856.000 (11.46)    29758607.000 (4.08)     21108600.000 (-26.17)
 
-In total, 26.81% of residential sets were reduced.
+In total, 26.17% of residential sets were reduced.
 
-With parsec3/freqmine, 'prcl' reduced 89.30% of residential sets and 22.40% of
-system memory usage while incurring only 1.98% runtime overhead.
+With parsec3/freqmine, 'prcl' reduced 89.16% of residential sets and 25.39% of
+system memory usage while incurring only 2.3% runtime overhead.
