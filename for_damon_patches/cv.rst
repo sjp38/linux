@@ -65,11 +65,11 @@ are
 
 [1] https://damonitor.github.io/_index
 [2] https://damonitor.github.io/doc/html/latest-damon
-[3] https://damonitor.github.io/test/result/visual/latest/heatmap.0.html
-[4] https://damonitor.github.io/test/result/visual/latest/heatmap.1.html
-[5] https://damonitor.github.io/test/result/visual/latest/heatmap.2.html
-[6] https://damonitor.github.io/test/result/visual/latest/wss_sz.html
-[7] https://damonitor.github.io/test/result/visual/latest/wss_time.html
+[3] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.0.html
+[4] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.html
+[5] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.2.html
+[6] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.html
+[7] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.html
 [8] https://damonitor.github.io/test/result/perf/latest/html/index.html
 
 Baseline and Complete Git Trees
