@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Support for Intel Camera Imaging ISP subsystem.
  * Copyright (c) 2015, Intel Corporation.
@@ -50,7 +51,7 @@ int ia_css_eventq_send(
 {
 	u8 tmp[4];
 	u32 sw_event;
-	int error = ENOSYS;
+	int error = -ENOSYS;
 
 	/*
 	 * Encode the queue type, the thread ID and
@@ -65,7 +66,7 @@ int ia_css_eventq_send(
 	/* queue the software event (busy-waiting) */
 	for ( ; ; ) {
 		error = ia_css_queue_enqueue(eventq_handle, sw_event);
-		if (error != ENOBUFS) {
+		if (error != -ENOBUFS) {
 			/* We were able to successfully send the event
 			   or had a real failure. return the status*/
 			break;
