@@ -7,13 +7,14 @@ TODOs
 - Implement real 'min_nr_regions'
   Dynamically set max size of region based on this will also avoid the
   thunderings.
-- Refine the DAMOS commit message for Breandan's questions (DAMOS alternatives
-  and targets)
-- Refine the functions export commit messages for Brendan's questions (what
-  commit really require the changes?)
-- Export page_lock_anon_vma_read, rmap_walk, and page_rmapping for module build
 - Apply Varad's optimization
 
 
 Done
 ====
+
+- Export page_lock_anon_vma_read, rmap_walk, and page_rmapping for module build
+- Refine the functions export commit messages for Brendan's questions (what
+  commit really require the changes?)
+- Refine the DAMOS commit message for Breandan's questions (DAMOS alternatives
+  and targets)
