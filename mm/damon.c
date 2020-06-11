@@ -411,8 +411,11 @@ static void kdamond_init_regions(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
 
-	damon_for_each_task(t, ctx)
-		damon_init_regions_of(ctx, t);
+	damon_for_each_task(t, ctx) {
+		/* the user may set the target regions as they want */
+		if (!nr_damon_regions(t))
+			damon_init_regions_of(ctx, t);
+	}
 }
 
 /*
