@@ -579,6 +579,7 @@ out:
 	rcu_read_unlock();
 	return anon_vma;
 }
+EXPORT_SYMBOL_GPL(page_lock_anon_vma_read);
 
 void page_unlock_anon_vma_read(struct anon_vma *anon_vma)
 {
@@ -1934,6 +1935,7 @@ void rmap_walk(struct page *page, struct rmap_walk_control *rwc)
 	else
 		rmap_walk_file(page, rwc, false);
 }
+EXPORT_SYMBOL_GPL(rmap_walk);
 
 /* Like rmap_walk, but caller holds relevant rmap lock */
 void rmap_walk_locked(struct page *page, struct rmap_walk_control *rwc)
