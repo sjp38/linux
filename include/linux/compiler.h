@@ -120,63 +120,10 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
 /* Annotate a C jump table to allow objtool to follow the code flow */
 #define __annotate_jump_table __section(.rodata..c_jump_table)
 
-#ifdef CONFIG_DEBUG_ENTRY
-/* Begin/end of an instrumentation safe region */
-#define instrumentation_begin() ({					\
-	asm volatile("%c0:\n\t"						\
-		     ".pushsection .discard.instr_begin\n\t"		\
-		     ".long %c0b - .\n\t"				\
-		     ".popsection\n\t" : : "i" (__COUNTER__));		\
-})
-
-/*
- * Because instrumentation_{begin,end}() can nest, objtool validation considers
- * _begin() a +1 and _end() a -1 and computes a sum over the instructions.
- * When the value is greater than 0, we consider instrumentation allowed.
- *
- * There is a problem with code like:
- *
- * noinstr void foo()
- * {
- *	instrumentation_begin();
- *	...
- *	if (cond) {
- *		instrumentation_begin();
- *		...
- *		instrumentation_end();
- *	}
- *	bar();
- *	instrumentation_end();
- * }
- *
- * If instrumentation_end() would be an empty label, like all the other
- * annotations, the inner _end(), which is at the end of a conditional block,
- * would land on the instruction after the block.
- *
- * If we then consider the sum of the !cond path, we'll see that the call to
- * bar() is with a 0-value, even though, we meant it to happen with a positive
- * value.
- *
- * To avoid this, have _end() be a NOP instruction, this ensures it will be
- * part of the condition block and does not escape.
- */
-#define instrumentation_end() ({					\
-	asm volatile("%c0: nop\n\t"					\
-		     ".pushsection .discard.instr_end\n\t"		\
-		     ".long %c0b - .\n\t"				\
-		     ".popsection\n\t" : : "i" (__COUNTER__));		\
-})
-#endif /* CONFIG_DEBUG_ENTRY */
-
 #else
 #define annotate_reachable()
 #define annotate_unreachable()
 #define __annotate_jump_table
-#endif
-
-#ifndef instrumentation_begin
-#define instrumentation_begin()		do { } while(0)
-#define instrumentation_end()		do { } while(0)
 #endif
 
 #ifndef ASM_UNREACHABLE
@@ -250,6 +197,27 @@ void ftrace_likely_update(struct ftrace_likely_data *f, int val,
  */
 #include <asm/barrier.h>
 #include <linux/kasan-checks.h>
+#include <linux/kcsan-checks.h>
+
+/**
+ * data_race - mark an expression as containing intentional data races
+ *
+ * This data_race() macro is useful for situations in which data races
+ * should be forgiven.  One example is diagnostic code that accesses
+ * shared variables but is not a part of the core synchronization design.
+ *
+ * This macro *does not* affect normal code generation, but is a hint
+ * to tooling that data races here are to be ignored.
+ */
+#define data_race(expr)							\
+({									\
+	__unqual_scalar_typeof(({ expr; })) __v = ({			\
+		__kcsan_disable_current();				\
+		expr;							\
+	});								\
+	__kcsan_enable_current();					\
+	__v;								\
+})
 
 /*
  * Use __READ_ONCE() instead of READ_ONCE() if you do not require any
@@ -281,18 +249,6 @@ do {							\
 	compiletime_assert_rwonce_type(x);		\
 	__WRITE_ONCE(x, val);				\
 } while (0)
-
-#ifdef CONFIG_KASAN
-/*
- * We can't declare function 'inline' because __no_sanitize_address conflicts
- * with inlining. Attempt to inline it may cause a build failure.
- *     https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67368
- * '__maybe_unused' allows us to avoid defined-but-not-used warnings.
- */
-# define __no_kasan_or_inline __no_sanitize_address notrace __maybe_unused
-#else
-# define __no_kasan_or_inline __always_inline
-#endif
 
 static __no_kasan_or_inline
 unsigned long __read_once_word_nocheck(const void *addr)
