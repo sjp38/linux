@@ -382,14 +382,23 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 	struct damon_addr_range gap = {0}, first_gap = {0}, second_gap = {0};
 	struct vm_area_struct *last_vma = NULL;
 	unsigned long start = 0;
+	struct rb_root rbroot;
 
 	/* Find two biggest gaps so that first_gap > second_gap > others */
 	for (; vma; vma = vma->vm_next) {
 		if (!last_vma) {
 			start = vma->vm_start;
-			last_vma = vma;
-			continue;
+			goto next;
 		}
+
+		if (vma->rb_subtree_gap < sz_range(&second_gap)) {
+			pr_info("the case found\n");
+			rbroot.rb_node = &vma->vm_rb;
+			vma = rb_entry(rb_last(&rbroot),
+					struct vm_area_struct, vm_rb);
+			goto next;
+		}
+
 		gap.start = last_vma->vm_end;
 		gap.end = vma->vm_start;
 		if (sz_range(&gap) > sz_range(&second_gap)) {
@@ -397,6 +406,7 @@ static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
 			if (sz_range(&second_gap) > sz_range(&first_gap))
 				swap_ranges(&second_gap, &first_gap);
 		}
+next:
 		last_vma = vma;
 	}
 
