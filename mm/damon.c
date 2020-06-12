@@ -264,7 +264,7 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 	return nr_regions;
 }
 
-/* Returns the size limit for each monitoring region */
+/* Returns the size upper limit for each monitoring region */
 static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
 {
 	struct damon_task *t;
@@ -509,8 +509,6 @@ static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 		sz += regions[i].end - regions[i].start;
 	if (c->min_nr_regions)
 		sz /= c->min_nr_regions;
-	else
-		sz /= 10;
 	if (sz < MIN_REGION)
 		sz = MIN_REGION;
 
@@ -1196,7 +1194,7 @@ static void damon_merge_two_regions(struct damon_region *l,
  *
  * t		task affected by merge operation
  * thres	'->nr_accesses' diff threshold for the merge
- * sz_limit	size limit of each region
+ * sz_limit	size upper limit of each region
  */
 static void damon_merge_regions_of(struct damon_task *t, unsigned int thres,
 				   unsigned long sz_limit)
@@ -1222,7 +1220,7 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres,
  * Merge adjacent regions having similar access frequencies
  *
  * threshold	'->nr_accesses' diff threshold for the merge
- * sz_limit	size limit of each region
+ * sz_limit	size upper limit of each region
  *
  * This function merges monitoring target regions which are adjacent and their
  * access frequencies are similar.  This is for minimizing the monitoring
