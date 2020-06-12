@@ -87,6 +87,9 @@ static struct damon_ctx damon_user_ctx = {
 	.regions_update_interval = 1000 * 1000,
 	.min_nr_regions = 10,
 	.max_nr_regions = 1000,
+
+	.init_target_regions = kdamond_init_vm_regions,
+	.update_target_regions = kdamond_update_vm_regions,
 };
 
 /*
@@ -363,7 +366,7 @@ static void swap_ranges(struct damon_addr_range *r1,
  *
  * This function receives an address space and finds three regions in it which
  * separated by the two biggest unmapped regions in the space.  Please refer to
- * below comments of 'damon_init_regions_of()' function to know why this is
+ * below comments of 'damon_init_vm_regions_of()' function to know why this is
  * necessary.
  *
  * Returns 0 if success, or negative error code otherwise.
@@ -484,7 +487,7 @@ static int damon_three_regions_of(struct damon_task *t,
  *   <BIG UNMAPPED REGION 2>
  *   <stack>
  */
-static void damon_init_regions_of(struct damon_ctx *c, struct damon_task *t)
+static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 {
 	struct damon_region *r;
 	struct damon_addr_range regions[3];
@@ -525,7 +528,7 @@ void kdamond_init_vm_regions(struct damon_ctx *ctx)
 	damon_for_each_task(t, ctx) {
 		/* the user may set the target regions as they want */
 		if (!nr_damon_regions(t))
-			damon_init_regions_of(ctx, t);
+			damon_init_vm_regions_of(ctx, t);
 	}
 }
 
