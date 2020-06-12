@@ -201,6 +201,15 @@ static void damon_test_set_init_regions(struct kunit *test)
 	damon_set_pids(ctx, NULL, 0);
 }
 
+static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
+{
+	int i;
+
+	for (i = 0; i < nr_vmas - 1; i++)
+		vmas[i].vm_next = &vmas[i + 1];
+	vmas[i].vm_next = NULL;
+}
+
 /*
  * Test damon_three_regions_in_vmas() function
  *
@@ -239,12 +248,8 @@ static void damon_test_three_regions_in_vmas(struct kunit *test)
 		(struct vm_area_struct) {.vm_start = 300, .vm_end = 305},
 		(struct vm_area_struct) {.vm_start = 307, .vm_end = 330},
 	};
-	vmas[0].vm_next = &vmas[1];
-	vmas[1].vm_next = &vmas[2];
-	vmas[2].vm_next = &vmas[3];
-	vmas[3].vm_next = &vmas[4];
-	vmas[4].vm_next = &vmas[5];
-	vmas[5].vm_next = NULL;
+
+	__link_vmas(vmas, 6);
 
 	damon_three_regions_in_vmas(&vmas[0], regions);
 
