@@ -203,11 +203,31 @@ static void damon_test_set_init_regions(struct kunit *test)
 
 static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
 {
-	int i;
+	int i, j;
+	unsigned long largest_gap, gap;
 
-	for (i = 0; i < nr_vmas - 1; i++)
+	if (!nr_vmas)
+		return;
+
+	for (i = 0; i < nr_vmas - 1; i++) {
 		vmas[i].vm_next = &vmas[i + 1];
+
+		vmas[i].vm_rb.rb_left = NULL;
+		vmas[i].vm_rb.rb_right = &vmas[i + 1].vm_rb;
+
+		largest_gap = 0;
+		for (j = i; j < nr_vmas; j++) {
+			if (j == 0)
+				continue;
+			gap = vmas[j].vm_start - vmas[j - 1].vm_end;
+			if (gap > largest_gap)
+				largest_gap = gap;
+		}
+		vmas[i].rb_subtree_gap = largest_gap;
+	}
 	vmas[i].vm_next = NULL;
+	vmas[i].vm_rb.rb_right = NULL;
+	vmas[i].rb_subtree_gap = 0;
 }
 
 /*
