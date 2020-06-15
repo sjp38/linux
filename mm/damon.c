@@ -176,6 +176,26 @@ static unsigned int nr_damon_regions(struct damon_task *t)
 	return nr_regions;
 }
 
+/* Returns the size upper limit for each monitoring region */
+static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
+{
+	struct damon_task *t;
+	struct damon_region *r;
+	unsigned long sz = 0;
+
+	damon_for_each_task(t, ctx) {
+		damon_for_each_region(r, t)
+			sz += r->ar.end - r->ar.start;
+	}
+
+	if (ctx->min_nr_regions)
+		sz /= ctx->min_nr_regions;
+	if (sz < MIN_REGION)
+		sz = MIN_REGION;
+
+	return sz;
+}
+
 /*
  * Functions for DAMON core logics and features
  */
@@ -248,14 +268,17 @@ static void damon_merge_two_regions(struct damon_region *l,
  *
  * t		task affected by merge operation
  * thres	'->nr_accesses' diff threshold for the merge
+ * sz_limit	size upper limit of each region
  */
-static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
+static void damon_merge_regions_of(struct damon_task *t, unsigned int thres,
+				   unsigned long sz_limit)
 {
 	struct damon_region *r, *prev = NULL, *next;
 
 	damon_for_each_region_safe(r, next, t) {
 		if (prev && prev->ar.end == r->ar.start &&
-		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres)
+		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres &&
+		    sz_damon_region(prev) + sz_damon_region(r) <= sz_limit)
 			damon_merge_two_regions(prev, r);
 		else
 			prev = r;
@@ -266,18 +289,20 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres)
  * Merge adjacent regions having similar access frequencies
  *
  * threshold	'->nr_accesses' diff threshold for the merge
+ * sz_limit	size upper limit of each region
  *
  * This function merges monitoring target regions which are adjacent and their
  * access frequencies are similar.  This is for minimizing the monitoring
  * overhead under the dynamically changeable access pattern.  If a merge was
  * unnecessarily made, later 'kdamond_split_regions()' will revert it.
  */
-static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold)
+static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,
+				  unsigned long sz_limit)
 {
 	struct damon_task *t;
 
 	damon_for_each_task(t, c)
-		damon_merge_regions_of(t, threshold);
+		damon_merge_regions_of(t, threshold, sz_limit);
 }
 
 /*
@@ -404,10 +429,13 @@ static int kdamond_fn(void *data)
 	struct damon_task *t;
 	struct damon_region *r, *next;
 	unsigned int max_nr_accesses = 0;
+	unsigned long sz_limit = 0;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 	if (ctx->init_target_regions)
 		ctx->init_target_regions(ctx);
+	sz_limit = damon_region_sz_limit(ctx);
+
 	while (!kdamond_need_stop(ctx)) {
 		if (ctx->prepare_access_checks)
 			ctx->prepare_access_checks(ctx);
@@ -422,7 +450,8 @@ static int kdamond_fn(void *data)
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			if (ctx->aggregate_cb)
 				ctx->aggregate_cb(ctx);
-			kdamond_merge_regions(ctx, max_nr_accesses / 10);
+			kdamond_merge_regions(ctx, max_nr_accesses / 10,
+					sz_limit);
 			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
 		}
