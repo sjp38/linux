@@ -386,6 +386,17 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 }
 
 /*
+ * Check whether it is time to check and apply the target monitoring regions
+ *
+ * Returns true if it is.
+ */
+static bool kdamond_need_update_regions(struct damon_ctx *ctx)
+{
+	return damon_check_reset_time_interval(&ctx->last_regions_update,
+			ctx->regions_update_interval);
+}
+
+/*
  * Check whether current monitoring should be stopped
  *
  * The monitoring is stopped when either the user requested to stop, or all
@@ -454,6 +465,12 @@ static int kdamond_fn(void *data)
 					sz_limit);
 			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
+		}
+
+		if (kdamond_need_update_regions(ctx)) {
+			if (ctx->update_target_regions)
+				ctx->update_target_regions(ctx);
+			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
 	damon_for_each_task(t, ctx) {
@@ -562,6 +579,7 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  * damon_set_attrs() - Set attributes for the monitoring.
  * @ctx:		monitoring context
  * @sample_int:		time interval between samplings
+ * @regions_update_int:	time interval between target regions update
  * @aggr_int:		time interval between aggregations
  * @min_nr_reg:		minimal number of regions
  * @max_nr_reg:		maximum number of regions
@@ -571,8 +589,8 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_set_attrs(struct damon_ctx *ctx,
-		    unsigned long sample_int, unsigned long aggr_int,
+int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
+		    unsigned long aggr_int, unsigned long regions_update_int,
 		    unsigned long min_nr_reg, unsigned long max_nr_reg)
 {
 	if (min_nr_reg < 3) {
@@ -588,6 +606,7 @@ int damon_set_attrs(struct damon_ctx *ctx,
 
 	ctx->sample_interval = sample_int;
 	ctx->aggr_interval = aggr_int;
+	ctx->regions_update_interval = regions_update_int;
 	ctx->min_nr_regions = min_nr_reg;
 	ctx->max_nr_regions = max_nr_reg;
 
