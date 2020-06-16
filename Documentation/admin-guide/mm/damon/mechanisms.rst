@@ -76,9 +76,8 @@ keeping the bounds users set for their trade-off.
 Handling Virtual Memory Mappings
 ================================
 
-This is for monitoring of virtual memory address space only.  It is the only
-one address space that supported by DAMON as of now, but other address spaces
-will be supported in the future.
+Note that this is used by the DAMON's reference implementation of the virtual
+memory address specific low level primitive only.
 
 Only small parts in the super-huge virtual address space of the processes are
 mapped to physical memory and accessed.  Thus, tracking the unmapped address

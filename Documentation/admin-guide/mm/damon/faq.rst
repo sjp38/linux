@@ -18,14 +18,14 @@ is implemented in the kernel space.
 Can 'idle pages tracking' or 'perf mem' substitute DAMON?
 =========================================================
 
-Idle page tracking is a low level primitive for access check of each physical
-page frame.  'perf mem' is similar, though it can use sampling to minimize the
-overhead.  DAMON is a higher-level framework for access patterns of data objects
-that focused on memory management optimization and providing sophisticated
-features for that including the overhead handling.  Therefore, 'idle pages
-tracking' and 'perf mem' could provide a subset of DAMON's output, but cannot
-substitute DAMON.  Rather than that, DAMON could use those as it's low-level
-primitives.
+Idle page tracking is a low level primitive for access check of the physical
+address space.  'perf mem' is similar, though it can use sampling to minimize
+the overhead.  DAMON is a higher-level framework for the monitoring of various
+address spaces that focused on memory management optimization and providing
+sophisticated features for that including the overhead handling.  Therefore,
+'idle pages tracking' and 'perf mem' could provide a subset of DAMON's output,
+but cannot substitute DAMON.  Rather than that, DAMON could use those as it's
+low-level primitives for specific address spaces.
 
 
 How can I optimize my system's memory management using DAMON?
@@ -38,9 +38,22 @@ separate document, :doc:`guide`.  Please refer to that.
 Does DAMON support virtual memory only?
 ========================================
 
-For now, yes.  But, DAMON will be able to support various address spaces
-including physical memory in near future.  An RFC patchset [1]_ for this
-extension is already available.  Please refer :doc:`plans` for detailed plan
-for this.
+No.  DAMON is designed to be able to extended for various address spaces.  In
+other words, the core of the DAMON is address space independent.  The address
+space specific low level primitive parts including monitoring target regions
+constructions and actual access checks can be implemented and configured on the
+DAMON core by the users.  In this way, DAMON users can monitor any address
+space with any access check technique.
 
-.. [1] https://lore.kernel.org/linux-mm/20200409094232.29680-1-sjpark@amazon.com/
+Nonetheless, DAMON provides a vma tracking and PTE Accessed bit check based
+implementation of the address space dependent functions for the virtual memory
+by default, for a reference and convenient use.  In near future, we will also
+provide that for physical memory address space.
+
+
+Can I simply monitor page granularity?
+======================================
+
+Yes.  You can do so by setting the ``min_nr_regions`` attribute higher than the
+working set size divided by the page size.  Because the monitoring target
+regions size is forced to be >=page size, the region split will make no effect.
