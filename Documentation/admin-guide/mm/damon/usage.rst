@@ -11,17 +11,20 @@ DAMON provides below three interfaces for various use cases.
   just-working human-friendly interface.  This interface is a reference
   implementation of the DAMON debugfs wrapper user space tool.  Using this
   tool, you can easily use the DAMON’s major features in a human-friendly way,
-  though it may not be highly tuned for your specific use-cases.
+  though it may not be highly tuned for your specific use-cases.  It supports
+  virtual address space monitoring only.
 - *debugfs interface.*
   This is for user space programmers who want optimized use of DAMON. Using
   this interface, you can use DAMON’s major features by reading from and
   writing to specific debugfs files.  Of course, you can write and use your
   personalized DAMON debugfs wrapper user space tool that reads/writes the
   debugfs files instead of you and provides a more human-friendly interface.
+  It supports virtual address space monitoring only.
 - *Kernel Space Programming Interface.*
   This is for kernel space programmers.  Using this, you can utilize every
   feature of DAMON most flexibly and efficiently by writing kernel space
-  DAMON application programs for you.
+  DAMON application programs for you.  You can even extend DAMON for various
+  address spaces.
 
 We recommend you to start with the DAMON user space tool and move to debugfs
 interface only if the real requirement is found, and prohibit the use of the
