@@ -13,27 +13,25 @@ schemes written in the human readable format:
     # us/ms/s/m/h/d for micro-seconds/milli-seconds/seconds/minutes/hours/days
     # 'null' means zero for size and age.
 
-    # if a region keeps a high access frequency for more than 100ms, put the
-    # region on the head of the LRU list (call madvise() with MADV_WILLNEED).
+    # if a region keeps a high access frequency for >=100ms, put the region on
+    # the head of the LRU list (call madvise() with MADV_WILLNEED).
     null    null    80      null    100ms   0s      willneed
 
-    # if a region keeps a low access frequency for more than 200ms and less
-    # than one hour, put the # region on the tail of the LRU list (call
-    # madvise() with MADV_COLD).
+    # if a region keeps a low access frequency for >=200ms and <=one hour, put
+    # the region on the tail of the LRU list (call madvise() with MADV_COLD).
     0B      0B      10      20      200ms   1h cold
 
-    # if a region keeps a very low access frequency for more than 1 minute,
-    # swap out the region immediately (call madvise() with MADV_PAGEOUT).
+    # if a region keeps a very low access frequency for >=60 seconds, swap out
+    # the region immediately (call madvise() with MADV_PAGEOUT).
     0B      null    0       10      60s     0s pageout
 
-    # if a region of a size bigger than 2MiB keeps a very high access frequency
-    # for more than 100ms, let the region to use huge pages (call madvise()
-    # with MADV_HUGEPAGE).
+    # if a region of a size >=2MiB keeps a very high access frequency for
+    # >=100ms, let the region to use huge pages (call madvise() with
+    # MADV_HUGEPAGE).
     2M      null    90      99      100ms   0s hugepage
 
-    # If a regions of a size bigger than 2MiB keeps small access frequency for
-    # more than 100ms, avoid the region using huge pages (call madvise() with
-    # MADV_NOHUGEPAGE).
+    # If a regions of a size >=2MiB keeps small access frequency for >=100ms,
+    # avoid the region using huge pages (call madvise() with MADV_NOHUGEPAGE).
     2M      null    0       25      100ms   0s nohugepage
 """
 
