@@ -718,6 +718,9 @@ static void damon_flush_rbuffer(struct damon_ctx *ctx)
 	loff_t pos = 0;
 	struct file *rfile;
 
+	if (!ctx->rbuf_offset)
+		return;
+
 	rfile = filp_open(ctx->rfile_path, O_CREAT | O_RDWR | O_APPEND, 0644);
 	if (IS_ERR(rfile)) {
 		pr_err("Cannot open the result file %s\n",
@@ -739,7 +742,7 @@ static void damon_flush_rbuffer(struct damon_ctx *ctx)
  */
 static void damon_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
 {
-	if (!ctx->rbuf_len || !ctx->rbuf)
+	if (!ctx->rbuf_len || !ctx->rbuf || !ctx->rfile_path)
 		return;
 	if (ctx->rbuf_offset + size > ctx->rbuf_len)
 		damon_flush_rbuffer(ctx);
