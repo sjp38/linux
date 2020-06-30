@@ -20,12 +20,12 @@ Can 'idle pages tracking' or 'perf mem' substitute DAMON?
 
 Idle page tracking is a low level primitive for access check of the physical
 address space.  'perf mem' is similar, though it can use sampling to minimize
-the overhead.  DAMON is a higher-level framework for the monitoring of various
-address spaces that focused on memory management optimization and providing
-sophisticated features for that including the overhead handling.  Therefore,
-'idle pages tracking' and 'perf mem' could provide a subset of DAMON's output,
-but cannot substitute DAMON.  Rather than that, DAMON could use those as it's
-low-level primitives for specific address spaces.
+the overhead.  On the other hand, DAMON is a higher-level framework for the
+monitoring of various address spaces.  It is focused on memory management
+optimization and provides sophisticated accuracy/overhead handling mechanisms.
+Therefore, 'idle pages tracking' and 'perf mem' could provide a subset of
+DAMON's output, but cannot substitute DAMON.  Rather than that, thouse could be
+configured as DAMON's low-level primitives for specific address spaces.
 
 
 How can I optimize my system's memory management using DAMON?
@@ -36,11 +36,10 @@ separate document, :doc:`guide`.  Please refer to that.
 
 
 Does DAMON support virtual memory only?
-========================================
+=======================================
 
-No.  DAMON is designed to be able to extended for various address spaces.  In
-other words, the core of the DAMON is address space independent.  The address
-space specific low level primitive parts including monitoring target regions
+No.  The core of the DAMON is address space independent.  The address space
+specific low level primitive parts including monitoring target regions
 constructions and actual access checks can be implemented and configured on the
 DAMON core by the users.  In this way, DAMON users can monitor any address
 space with any access check technique.
@@ -56,4 +55,5 @@ Can I simply monitor page granularity?
 
 Yes.  You can do so by setting the ``min_nr_regions`` attribute higher than the
 working set size divided by the page size.  Because the monitoring target
-regions size is forced to be >=page size, the region split will make no effect.
+regions size is forced to be ``>=page size``, the region split will make no
+effect.

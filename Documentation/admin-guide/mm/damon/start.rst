@@ -4,23 +4,23 @@
 Getting Started
 ===============
 
-This document briefly describes how you can use DAMON by demonstrating the user
-space tool.  Please note that this document describes only a part of the
-features for brevity.  Please refer to :doc:`usage` for more details.
+This document briefly describes how you can use DAMON by demonstrating its
+default user space tool.  Please note that this document describes only a part
+of its features for brevity.  Please refer to :doc:`usage` for more details.
 
 
 TL; DR
 ======
 
-Simply follow below 5 commands.  Don't forget replacing ``<your workload>``
-with your *real* workload, though. ::
+Follow below 5 commands to monitor and visualize the access pattern of your
+workload. ::
 
     $ git clone https://github.com/sjp38/linux -b damon/master
     /* build the kernel with CONFIG_DAMON=y, install, reboot */
+    $ mount -t debugfs none /sys/kernel/debug/
     $ cd linux/tools/damon
     $ ./damo record $(pidof <your workload>)
-    $ ./damo report heats --heatmap access_pattern.pdf
-    $ ./damo report wss --range 0 101 1 --plot wss_dist.pdf
+    $ ./damo report heats --heatmap access_pattern.png
 
 
 Prerequisites
@@ -30,8 +30,7 @@ Kernel
 ------
 
 You should first ensure your system is running on a kernel built with
-``CONFIG_DAMON``.  If the value is set as ``m``, you should load the module
-first::
+``CONFIG_DAMON``.  If the value is set to ``m``, load the module first::
 
     # modprobe damon
 
@@ -39,15 +38,14 @@ first::
 User Space Tool
 ---------------
 
-For the demonstration, we will use a user space tool for the convenient use of
-DAMON, called DAMON Operator (DAMO).  It is located at ``tools/damon/damo`` of
-the kernel source tree.  We assume that you set ``$PATH`` to point it.  The
-``$PATH`` setting is not mandatory but we make the assumption here for the
-brevity of the below examples.
+For the demonstration, we will use the default user space tool for DAMON,
+called DAMON Operator (DAMO).  It is located at ``tools/damon/damo`` of the
+kernel source tree.  For brevity, below examples assume you set ``$PATH`` to
+point it.  It's not mandatory, though.
 
 Because DAMO is using the debugfs interface (refer to :doc:`usage` for the
-detail) of DAMON, you should also ensure debugfs is mounted.  Mount it manually
-as below::
+detail) of DAMON, you should ensure debugfs is mounted.  Mount it manually as
+below::
 
     # mount -t debugfs none /sys/kernel/debug/
 
@@ -60,25 +58,25 @@ automatically mount debugfs from next booting::
 Recording Data Access Patterns
 ==============================
 
-Below commands record memory access pattern of a program, ``masim``, and save
-it in a file, ``damon.data``.  The program will access two 100 MiB memory
-regions one by one. ::
+Below commands record memory access pattern of a program and save the
+monitoring results in a file. ::
 
     $ git clone https://github.com/sjp38/masim
     $ cd masim; make; ./masim ./configs/zigzag.cfg &
     $ sudo damo record -o damon.data $(pidof masim)
 
-The first two lines of commands start the monitoring target process in the
-background.  You can substitute this with your real workload.  The last line
-asks ``damo record`` to record the access pattern.
+The first two lines of the commands get an artificial memory access generator
+program and runs it in the background.  It will repeatedly access two 100 MiB
+sized memory regions one by one.  You can substitute this with your real
+workload.  The last line asks ``damo`` to record the access pattern in
+``damon.data`` file.
 
 
 Visualizing Recorded Patterns
 =============================
 
 Below three commands visualize the recorded access patterns into three
-image files, ``access_pattern_heatmap.png``, ``wss_dist.png``, and
-``wss_chron_change.png``. ::
+image files. ::
 
     $ damo report heats --heatmap -i damon.data access_pattern_heatmap.png
     $ damo report wss --range 0 101 1 --plot wss_dist.png
@@ -114,6 +112,6 @@ workloads at external web pages [1]_ [2]_ [3]_.
 
           The chronological changes of working set size.
 
-.. [1] https://damonitor.github.io/test/result/visual/latest/heatmap.1.html
-.. [2] https://damonitor.github.io/test/result/visual/latest/wss_sz.html
-.. [3] https://damonitor.github.io/test/result/visual/latest/wss_time.html
+.. [1] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
+.. [2] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html
+.. [3] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html
