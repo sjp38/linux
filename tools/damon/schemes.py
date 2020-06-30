@@ -35,6 +35,7 @@ def run_damon(target, is_target_cmd, attrs, old_attrs):
         cleanup_exit(old_attrs, -3)
     while not _damon.is_damon_running():
         sleep(1)
+    print('Press Ctrl+C to stop')
     if is_target_cmd:
         p.wait()
     while True:
