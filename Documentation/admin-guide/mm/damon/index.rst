@@ -32,4 +32,3 @@ workloads and systems.
    faq
    mechanisms
    eval
-   plans
