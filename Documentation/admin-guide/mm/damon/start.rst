@@ -112,6 +112,17 @@ workloads at external web pages [1]_ [2]_ [3]_.
 
           The chronological changes of working set size.
 
+
+Data Access Pattern Aware Memory Management
+===========================================
+
+Below three commands make every memory region of size >=4K that doesn't
+accessed for >=60 seconds in your workload to be swapped out. ::
+
+    $ echo "#min-size max-size min-acc max-acc min-age max-age action" > scheme
+    $ echo "4K        max      0       0       60s     max     pageout" >> scheme
+    $ damo schemes -c my_thp_scheme <pid of your workload>
+
 .. [1] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
 .. [2] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html
 .. [3] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html
