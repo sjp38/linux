@@ -53,10 +53,11 @@ heats``.  If it shows a simple pattern consists of a small number of memory
 regions having high contrast of access temperature, you could consider manual
 `Program Modification`_.
 
+If you still want to absorb more benefits, you should develop `Personalized
+DAMON Application`_ for your special case.
+
 You don't need to take only one approach among the above plans, but you could
-use multiple of the above approaches to maximize the benefit.  If you still
-want to absorb more benefits, you should develop `Personalized DAMON
-Application`_ for your special case.
+use multiple of the above approaches to maximize the benefit.  
 
 
 Optimize
@@ -73,11 +74,12 @@ concrete understanding of your memory devices.
 Memory Configuration
 --------------------
 
-No more no less, DRAM should be large enough to accommodate the real working
-sets, because DRAM is highly performance critical but expensive and heavily
-consumes the power.  However, knowing the size of the real important working
-sets is difficult.  As a consequence, people frequently equips unnecessarily
-large or too small DRAM.  Many problems stem from such wrong configurations.
+No more no less, DRAM should be large enough to accommodate only important
+working sets, because DRAM is highly performance critical but expensive and
+heavily consumes the power.  However, knowing the size of the real important
+working sets is difficult.  As a consequence, people usually equips
+unnecessarily large or too small DRAM.  Many problems stem from such wrong
+configurations.
 
 Using the working set size distribution report provided by ``damo report wss``,
 you can know the appropriate DRAM size for you.  For example, roughly speaking,
@@ -116,16 +118,16 @@ Program Modification
 --------------------
 
 If the data access pattern heatmap plotted by ``damo report heats`` is quite
-simple and clear so that you can understand how the thing is going in the
-workload, you could manually optimize the memory management.
+simple so that you can understand how the things are going in the workload with
+your human eye, you could manually optimize the memory management.
 
 For example, suppose that the workload has two big memory object but only one
-object is frequently accessed while the other is only occasionally accessed.
-Then, you could modify the program source code to keep the hot object in the
-main memory by invoking ``mlock()`` or ``madvise()`` with ``WILLNEED``.  Or,
-you could proactively evict the cold object using ``madvise()`` with
-``MADV_COLD`` or ``MADV_PAGEOUT``.  Using both together would be also worth
-trying.
+object is frequently accessed while the other one is only occasionally
+accessed.  Then, you could modify the program source code to keep the hot
+object in the main memory by invoking ``mlock()`` or ``madvise()`` with
+``MADV_WILLNEED``.  Or, you could proactively evict the cold object using
+``madvise()`` with ``MADV_COLD`` or ``MADV_PAGEOUT``.  Using both together
+would be also worthy.
 
 A research work [1]_ using the ``mlock()`` achieved up to 2.55x performance
 speedup.
@@ -179,15 +181,14 @@ Reference Practices
 
 Referencing previously done successful practices could help you getting the
 sense for this kind of optimizations.  There is an academic paper [1]_
-previously reported the visualized access pattern and manual `Program
+reporting the visualized access pattern and manual `Program
 Modification`_ results for a number of realistic workloads.  You can also get
-the visualized access pattern [4]_ [5]_ [6]_ and automated DAMON-based
+the visualized access patterns [3]_ [4]_ [5]_ and automated DAMON-based
 memory operations results for other realistic workloads that collected with
-latest version of DAMON [2]_ [3]_.
+latest version of DAMON [2]_.
 
 .. [1] https://dl.acm.org/doi/10.1145/3366626.3368125
 .. [2] https://damonitor.github.io/test/result/perf/latest/html/
-.. [3] https://lore.kernel.org/linux-mm/20200512115343.27699-1-sjpark@amazon.com/
-.. [4] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
-.. [5] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html
-.. [6] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html
+.. [3] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
+.. [4] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html
+.. [5] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html

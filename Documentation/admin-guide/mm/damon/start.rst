@@ -78,7 +78,7 @@ Visualizing Recorded Patterns
 Below three commands visualize the recorded access patterns into three
 image files. ::
 
-    $ damo report heats --heatmap -i damon.data access_pattern_heatmap.png
+    $ damo report heats --heatmap access_pattern_heatmap.png
     $ damo report wss --range 0 101 1 --plot wss_dist.png
     $ damo report wss --range 0 101 1 --sortby time --plot wss_chron_change.png
 

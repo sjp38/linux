@@ -16,11 +16,11 @@ it
    of the size of target workloads).
 
 Using this framework, therefore, the kernel's memory management mechanisms can
-make advanced decisions.  The experimental memory management optimization works
-that incurring high data accesses instrumentation overhead will be able to take
-another try.  In user space, meanwhile, users who have some special workloads
-can write personalized tools or applications for deeper understanding and
-specialized optimizations of their workloads and systems.
+make advanced decisions.  Experimental memory management optimization works
+that incurring high data accesses monitoring overhead could implemented again.
+In user space, meanwhile, users who have some special workloads can write
+personalized applications for better understanding and optimizations of their
+workloads and systems.
 
 .. toctree::
    :maxdepth: 2
