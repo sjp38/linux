@@ -177,7 +177,7 @@ system calls inside the code will also be quite challenging.
 By using DAMON-based operation schemes (DAMOS) via ``damo schemes``, you will
 be able to easily optimize your workload in such a case.  Our example schemes
 called 'efficient THP' and 'proactive reclamation' achieved significant speedup
-and memory space saves against 25 realistic workloads [2]_, [3]_.
+and memory space saves against 25 realistic workloads [2]_.
 
 That said, note that you need careful tune of the schemes (e.g., target region
 size and age) and monitoring attributes for the successful use of this
@@ -218,9 +218,9 @@ Referencing previously done successful practices could help you getting the
 sense for this kind of optimizations.  There is an academic paper [1]_
 reporting the visualized access pattern and manual `Program
 Modification`_ results for a number of realistic workloads.  You can also get
-the visualized access patterns [3]_ [4]_ [5]_ and automated DAMON-based
-memory operations results for other realistic workloads that collected with
-latest version of DAMON [2]_.
+the visualized access patterns [3]_ [4]_ [5]_ and
+`Automated DAMON-based Memory Operations`_ results for other realistic
+workloads that collected with latest version of DAMON [2]_ .
 
 .. [1] https://dl.acm.org/doi/10.1145/3366626.3368125
 .. [2] https://damonitor.github.io/test/result/perf/latest/html/
