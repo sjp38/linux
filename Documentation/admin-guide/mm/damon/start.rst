@@ -113,11 +113,11 @@ workloads at external web pages [1]_ [2]_ [3]_.
           The chronological changes of working set size.
 
 
-Automated Memory Management Optimization
-========================================
+Data Access Pattern Aware Memory Management
+===========================================
 
 Below three commands make every memory region of size >=4K that kept low access
-frequency for >=60 seconds in your workload to be swapped out.
+frequency for >=60 seconds in your workload to be swapped out. ::
 
     $ echo "#min-size max-size min-acc max-acc min-age max-age action" > scheme
     $ echo "4K        null     null    5       60s     null    pageout" >> scheme
