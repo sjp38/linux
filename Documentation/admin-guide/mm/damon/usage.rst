@@ -318,12 +318,13 @@ Note that setting the pids doesn't start the monitoring.
 Initial Monitoring Target Regions
 ---------------------------------
 
-DAMON automatically sets and updates the monitoring target regions so that
-entire memory mappings of target processes can be covered.  However, users
-might want to limit the monitoring region to specific address ranges, such as
-the heap, the stack, or specific file-mapped area.  Or, some users might know
-the initial access pattern of their workloads and therefore want to set optimal
-initial regions for the 'adaptive regions adjustment'.
+In case of the debugfs based monitoring, DAMON automatically sets and updates
+the monitoring target regions so that entire memory mappings of target
+processes can be covered. However, users might want to limit the monitoring
+region to specific address ranges, such as the heap, the stack, or specific
+file-mapped area. Or, some users might know the initial access pattern of their
+workloads and therefore want to set optimal initial regions for the 'adaptive
+regions adjustment'.
 
 In such cases, users can explicitly set the initial monitoring target regions
 as they want, by writing proper values to the ``init_regions`` file.  Each line
@@ -331,7 +332,7 @@ of the input should represent one region in below form.::
 
     <pid> <start address> <end address>
 
-The ``pid`` should be already in ``pids`` file, and the regions should be
+The ``pid`` should already in ``pids`` file, and the regions should be
 passed in address order.  For example, below commands will set a couple of
 address ranges, ``1-100`` and ``100-200`` as the initial monitoring target
 region of process 42, and another couple of address ranges, ``20-40`` and
