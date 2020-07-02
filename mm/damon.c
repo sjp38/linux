@@ -746,6 +746,11 @@ static void damon_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
 		return;
 	if (ctx->rbuf_offset + size > ctx->rbuf_len)
 		damon_flush_rbuffer(ctx);
+	if (ctx->rbuf_offset + size > ctx->rbuf_len) {
+		pr_warn("%s: flush failed, or wrong size given(%u, %zu)\n",
+				__func__, ctx->rbuf_offset, size);
+		return;
+	}
 
 	memcpy(&ctx->rbuf[ctx->rbuf_offset], data, size);
 	ctx->rbuf_offset += size;
