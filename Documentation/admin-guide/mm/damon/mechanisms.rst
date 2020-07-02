@@ -25,9 +25,11 @@ files, and backing devices would be supportable.  Also, if some architectures
 or kernel module support special access check primitives for specific address
 space, those will be easily configurable.
 
-DAMON currently provides an implementation of the primitives for the virtual
-address space.  It uses VMA for the target address range identification and PTE
-Accessed bit for the access check.
+DAMON currently provides an implementation of the primitives for the physical
+and virtual address spaces.  The implementation for the physical address space
+ask users to manually set the monitoring target address ranges while the
+implementation for the virtual address space uses VMA for the target address
+range identification.  Both uses PTE Accessed bit for the access check.
 
 Below four sections describe the address independent core mechanisms and the
 five knobs for tuning, that is, ``sampling interval``, ``aggregation
@@ -113,25 +115,28 @@ memory mapping changes and applies it to the abstracted target area only for
 each of a user-specified time interval (``regions update interval``).
 
 
-Virtual Address Space Specific Low Primitives
-=============================================
+Address Space Specific Low Primitives
+=====================================
 
-This is for the DAMON's reference implementation of the virtual memory address
-specific low level primitive only.
+This is for the DAMON's reference implementation of the address space specific
+low level primitive only.
 
 
 PTE Accessed-bit Based Access Check
 -----------------------------------
 
-The implementation uses PTE Accessed-bit for basic access checks.  That is, it
-clears the bit for next sampling target page and checks whether it set again
-after one sampling period.  To avoid disturbing other Accessed bit users such
-as the reclamation logic, this implementation adjusts the ``PG_Idle`` and
-``PG_Young`` appropriately, as same to the 'Idle Page Tracking'.
+Both of the implementations for physical and virtual address spaces use PTE
+Accessed-bit for basic access checks.  That is, those clears the bit for next
+sampling target page and checks whether it set again after one sampling period.
+To avoid disturbing other Accessed bit users such as the reclamation logic, the
+implementations adjust the ``PG_Idle`` and ``PG_Young`` appropriately, as same
+to the 'Idle Page Tracking'.
 
 
 VMA-based Target Address Range Construction
 -------------------------------------------
+
+This is for the virtual address space specific primitives implementation.
 
 Only small parts in the super-huge virtual address space of the processes are
 mapped to the physical memory and accessed.  Thus, tracking the unmapped
