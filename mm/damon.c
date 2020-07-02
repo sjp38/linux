@@ -250,7 +250,7 @@ static int damon_split_region_evenly(struct damon_ctx *ctx,
 	next = damon_next_region(r);
 	for (start = r->ar.end; start + sz_piece <= orig_end;
 			start += sz_piece) {
-		n = damon_new_region(ctx, start, start + sz_piece);
+		n = damon_new_region(start, start + sz_piece);
 		if (!n)
 			return -ENOMEM;
 		damon_insert_region(n, r, next);
@@ -428,7 +428,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 
 	/* Set the initial three regions of the task */
 	for (i = 0; i < 3; i++) {
-		r = damon_new_region(c, regions[i].start, regions[i].end);
+		r = damon_new_region(regions[i].start, regions[i].end);
 		if (!r) {
 			pr_err("%d'th init region creation failed\n", i);
 			return;
@@ -507,7 +507,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 		}
 		if (!first) {
 			/* no damon_region intersects with this big region */
-			newr = damon_new_region(ctx,
+			newr = damon_new_region(
 					ALIGN_DOWN(br->start, MIN_REGION),
 					ALIGN(br->end, MIN_REGION));
 			if (!newr)
