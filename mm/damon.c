@@ -58,6 +58,7 @@
 #define damon_for_each_task_safe(t, next, ctx) \
 	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
 
+#define MIN_RECORD_BUFFER_LEN	1024
 #define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
 #define MAX_RFILE_PATH_LEN	256
 
@@ -1152,8 +1153,10 @@ int damon_set_recording(struct damon_ctx *ctx,
 {
 	size_t rfile_path_len;
 
-	if (rbuf_len > MAX_RECORD_BUFFER_LEN) {
-		pr_err("too long (>%d) result buffer length\n",
+	if (rbuf_len && (rbuf_len > MAX_RECORD_BUFFER_LEN ||
+			rbuf_len < MIN_RECORD_BUFFER_LEN)) {
+		pr_err("result buffer size (%u) is out of [%d,%d]\n",
+				rbuf_len, MIN_RECORD_BUFFER_LEN,
 				MAX_RECORD_BUFFER_LEN);
 		return -EINVAL;
 	}
@@ -1165,11 +1168,11 @@ int damon_set_recording(struct damon_ctx *ctx,
 	}
 	ctx->rbuf_len = rbuf_len;
 	kfree(ctx->rbuf);
+	ctx->rbuf = NULL;
 	kfree(ctx->rfile_path);
 	ctx->rfile_path = NULL;
-	if (!rbuf_len) {
-		ctx->rbuf = NULL;
-	} else {
+
+	if (rbuf_len) {
 		ctx->rbuf = kvmalloc(rbuf_len, GFP_KERNEL);
 		if (!ctx->rbuf)
 			return -ENOMEM;
