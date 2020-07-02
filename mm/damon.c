@@ -352,9 +352,9 @@ static void damon_split_regions_of(struct damon_ctx *ctx,
 }
 
 /*
- * splits every target region into two randomly-sized regions
+ * Split every target region into randomly-sized small regions
  *
- * This function splits every target region into two random-sized regions if
+ * This function splits every target region into random-sized small regions if
  * current total number of the regions is equal or smaller than half of the
  * user-specified maximum number of regions.  This is for maximizing the
  * monitoring accuracy under the dynamically changeable access patterns.  If a
@@ -374,7 +374,7 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 	if (nr_regions > ctx->max_nr_regions / 2)
 		return;
 
-	/* If number of regions is not changed, we are maybe in corner case */
+	/* Maybe the middle of the region has different access frequency */
 	if (last_nr_regions == nr_regions &&
 			nr_regions < ctx->max_nr_regions / 3)
 		nr_subregions = 3;
