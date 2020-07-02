@@ -123,7 +123,7 @@ specific low level primitive only.
 PTE Accessed-bit Based Access Check
 -----------------------------------
 
-The implementation uses PTE Accessed-bit for basic access check.  That is, it
+The implementation uses PTE Accessed-bit for basic access checks.  That is, it
 clears the bit for next sampling target page and checks whether it set again
 after one sampling period.  To avoid disturbing other Accessed bit users such
 as the reclamation logic, this implementation adjusts the ``PG_Idle`` and
@@ -134,22 +134,21 @@ VMA-based Target Address Range Construction
 -------------------------------------------
 
 Only small parts in the super-huge virtual address space of the processes are
-mapped to physical memory and accessed.  Thus, tracking the unmapped address
-regions is just wasteful.  However, because DAMON can deal with some level of
-noise using the adaptive regions adjustment mechanism, tracking every mapping
-is not strictly required but could even incur a high overhead in some cases.
-That said, too huge unmapped areas inside the monitoring target should be
-removed to not take the time for the adaptive mechanism.
+mapped to the physical memory and accessed.  Thus, tracking the unmapped
+address regions is just wasteful.  However, because DAMON can deal with some
+level of noise using the adaptive regions adjustment mechanism, tracking every
+mapping is not strictly required but could even incur a high overhead in some
+cases.  That said, too huge unmapped areas inside the monitoring target should
+be removed to not take the time for the adaptive mechanism.
 
 For the reason, this implementation converts the complex mappings to three
-distinct regions that cover every mapped area of the address space.  Also, the
-two gaps between the three regions are the two biggest unmapped areas in the
-given address space.  The two biggest unmapped areas would be the gap between
-the heap and the uppermost mmap()-ed region, and the gap between the lowermost
-mmap()-ed region and the stack will be two biggest unmapped regions.  Because
-these gaps are exceptionally huge in usual address spaces, excluding these two
-biggest unmapped regions will be sufficient to make a trade-off.  Below shows
-this in detail::
+distinct regions that cover every mapped area of the address space.  The two
+gaps between the three regions are the two biggest unmapped areas in the given
+address space.  The two biggest unmapped areas would be the gap between the
+heap and the uppermost mmap()-ed region, and the gap between the lowermost
+mmap()-ed region and the stack in most of the cases.  Because these gaps are
+exceptionally huge in usual address spaces, excluding these will be sufficient
+to make a reasonable trade-off.  Below shows this in detail::
 
     <heap>
     <BIG UNMAPPED REGION 1>
