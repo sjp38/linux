@@ -1858,7 +1858,7 @@ static int add_init_region(struct damon_ctx *c,
 
 	damon_for_each_task(t, c) {
 		if (t->pid == pid) {
-			r = damon_new_region(c, ar->start, ar->end);
+			r = damon_new_region(ar->start, ar->end);
 			if (!r)
 				return -ENOMEM;
 			damon_add_region(r, t);
