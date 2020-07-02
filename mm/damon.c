@@ -292,7 +292,7 @@ static void swap_ranges(struct damon_addr_range *r1,
  * Returns 0 if success, or negative error code otherwise.
  */
 static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
-		struct damon_addr_range regions[3])
+				       struct damon_addr_range regions[3])
 {
 	struct damon_addr_range gap = {0}, first_gap = {0}, second_gap = {0};
 	struct vm_area_struct *last_vma = NULL;
