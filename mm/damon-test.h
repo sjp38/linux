@@ -140,12 +140,15 @@ static void damon_test_set_pids(struct kunit *test)
 static void damon_test_set_recording(struct kunit *test)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
+	int err;
 
+	err = damon_set_recording(ctx, 42, "foo");
+	KUNIT_EXPECT_EQ(test, err, -EINVAL);
 	damon_set_recording(ctx, 4242, "foo.bar");
 	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 4242u);
 	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo.bar");
-	damon_set_recording(ctx, 42, "foo");
-	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 42u);
+	damon_set_recording(ctx, 424242, "foo");
+	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 424242u);
 	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo");
 }
 
@@ -262,7 +265,7 @@ static void damon_test_aggregate(struct kunit *test)
 	int it, ir;
 	ssize_t sz, sr, sp;
 
-	damon_set_recording(ctx, 256, "damon.data");
+	damon_set_recording(ctx, 4242, "damon.data");
 	damon_set_pids(ctx, pids, 3);
 
 	it = 0;
@@ -305,7 +308,7 @@ static void damon_test_write_rbuf(struct kunit *test)
 	struct damon_ctx *ctx = &damon_user_ctx;
 	char *data;
 
-	damon_set_recording(&damon_user_ctx, 256, "damon.data");
+	damon_set_recording(&damon_user_ctx, 4242, "damon.data");
 
 	data = "hello";
 	damon_write_rbuf(ctx, data, strnlen(data, 256));
