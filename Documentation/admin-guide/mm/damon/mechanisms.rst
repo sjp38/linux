@@ -144,12 +144,12 @@ removed to not take the time for the adaptive mechanism.
 For the reason, this implementation converts the complex mappings to three
 distinct regions that cover every mapped area of the address space.  Also, the
 two gaps between the three regions are the two biggest unmapped areas in the
-given address space.  The two biggest unmapped areas might be the gap between
+given address space.  The two biggest unmapped areas would be the gap between
 the heap and the uppermost mmap()-ed region, and the gap between the lowermost
 mmap()-ed region and the stack will be two biggest unmapped regions.  Because
-these gaps are exceptionally huge areas in usual address space, excluding these
-two biggest unmapped regions will be sufficient to make a trade-off.  Below
-shows this in detail::
+these gaps are exceptionally huge in usual address spaces, excluding these two
+biggest unmapped regions will be sufficient to make a trade-off.  Below shows
+this in detail::
 
     <heap>
     <BIG UNMAPPED REGION 1>
