@@ -54,8 +54,8 @@
  *
  * Returns the pointer to the new struct if success, or NULL otherwise
  */
-static struct damon_region *damon_new_region(struct damon_ctx *ctx,
-				unsigned long start, unsigned long end)
+static struct damon_region *damon_new_region(unsigned long start,
+					     unsigned long end)
 {
 	struct damon_region *region;
 
