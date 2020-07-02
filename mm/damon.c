@@ -316,7 +316,7 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 {
 	struct damon_region *new;
 
-	new = damon_new_region(ctx, r->ar.start + sz_r, r->ar.end);
+	new = damon_new_region(r->ar.start + sz_r, r->ar.end);
 	r->ar.end = new->ar.start;
 
 	damon_insert_region(new, r, damon_next_region(r));
