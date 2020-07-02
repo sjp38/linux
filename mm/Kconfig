@@ -871,12 +871,12 @@ config DAMON
 	tristate "Data Access Monitor"
 	depends on MMU
 	help
-	  Provides data access monitoring.
+	  This feature allows to monitor access frequency of each memory
+	  region. The information can be useful for performance-centric DRAM
+	  level memory management.
 
-	  DAMON is a kernel module that allows users to monitor the actual
-	  memory access pattern of specific user-space processes.  It aims to
-	  be 1) accurate enough to be useful for performance-centric domains,
-	  and 2) sufficiently light-weight so that it can be applied online.
+	  See https://damonitor.github.io/doc/html/latest-damon/index.html for
+	  more information.
 	  If unsure, say N.
 
 endmenu
