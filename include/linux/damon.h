@@ -59,12 +59,9 @@ struct damon_task {
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
  *
- * For each monitoring request (damon_start()), a kernel thread for the
- * monitoring is created.  The pointer to the thread is stored in @kdamond.
- *
  * @sample_interval:		The time between access samplings.
  * @aggr_interval:		The time between monitor results aggregations.
- * @min_nr_regions:		The number of initial monitoring regions.
+ * @nr_regions:			The number of monitoring regions.
  *
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
@@ -74,6 +71,9 @@ struct damon_task {
  * @kdamond:		Kernel thread who does the monitoring.
  * @kdamond_stop:	Notifies whether kdamond should stop.
  * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
+ *
+ * For each monitoring request (damon_start()), a kernel thread for the
+ * monitoring is created.  The pointer to the thread is stored in @kdamond.
  *
  * The monitoring thread sets @kdamond to NULL when it terminates.  Therefore,
  * users can know whether the monitoring is ongoing or terminated by reading
@@ -114,7 +114,7 @@ struct damon_task {
 struct damon_ctx {
 	unsigned long sample_interval;
 	unsigned long aggr_interval;
-	unsigned long min_nr_regions;
+	unsigned long nr_regions;
 
 	struct timespec64 last_aggregation;
 

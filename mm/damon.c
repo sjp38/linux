@@ -398,7 +398,7 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  * @ctx:		monitoring context
  * @sample_int:		time interval between samplings
  * @aggr_int:		time interval between aggregations
- * @min_nr_reg:		minimal number of regions
+ * @nr_reg:		number of regions
  *
  * This function should not be called while the kdamond is running.
  * Every time interval is in micro-seconds.
@@ -406,17 +406,17 @@ int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
  * Return: 0 on success, negative error code otherwise.
  */
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
-		unsigned long aggr_int, unsigned long min_nr_reg)
+		unsigned long aggr_int, unsigned long nr_reg)
 {
-	if (min_nr_reg < 3) {
-		pr_err("min_nr_regions (%lu) must be at least 3\n",
-				min_nr_reg);
+	if (nr_reg < 3) {
+		pr_err("nr_regions (%lu) must be at least 3\n",
+				nr_reg);
 		return -EINVAL;
 	}
 
 	ctx->sample_interval = sample_int;
 	ctx->aggr_interval = aggr_int;
-	ctx->min_nr_regions = min_nr_reg;
+	ctx->nr_regions = nr_reg;
 
 	return 0;
 }
