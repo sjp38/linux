@@ -77,7 +77,7 @@ static void damon_test_regions(struct kunit *test)
 	struct damon_region *r;
 	struct damon_task *t;
 
-	r = damon_new_region(&damon_user_ctx, 1, 2);
+	r = damon_new_region(1, 2);
 	KUNIT_EXPECT_EQ(test, 1ul, r->ar.start);
 	KUNIT_EXPECT_EQ(test, 2ul, r->ar.end);
 	KUNIT_EXPECT_EQ(test, 0u, r->nr_accesses);
@@ -268,8 +268,7 @@ static void damon_test_aggregate(struct kunit *test)
 	it = 0;
 	damon_for_each_task(t, ctx) {
 		for (ir = 0; ir < 3; ir++) {
-			r = damon_new_region(ctx,
-					saddr[it][ir], eaddr[it][ir]);
+			r = damon_new_region(saddr[it][ir], eaddr[it][ir]);
 			r->nr_accesses = accesses[it][ir];
 			damon_add_region(r, t);
 		}
@@ -365,8 +364,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 
 	t = damon_new_task(42);
 	for (i = 0; i < nr_regions / 2; i++) {
-		r = damon_new_region(&damon_user_ctx,
-				regions[i * 2], regions[i * 2 + 1]);
+		r = damon_new_region(regions[i * 2], regions[i * 2 + 1]);
 		damon_add_region(r, t);
 	}
 	damon_add_task(&damon_user_ctx, t);
@@ -486,7 +484,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, NULL, 5), -EINVAL);
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 0, 100);
+	r = damon_new_region(0, 100);
 	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 0), -EINVAL);
 
 	damon_add_region(r, t);
@@ -501,7 +499,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	damon_free_task(t);
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 5, 59);
+	r = damon_new_region(5, 59);
 	damon_add_region(r, t);
 	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 5), 0);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 5u);
@@ -518,7 +516,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	damon_free_task(t);
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 5, 6);
+	r = damon_new_region(5, 6);
 	damon_add_region(r, t);
 	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 2), -EINVAL);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 1u);
@@ -536,7 +534,7 @@ static void damon_test_split_at(struct kunit *test)
 	struct damon_region *r;
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 0, 100);
+	r = damon_new_region(0, 100);
 	damon_add_region(r, t);
 	damon_split_region_at(&damon_user_ctx, r, 25);
 	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
@@ -556,10 +554,10 @@ static void damon_test_merge_two(struct kunit *test)
 	int i;
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 0, 100);
+	r = damon_new_region(0, 100);
 	r->nr_accesses = 10;
 	damon_add_region(r, t);
-	r2 = damon_new_region(&damon_user_ctx, 100, 300);
+	r2 = damon_new_region(100, 300);
 	r2->nr_accesses = 20;
 	damon_add_region(r2, t);
 
@@ -592,7 +590,7 @@ static void damon_test_merge_regions_of(struct kunit *test)
 
 	t = damon_new_task(42);
 	for (i = 0; i < ARRAY_SIZE(sa); i++) {
-		r = damon_new_region(&damon_user_ctx, sa[i], ea[i]);
+		r = damon_new_region(sa[i], ea[i]);
 		r->nr_accesses = nrs[i];
 		damon_add_region(r, t);
 	}
@@ -614,14 +612,14 @@ static void damon_test_split_regions_of(struct kunit *test)
 	struct damon_region *r;
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 0, 22);
+	r = damon_new_region(0, 22);
 	damon_add_region(r, t);
 	damon_split_regions_of(&damon_user_ctx, t, 2);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 2u);
 	damon_free_task(t);
 
 	t = damon_new_task(42);
-	r = damon_new_region(&damon_user_ctx, 0, 220);
+	r = damon_new_region(0, 220);
 	damon_add_region(r, t);
 	damon_split_regions_of(&damon_user_ctx, t, 4);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 4u);
