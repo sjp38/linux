@@ -1,16 +1,17 @@
 TODOs
 =====
 
-- Export the functions for modules
 - Add cleanup callback
 - DAMOS: Support 0 max access count
-- Remove unused argument in damon_new_regions()
+- DAMOS: Use 'unsigned long' for (min|max)_sz_region
 
 
 Done
 ====
 
-- Wordsmith the doc
+- Wordsmith the document, comment, commit messages
+- Clean up code
+- Make tools code based on DAMOS code
+- Remove unused argument in damon_new_regions()
 - Check recording disablement condition properly
-- Print 'Press Ctrl+C to stop' for schemes, either
-- Make tools initial code based on DAMOS code
+- Force minimal recording buffer size
