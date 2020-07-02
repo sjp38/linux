@@ -775,7 +775,7 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 
 	ktime_get_coarse_ts64(&now);
 
-	damon_write_rbuf(c, &now, sizeof(struct timespec64));
+	damon_write_rbuf(c, &now, sizeof(now));
 	nr = nr_damon_tasks(c);
 	damon_write_rbuf(c, &nr, sizeof(nr));
 
