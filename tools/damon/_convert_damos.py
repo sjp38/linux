@@ -84,7 +84,7 @@ def text_to_nr_accesses(txt, max_nr_accesses):
     if txt == 'min':
         return 0
     if txt == 'max':
-        return uint_max
+        return max_nr_accesses
 
     return int(float(txt) * max_nr_accesses / 100)
 
