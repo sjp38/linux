@@ -242,39 +242,38 @@ Please also note that the range is inclusive (closed interval), and ``0`` for
 max values means infinite. Below example schemes are possible. ::
 
     # format is:
-    # <min/max size> <min/max frequency (0-99)> <min/max age> <action>
+    # <min/max size> <min/max frequency (0-100)> <min/max age> <action>
     #
     # B/K/M/G/T for Bytes/KiB/MiB/GiB/TiB
     # us/ms/s/m/h/d for micro-seconds/milli-seconds/seconds/minutes/hours/days
-    # 'null' means zero for size and age.
+    # 'min/max' for possible min/max value.
 
     # if a region keeps a high access frequency for >=100ms, put the region on
     # the head of the LRU list (call madvise() with MADV_WILLNEED).
-    null    null    80      null    100ms   0s      willneed
+    min    max      80      max     100ms   max willneed
 
-    # if a region keeps a low access frequency at least 200ms and at most one
-    # hour, put the region on the tail of the LRU list (call madvise() with
-    # MADV_COLD).
-    0B      0B      10      20      200ms   1h cold
+    # if a region keeps a low access frequency for >=200ms and <=one hour, put
+    # the region on the tail of the LRU list (call madvise() with MADV_COLD).
+    min     max     10      20      200ms   1h  cold
 
-    # if a region keeps a very low access frequency for >=1 minute, swap
-    # out the region immediately (call madvise() with MADV_PAGEOUT).
-    0B      null    0       10      60s     0s pageout
+    # if a region keeps a very low access frequency for >=60 seconds, swap out
+    # the region immediately (call madvise() with MADV_PAGEOUT).
+    min     max     0       10      60s     max pageout
 
     # if a region of a size >=2MiB keeps a very high access frequency for
     # >=100ms, let the region to use huge pages (call madvise() with
     # MADV_HUGEPAGE).
-    2M      null    90      99      100ms   0s hugepage
+    2M      max     90      100     100ms   max hugepage
 
-    # If a region of a size >=2MiB keeps small access frequency for >=100ms,
+    # If a regions of a size >=2MiB keeps small access frequency for >=100ms,
     # avoid the region using huge pages (call madvise() with MADV_NOHUGEPAGE).
-    2M      null    0       25      100ms   0s nohugepage
+    2M      max     0       25      100ms   max nohugepage
 
 For example, you can make a running process named 'foo' to use huge pages for
 memory regions keeping 2MB or larger size and having very high access frequency
 for at least 100 milliseconds using below commands::
 
-    $ echo "2M null 90 99 100ms 0s hugepage" > my_thp_scheme
+    $ echo "2M max    90 max    100ms max    hugepage" > my_thp_scheme
     $ ./damo schemes --schemes my_thp_scheme `pidof foo`
 
 
@@ -356,8 +355,7 @@ Note that the ranges are closed interval.  Bytes for the size of regions
 interval for access frequency (``min-acc`` and ``max-acc``), number of
 aggregate intervals for the age of regions (``min-age`` and ``max-age``), and a
 predefined integer for memory management actions should be used.  The supported
-numbers and their
-meanings are as below.
+numbers and their meanings are as below.
 
  - 0: Call ``madvise()`` for the region with ``MADV_WILLNEED``
  - 1: Call ``madvise()`` for the region with ``MADV_COLD``
@@ -367,15 +365,15 @@ meanings are as below.
  - 5: Do nothing but count the statistics
 
 You can disable schemes by simply writing an empty string to the file.  For
-example, below commands applies a scheme saying "If a memory region >=4KiB is
-showing <=5 accesses per aggregate interval (0 5) for >=5 aggregate interval (5
-0), page out the region (2)", check the entered scheme again, and finally
-remove the scheme. ::
+example, below commands applies a scheme saying "If a memory region of size in
+[4KiB, 8KiB] is showing accesses per aggregate interval in [0, 5] for aggregate
+interval in [10, 20], page out the region", check the entered scheme again, and
+finally remove the scheme. ::
 
     # cd <debugfs>/damon
-    # echo "4096 0 0 5 5 0 2" > schemes
+    # echo "4096 8192    0 5    10 20    2" > schemes
     # cat schemes
-    4096 0 0 5 5 0 2 0 0
+    4096 8192 0 5 10 20 2 0 0
     # echo > schemes
 
 The last two integers in the 4th line of above example is the total number and
