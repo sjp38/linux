@@ -198,7 +198,7 @@ static void damon_destroy_task(struct damon_task *t)
 }
 
 static struct damos *damon_new_scheme(
-		unsigned int min_sz_region, unsigned int max_sz_region,
+		unsigned long min_sz_region, unsigned long max_sz_region,
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
 		enum damos_action action)
@@ -1714,7 +1714,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 
 	damon_for_each_scheme(s, c) {
 		rc = snprintf(&buf[written], len - written,
-				"%u %u %u %u %u %u %d %lu %lu\n",
+				"%lu %lu %u %u %u %u %d %lu %lu\n",
 				s->min_sz_region, s->max_sz_region,
 				s->min_nr_accesses, s->max_nr_accesses,
 				s->min_age_region, s->max_age_region,
@@ -1771,7 +1771,8 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 	struct damos *scheme, **schemes;
 	const int max_nr_schemes = 256;
 	int pos = 0, parsed, ret;
-	unsigned int min_sz, max_sz, min_nr_a, max_nr_a, min_age, max_age;
+	unsigned long min_sz, max_sz;
+	unsigned int min_nr_a, max_nr_a, min_age, max_age;
 	unsigned int action;
 
 	schemes = kmalloc_array(max_nr_schemes, sizeof(scheme),
@@ -1781,7 +1782,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 
 	*nr_schemes = 0;
 	while (pos < len && *nr_schemes < max_nr_schemes) {
-		ret = sscanf(&str[pos], "%u %u %u %u %u %u %u%n",
+		ret = sscanf(&str[pos], "%lu %lu %u %u %u %u %u%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
 				&min_age, &max_age, &action, &parsed);
 		if (ret != 7)
