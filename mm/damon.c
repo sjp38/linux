@@ -1148,16 +1148,12 @@ static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 
 	damon_for_each_scheme(s, c) {
 		sz = r->ar.end - r->ar.start;
-		if ((s->min_sz_region && sz < s->min_sz_region) ||
-				(s->max_sz_region && s->max_sz_region < sz))
+		if (sz < s->min_sz_region || s->max_sz_region < sz)
 			continue;
-		if ((s->min_nr_accesses && r->nr_accesses < s->min_nr_accesses)
-				|| (s->max_nr_accesses &&
-					s->max_nr_accesses < r->nr_accesses))
+		if (r->nr_accesses < s->min_nr_accesses ||
+				s->max_nr_accesses < r->nr_accesses)
 			continue;
-		if ((s->min_age_region && r->age < s->min_age_region) ||
-				(s->max_age_region &&
-				 s->max_age_region < r->age))
+		if (r->age < s->min_age_region || s->max_age_region < r->age)
 			continue;
 		s->stat_count++;
 		s->stat_sz += sz;
