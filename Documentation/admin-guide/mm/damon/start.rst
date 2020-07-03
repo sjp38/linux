@@ -116,11 +116,11 @@ workloads at external web pages [1]_ [2]_ [3]_.
 Data Access Pattern Aware Memory Management
 ===========================================
 
-Below three commands make every memory region of size >=4K that kept low access
-frequency for >=60 seconds in your workload to be swapped out. ::
+Below three commands make every memory region of size >=4K that doesn't
+accessed for >=60 seconds in your workload to be swapped out. ::
 
     $ echo "#min-size max-size min-acc max-acc min-age max-age action" > scheme
-    $ echo "4K        null     null    5       60s     null    pageout" >> scheme
+    $ echo "4K        max      0       0       60s     max     pageout" >> scheme
     $ damo schemes -c my_thp_scheme <pid of your workload>
 
 .. [1] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
