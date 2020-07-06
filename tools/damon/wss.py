@@ -17,7 +17,8 @@ def set_argparser(parser):
     parser.add_argument('--range', '-r', type=int, nargs=3,
             metavar=('<start>', '<stop>', '<step>'),
             help='range of wss percentiles to print')
-    parser.add_argument('--thres', '-t', type=int, metavar='<# accesses>',
+    parser.add_argument('--thres', '-t', type=int, default=1,
+            metavar='<# accesses>',
             help='minimal number of accesses for treated as working set')
     parser.add_argument('--sortby', '-s', choices=['time', 'size'],
             help='the metric to be used for the sort of the working set sizes')
