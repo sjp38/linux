@@ -2,16 +2,16 @@ TODOs
 =====
 
 - Add cleanup callback
-- DAMOS: Support 0 max access count
-- DAMOS: Use 'unsigned long' for (min|max)_sz_region
 
 
 Done
 ====
 
 - Wordsmith the document, comment, commit messages
-- Clean up code
-- Make tools code based on DAMOS code
-- Remove unused argument in damon_new_regions()
-- Check recording disablement condition properly
-- Force minimal recording buffer size
+- Clean up code (Remove unused argument in damon_new_regions())
+- user space tool: Simplify the code
+- user space tool: Add wss option for reuse histogram
+- recording: Check disablement condition properly
+- recording: Force minimal recording buffer size (1KB)
+- DAMOS: Support 0 max access count
+- DAMOS: Use 'unsigned long' for (min|max)_sz_region
