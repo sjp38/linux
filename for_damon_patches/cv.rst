@@ -1,5 +1,13 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
+Changes from Previous Version
+=============================
+
+- Wordsmith/cleanup the documentations and the code
+- user space tool: Cleanup and add an option for reuse histogram (patch 11)
+- recording: Check disablement condition properly
+- recording: Force minimal recording buffer size (1KB)
+
 Introduction
 ============
 
@@ -35,9 +43,9 @@ consumes less than 1% CPU time in most case. It slows target workloads down by
 only 0.94%.
 
 DAMON is accurate and useful for memory management optimizations. An
-experimental DAMON-based operation scheme for THP, ‘ethp’, removes 31.29% of
+experimental DAMON-based operation scheme for THP, 'ethp', removes 31.29% of
 THP memory overheads while preserving 60.64% of THP speedup. Another
-experimental DAMON-based ‘proactive reclamation’ implementation, ‘prcl’,
+experimental DAMON-based 'proactive reclamation' implementation, 'prcl',
 reduces 87.95% of residential sets and 29.52% of system memory footprint while
 incurring only 2.15% runtime overhead in the best case (parsec3/freqmine).
 
@@ -48,7 +56,7 @@ Please refer to the official document[1] or "Documentation/admin-guide/mm: Add
 a document for DAMON" patch in this patchset for detailed evaluation setup and
 results.
 
-[1] https://damonitor.github.io/doc/html/latest-damon
+[1] https://damonitor.github.io/doc/html/latest-damon/admin-guide/mm/damon/eval.html
 
 More Information
 ================
@@ -65,11 +73,11 @@ are
 
 [1] https://damonitor.github.io/_index
 [2] https://damonitor.github.io/doc/html/latest-damon
-[3] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.0.html
-[4] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.html
-[5] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.2.html
-[6] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.html
-[7] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.html
+[3] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.0.png.html
+[4] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html
+[5] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.2.png.html
+[6] https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html
+[7] https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html
 [8] https://damonitor.github.io/test/result/perf/latest/html/index.html
 
 Baseline and Complete Git Trees
@@ -78,10 +86,10 @@ Baseline and Complete Git Trees
 The patches are based on the v5.7.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v16
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v17
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v16
+https://github.com/sjp38/linux/releases/tag/damon/patches/v17
 
 There are a couple of trees for entire DAMON patchset series.  It includes
 future features.  The first one[1] contains the changes for latest release,
@@ -112,15 +120,16 @@ implements recording of access patterns in DAMON.  Each of next two patches
 tracers such as perf, and a debugfs interface for privileged people and/or
 programs in user space.
 
-Two patches for high level users of DAMON follows.  To provide a minimal
+Three patches for high level users of DAMON follows.  To provide a minimal
 reference to the debugfs interface and for high level use/tests of the DAMON,
-the next patch (10th) implements an user space tool.  The 11th patch adds a
+the next patch (10th) implements an user space tool.  The 11th patch adds one
+more option to the tool for reuse histogram plot.  The 12nd patch adds a
 document for administrators of DAMON.
 
-Next two patches are for tests.  The 12th patch provides unit tests (based on
-the kunit) while the 13th patch adds user space tests (based on the kselftest).
+Next two patches are for tests.  The 13th patch provides unit tests (based on
+the kunit) while the 14th patch adds user space tests (based on the kselftest).
 
-Finally, the last patch (14th) updates the MAINTAINERS file.
+Finally, the last patch (15th) updates the MAINTAINERS file.
 
 Patch History
 =============
@@ -132,6 +141,12 @@ dropped.
 
 [1] https://lore.kernel.org/linux-mm/20200609141941.19184-1-sjpark@amazon.com/
 
+Changes from v16
+(https://lore.kernel.org/linux-mm/20200615161927.12637-1-sjpark@amazon.com/)
+ - Wordsmith/cleanup the documentations and the code
+ - user space tool: Simplify the code and add wss option for reuse histogram
+ - recording: Check disablement condition properly
+ - recording: Force minimal recording buffer size (1KB)
 
 Changes from v15
 (https://lore.kernel.org/linux-mm/20200608114047.26589-1-sjpark@amazon.com/)
