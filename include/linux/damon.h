@@ -100,8 +100,8 @@ enum damos_action {
  * the minimums and the maximums are inclusive.
  */
 struct damos {
-	unsigned int min_sz_region;
-	unsigned int max_sz_region;
+	unsigned long min_sz_region;
+	unsigned long max_sz_region;
 	unsigned int min_nr_accesses;
 	unsigned int max_nr_accesses;
 	unsigned int min_age_region;
