@@ -332,9 +332,11 @@ int damon_start(struct damon_ctx *ctx)
 	if (!ctx->kdamond) {
 		err = 0;
 		ctx->kdamond_stop = false;
-		ctx->kdamond = kthread_run(kdamond_fn, ctx, "kdamond");
+		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond");
 		if (IS_ERR(ctx->kdamond))
 			err = PTR_ERR(ctx->kdamond);
+		else
+			wake_up_process(ctx->kdamond);
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
