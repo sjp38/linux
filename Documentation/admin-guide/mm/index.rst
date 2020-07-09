@@ -27,7 +27,7 @@ the Linux memory management.
 
    concepts
    cma_debugfs
-   data_access_monitor
+   damon/index
    hugetlbpage
    idle_page_tracking
    ksm
