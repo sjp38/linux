@@ -25,11 +25,7 @@ workloads and systems.
 .. toctree::
    :maxdepth: 2
 
-   start
-   guide
-   usage
-   api
    faq
    mechanisms
    eval
-   plans
+   api
