@@ -12,5 +12,4 @@ optimize those.
    :maxdepth: 2
 
    start
-   guide
    usage
