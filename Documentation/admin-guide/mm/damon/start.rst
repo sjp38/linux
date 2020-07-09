@@ -105,8 +105,28 @@ the results as separate image files. ::
 - ``wss_chron_change.png`` will show how the working set size has
   chronologically changed.
 
-You can show the images in a web page [1]_ .  Those made with other realistic
-workloads are also available [2]_ [3]_ [4]_.
+Below are the three images.  You can show those made with other realistic
+workloads at external web pages [1]_ [2]_ [3]_.
+
+.. list-table::
+
+   * - .. kernel-figure::  damon_heatmap.png
+          :alt:   the access pattern in heatmap format
+          :align: center
+
+          The access pattern in heatmap format.
+
+     - .. kernel-figure::  damon_wss_dist.png
+          :alt:    the distribution of working set size
+          :align: center
+
+          The distribution of working set size.
+
+     - .. kernel-figure::  damon_wss_change.png
+          :alt:    the chronological changes of working set size
+          :align: center
+
+          The chronological changes of working set size.
 
 
 Data Access Pattern Aware Memory Management
