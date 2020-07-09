@@ -4691,6 +4691,7 @@ M:	SeongJae Park <sjpark@amazon.de>
 L:	linux-mm@kvack.org
 S:	Maintained
 F:	Documentation/admin-guide/mm/damon/*
+F:	Documentation/vm/damon/*
 F:	include/linux/damon.h
 F:	include/trace/events/damon.h
 F:	mm/damon-test.h
