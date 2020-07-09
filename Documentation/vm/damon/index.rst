@@ -26,4 +26,5 @@ workloads and systems.
 
    faq
    design
+   eval
    api
