@@ -31,5 +31,6 @@ operations with no code but simple configurations.
 
    faq
    design
+   eval
    api
    maintainer-profile
