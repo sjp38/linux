@@ -10,15 +10,15 @@ DAMON provides below three interfaces for different users.
   This is for privileged people such as system administrators who want a
   just-working human-friendly interface.  Using this, users can use the DAMON’s
   major features in a human-friendly way.  It may not be highly tuned for
-  special cases, though.  It supports virtual address space monitoring only.
+  special cases, though.  It supports only virtual address spaces monitoring.
 - *debugfs interface.*
   This is for privileged user space programmers who want more optimized use of
   DAMON.  Using this, users can use DAMON’s major features by reading
   from and writing to special debugfs files.  Therefore, you can write and use
   your personalized DAMON debugfs wrapper programs that reads/writes the
   debugfs files instead of you.  The DAMON user space tool is also a reference
-  implementation of such programs.  It supports virtual address space
-  monitoring only.
+  implementation of such programs.  It supports only virtual address spaces
+  monitoring.
 - *Kernel Space Programming Interface.*
   This is for kernel space programmers.  Using this, users can utilize every
   feature of DAMON most flexibly and efficiently by writing kernel space
@@ -26,7 +26,7 @@ DAMON provides below three interfaces for different users.
   address spaces.
 
 This document does not describe the kernel space programming interface in
-detail.  For that, please refer to :doc:`api`.
+detail.  For that, please refer to the :doc:`/vm/damon/api`.
 
 
 DAMON User Sapce Tool
@@ -48,9 +48,9 @@ Recording Data Access Pattern
 -----------------------------
 
 The ``record`` subcommand records the data access pattern of target workloads
-in a file (``./damon.data`` by default).  You can specify the target as either
-process id of running target or a command for execution of it.  Below example
-shows a command target usage::
+in a file (``./damon.data`` by default).  You can specify the target with 1)
+the command for execution of the monitoring target process, or 2) pid of
+running target process.  Below example shows a command target usage::
 
     # cd <kernel>/tools/damon/
     # damo record "sleep 5"
@@ -63,7 +63,8 @@ of the process.  Below example shows a pid target usage::
 
 The location of the recorded file can be explicitly set using ``-o`` option.
 You can further tune this by setting the monitoring attributes.  To know about
-the monitoring attributes in detail, please refer to :doc:`mechanisms`.
+the monitoring attributes in detail, please refer to the
+:doc:`/vm/damon/mechanisms`.
 
 
 Analyzing Data Access Pattern
@@ -231,9 +232,9 @@ Attributes
 Users can get and set the ``sampling interval``, ``aggregation interval``,
 ``regions update interval``, and min/max number of monitoring target regions by
 reading from and writing to the ``attrs`` file.  To know about the monitoring
-attributes in detail, please refer to :doc:`mechanisms`.  For example, below
-commands set those values to 5 ms, 100 ms, 1,000 ms, 10 and 1000, and then
-check it again::
+attributes in detail, please refer to the :doc:`/vm/damon/mechanisms`.  For
+example, below commands set those values to 5 ms, 100 ms, 1,000 ms, 10 and
+1000, and then check it again::
 
     # cd <debugfs>/damon
     # echo 5000 100000 1000000 10 1000 > attrs
@@ -244,9 +245,10 @@ check it again::
 Target PIDs
 -----------
 
-Users can get and set the pids of monitoring target processes by reading from
-and writing to the ``pids`` file.  For example, below commands set processes
-having pids 42 and 4242 as the processes to be monitored and check it again::
+To monitor the virtual memory address spaces of specific processes, users can
+get and set the pids of monitoring target processes by reading from and writing
+to the ``pids`` file.  For example, below commands set processes having pids 42
+and 4242 as the processes to be monitored and check it again::
 
     # cd <debugfs>/damon
     # echo 42 4242 > pids
@@ -277,10 +279,10 @@ The recording can be disabled by setting the buffer size zero.
 Turning On/Off
 --------------
 
-Setting the files as described above doesn't incur effect unless you
-explicitly start the monitoring.  You can start, stop, and check the current
-status of the monitoring by writing to and reading from the ``monitor_on``
-file.  Writing ``on`` to the file starts the monitoring and recording of the
+Setting the files as described above doesn't incur any effect on your system
+unless you explicitly start the monitoring.  You can start, stop, and check the
+current status of the monitoring by writing to and reading from the
+``monitor_on`` file.  Writing ``on`` to the file starts the monitoring of the
 targets with the attributes.  Writing ``off`` to the file stops those.  DAMON
 also stops if every target process is terminated.  Below example commands turn
 on, off, and check the status of DAMON::

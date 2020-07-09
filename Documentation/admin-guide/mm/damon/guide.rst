@@ -135,7 +135,8 @@ applies complex optimizations itself.  Using this, you can make more creative
 and wise optimizations.
 
 If you are a kernel space programmer, writing kernel space DAMON applications
-using the API (refer to :doc:`api` for more detail) would be also an option.
+using the API (refer to the :doc:`/vm/damon/api` for more detail) would be an
+option.
 
 
 Reference Practices
@@ -145,9 +146,9 @@ Referencing previously done successful practices could help you getting the
 sense for this kind of optimizations.  There is an academic paper [1]_
 reporting the visualized access pattern and manual `Program
 Modification`_ results for a number of realistic workloads.  You can also get
-the visualized access patterns [3]_ [4]_ [5]_ and automated DAMON-based
-memory operations results for other realistic workloads that collected with
-latest version of DAMON [2]_.
+the visualized access patterns [3]_ [4]_ [5]_ and automated DAMON-based memory
+operations results for other realistic workloads that collected with latest
+version of DAMON [2]_ .
 
 .. [1] https://dl.acm.org/doi/10.1145/3366626.3368125
 .. [2] https://damonitor.github.io/test/result/perf/latest/html/
