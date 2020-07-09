@@ -1610,6 +1610,21 @@ static void free_schemes_arr(struct damos **schemes, ssize_t nr_schemes)
 	kfree(schemes);
 }
 
+static bool damos_action_valid(int action)
+{
+	switch (action) {
+	case DAMOS_WILLNEED:
+	case DAMOS_COLD:
+	case DAMOS_PAGEOUT:
+	case DAMOS_HUGEPAGE:
+	case DAMOS_NOHUGEPAGE:
+	case DAMOS_STAT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 /*
  * Converts a string into an array of struct damos pointers
  *
@@ -1638,7 +1653,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 				&min_age, &max_age, &action, &parsed);
 		if (ret != 7)
 			break;
-		if (action >= DAMOS_ACTION_LEN) {
+		if (!damos_action_valid(action)) {
 			pr_err("wrong action %d\n", action);
 			goto fail;
 		}
