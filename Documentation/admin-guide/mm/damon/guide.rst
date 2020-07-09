@@ -91,13 +91,32 @@ you can know the appropriate DRAM size for you.  For example, roughly speaking,
 if you worry about only 95 percentile latency, you don't need to equip DRAM of
 a size larger than 95 percentile working set size.
 
-Let's see a real example.  This `page
-<https://damonitor.github.io/doc/html/v17/admin-guide/mm/damon/guide.html#memory-configuration>`_
-shows the heatmap and the working set size distributions/changes of
-``freqmine`` workload in PARSEC3 benchmark suite.  The working set size spikes
-up to 180 MiB, but keeps smaller than 50 MiB for more than 95% of the time.
-Even though you give only 50 MiB of memory space to the workload, it will work
-well for 95% of the time.  Meanwhile, you can save the 130 MiB of memory space.
+Let's see a real example.  Below are the heatmap and the working set size
+distributions/changes of ``freqmine`` workload in PARSEC3 benchmark suite.  The
+working set size spikes up to 180 MiB, but keeps smaller than 50 MiB for more
+than 95% of the time.  Even though you give only 50 MiB of memory space to the
+workload, it will work well for 95% of the time.  Meanwhile, you can save the
+130 MiB of memory space.
+
+.. list-table::
+
+   * - .. kernel-figure::  freqmine_heatmap.png
+          :alt:   the access pattern in heatmap format
+          :align: center
+
+          The access pattern in heatmap format.
+
+     - .. kernel-figure::  freqmine_wss_sz.png
+          :alt:    the distribution of working set size
+          :align: center
+
+          The distribution of working set size.
+
+     - .. kernel-figure::  freqmine_wss_time.png
+          :alt:    the chronological changes of working set size
+          :align: center
+
+          The chronological changes of working set size.
 
 
 Program Modification
@@ -119,10 +138,29 @@ A research work [1]_ using the ``mlock()`` achieved up to 2.55x performance
 speedup.
 
 Let's see another realistic example access pattern for this kind of
-optimizations.  This `page
-<https://damonitor.github.io/doc/html/v17/admin-guide/mm/damon/guide.html#program-modification>`_
-shows the visualized access patterns of streamcluster workload in PARSEC3
-benchmark suite.  We can easily identify the 100 MiB sized hot object.
+optimizations.  Below are the visualized access patterns of streamcluster
+workload in PARSEC3 benchmark suite.  We can easily identify the 100 MiB sized
+hot object.
+
+.. list-table::
+
+   * - .. kernel-figure::  streamcluster_heatmap.png
+          :alt:   the access pattern in heatmap format
+          :align: center
+
+          The access pattern in heatmap format.
+
+     - .. kernel-figure::  streamcluster_wss_sz.png
+          :alt:    the distribution of working set size
+          :align: center
+
+          The distribution of working set size.
+
+     - .. kernel-figure::  streamcluster_wss_time.png
+          :alt:    the chronological changes of working set size
+          :align: center
+
+          The chronological changes of working set size.
 
 
 Automated DAMON-based Memory Operations
