@@ -27,6 +27,13 @@ Therefore, 'idle pages tracking' and 'perf mem' could provide a subset of
 DAMON's output, but cannot substitute DAMON.
 
 
+How can I optimize my system's memory management using DAMON?
+=============================================================
+
+Because there are several ways for the DAMON-based optimizations, we wrote a
+separate document, :doc:`/admin-guide/mm/damon/guide`.  Please refer to that.
+
+
 Does DAMON support virtual memory only?
 =======================================
 
