@@ -32,7 +32,7 @@ How can I optimize my system's memory management using DAMON?
 =============================================================
 
 Because there are several ways for the DAMON-based optimizations, we wrote a
-separate document, :doc:`guide`.  Please refer to that.
+separate document, :doc:`/admin-guide/mm/damon/guide`.  Please refer to that.
 
 
 Does DAMON support virtual memory only?
@@ -44,10 +44,10 @@ constructions and actual access checks can be implemented and configured on the
 DAMON core by the users.  In this way, DAMON users can monitor any address
 space with any access check technique.
 
-Nonetheless, DAMON provides a vma tracking and PTE Accessed bit check based
-implementation of the address space dependent functions for the virtual memory
-by default, for a reference and convenient use.  In near future, we will also
-provide that for physical memory address space.
+Nonetheless, DAMON provides vma tracking and PTE Accessed bit check based
+implementations of the address space dependent functions for the virtual memory
+by default, for a reference and convenient use.  In near future, we will
+provide those for physical memory address space.
 
 
 Can I simply monitor page granularity?

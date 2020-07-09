@@ -29,3 +29,4 @@ workloads and systems.
    mechanisms
    eval
    api
+   plans
