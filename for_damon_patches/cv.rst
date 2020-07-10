@@ -3,10 +3,10 @@ Subject: Introduce Data Access MONitor (DAMON)
 Changes from Previous Version
 =============================
 
-- Wordsmith/cleanup the documentations and the code
-- user space tool: Cleanup and add an option for reuse histogram (patch 11)
-- recording: Check disablement condition properly
-- recording: Force minimal recording buffer size (1KB)
+- Reorganize the doc and remove png blobs (Mike Rapoport)
+- Wordsmith mechnisms doc and commit messages
+- tools/wss: Set default working set access frequency threshold
+- Avoid race in damon deamon start
 
 Introduction
 ============
@@ -86,10 +86,10 @@ Baseline and Complete Git Trees
 The patches are based on the v5.7.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v17
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v18
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v17
+https://github.com/sjp38/linux/releases/tag/damon/patches/v18
 
 There are a couple of trees for entire DAMON patchset series.  It includes
 future features.  The first one[1] contains the changes for latest release,
@@ -120,26 +120,25 @@ implements recording of access patterns in DAMON.  Each of next two patches
 tracers such as perf, and a debugfs interface for privileged people and/or
 programs in user space.
 
-Three patches for high level users of DAMON follows.  To provide a minimal
+Two patches for high level users of DAMON follows.  To provide a minimal
 reference to the debugfs interface and for high level use/tests of the DAMON,
-the next patch (10th) implements an user space tool.  The 11th patch adds one
-more option to the tool for reuse histogram plot.  The 12nd patch adds a
+the next patch (10th) implements an user space tool.  The 11th patch adds a
 document for administrators of DAMON.
 
-Next two patches are for tests.  The 13th patch provides unit tests (based on
-the kunit) while the 14th patch adds user space tests (based on the kselftest).
+Next two patches are for tests.  The 12th patch provides unit tests (based on
+the kunit) while the 13th patch adds user space tests (based on the kselftest).
 
-Finally, the last patch (15th) updates the MAINTAINERS file.
+Finally, the last patch (14th) updates the MAINTAINERS file.
 
 Patch History
 =============
 
-This version of patchset merges first, second, and sixth patches in the CDAMON
-patchset[1] for better readability.  As the changes are not subtle,
-'Reviewed-by's I previously received on the changes affected patches are also
-dropped.
-
-[1] https://lore.kernel.org/linux-mm/20200609141941.19184-1-sjpark@amazon.com/
+Changes from v17
+(https://lore.kernel.org/linux-mm/20200706115322.29598-1-sjpark@amazon.com/)
+- Reorganize the doc and remove png blobs (Mike Rapoport)
+- Wordsmith mechnisms doc and commit messages
+- tools/wss: Set default working set access frequency threshold
+- Avoid race in damon deamon start
 
 Changes from v16
 (https://lore.kernel.org/linux-mm/20200615161927.12637-1-sjpark@amazon.com/)
