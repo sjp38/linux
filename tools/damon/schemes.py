@@ -95,7 +95,7 @@ def main(args=None):
     target = args.target
 
     target_fields = target.split()
-    if not subprocess.call('which %s > /dev/null' % target_fields[0],
+    if not subprocess.call('which %s &> /dev/null' % target_fields[0],
             shell=True, executable='/bin/bash'):
         run_damon(target, True, new_attrs, orig_attrs)
     else:
