@@ -76,7 +76,6 @@ struct damon_target {
  * @DAMOS_PAGEOUT:	Call ``madvise()`` for the region with MADV_PAGEOUT.
  * @DAMOS_HUGEPAGE:	Call ``madvise()`` for the region with MADV_HUGEPAGE.
  * @DAMOS_NOHUGEPAGE:	Call ``madvise()`` for the region with MADV_NOHUGEPAGE.
- * @DAMOS_ACTION_LEN:	Number of supported actions.
  */
 enum damos_action {
 	DAMOS_WILLNEED,
@@ -84,7 +83,6 @@ enum damos_action {
 	DAMOS_PAGEOUT,
 	DAMOS_HUGEPAGE,
 	DAMOS_NOHUGEPAGE,
-	DAMOS_ACTION_LEN,
 };
 
 /**
