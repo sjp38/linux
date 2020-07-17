@@ -12,4 +12,5 @@ Done
 
 - DAMOS: Use dedicated valid action check function
 - Drop loadable module support (Mike Rapoport)
+- Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
 - Notice Accessed bit clearing to MMU notification subscribers (Shakeel Butt)
