@@ -176,11 +176,11 @@ static unsigned int nr_damon_regions(struct damon_target *t)
 /* Returns the size upper limit for each monitoring region */
 static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 	unsigned long sz = 0;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		damon_for_each_region(r, t)
 			sz += r->ar.end - r->ar.start;
 	}
@@ -263,11 +263,11 @@ static void damon_merge_two_regions(struct damon_region *l,
 /*
  * Merge adjacent regions having similar access frequencies
  *
- * t		task affected by merge operation
+ * t		target affected by this merge operation
  * thres	'->nr_accesses' diff threshold for the merge
  * sz_limit	size upper limit of each region
  */
-static void damon_merge_regions_of(struct damon_task *t, unsigned int thres,
+static void damon_merge_regions_of(struct damon_target *t, unsigned int thres,
 				   unsigned long sz_limit)
 {
 	struct damon_region *r, *prev = NULL, *next;
@@ -296,9 +296,9 @@ static void damon_merge_regions_of(struct damon_task *t, unsigned int thres,
 static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,
 				  unsigned long sz_limit)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 
-	damon_for_each_task(t, c)
+	damon_for_each_target(t, c)
 		damon_merge_regions_of(t, threshold, sz_limit);
 }
 
@@ -319,9 +319,9 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 	damon_insert_region(new, r, damon_next_region(r));
 }
 
-/* Split every region in the given task into 'nr_subs' regions */
+/* Split every region in the given target into 'nr_subs' regions */
 static void damon_split_regions_of(struct damon_ctx *ctx,
-				     struct damon_task *t, int nr_subs)
+				     struct damon_target *t, int nr_subs)
 {
 	struct damon_region *r, *next;
 	unsigned long sz_region, sz_sub = 0;
@@ -360,12 +360,12 @@ static void damon_split_regions_of(struct damon_ctx *ctx,
  */
 static void kdamond_split_regions(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	unsigned int nr_regions = 0;
 	static unsigned int last_nr_regions;
 	int nr_subregions = 2;
 
-	damon_for_each_task(t, ctx)
+	damon_for_each_target(t, ctx)
 		nr_regions += nr_damon_regions(t);
 
 	if (nr_regions > ctx->max_nr_regions / 2)
@@ -376,7 +376,7 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 			nr_regions < ctx->max_nr_regions / 3)
 		nr_subregions = 3;
 
-	damon_for_each_task(t, ctx)
+	damon_for_each_target(t, ctx)
 		damon_split_regions_of(ctx, t, nr_subregions);
 
 	last_nr_regions = nr_regions;
