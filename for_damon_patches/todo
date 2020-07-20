@@ -17,3 +17,5 @@ Done
 - Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
 - Notice Accessed bit clearing to MMU notification subscribers (Shakeel Butt)
 - DAMON/DAMOS: Forward stderr of which in tools/damon/damo
+- (not for patch) Remove physical address DAMOS support: It's not well
+  prepaired, just remove it for now.  Let's do it again later.
