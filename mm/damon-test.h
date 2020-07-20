@@ -163,8 +163,8 @@ static void damon_test_set_recording(struct kunit *test)
 static void damon_test_set_init_regions(struct kunit *test)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
-	int pids[] = {1, 2, 3};
-	/* Each line represents one region in ``<pid> <start> <end>`` */
+	unsigned long ids[] = {1, 2, 3};
+	/* Each line represents one region in ``<target id> <start> <end>`` */
 	char * const valid_inputs[] = {"2 10 20\n 2   20 30\n2 35 45",
 		"2 10 20\n",
 		"2 10 20\n1 39 59\n1 70 134\n  2  20 25\n",
@@ -174,14 +174,14 @@ static void damon_test_set_init_regions(struct kunit *test)
 		"2 10 20\n",
 		"1 39 59\n1 70 134\n2 10 20\n2 20 25\n",
 		""};
-	char * const invalid_inputs[] = {"4 10 20\n",	/* pid not exists */
+	char * const invalid_inputs[] = {"4 10 20\n",	/* target not exists */
 		"2 10 20\n 2 14 26\n",		/* regions overlap */
 		"1 10 20\n2 30 40\n 1 5 8"};	/* not sorted by address */
 	char *input, *expect;
 	int i, rc;
 	char buf[256];
 
-	damon_set_pids(ctx, pids, 3);
+	damon_set_targets(ctx, ids, 3);
 
 	/* Put valid inputs and check the results */
 	for (i = 0; i < ARRAY_SIZE(valid_inputs); i++) {
@@ -209,7 +209,7 @@ static void damon_test_set_init_regions(struct kunit *test)
 		KUNIT_EXPECT_STREQ(test, (char *)buf, "");
 	}
 
-	damon_set_pids(ctx, NULL, 0);
+	damon_set_targets(ctx, NULL, 0);
 }
 
 static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
