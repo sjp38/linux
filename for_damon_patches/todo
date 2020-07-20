@@ -5,7 +5,9 @@ TODOs
 - Make debugfs interface simple and clean
  - Atomically pass a copy of constructed context to damon_start()?
 - Add cleanup callback
-- Forward stderr of which in tools/damon/damo
+- CDAMON: Support nested iomem sections (Du Fan)
+- Rename and generalize 'struct damon_task'
+- Use pidfd instead of pid (Shakeel Butt)
 
 Done
 ====
@@ -14,3 +16,4 @@ Done
 - Drop loadable module support (Mike Rapoport)
 - Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
 - Notice Accessed bit clearing to MMU notification subscribers (Shakeel Butt)
+- DAMON/DAMOS: Forward stderr of which in tools/damon/damo
