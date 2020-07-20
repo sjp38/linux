@@ -823,27 +823,27 @@ static void damon_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
  * Stores current tracking results to the result buffer and reset 'nr_accesses'
  * of each region.  The format for the result buffer is as below:
  *
- *   <time> <number of tasks> <array of task infos>
+ *   <time> <number of targets> <array of target infos>
  *
- *   task info: <pid> <number of regions> <array of region infos>
+ *   target info: <id> <number of regions> <array of region infos>
  *   region info: <start address> <end address> <nr_accesses>
  */
 static void kdamond_reset_aggregated(struct damon_ctx *c)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct timespec64 now;
 	unsigned int nr;
 
 	ktime_get_coarse_ts64(&now);
 
 	damon_write_rbuf(c, &now, sizeof(now));
-	nr = nr_damon_tasks(c);
+	nr = nr_damon_targets(c);
 	damon_write_rbuf(c, &nr, sizeof(nr));
 
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		struct damon_region *r;
 
-		damon_write_rbuf(c, &t->pid, sizeof(t->pid));
+		damon_write_rbuf(c, &t->id, sizeof(t->id));
 		nr = nr_damon_regions(t);
 		damon_write_rbuf(c, &nr, sizeof(nr));
 		damon_for_each_region(r, t) {
@@ -1089,7 +1089,7 @@ static int kdamond_fn(void *data)
 		}
 	}
 	damon_flush_rbuffer(ctx);
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
