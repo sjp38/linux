@@ -155,6 +155,13 @@ struct damon_ctx {
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
 
+/* Reference callback implementations for virtual memory */
+void kdamond_init_vm_regions(struct damon_ctx *ctx);
+void kdamond_update_vm_regions(struct damon_ctx *ctx);
+void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
+unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
+bool kdamond_vm_target_valid(struct damon_target *t);
+
 int damon_set_targets(struct damon_ctx *ctx,
 		unsigned long *ids, ssize_t nr_ids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
