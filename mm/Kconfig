@@ -877,6 +877,9 @@ config MAPPING_DIRTY_HELPERS
 
 config DAMON
 	bool "Data Access Monitor"
+	depends on MMU && !IDLE_PAGE_TRACKING
+	select PAGE_EXTENSION if !64BIT
+	select PAGE_IDLE_FLAG
 	help
 	  This feature allows to monitor access frequency of each memory
 	  region. The information can be useful for performance-centric DRAM
