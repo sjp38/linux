@@ -38,26 +38,29 @@ struct damon_region {
 };
 
 /**
- * struct damon_task - Represents a monitoring target task.
- * @pid:		Process id of the task.
- * @regions_list:	Head of the monitoring target regions of this task.
- * @list:		List head for siblings.
+ * struct damon_target - Represents a monitoring target.
+ * @id:                 Unique identifier for this target.
+ * @regions_list:       Head of the monitoring target regions of this target.
+ * @list:               List head for siblings.
  *
- * If the monitoring target address space is task independent (e.g., physical
- * memory address space monitoring), @pid should be '-1'.
+ * Each monitoring context could have multiple targets.  For example, a context
+ * for virtual memory address spaces could have multiple target processes.  The
+ * @id of each target should be unique among the targets of the context.  For
+ * example, in the virtual address monitoring context, it could be a pidfd or
+ * an adress of an mm_struct.
  */
-struct damon_task {
-	int pid;
+struct damon_target {
+	unsigned long id;
 	struct list_head regions_list;
 	struct list_head list;
 };
 
 /**
  * struct damon_ctx - Represents a context for each monitoring.
- * @tasks_list:		Head of monitoring target tasks (&damon_task) list.
+ * @targets_list:       Head of monitoring targets (&damon_target) list.
  */
 struct damon_ctx {
-	struct list_head tasks_list;	/* 'damon_task' objects */
+	struct list_head targets_list;	/* 'damon_target' objects */
 };
 
 #endif

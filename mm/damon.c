@@ -25,9 +25,6 @@
  * Functions and macros for DAMON data structures
  */
 
-#define damon_get_task_struct(t) \
-	(get_pid_task(find_vpid(t->pid), PIDTYPE_PID))
-
 #define damon_next_region(r) \
 	(container_of(r->list.next, struct damon_region, list))
 
@@ -40,11 +37,11 @@
 #define damon_for_each_region_safe(r, next, t) \
 	list_for_each_entry_safe(r, next, &t->regions_list, list)
 
-#define damon_for_each_task(t, ctx) \
-	list_for_each_entry(t, &(ctx)->tasks_list, list)
+#define damon_for_each_target(t, ctx) \
+	list_for_each_entry(t, &(ctx)->targets_list, list)
 
-#define damon_for_each_task_safe(t, next, ctx) \
-	list_for_each_entry_safe(t, next, &(ctx)->tasks_list, list)
+#define damon_for_each_target_safe(t, next, ctx) \
+	list_for_each_entry_safe(t, next, &(ctx)->targets_list, list)
 
 /* Get a random number in [l, r) */
 #define damon_rand(l, r) (l + prandom_u32() % (r - l))
@@ -80,7 +77,7 @@ static inline void damon_insert_region(struct damon_region *r,
 	__list_add(&r->list, &prev->list, &next->list);
 }
 
-static void damon_add_region(struct damon_region *r, struct damon_task *t)
+static void damon_add_region(struct damon_region *r, struct damon_target *t)
 {
 	list_add_tail(&r->list, &t->regions_list);
 }
@@ -102,35 +99,35 @@ static void damon_destroy_region(struct damon_region *r)
 }
 
 /*
- * Construct a damon_task struct
+ * Construct a damon_target struct
  *
  * Returns the pointer to the new struct if success, or NULL otherwise
  */
-static struct damon_task *damon_new_task(int pid)
+static struct damon_target *damon_new_target(unsigned long id)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 
 	t = kmalloc(sizeof(*t), GFP_KERNEL);
 	if (!t)
 		return NULL;
 
-	t->pid = pid;
+	t->id = id;
 	INIT_LIST_HEAD(&t->regions_list);
 
 	return t;
 }
 
-static void damon_add_task(struct damon_ctx *ctx, struct damon_task *t)
+static void damon_add_target(struct damon_ctx *ctx, struct damon_target *t)
 {
-	list_add_tail(&t->list, &ctx->tasks_list);
+	list_add_tail(&t->list, &ctx->targets_list);
 }
 
-static void damon_del_task(struct damon_task *t)
+static void damon_del_target(struct damon_target *t)
 {
 	list_del(&t->list);
 }
 
-static void damon_free_task(struct damon_task *t)
+static void damon_free_target(struct damon_target *t)
 {
 	struct damon_region *r, *next;
 
@@ -139,24 +136,24 @@ static void damon_free_task(struct damon_task *t)
 	kfree(t);
 }
 
-static void damon_destroy_task(struct damon_task *t)
+static void damon_destroy_target(struct damon_target *t)
 {
-	damon_del_task(t);
-	damon_free_task(t);
+	damon_del_target(t);
+	damon_free_target(t);
 }
 
-static unsigned int nr_damon_tasks(struct damon_ctx *ctx)
+static unsigned int nr_damon_targets(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
-	unsigned int nr_tasks = 0;
+	struct damon_target *t;
+	unsigned int nr_targets = 0;
 
-	damon_for_each_task(t, ctx)
-		nr_tasks++;
+	damon_for_each_target(t, ctx)
+		nr_targets++;
 
-	return nr_tasks;
+	return nr_targets;
 }
 
-static unsigned int nr_damon_regions(struct damon_task *t)
+static unsigned int nr_damon_regions(struct damon_target *t)
 {
 	struct damon_region *r;
 	unsigned int nr_regions = 0;
