@@ -214,10 +214,10 @@ static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)
  */
 static void kdamond_reset_aggregated(struct damon_ctx *c)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		damon_for_each_region(r, t)
 			r->nr_accesses = 0;
 	}
@@ -227,14 +227,13 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
  * Check whether current monitoring should be stopped
  *
  * The monitoring is stopped when either the user requested to stop, or all
- * monitoring target tasks are dead.
+ * monitoring targets are invalid.
  *
  * Returns true if need to stop current monitoring.
  */
 static bool kdamond_need_stop(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
-	struct task_struct *task;
+	struct damon_target *t;
 	bool stop;
 
 	mutex_lock(&ctx->kdamond_lock);
@@ -243,16 +242,12 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	if (stop)
 		return true;
 
-	damon_for_each_task(t, ctx) {
-		/* -1 is reserved for non-process bounded monitoring */
-		if (t->pid == -1)
-			return false;
+	if (!ctx->target_valid)
+		return false;
 
-		task = damon_get_task_struct(t);
-		if (task) {
-			put_task_struct(task);
+	damon_for_each_target(t, ctx) {
+		if (ctx->target_valid(t))
 			return false;
-		}
 	}
 
 	return true;
@@ -264,7 +259,7 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 static int kdamond_fn(void *data)
 {
 	struct damon_ctx *ctx = (struct damon_ctx *)data;
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r, *next;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
@@ -288,7 +283,7 @@ static int kdamond_fn(void *data)
 		}
 
 	}
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
@@ -365,28 +360,29 @@ int damon_stop(struct damon_ctx *ctx)
 /**
  * damon_set_pids() - Set monitoring target processes.
  * @ctx:	monitoring context
- * @pids:	array of target processes pids
- * @nr_pids:	number of entries in @pids
+ * @ids:	array of target ids
+ * @nr_ids:	number of entries in @ids
  *
  * This function should not be called while the kdamond is running.
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids)
+int damon_set_targets(struct damon_ctx *ctx,
+		      unsigned long *ids, ssize_t nr_ids)
 {
 	ssize_t i;
-	struct damon_task *t, *next;
+	struct damon_target *t, *next;
 
-	damon_for_each_task_safe(t, next, ctx)
-		damon_destroy_task(t);
+	damon_for_each_target_safe(t, next, ctx)
+		damon_destroy_target(t);
 
-	for (i = 0; i < nr_pids; i++) {
-		t = damon_new_task(pids[i]);
+	for (i = 0; i < nr_ids; i++) {
+		t = damon_new_target(ids[i]);
 		if (!t) {
-			pr_err("Failed to alloc damon_task\n");
+			pr_err("Failed to alloc damon_target\n");
 			return -ENOMEM;
 		}
-		damon_add_task(ctx, t);
+		damon_add_target(ctx, t);
 	}
 
 	return 0;
