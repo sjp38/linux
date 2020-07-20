@@ -78,11 +78,14 @@ struct damon_target {
  * For each monitoring request (damon_start()), a kernel thread for the
  * monitoring is created.  The pointer to the thread is stored in @kdamond.
  *
- * The monitoring thread sets @kdamond to NULL when it terminates.  Therefore,
- * users can know whether the monitoring is ongoing or terminated by reading
- * @kdamond.  Also, users can ask @kdamond to be terminated by writing non-zero
- * to @kdamond_stop.  Reads and writes to @kdamond and @kdamond_stop from
- * outside of the monitoring thread must be protected by @kdamond_lock.
+ * Once started, the monitoring thread runs until explicitly required to be
+ * terminated or every monitoring target is invalid.  The validity of the
+ * targets is checked via the @target_valid callback.  The termination can also
+ * be explicitly requested by writing non-zero to @kdamond_stop.  The thread
+ * sets @kdamond to NULL when it terminates.  Therefore, users can know whether
+ * the monitoring is ongoing or terminated by reading @kdamond.  Reads and
+ * writes to @kdamond and @kdamond_stop from outside of the monitoring thread
+ * must be protected by @kdamond_lock.
  *
  * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
  * @kdamond_lock.  Accesses to other fields must be protected by themselves.
@@ -92,6 +95,7 @@ struct damon_target {
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @prepare_access_checks:	Prepares next access check of target regions.
  * @check_accesses:		Checks the access of target regions.
+ * @target_valid:		Determine if the target is valid.
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
  *
@@ -99,7 +103,8 @@ struct damon_target {
  * can register the target address space dependent low level functions for
  * their usecases via the callback pointers of the context.  The monitoring
  * thread calls @init_target_regions before starting the monitoring, and
- * @prepare_access_checks and @check_accesses for each @sample_interval.
+ * @prepare_access_checks, @check_accesses, and @target_valid for each
+ * @sample_interval.
  *
  * @init_target_regions should construct proper monitoring target regions and
  * link those to the DAMON context struct.
@@ -107,10 +112,12 @@ struct damon_target {
  * prepare for the next access check.
  * @check_accesses should check the accesses to each region that made after the
  * last preparation and update the `->nr_accesses` of each region.
+ * @target_valid should check whether the target is still valid for the
+ * monitoring.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
- * users can safely access to the monitoring results via @tasks_list without
+ * users can safely access to the monitoring results via @targets_list without
  * additional protection of @kdamond_lock.  For the reason, users are
  * recommended to use these callback for the accesses to the results.
  */
@@ -131,11 +138,13 @@ struct damon_ctx {
 	void (*init_target_regions)(struct damon_ctx *context);
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
+	bool (*target_valid)(struct damon_target *target);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
 
-int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids);
+int damon_set_targets(struct damon_ctx *ctx,
+		unsigned long *ids, ssize_t nr_ids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long min_nr_reg);
 int damon_start(struct damon_ctx *ctx);
