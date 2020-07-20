@@ -12,6 +12,7 @@
  * - Functions for the initial monitoring target regions construction
  * - Functions for the dynamic monitoring target regions update
  * - Functions for the access checking of the regions
+ * - Functions for the target validity check
  * - Functions for DAMON core logics and features
  * - Functions for the DAMON programming interface
  * - Functions for the initialization
@@ -198,13 +199,25 @@ static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
 }
 
 /*
- * Get the mm_struct of the given task
+ * Functions for the initial monitoring target regions construction
+ */
+
+#define damon_get_task_struct(t) \
+	        (get_pid_task(find_vpid((int)t->id), PIDTYPE_PID))
+
+/*
+ * Get the mm_struct of the given target
+ *
+ * '->id' of the target should be the relevant pid.  Currently, the reference
+ * implementation of the low level primitives for the virtual address spaces
+ * and the DAMON-based schemes execution logic has the assumption and uses
+ * this.
  *
  * Caller _must_ put the mm_struct after use, unless it is NULL.
  *
- * Returns the mm_struct of the task on success, NULL on failure
+ * Returns the mm_struct of the target on success, NULL on failure
  */
-static struct mm_struct *damon_get_mm(struct damon_task *t)
+static struct mm_struct *damon_get_mm(struct damon_target *t)
 {
 	struct task_struct *task;
 	struct mm_struct *mm;
@@ -217,10 +230,6 @@ static struct mm_struct *damon_get_mm(struct damon_task *t)
 	put_task_struct(task);
 	return mm;
 }
-
-/*
- * Functions for the initial monitoring target regions construction
- */
 
 /*
  * Size-evenly split a region into 'nr_pieces' small regions
@@ -341,11 +350,11 @@ next:
 }
 
 /*
- * Get the three regions in the given task
+ * Get the three regions in the given target (task)
  *
  * Returns 0 on success, negative error code otherwise.
  */
-static int damon_three_regions_of(struct damon_task *t,
+static int damon_three_regions_of(struct damon_target *t,
 				struct damon_addr_range regions[3])
 {
 	struct mm_struct *mm;
@@ -364,9 +373,9 @@ static int damon_three_regions_of(struct damon_task *t,
 }
 
 /*
- * Initialize the monitoring target regions for the given task
+ * Initialize the monitoring target regions for the given target (task)
  *
- * t	the given target task
+ * t	the given target
  *
  * Because only a number of small portions of the entire address space
  * is actually mapped to the memory and accessed, monitoring the unmapped
@@ -405,7 +414,8 @@ static int damon_three_regions_of(struct damon_task *t,
  *   <BIG UNMAPPED REGION 2>
  *   <stack>
  */
-static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
+static void damon_init_vm_regions_of(struct damon_ctx *c,
+				     struct damon_target *t)
 {
 	struct damon_region *r;
 	struct damon_addr_range regions[3];
@@ -413,7 +423,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 	int i;
 
 	if (damon_three_regions_of(t, regions)) {
-		pr_err("Failed to get three regions of task %d\n", t->pid);
+		pr_err("Failed to get three regions of target %lu\n", t->id);
 		return;
 	}
 
@@ -424,7 +434,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 	if (sz < MIN_REGION)
 		sz = MIN_REGION;
 
-	/* Set the initial three regions of the task */
+	/* Set the initial three regions of the target */
 	for (i = 0; i < 3; i++) {
 		r = damon_new_region(regions[i].start, regions[i].end);
 		if (!r) {
@@ -438,12 +448,12 @@ static void damon_init_vm_regions_of(struct damon_ctx *c, struct damon_task *t)
 	}
 }
 
-/* Initialize '->regions_list' of every task */
+/* Initialize '->regions_list' of every target (task) */
 void kdamond_init_vm_regions(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		/* the user may set the target regions as they want */
 		if (!nr_damon_regions(t))
 			damon_init_vm_regions_of(ctx, t);
@@ -465,13 +475,13 @@ static bool damon_intersect(struct damon_region *r, struct damon_addr_range *re)
 }
 
 /*
- * Update damon regions for the three big regions of the given task
+ * Update damon regions for the three big regions of the given target
  *
- * t		the given task
- * bregions	the three big regions of the task
+ * t		the given target
+ * bregions	the three big regions of the target
  */
 static void damon_apply_three_regions(struct damon_ctx *ctx,
-		struct damon_task *t, struct damon_addr_range bregions[3])
+		struct damon_target *t, struct damon_addr_range bregions[3])
 {
 	struct damon_region *r, *next;
 	unsigned int i = 0;
@@ -524,9 +534,9 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 void kdamond_update_vm_regions(struct damon_ctx *ctx)
 {
 	struct damon_addr_range three_regions[3];
-	struct damon_task *t;
+	struct damon_target *t;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		if (damon_three_regions_of(t, three_regions))
 			continue;
 		damon_apply_three_regions(ctx, t, three_regions);
@@ -610,11 +620,11 @@ static void damon_prepare_vm_access_check(struct damon_ctx *ctx,
 
 void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct mm_struct *mm;
 	struct damon_region *r;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		mm = damon_get_mm(t);
 		if (!mm)
 			continue;
@@ -683,12 +693,12 @@ static void damon_check_vm_access(struct damon_ctx *ctx,
 
 unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct mm_struct *mm;
 	struct damon_region *r;
 	unsigned int max_nr_accesses = 0;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		mm = damon_get_mm(t);
 		if (!mm)
 			continue;
@@ -700,6 +710,24 @@ unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 	}
 
 	return max_nr_accesses;
+}
+
+
+/*
+ * Functions for the target validity check
+ */
+
+bool kdamond_vm_target_valid(struct damon_target *t)
+{
+	struct task_struct *task;
+
+	task = damon_get_task_struct(t);
+	if (task) {
+		put_task_struct(task);
+		return true;
+	}
+
+	return false;
 }
 
 /*
