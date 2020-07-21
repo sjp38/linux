@@ -21,10 +21,11 @@ def set_fmt_version(f):
     return fmt_version
 
 def read_pid(f):
-    if fmt_version == 0:
-        pid = struct.unpack('L', f.read(8))[0]
-    else:
+    if fmt_version == 1:
         pid = struct.unpack('i', f.read(4))[0]
+    else:
+        pid = struct.unpack('L', f.read(8))[0]
+
 def err_percent(val, expected):
     return abs(val - expected) / expected * 100
 
