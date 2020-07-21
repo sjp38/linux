@@ -894,10 +894,10 @@ static void damon_prepare_phys_access_check(struct damon_ctx *ctx,
 
 void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		damon_for_each_region(r, t)
 			damon_prepare_phys_access_check(ctx, r);
 	}
@@ -983,11 +983,11 @@ static void damon_check_phys_access(struct damon_ctx *ctx,
 
 unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 	unsigned int max_nr_accesses = 0;
 
-	damon_for_each_task(t, ctx) {
+	damon_for_each_target(t, ctx) {
 		damon_for_each_region(r, t) {
 			damon_check_phys_access(ctx, r);
 			max_nr_accesses = max(r->nr_accesses, max_nr_accesses);
