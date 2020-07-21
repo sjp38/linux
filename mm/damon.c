@@ -2009,7 +2009,7 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 		ctx->check_accesses = kdamond_check_phys_accesses;
 		ctx->target_valid = NULL;
 
-		/* Set the fake target task pid as -1 */
+		/* target id is meaningless here, but we set it just for fun */
 		snprintf(kbuf, count, "-1    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
