@@ -54,6 +54,11 @@ heats``.  If it shows a simple pattern consists of a small number of memory
 regions having high contrast of access temperature, you could consider manual
 `Program Modification`_.
 
+If the access pattern is very frequently changing so that you cannot figure out
+what is the performance important region using your human eye, `Automated
+DAMON-based Memory Operations`_ might help the case owing to its machine-level
+microscope view.
+
 If you still want to absorb more benefits, you should develop `Personalized
 DAMON Application`_ for your special case.
 
@@ -121,6 +126,36 @@ shows the visualized access patterns of streamcluster workload in PARSEC3
 benchmark suite.  We can easily identify the 100 MiB sized hot object.
 
 
+Automated DAMON-based Memory Operations
+---------------------------------------
+
+Though `Manual Program Optimization` works well in many cases and DAMON can
+help it, modifying the source code is not a good option in many cases.  First
+of all, the source code could be too old or unavailable.  And, many workloads
+will have complex data access patterns that even hard to distinguish hot memory
+objects and cold memory objects with the human eye.  Finding the mapping from
+the visualized access pattern to the source code and injecting the hinting
+system calls inside the code will also be quite challenging.
+
+By using DAMON-based operation schemes (DAMOS) via ``damo schemes``, you will
+be able to easily optimize your workload in such a case.  Our example schemes
+called 'efficient THP' and 'proactive reclamation' achieved significant speedup
+and memory space saves against 25 realistic workloads [2]_.
+
+That said, note that you need careful tune of the schemes (e.g., target region
+size and age) and monitoring attributes for the successful use of this
+approach.  Because the optimal values of the parameters will be dependent on
+each system and workload, misconfiguring the parameters could result in worse
+memory management.
+
+For the tuning, you could measure the performance metrics such as IPC, TLB
+misses, and swap in/out events and adjusts the parameters based on their
+changes.  The total number and the total size of the regions that each scheme
+is applied, which are provided via the debugfs interface and the programming
+interface can also be useful.  Writing a program automating this optimal
+parameter could be an option.
+
+
 Personalized DAMON Application
 ------------------------------
 
@@ -147,9 +182,9 @@ Referencing previously done successful practices could help you getting the
 sense for this kind of optimizations.  There is an academic paper [1]_
 reporting the visualized access pattern and manual `Program
 Modification`_ results for a number of realistic workloads.  You can also get
-the visualized access patterns [3]_ [4]_ [5]_ and automated DAMON-based memory
-operations results for other realistic workloads that collected with latest
-version of DAMON [2]_ .
+the visualized access patterns [3]_ [4]_ [5]_ and
+`Automated DAMON-based Memory Operations`_ results for other realistic
+workloads that collected with latest version of DAMON [2]_ .
 
 .. [1] https://dl.acm.org/doi/10.1145/3366626.3368125
 .. [2] https://damonitor.github.io/test/result/perf/latest/html/
