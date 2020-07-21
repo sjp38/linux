@@ -1876,16 +1876,16 @@ out:
 
 static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 	int written = 0;
 	int rc;
 
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		damon_for_each_region(r, t) {
 			rc = snprintf(&buf[written], len - written,
-					"%d %lu %lu\n",
-					t->pid, r->ar.start, r->ar.end);
+					"%lu %lu %lu\n",
+					t->id, r->ar.start, r->ar.end);
 			if (!rc)
 				return -ENOMEM;
 			written += rc;
@@ -1923,17 +1923,17 @@ out:
 }
 
 static int add_init_region(struct damon_ctx *c,
-			 int pid, struct damon_addr_range *ar)
+			 unsigned long target_id, struct damon_addr_range *ar)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r, *prev;
 	int rc = -EINVAL;
 
 	if (ar->start >= ar->end)
 		return -EINVAL;
 
-	damon_for_each_task(t, c) {
-		if (t->pid == pid) {
+	damon_for_each_target(t, c) {
+		if (t->id == target_id) {
 			r = damon_new_region(ar->start, ar->end);
 			if (!r)
 				return -ENOMEM;
@@ -1953,24 +1953,24 @@ static int add_init_region(struct damon_ctx *c,
 
 static int set_init_regions(struct damon_ctx *c, const char *str, ssize_t len)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r, *next;
 	int pos = 0, parsed, ret;
-	int pid;
+	unsigned long target_id;
 	struct damon_addr_range ar;
 	int err;
 
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
 
 	while (pos < len) {
-		ret = sscanf(&str[pos], "%d %lu %lu%n",
-				&pid, &ar.start, &ar.end, &parsed);
+		ret = sscanf(&str[pos], "%lu %lu %lu%n",
+				&target_id, &ar.start, &ar.end, &parsed);
 		if (ret != 3)
 			break;
-		err = add_init_region(c, pid, &ar);
+		err = add_init_region(c, target_id, &ar);
 		if (err)
 			goto fail;
 		pos += parsed;
@@ -1979,7 +1979,7 @@ static int set_init_regions(struct damon_ctx *c, const char *str, ssize_t len)
 	return 0;
 
 fail:
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
