@@ -913,23 +913,23 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 }
 
 #ifndef CONFIG_ADVISE_SYSCALLS
-static int damos_madvise(struct damon_task *task, struct damon_region *r,
+static int damos_madvise(struct damon_target *target, struct damon_region *r,
 			int behavior)
 {
 	return -EINVAL;
 }
 #else
-static int damos_madvise(struct damon_task *task, struct damon_region *r,
+static int damos_madvise(struct damon_target *target, struct damon_region *r,
 			int behavior)
 {
 	struct task_struct *t;
 	struct mm_struct *mm;
 	int ret = -ENOMEM;
 
-	t = damon_get_task_struct(task);
+	t = damon_get_task_struct(target);
 	if (!t)
 		goto out;
-	mm = damon_get_mm(task);
+	mm = damon_get_mm(target);
 	if (!mm)
 		goto put_task_out;
 
@@ -943,7 +943,7 @@ out:
 }
 #endif	/* CONFIG_ADVISE_SYSCALLS */
 
-static int damos_do_action(struct damon_task *task, struct damon_region *r,
+static int damos_do_action(struct damon_target *target, struct damon_region *r,
 			enum damos_action action)
 {
 	int madv_action;
@@ -969,11 +969,12 @@ static int damos_do_action(struct damon_task *task, struct damon_region *r,
 		return -EINVAL;
 	}
 
-	return damos_madvise(task, r, madv_action);
+	return damos_madvise(target, r, madv_action);
 }
 
-static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
-				struct damon_region *r)
+static void damon_do_apply_schemes(struct damon_ctx *c,
+				   struct damon_target *t,
+				   struct damon_region *r)
 {
 	struct damos *s;
 	unsigned long sz;
@@ -994,10 +995,10 @@ static void damon_do_apply_schemes(struct damon_ctx *c, struct damon_task *t,
 
 static void kdamond_apply_schemes(struct damon_ctx *c)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	struct damon_region *r;
 
-	damon_for_each_task(t, c) {
+	damon_for_each_target(t, c) {
 		damon_for_each_region(r, t)
 			damon_do_apply_schemes(c, t, r);
 	}
