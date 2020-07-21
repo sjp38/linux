@@ -39,9 +39,9 @@ struct damon_region {
 
 /**
  * struct damon_target - Represents a monitoring target.
- * @id:                 Unique identifier for this target.
- * @regions_list:       Head of the monitoring target regions of this target.
- * @list:               List head for siblings.
+ * @id:			Unique identifier for this target.
+ * @regions_list:	Head of the monitoring target regions of this target.
+ * @list:		List head for siblings.
  *
  * Each monitoring context could have multiple targets.  For example, a context
  * for virtual memory address spaces could have multiple target processes.  The
@@ -57,7 +57,7 @@ struct damon_target {
 
 /**
  * struct damon_ctx - Represents a context for each monitoring.
- * @targets_list:       Head of monitoring targets (&damon_target) list.
+ * @targets_list:	Head of monitoring targets (&damon_target) list.
  */
 struct damon_ctx {
 	struct list_head targets_list;	/* 'damon_target' objects */
