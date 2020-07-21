@@ -335,7 +335,14 @@ int damon_va_apply_scheme(struct damon_ctx *context, struct damon_target *t,
 		struct damon_region *r, struct damos *scheme);
 void damon_va_set_primitives(struct damon_ctx *ctx);
 
-#endif	/* CONFIG_DAMON_PRIMITIVES */
+/* Reference callback implementations for physical memory */
+void damon_pa_init_regions(struct damon_ctx *ctx);
+void damon_pa_update_regions(struct damon_ctx *ctx);
+void damon_pa_prepare_access_checks(struct damon_ctx *ctx);
+unsigned int damon_pa_check_accesses(struct damon_ctx *ctx);
+bool damon_pa_target_valid(struct damon_target *t);
+void damon_pa_set_primitives(struct damon_ctx *ctx);
 
+#endif	/* CONFIG_DAMON_PRIMITIVES */
 
 #endif
