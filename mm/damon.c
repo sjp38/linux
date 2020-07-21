@@ -358,7 +358,7 @@ int damon_stop(struct damon_ctx *ctx)
 }
 
 /**
- * damon_set_pids() - Set monitoring target processes.
+ * damon_set_targets() - Set monitoring targets.
  * @ctx:	monitoring context
  * @ids:	array of target ids
  * @nr_ids:	number of entries in @ids
