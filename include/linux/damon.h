@@ -11,6 +11,8 @@
 #define _DAMON_H_
 
 #include <linux/random.h>
+#include <linux/mutex.h>
+#include <linux/time64.h>
 #include <linux/types.h>
 
 /**
@@ -56,11 +58,87 @@ struct damon_target {
 };
 
 /**
- * struct damon_ctx - Represents a context for each monitoring.
+ * struct damon_ctx - Represents a context for each monitoring.  This is the
+ * main interface that allows users to set the attributes and get the results
+ * of the monitoring.
+ *
+ * @sample_interval:		The time between access samplings.
+ * @aggr_interval:		The time between monitor results aggregations.
+ * @nr_regions:			The number of monitoring regions.
+ *
+ * For each @sample_interval, DAMON checks whether each region is accessed or
+ * not.  It aggregates and keeps the access information (number of accesses to
+ * each region) for @aggr_interval time.  All time intervals are in
+ * micro-seconds.
+ *
+ * @kdamond:		Kernel thread who does the monitoring.
+ * @kdamond_stop:	Notifies whether kdamond should stop.
+ * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
+ *
+ * For each monitoring request (damon_start()), a kernel thread for the
+ * monitoring is created.  The pointer to the thread is stored in @kdamond.
+ *
+ * The monitoring thread sets @kdamond to NULL when it terminates.  Therefore,
+ * users can know whether the monitoring is ongoing or terminated by reading
+ * @kdamond.  Also, users can ask @kdamond to be terminated by writing non-zero
+ * to @kdamond_stop.  Reads and writes to @kdamond and @kdamond_stop from
+ * outside of the monitoring thread must be protected by @kdamond_lock.
+ *
+ * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
+ * @kdamond_lock.  Accesses to other fields must be protected by themselves.
+ *
  * @targets_list:	Head of monitoring targets (&damon_target) list.
+ *
+ * @init_target_regions:	Constructs initial monitoring target regions.
+ * @prepare_access_checks:	Prepares next access check of target regions.
+ * @check_accesses:		Checks the access of target regions.
+ * @sample_cb:			Called for each sampling interval.
+ * @aggregate_cb:		Called for each aggregation interval.
+ *
+ * DAMON can be extended for various address spaces by users.  For this, users
+ * can register the target address space dependent low level functions for
+ * their usecases via the callback pointers of the context.  The monitoring
+ * thread calls @init_target_regions before starting the monitoring, and
+ * @prepare_access_checks and @check_accesses for each @sample_interval.
+ *
+ * @init_target_regions should construct proper monitoring target regions and
+ * link those to the DAMON context struct.
+ * @prepare_access_checks should manipulate the monitoring regions to be
+ * prepare for the next access check.
+ * @check_accesses should check the accesses to each region that made after the
+ * last preparation and update the `->nr_accesses` of each region.
+ *
+ * @sample_cb and @aggregate_cb are called from @kdamond for each of the
+ * sampling intervals and aggregation intervals, respectively.  Therefore,
+ * users can safely access to the monitoring results via @tasks_list without
+ * additional protection of @kdamond_lock.  For the reason, users are
+ * recommended to use these callback for the accesses to the results.
  */
 struct damon_ctx {
+	unsigned long sample_interval;
+	unsigned long aggr_interval;
+	unsigned long nr_regions;
+
+	struct timespec64 last_aggregation;
+
+	struct task_struct *kdamond;
+	bool kdamond_stop;
+	struct mutex kdamond_lock;
+
 	struct list_head targets_list;	/* 'damon_target' objects */
+
+	/* callbacks */
+	void (*init_target_regions)(struct damon_ctx *context);
+	void (*prepare_access_checks)(struct damon_ctx *context);
+	unsigned int (*check_accesses)(struct damon_ctx *context);
+	void (*sample_cb)(struct damon_ctx *context);
+	void (*aggregate_cb)(struct damon_ctx *context);
 };
+
+int damon_set_pids(struct damon_ctx *ctx, int *pids, ssize_t nr_pids);
+int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
+		unsigned long aggr_int, unsigned long min_nr_reg);
+int damon_start(struct damon_ctx *ctx);
+int damon_stop(struct damon_ctx *ctx);
 
 #endif
