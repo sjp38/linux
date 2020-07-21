@@ -22,8 +22,8 @@ def pr_region(f):
             (saddr, eaddr, eaddr - saddr, nr_accesses))
 
 def pr_task_info(f):
-    pid = _recfile.pid(f)
-    print("pid: ", pid)
+    target_id = _recfile.target_id(f)
+    print("target_id: ", target_id)
     nr_regions = struct.unpack('I', f.read(4))[0]
     print("nr_regions: ", nr_regions)
     for r in range(nr_regions):

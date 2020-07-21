@@ -55,10 +55,10 @@ def pr_samples(samples, time_idx, time_unit, region_unit):
 def to_idx(value, min_, unit):
     return (value - min_) // unit
 
-def read_task_heats(f, pid, aunit, amin, amax):
-    pid_ = _recfile.pid(f)
+def read_task_heats(f, tid, aunit, amin, amax):
+    tid_ = _recfile.target_id(f)
     nr_regions = struct.unpack('I', f.read(4))[0]
-    if pid_ != pid:
+    if tid_ != tid:
         f.read(20 * nr_regions)
         return None
     samples = []
@@ -99,7 +99,7 @@ def apply_samples(target_samples, samples, start_time, end_time, aunit, amin):
         else:
             target_samples[idx].merge(sample)
 
-def __pr_heats(f, pid, tunit, tmin, tmax, aunit, amin, amax):
+def __pr_heats(f, tid, tunit, tmin, tmax, aunit, amin, amax):
     heat_samples = [None] * ((amax - amin) // aunit)
 
     start_time = 0
@@ -114,10 +114,10 @@ def __pr_heats(f, pid, tunit, tmin, tmax, aunit, amin, amax):
         nr_tasks = struct.unpack('I', f.read(4))[0]
         samples_set = {}
         for t in range(nr_tasks):
-            samples = read_task_heats(f, pid, aunit, amin, amax)
+            samples = read_task_heats(f, tid, aunit, amin, amax)
             if samples:
-                samples_set[pid] = samples
-        if not pid in samples_set:
+                samples_set[tid] = samples
+        if not tid in samples_set:
             continue
         if start_time >= tmax:
             continue
@@ -135,11 +135,11 @@ def __pr_heats(f, pid, tunit, tmin, tmax, aunit, amin, amax):
                 last_flushed = idx
             st = max(start_time, tmin + idx * tunit)
             et = min(end_time, tmin + (idx + 1) * tunit)
-            apply_samples(heat_samples, samples_set[pid], st, et, aunit, amin)
+            apply_samples(heat_samples, samples_set[tid], st, et, aunit, amin)
 
 def pr_heats(args):
     binfile = args.input
-    pid = args.pid
+    tid = args.tid
     tres = args.tres
     tmin = args.tmin
     ares = args.ares
@@ -154,18 +154,18 @@ def pr_heats(args):
 
     with open(binfile, 'rb') as f:
         _recfile.set_fmt_version(f)
-        __pr_heats(f, pid, tunit, tmin, tmax, aunit, amin, amax)
+        __pr_heats(f, tid, tunit, tmin, tmax, aunit, amin, amax)
 
 class GuideInfo:
-    pid = None
+    tid = None
     start_time = None
     end_time = None
     lowest_addr = None
     highest_addr = None
     gaps = None
 
-    def __init__(self, pid, start_time):
-        self.pid = pid
+    def __init__(self, tid, start_time):
+        self.tid = tid
         self.start_time = start_time
         self.gaps = []
 
@@ -190,7 +190,7 @@ class GuideInfo:
         return ret
 
     def __str__(self):
-        lines = ['pid:%d' % self.pid]
+        lines = ['target_id:%d' % self.tid]
         lines.append('time: %d-%d (%d)' % (self.start_time, self.end_time,
                     self.end_time - self.start_time))
         for idx, region in enumerate(self.regions()):
@@ -230,11 +230,11 @@ def get_guide_info(binfile):
             monitor_time = parse_time(timebin)
             nr_tasks = struct.unpack('I', f.read(4))[0]
             for t in range(nr_tasks):
-                pid = _recfile.pid(f)
+                tid = _recfile.target_id(f)
                 nr_regions = struct.unpack('I', f.read(4))[0]
-                if not pid in guides:
-                    guides[pid] = GuideInfo(pid, monitor_time)
-                guide = guides[pid]
+                if not tid in guides:
+                    guides[tid] = GuideInfo(tid, monitor_time)
+                guide = guides[tid]
                 guide.end_time = monitor_time
 
                 last_addr = None
@@ -271,14 +271,14 @@ def region_sort_key(region):
     return region[1] - region[0]
 
 def set_missed_args(args):
-    if args.pid and args.tmin and args.tmax and args.amin and args.amax:
+    if args.tid and args.tmin and args.tmax and args.amin and args.amax:
         return
     guides = get_guide_info(args.input)
     guide = guides[0]
-    if not args.pid:
-        args.pid = guide.pid
+    if not args.tid:
+        args.tid = guide.tid
     for g in guides:
-        if g.pid == args.pid:
+        if g.tid == args.tid:
             guide = g
             break
 
@@ -307,7 +307,7 @@ def plot_heatmap(data_file, output_file):
     set xrange [0:];
     set yrange [0:];
     set xlabel 'Time (ns)';
-    set ylabel 'Virtual Address (bytes)';
+    set ylabel 'Address (bytes)';
     plot '%s' using 1:2:3 with image;""" % (terminal, output_file, data_file)
     subprocess.call(['gnuplot', '-e', gnuplot_cmd])
     os.remove(data_file)
@@ -315,8 +315,8 @@ def plot_heatmap(data_file, output_file):
 def set_argparser(parser):
     parser.add_argument('--input', '-i', type=str, metavar='<file>',
             default='damon.data', help='input file name')
-    parser.add_argument('--pid', metavar='<pid>', type=int,
-            help='pid of target task')
+    parser.add_argument('--tid', metavar='<id>', type=int,
+            help='target id')
     parser.add_argument('--tres', metavar='<resolution>', type=int,
             default=500, help='time resolution of the output')
     parser.add_argument('--tmin', metavar='<time>', type=lambda x: int(x,0),
