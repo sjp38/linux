@@ -122,6 +122,9 @@ static void damon_test_set_targets(struct kunit *test)
 	unsigned long ids[] = {1, 2, 3};
 	char buf[64];
 
+	/* Make DAMON consider target id as plain number */
+	ctx->target_valid = NULL;
+
 	damon_set_targets(ctx, ids, 3);
 	sprint_target_ids(ctx, buf, 64);
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2 3\n");

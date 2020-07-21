@@ -289,16 +289,15 @@ static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
  * Functions for the initial monitoring target regions construction
  */
 
+/*
+ * 't->id' should be the pointer to the relevant 'struct pid' having reference
+ * count.  Caller must put the returned task, unless it is NULL.
+ */
 #define damon_get_task_struct(t) \
-	        (get_pid_task(find_vpid((int)t->id), PIDTYPE_PID))
+	(get_pid_task((struct pid *)t->id, PIDTYPE_PID))
 
 /*
  * Get the mm_struct of the given target
- *
- * '->id' of the target should be the relevant pid.  Currently, the reference
- * implementation of the low level primitives for the virtual address spaces
- * and the DAMON-based schemes execution logic has the assumption and uses
- * this.
  *
  * Caller _must_ put the mm_struct after use, unless it is NULL.
  *
@@ -1580,6 +1579,9 @@ int damon_set_schemes(struct damon_ctx *ctx, struct damos **schemes,
 	return 0;
 }
 
+#define targetid_is_pid(ctx)	\
+	(ctx->target_valid == kdamond_vm_target_valid)
+
 /**
  * damon_set_targets() - Set monitoring targets.
  * @ctx:	monitoring context
@@ -1925,11 +1927,17 @@ out:
 static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 {
 	struct damon_target *t;
+	unsigned long id;
 	int written = 0;
 	int rc;
 
 	damon_for_each_target(t, ctx) {
-		rc = snprintf(&buf[written], len - written, "%lu ", t->id);
+		id = t->id;
+		if (targetid_is_pid(ctx))
+			/* Show pid numbers to debugfs users */
+			id = (unsigned long)pid_vnr((struct pid *)id);
+
+		rc = snprintf(&buf[written], len - written, "%lu ", id);
 		if (!rc)
 			return -ENOMEM;
 		written += rc;
@@ -1994,6 +2002,8 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
+	struct damon_target *target;
+	int i;
 	int err;
 
 	kbuf = user_input_str(buf, count, ppos);
@@ -2025,10 +2035,21 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 		goto out;
 	}
 
+	if (targetid_is_pid(ctx)) {
+		for (i = 0; i < nr_targets; i++)
+			targets[i] = (unsigned long)find_get_pid(
+					(int)targets[i]);
+	}
+
 	mutex_lock(&ctx->kdamond_lock);
 	if (ctx->kdamond) {
 		ret = -EINVAL;
 		goto unlock_out;
+	}
+
+	if (targetid_is_pid(ctx)) {
+		damon_for_each_target(target, ctx)
+			put_pid((struct pid *)target->id);
 	}
 
 	err = damon_set_targets(ctx, targets, nr_targets);
