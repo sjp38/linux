@@ -165,6 +165,8 @@ struct damos {
  * @targets_list:	Head of monitoring targets (&damon_target) list.
  * @schemes_list:	Head of schemes (&damos) list.
  *
+ * @priv:		Private data for the monitoring requester.
+ *
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @update_target_regions:	Updates monitoring target regions.
  * @prepare_access_checks:	Prepares next access check of target regions.
@@ -197,6 +199,9 @@ struct damos {
  * users can safely access to the monitoring results via @targets_list without
  * additional protection of @kdamond_lock.  For the reason, users are
  * recommended to use these callback for the accesses to the results.
+ *
+ * @stop_cb is called from @kdamond just before its termination.  This would be
+ * a good point for the cleanup of @priv.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -220,6 +225,8 @@ struct damon_ctx {
 	struct list_head targets_list;	/* 'damon_target' objects */
 	struct list_head schemes_list;	/* 'damos' objects */
 
+	void *priv;
+
 	/* callbacks */
 	void (*init_target_regions)(struct damon_ctx *context);
 	void (*update_target_regions)(struct damon_ctx *context);
@@ -228,6 +235,7 @@ struct damon_ctx {
 	bool (*target_valid)(struct damon_target *target);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
+	void (*stop_cb)(struct damon_ctx *context);
 };
 
 /* Reference callback implementations for virtual memory */
