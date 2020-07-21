@@ -484,10 +484,19 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 		return PTR_ERR(kbuf);
 
 	nrs = kbuf;
+	if (!strncmp(kbuf, "paddr\n", count)) {
+		/* Configure the context for physical memory monitoring */
+		damon_pa_set_primitives(ctx);
+		/* target id is meaningless here, but we set it just for fun */
+		scnprintf(kbuf, count, "42    ");
+	} else {
+		/* Configure the context for virtual memory monitoring */
+		damon_va_set_primitives(ctx);
 
-	if (!strncmp(kbuf, "pidfd ", 6)) {
-		received_pidfds = true;
-		nrs = &kbuf[6];
+		if (!strncmp(kbuf, "pidfd ", 6)) {
+			received_pidfds = true;
+			nrs = &kbuf[6];
+		}
 	}
 
 	targets = str_to_target_ids(nrs, ret, &nr_targets);
