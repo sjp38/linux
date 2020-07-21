@@ -97,8 +97,8 @@ fi
 
 echo $ORIG_CONTENT > $file
 
-# Test pids file
-file="$DBGFS/pids"
+# Test target_ids file
+file="$DBGFS/target_ids"
 
 ORIG_CONTENT=$(cat $file)
 
