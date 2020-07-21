@@ -81,6 +81,7 @@ static struct damon_ctx damon_user_ctx = {
 	.update_target_regions = kdamond_update_vm_regions,
 	.prepare_access_checks = kdamond_prepare_vm_access_checks,
 	.check_accesses = kdamond_check_vm_accesses,
+	.target_valid = kdamond_vm_target_valid,
 };
 
 /*
