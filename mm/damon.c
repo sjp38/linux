@@ -1371,14 +1371,14 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	return ret;
 }
 
-static ssize_t damon_sprint_pids(struct damon_ctx *ctx, char *buf, ssize_t len)
+static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 {
-	struct damon_task *t;
+	struct damon_target *t;
 	int written = 0;
 	int rc;
 
-	damon_for_each_task(t, ctx) {
-		rc = snprintf(&buf[written], len - written, "%d ", t->pid);
+	damon_for_each_target(t, ctx) {
+		rc = snprintf(&buf[written], len - written, "%lu ", t->id);
 		if (!rc)
 			return -ENOMEM;
 		written += rc;
@@ -1389,20 +1389,20 @@ static ssize_t damon_sprint_pids(struct damon_ctx *ctx, char *buf, ssize_t len)
 	return written;
 }
 
-static ssize_t debugfs_pids_read(struct file *file,
+static ssize_t debugfs_target_ids_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
 	ssize_t len;
-	char pids_buf[320];
+	char ids_buf[320];
 
 	mutex_lock(&ctx->kdamond_lock);
-	len = damon_sprint_pids(ctx, pids_buf, 320);
+	len = sprint_target_ids(ctx, ids_buf, 320);
 	mutex_unlock(&ctx->kdamond_lock);
 	if (len < 0)
 		return len;
 
-	return simple_read_from_buffer(buf, count, ppos, pids_buf, len);
+	return simple_read_from_buffer(buf, count, ppos, ids_buf, len);
 }
 
 /*
@@ -1411,39 +1411,40 @@ static ssize_t debugfs_pids_read(struct file *file,
  * Returns an array of unsigned long integers if the conversion success, or
  * NULL otherwise.
  */
-static int *str_to_pids(const char *str, ssize_t len, ssize_t *nr_pids)
+static unsigned long *str_to_target_ids(const char *str, ssize_t len,
+					ssize_t *nr_ids)
 {
-	int *pids;
-	const int max_nr_pids = 32;
-	int pid;
+	unsigned long *ids;
+	const int max_nr_ids = 32;
+	unsigned long id;
 	int pos = 0, parsed, ret;
 
-	*nr_pids = 0;
-	pids = kmalloc_array(max_nr_pids, sizeof(pid), GFP_KERNEL);
-	if (!pids)
+	*nr_ids = 0;
+	ids = kmalloc_array(max_nr_ids, sizeof(id), GFP_KERNEL);
+	if (!ids)
 		return NULL;
-	while (*nr_pids < max_nr_pids && pos < len) {
-		ret = sscanf(&str[pos], "%d%n", &pid, &parsed);
+	while (*nr_ids < max_nr_ids && pos < len) {
+		ret = sscanf(&str[pos], "%lu%n", &id, &parsed);
 		pos += parsed;
 		if (ret != 1)
 			break;
-		pids[*nr_pids] = pid;
-		*nr_pids += 1;
+		ids[*nr_ids] = id;
+		*nr_ids += 1;
 	}
-	if (*nr_pids == 0) {
-		kfree(pids);
-		pids = NULL;
+	if (*nr_ids == 0) {
+		kfree(ids);
+		ids = NULL;
 	}
 
-	return pids;
+	return ids;
 }
 
-static ssize_t debugfs_pids_write(struct file *file,
+static ssize_t debugfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
 	char *kbuf;
-	int *targets;
+	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
 	int err;
@@ -1452,7 +1453,7 @@ static ssize_t debugfs_pids_write(struct file *file,
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
 
-	targets = str_to_pids(kbuf, ret, &nr_targets);
+	targets = str_to_target_ids(kbuf, ret, &nr_targets);
 	if (!targets) {
 		ret = -ENOMEM;
 		goto out;
@@ -1464,7 +1465,7 @@ static ssize_t debugfs_pids_write(struct file *file,
 		goto unlock_out;
 	}
 
-	err = damon_set_pids(ctx, targets, nr_targets);
+	err = damon_set_targets(ctx, targets, nr_targets);
 	if (err)
 		ret = err;
 unlock_out:
@@ -1583,10 +1584,10 @@ static const struct file_operations monitor_on_fops = {
 	.write = debugfs_monitor_on_write,
 };
 
-static const struct file_operations pids_fops = {
+static const struct file_operations target_ids_fops = {
 	.owner = THIS_MODULE,
-	.read = debugfs_pids_read,
-	.write = debugfs_pids_write,
+	.read = debugfs_target_ids_read,
+	.write = debugfs_target_ids_write,
 };
 
 static const struct file_operations record_fops = {
@@ -1606,9 +1607,9 @@ static struct dentry *debugfs_root;
 static int __init damon_debugfs_init(void)
 {
 	const char * const file_names[] = {"attrs", "record",
-		"pids", "monitor_on"};
+		"target_ids", "monitor_on"};
 	const struct file_operations *fops[] = {&attrs_fops, &record_fops,
-		&pids_fops, &monitor_on_fops};
+		&target_ids_fops, &monitor_on_fops};
 	int i;
 
 	debugfs_root = debugfs_create_dir("damon", NULL);
@@ -1643,7 +1644,7 @@ static int __init damon_init_user_ctx(void)
 
 	mutex_init(&ctx->kdamond_lock);
 
-	INIT_LIST_HEAD(&ctx->tasks_list);
+	INIT_LIST_HEAD(&ctx->targets_list);
 
 	return 0;
 }
