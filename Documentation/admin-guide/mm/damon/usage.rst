@@ -337,10 +337,10 @@ In such cases, users can explicitly set the initial monitoring target regions
 as they want, by writing proper values to the ``init_regions`` file.  Each line
 of the input should represent one region in below form.::
 
-    <pid> <start address> <end address>
+    <target id> <start address> <end address>
 
-The ``pid`` should already in ``pids`` file, and the regions should be
-passed in address order.  For example, below commands will set a couple of
+The ``target id`` should already in ``target_ids`` file, and the regions should
+be passed in address order.  For example, below commands will set a couple of
 address ranges, ``1-100`` and ``100-200`` as the initial monitoring target
 region of process 42, and another couple of address ranges, ``20-40`` and
 ``50-100`` as that of process 4242.::
