@@ -87,7 +87,7 @@ human-readable text.  For example::
     start_time:  193485829398
     rel time:                0
     nr_tasks:  1
-    pid:  1348
+    target_id:  1348
     nr_regions:  4
     560189609000-56018abce000(  22827008):  0
     7fbdff59a000-7fbdffaf1a00(   5601792):  0
@@ -96,7 +96,7 @@ human-readable text.  For example::
 
     rel time:        100000731
     nr_tasks:  1
-    pid:  1348
+    target_id:  1348
     nr_regions:  6
     560189609000-56018abce000(  22827008):  0
     7fbdff59a000-7fbdff8ce933(   3361075):  0
@@ -110,7 +110,7 @@ data access patterns follows.  Each record is separated by a blank line.  Each
 record first specifies the recorded time (``rel time``) in relative to the
 start time, the number of monitored tasks in this record (``nr_tasks``).
 Recorded data access patterns of each task follow.  Each data access pattern
-for each task shows the target's pid (``pid``) and a number of monitored
+for each task shows the target's pid (``target_id``) and a number of monitored
 address regions in this access pattern (``nr_regions``) first.  After that,
 each line shows the start/end address, size, and the number of observed
 accesses of each region.
@@ -161,7 +161,7 @@ resolution and axis boundary-setting arguments.  To make this effort minimal,
 you can use ``--guide`` option as below::
 
     $ ./damo report heats --guide
-    pid:1348
+    target_id:1348
     time: 193485829398-198337863555 (4852034157)
     region   0: 00000094564599762944-00000094564622589952 (22827008)
     region   1: 00000140454009610240-00000140454016012288 (6402048)
@@ -182,7 +182,7 @@ changes from the records.  For example::
 
     $ ./damo report wss
     # <percentile> <wss>
-    # pid   1348
+    # target_id   1348
     # avr:  66228
     0       0
     25      0
@@ -201,7 +201,7 @@ the working set size has chronologically changed.  For example::
 
     $ ./damo report wss --sortby time
     # <percentile> <wss>
-    # pid   1348
+    # target_id   1348
     # avr:  66228
     0       0
     25      0
@@ -222,8 +222,8 @@ visualization of the distribution via ``--plot`` option.
 debugfs Interface
 =================
 
-DAMON exports four files, ``attrs``, ``pids``, ``record``, and ``monitor_on``
-under its debugfs directory, ``<debugfs>/damon/``.
+DAMON exports four files, ``attrs``, ``target_ids``, ``record``, and
+``monitor_on`` under its debugfs directory, ``<debugfs>/damon/``.
 
 
 Attributes
@@ -242,20 +242,24 @@ example, below commands set those values to 5 ms, 100 ms, 1,000 ms, 10 and
     5000 100000 1000000 10 1000
 
 
-Target PIDs
------------
+Target IDs
+----------
 
-To monitor the virtual memory address spaces of specific processes, users can
-get and set the pids of monitoring target processes by reading from and writing
-to the ``pids`` file.  For example, below commands set processes having pids 42
-and 4242 as the processes to be monitored and check it again::
+Some types of address spaces supports multiple monitoring target.  For example,
+the virtual memory address spaces monitoring can have multiple processes as the
+monitoring targets.  Users can set the targets by writing relevant id values of
+the targets to, and get the ids of the current targets by reading from the
+``target_ids`` file.  In case of the virtual address spaces monitoring, the
+values should be pids of the monitoring target processes.  For example, below
+commands set processes having pids 42 and 4242 as the monitoring targets and
+check it again::
 
     # cd <debugfs>/damon
-    # echo 42 4242 > pids
-    # cat pids
+    # echo 42 4242 > target_ids
+    # cat target_ids
     42 4242
 
-Note that setting the pids doesn't start the monitoring.
+Note that setting the target ids doesn't start the monitoring.
 
 
 Record
@@ -279,13 +283,13 @@ The recording can be disabled by setting the buffer size zero.
 Turning On/Off
 --------------
 
-Setting the files as described above doesn't incur any effect on your system
-unless you explicitly start the monitoring.  You can start, stop, and check the
-current status of the monitoring by writing to and reading from the
-``monitor_on`` file.  Writing ``on`` to the file starts the monitoring of the
-targets with the attributes.  Writing ``off`` to the file stops those.  DAMON
-also stops if every target process is terminated.  Below example commands turn
-on, off, and check the status of DAMON::
+Setting the files as described above doesn't incur effect unless you explicitly
+start the monitoring.  You can start, stop, and check the current status of the
+monitoring by writing to and reading from the ``monitor_on`` file.  Writing
+``on`` to the file starts the monitoring of the targets with the attributes.
+Writing ``off`` to the file stops those.  DAMON also stops if every target
+process is terminated.  Below example commands turn on, off, and check the
+status of DAMON::
 
     # cd <debugfs>/damon
     # echo on > monitor_on
