@@ -37,7 +37,7 @@ def main(args=None):
     if args.sortby == 'time':
         nr_regions_sort = False
 
-    pid_pattern_map = {}
+    tid_pattern_map = {}
     with open(file_path, 'rb') as f:
         _recfile.set_fmt_version(f)
         start_time = None
@@ -47,10 +47,10 @@ def main(args=None):
                 break
             nr_tasks = struct.unpack('I', f.read(4))[0]
             for t in range(nr_tasks):
-                pid = _recfile.pid(f)
-                if not pid in pid_pattern_map:
-                    pid_pattern_map[pid] = []
-                pid_pattern_map[pid].append(_dist.access_patterns(f))
+                tid = _recfile.target_id(f)
+                if not tid in tid_pattern_map:
+                    tid_pattern_map[tid] = []
+                tid_pattern_map[tid].append(_dist.access_patterns(f))
 
     orig_stdout = sys.stdout
     if args.plot:
@@ -59,16 +59,16 @@ def main(args=None):
         sys.stdout = tmp_file
 
     print('# <percentile> <# regions>')
-    for pid in pid_pattern_map.keys():
+    for tid in tid_pattern_map.keys():
         # Skip firs 20 regions as those would not adaptively adjusted
-        snapshots = pid_pattern_map[pid][20:]
+        snapshots = tid_pattern_map[tid][20:]
         nr_regions_dist = []
         for snapshot in snapshots:
             nr_regions_dist.append(len(snapshot))
         if nr_regions_sort:
             nr_regions_dist.sort(reverse=False)
 
-        print('# pid\t%s' % pid)
+        print('# target_id\t%s' % tid)
         print('# avr:\t%d' % (sum(nr_regions_dist) / len(nr_regions_dist)))
         for percentile in percentiles:
             thres_idx = int(percentile / 100.0 * len(nr_regions_dist))

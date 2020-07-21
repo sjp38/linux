@@ -10,12 +10,12 @@ import subprocess
 
 debugfs_attrs = None
 debugfs_record = None
-debugfs_pids = None
+debugfs_target_ids = None
 debugfs_monitor_on = None
 
-def set_target_pid(pid):
-    return subprocess.call('echo %s > %s' % (pid, debugfs_pids), shell=True,
-            executable='/bin/bash')
+def set_target_id(tid):
+    return subprocess.call('echo %s > %s' % (tid, debugfs_target_ids),
+            shell=True, executable='/bin/bash')
 
 def turn_damon(on_off):
     return subprocess.call("echo %s > %s" % (on_off, debugfs_monitor_on),
@@ -82,20 +82,21 @@ def current_attrs():
 def chk_update_debugfs(debugfs):
     global debugfs_attrs
     global debugfs_record
-    global debugfs_pids
+    global debugfs_target_ids
     global debugfs_monitor_on
 
     debugfs_damon = os.path.join(debugfs, 'damon')
     debugfs_attrs = os.path.join(debugfs_damon, 'attrs')
     debugfs_record = os.path.join(debugfs_damon, 'record')
-    debugfs_pids = os.path.join(debugfs_damon, 'pids')
+    debugfs_target_ids = os.path.join(debugfs_damon, 'target_ids')
     debugfs_monitor_on = os.path.join(debugfs_damon, 'monitor_on')
 
     if not os.path.isdir(debugfs_damon):
         print("damon debugfs dir (%s) not found", debugfs_damon)
         exit(1)
 
-    for f in [debugfs_attrs, debugfs_record, debugfs_pids, debugfs_monitor_on]:
+    for f in [debugfs_attrs, debugfs_record, debugfs_target_ids,
+            debugfs_monitor_on]:
         if not os.path.isfile(f):
             print("damon debugfs file (%s) not found" % f)
             exit(1)

@@ -16,8 +16,8 @@ def set_fmt_version(f):
         f.seek(0)
     return fmt_version
 
-def pid(f):
-    if fmt_version == 0:
-        return struct.unpack('L', f.read(8))[0]
-    else:
+def target_id(f):
+    if fmt_version == 1:
         return struct.unpack('i', f.read(4))[0]
+    else:
+        return struct.unpack('L', f.read(8))[0]
