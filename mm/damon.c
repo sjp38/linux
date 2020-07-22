@@ -1432,10 +1432,6 @@ static unsigned long *str_to_target_ids(const char *str, ssize_t len,
 		ids[*nr_ids] = id;
 		*nr_ids += 1;
 	}
-	if (*nr_ids == 0) {
-		kfree(ids);
-		ids = NULL;
-	}
 
 	return ids;
 }
