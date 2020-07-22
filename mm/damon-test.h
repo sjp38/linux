@@ -39,7 +39,7 @@ static void damon_test_str_to_target_ids(struct kunit *test)
 	answers = str_to_target_ids(question, strnlen(question, 128),
 			&nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, answers, (unsigned long *)NULL);
+	kfree(answers);
 
 	question = "12 35";
 	answers = str_to_target_ids(question, strnlen(question, 128),
@@ -69,14 +69,12 @@ static void damon_test_str_to_target_ids(struct kunit *test)
 	answers = str_to_target_ids(question, strnlen(question, 128),
 			&nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, (unsigned long *)NULL, answers);
 	kfree(answers);
 
 	question = "\n";
 	answers = str_to_target_ids(question, strnlen(question, 128),
 			&nr_integers);
 	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	KUNIT_EXPECT_PTR_EQ(test, (unsigned long *)NULL, answers);
 	kfree(answers);
 }
 
