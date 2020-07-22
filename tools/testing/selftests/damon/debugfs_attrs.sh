@@ -118,18 +118,40 @@ then
 	exit 1
 fi
 
-echo abc 2 3 > $file
-if [ $? -eq 0 ]
-then
-	echo "$file write success (should failed)"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
 CONTENT=$(cat $file)
 if [ "$CONTENT" != "1 2" ]
 then
 	echo "$file not written"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo abc 2 3 > $file
+if [ $? -ne 0 ]
+then
+	echo "$file wrong value write fail"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+if [ ! -z "$(cat $file)" ]
+then
+	echo "$file not cleared"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo > $file
+if [ $? -ne 0 ]
+then
+	echo "$file init fail"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+if [ ! -z "$(cat $file)" ]
+then
+	echo "$file not initialized"
 	echo $ORIG_CONTENT > $file
 	exit 1
 fi
