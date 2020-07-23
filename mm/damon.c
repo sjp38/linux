@@ -1444,11 +1444,32 @@ static unsigned long *str_to_target_ids(const char *str, ssize_t len,
 	return ids;
 }
 
+/* Returns pid for the given pidfd if it's valid, or NULL otherwise. */
+static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
+{
+	struct fd f;
+	struct pid *pid;
+
+	f = fdget(pidfd);
+	if (!f.file)
+		return NULL;
+
+	pid = pidfd_pid(f.file);
+	if (!IS_ERR(pid))
+		get_pid(pid);
+	else
+		pid = NULL;
+
+	fdput(f);
+	return pid;
+}
+
 static ssize_t debugfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = &damon_user_ctx;
-	char *kbuf;
+	char *kbuf, *nrs;
+	bool received_pidfds = false;
 	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
@@ -1460,13 +1481,23 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
 
-	targets = str_to_target_ids(kbuf, ret, &nr_targets);
+	nrs = kbuf;
+	if (!strncmp(kbuf, "pidfd ", 6)) {
+		received_pidfds = true;
+		nrs = &kbuf[6];
+	}
+
+	targets = str_to_target_ids(nrs, ret, &nr_targets);
 	if (!targets) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	if (targetid_is_pid(ctx)) {
+	if (received_pidfds) {
+		for (i = 0; i < nr_targets; i++)
+			targets[i] = (unsigned long)damon_get_pidfd_pid(
+					(unsigned int)targets[i]);
+	} else if (targetid_is_pid(ctx)) {
 		for (i = 0; i < nr_targets; i++)
 			targets[i] = (unsigned long)find_get_pid(
 					(int)targets[i]);
