@@ -14,8 +14,8 @@ debugfs_target_ids = None
 debugfs_monitor_on = None
 
 def set_target_id(tid):
-    return subprocess.call('echo %s > %s' % (tid, debugfs_target_ids),
-            shell=True, executable='/bin/bash')
+    with open(debugfs_target_ids, 'w') as f:
+        f.write('%s\n' % tid)
 
 def turn_damon(on_off):
     return subprocess.call("echo %s > %s" % (on_off, debugfs_monitor_on),
