@@ -16,8 +16,8 @@ debugfs_init_regions = None
 debugfs_monitor_on = None
 
 def set_target_id(tid):
-    return subprocess.call('echo %s > %s' % (tid, debugfs_target_ids),
-            shell=True, executable='/bin/bash')
+    with open(debugfs_target_ids, 'w') as f:
+        f.write('%s\n' % tid)
 
 def set_target(tid, init_regions=[]):
     rc = set_target_id(tid)

@@ -14,7 +14,22 @@ import time
 import _damon
 import _paddr_layout
 
-def do_record(target, is_target_cmd, init_regions, attrs, old_attrs):
+def pidfd_open(pid):
+    import ctypes
+    libc = ctypes.CDLL(None)
+    syscall = libc.syscall
+    syscall.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+    syscall.restype = ctypes.c_long
+
+    NR_pidfd_open = 434
+
+    # NOTE: pid could be recycled inside pidfd_open() syscall.  To avoid that,
+    # we should return error if the process pointed by the pidfd_open() syscall
+    # return value is different from the process caller wanted.  We don't do
+    # that here though, because this is only for reference of the pidfd usage.
+    return syscall(NR_pidfd_open, pid, 0)
+
+def do_record(target, is_target_cmd, init_regions, attrs, old_attrs, pidfd):
     if os.path.isfile(attrs.rfile_path):
         os.rename(attrs.rfile_path, attrs.rfile_path + '.old')
 
@@ -25,6 +40,14 @@ def do_record(target, is_target_cmd, init_regions, attrs, old_attrs):
     if is_target_cmd:
         p = subprocess.Popen(target, shell=True, executable='/bin/bash')
         target = p.pid
+
+    if pidfd:
+        fd = pidfd_open(int(target))
+        if fd < 0:
+            print('failed getting pidfd of %s: %s' % (target, fd))
+            cleanup_exit(old_attrs, -1)
+        target = 'pidfd %s' % fd
+
     if _damon.set_target(target, init_regions):
         print('target setting (%s, %s) failed' % (target, init_regions))
         cleanup_exit(old_attrs, -2)
@@ -42,6 +65,8 @@ def do_record(target, is_target_cmd, init_regions, attrs, old_attrs):
             break
         time.sleep(1)
 
+    if pidfd:
+        os.close(fd)
     cleanup_exit(old_attrs, 0)
 
 def cleanup_exit(orig_attrs, exit_code):
@@ -69,6 +94,8 @@ def set_argparser(parser):
     _damon.set_init_regions_argparser(parser)
     parser.add_argument('target', type=str, metavar='<target>',
             help='the target command or the pid to record')
+    parser.add_argument('--pidfd', action='store_true',
+            help='use pidfd type target id')
     parser.add_argument('-l', '--rbuf', metavar='<len>', type=int,
             default=1024*1024, help='length of record result buffer')
     parser.add_argument('--numa_node', metavar='<node id>', type=int,
@@ -126,6 +153,7 @@ def main(args=None):
     orig_attrs = _damon.current_attrs()
 
     args.schemes = ''
+    pidfd = args.pidfd
     new_attrs = _damon.cmd_args_to_attrs(args)
     init_regions = _damon.cmd_args_to_init_regions(args)
     numa_node = args.numa_node
@@ -138,17 +166,17 @@ def main(args=None):
                 init_regions = paddr_region_of(numa_node)
             else:
                 init_regions = [default_paddr_region()]
-        do_record(target, False, init_regions, new_attrs, orig_attrs)
+        do_record(target, False, init_regions, new_attrs, orig_attrs, pidfd)
     elif not subprocess.call('which %s &> /dev/null' % target_fields[0],
             shell=True, executable='/bin/bash'):
-        do_record(target, True, init_regions, new_attrs, orig_attrs)
+        do_record(target, True, init_regions, new_attrs, orig_attrs, pidfd)
     else:
         try:
             pid = int(target)
         except:
             print('target \'%s\' is neither a command, nor a pid' % target)
             exit(1)
-        do_record(target, False, init_regions, new_attrs, orig_attrs)
+        do_record(target, False, init_regions, new_attrs, orig_attrs, pidfd)
 
 if __name__ == '__main__':
     main()
