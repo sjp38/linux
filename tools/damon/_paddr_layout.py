@@ -110,38 +110,27 @@ def iomem_ranges():
 
     return ranges
 
-def paddr_ranges():
-    ranges1 = memblock_ranges()
-    ranges2 = iomem_ranges()
+def integrate(memblock_parsed, iomem_parsed):
     merged = []
 
-    for r in ranges1:
-        subsets = []
-        for r2 in ranges2:
-            interleaved = r.interleaved(r2)
-            if interleaved == None:
-                continue
-
-            start, end = interleaved
-            left = None
-            if start > r.start:
-                left = PaddrRange(r.start, start, r.nid, r.state, r.name)
-                subsets.append(left)
-
-            middle = PaddrRange(start, end, r.nid, r.state, r.name)
-            if r2.nid:
-                middle.nid = r2.nid
-            if r2.state:
-                middle.state = r2.state
-            if r2.name:
-                middle.name = r2.name
-            subsets.append(middle)
-            r.start = end
-        if r.start < r.end:
-            subsets = [r]
-
-        merged += subsets
+    for r in iomem_parsed:
+        for r2 in memblock_parsed:
+            if r2.start <= r.start and r.end <= r2.end:
+                r.nid = r2.nid
+                r.state = r2.state
+                merged.append(r)
+            elif r2.start <= r.start and r.start < r2.end and r2.end < r.end:
+                sub = PaddrRange(r2.end, r.end, None, None, r.name)
+                iomem_parsed.append(sub)
+                r.end = r2.end
+                r.nid = r2.nid
+                r.state = r2.state
+                merged.append(r)
+    merged = sorted(merged, key=lambda x: x.start)
     return merged
+
+def paddr_ranges():
+    return integrate(memblock_ranges(), iomem_ranges())
 
 def pr_ranges(ranges):
     print('#%12s %13s\tnode\tstate\tresource\tsize' % ('start', 'end'))
