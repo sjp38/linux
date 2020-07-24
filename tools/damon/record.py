@@ -129,11 +129,8 @@ def default_paddr_region():
 
 def paddr_region_of(numa_node):
     regions = []
-    default_region = default_paddr_region()
     paddr_ranges = _paddr_layout.paddr_ranges()
     for r in paddr_ranges:
-        if r.end <= default_region[0] or default_region[1] <= r.start:
-            continue
         if r.nid == numa_node and r.name == 'System RAM':
             regions.append([r.start, r.end])
 
