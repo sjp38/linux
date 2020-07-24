@@ -42,11 +42,10 @@ def do_record(target, is_target_cmd, attrs, old_attrs, pidfd):
             print('failed getting pidfd of %s: %s' % (target, fd))
             cleanup_exit(old_attrs, -1)
 
-        # NOTE: To avoid pid recycling, we should return error if the process
-        # pointed by 'fd' here is different from the process that user wanted.
-        # We don't do that here though, because the race can happen even before
-        # this program is executed.  This is only for test and reference of the
-        # pidfd usage.
+        # NOTE: The race is still possible because the pid might be already
+        # reused before above pidfd_open() returned.  Eliminating the race is
+        # impossible unless we drop the pid support.  This option handling is
+        # only for reference of the pidfd usage.
         target = 'pidfd %s' % fd
 
     if _damon.set_target_id(target):
