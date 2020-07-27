@@ -5,11 +5,6 @@ TODOs
 - Make debugfs interface simple and clean
  - Atomically pass a copy of constructed context to damon_start()?
 - Add cleanup callback
-- CDAMON: Support nested iomem sections (Du Fan)
-- Use pidfd instead of pid (Shakeel Butt)
-- Allow all target_ids removable
-- Fix typo (Greg Thelen)
-- Avoid interference from IDLE_PAGE_TRACKING and vmscan (Greg Thelen)
 
 Done
 ====
@@ -22,3 +17,8 @@ Done
 - (not for patch) Remove physical address DAMOS support: It's not well
   prepaired, just remove it for now.  Let's do it again later.
 - Rename and generalize 'struct damon_task'
+- Allow all target_ids removable
+- Support pidfd (Shakeel Butt)
+- CDAMON: Support nested iomem sections (Du Fan)
+- Fix typo (Greg Thelen)
+- Avoid interference to/from concurrent Accessed bit users (Greg Thelen)
