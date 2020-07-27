@@ -30,7 +30,7 @@ This document does not describe the kernel space programming interface in
 detail.  For that, please refer to the :doc:`/vm/damon/api`.
 
 
-DAMON User Sapce Tool
+DAMON User Space Tool
 =====================
 
 A reference implementation of the DAMON user space tools which provides a

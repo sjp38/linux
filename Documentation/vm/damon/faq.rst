@@ -24,7 +24,7 @@ the overhead.  On the other hand, DAMON is a higher-level framework for the
 monitoring of various address spaces.  It is focused on memory management
 optimization and provides sophisticated accuracy/overhead handling mechanisms.
 Therefore, 'idle pages tracking' and 'perf mem' could provide a subset of
-DAMON's output, but cannot substitute DAMON.  Rather than that, thouse could be
+DAMON's output, but cannot substitute DAMON.  Rather than that, those could be
 configured as DAMON's low-level primitives for specific address spaces.
 
 
