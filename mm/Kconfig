@@ -869,7 +869,7 @@ config MAPPING_DIRTY_HELPERS
 
 config DAMON
 	bool "Data Access Monitor"
-	depends on MMU
+	depends on MMU && !IDLE_PAGE_TRACKING
 	select PAGE_EXTENSION if !64BIT
 	help
 	  This feature allows to monitor access frequency of each memory
