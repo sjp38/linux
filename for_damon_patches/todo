@@ -8,6 +8,8 @@ TODOs
 - CDAMON: Support nested iomem sections (Du Fan)
 - Use pidfd instead of pid (Shakeel Butt)
 - Allow all target_ids removable
+- Fix typo (Greg Thelen)
+- Avoid interference from IDLE_PAGE_TRACKING and vmscan (Greg Thelen)
 
 Done
 ====
