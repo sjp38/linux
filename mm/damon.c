@@ -673,10 +673,8 @@ static void damon_ptep_mkold(pte_t *pte, struct mm_struct *mm,
 		referenced = true;
 #endif /* CONFIG_MMU_NOTIFIER */
 
-	if (referenced) {
-		clear_page_idle(pte_page(*pte));
+	if (referenced)
 		set_page_young(pte_page(*pte));
-	}
 }
 
 static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
@@ -696,10 +694,8 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 		referenced = true;
 #endif /* CONFIG_MMU_NOTIFIER */
 
-	if (referenced) {
-		clear_page_idle(pmd_page(*pmd));
+	if (referenced)
 		set_page_young(pmd_page(*pmd));
-	}
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
@@ -759,12 +755,16 @@ static bool damon_young(struct mm_struct *mm, unsigned long addr,
 	*page_sz = PAGE_SIZE;
 	if (pte) {
 		young = pte_young(*pte);
+		if (!young)
+			young = page_is_idle(pte_page(*pte));
 		pte_unmap_unlock(pte, ptl);
 		return young;
 	}
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	young = pmd_young(*pmd);
+	if (!young)
+		young = page_is_idle(pmd_page(*pmd));
 	spin_unlock(ptl);
 	*page_sz = ((1UL) << HPAGE_PMD_SHIFT);
 #endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
