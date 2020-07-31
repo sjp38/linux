@@ -1,24 +1,25 @@
 TODOs
 =====
 
-- Support pmem
+- Support pmem (already done?)
 - Make debugfs interface simple and clean
  - Atomically pass a copy of constructed context to damon_start()?
-- Add cleanup callback
 
 Done
 ====
 
+- CDAMON: Support nested iomem sections (Du Fan)
 - DAMOS: Use dedicated valid action check function
-- Drop loadable module support (Mike Rapoport)
-- Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
-- Notice Accessed bit clearing to MMU notification subscribers (Shakeel Butt)
 - DAMON/DAMOS: Forward stderr of which in tools/damon/damo
 - (not for patch) Remove physical address DAMOS support: It's not well
   prepaired, just remove it for now.  Let's do it again later.
-- Rename and generalize 'struct damon_task'
+- Add cleanup callback
+
+- Drop loadable module support (Mike Rapoport)
+- Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
+- Notice Accessed bit clearing to MMU notification subscribers (Shakeel Butt)
+- Substitute 'struct damon_task' with 'struct damon_target' for better abstract
 - Allow all target_ids removable
 - Support pidfd (Shakeel Butt)
-- CDAMON: Support nested iomem sections (Du Fan)
-- Fix typo (Greg Thelen)
-- Avoid interference to/from concurrent Accessed bit users (Greg Thelen)
+- Fix typos (Greg Thelen)
+- Isolate DAMON from other pmd/pte Accessed bit users (Greg Thelen)
