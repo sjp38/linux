@@ -98,6 +98,9 @@ static struct damon_ctx damon_user_ctx = {
 	.target_valid = kdamond_vm_target_valid,
 };
 
+static DEFINE_MUTEX(damon_lock);
+static struct damon_ctx *current_ctx;
+
 /*
  * Construct a damon_region struct
  *
@@ -1497,6 +1500,10 @@ static int kdamond_fn(void *data)
 	ctx->kdamond = NULL;
 	mutex_unlock(&ctx->kdamond_lock);
 
+	mutex_lock(&damon_lock);
+	current_ctx = NULL;
+	mutex_unlock(&damon_lock);
+
 	do_exit(0);
 }
 
@@ -1525,6 +1532,14 @@ int damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
 
+	mutex_lock(&damon_lock);
+	if (current_ctx) {
+		mutex_unlock(&damon_lock);
+		return err;
+	}
+	current_ctx = ctx;
+	mutex_unlock(&damon_lock);
+
 	mutex_lock(&ctx->kdamond_lock);
 	if (!ctx->kdamond) {
 		err = 0;
@@ -1536,6 +1551,12 @@ int damon_start(struct damon_ctx *ctx)
 			wake_up_process(ctx->kdamond);
 	}
 	mutex_unlock(&ctx->kdamond_lock);
+
+	if (err) {
+		mutex_lock(&damon_lock);
+		current_ctx = NULL;
+		mutex_unlock(&damon_lock);
+	}
 
 	return err;
 }
