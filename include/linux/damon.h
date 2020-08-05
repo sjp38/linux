@@ -75,8 +75,8 @@ struct damon_target {
  * @kdamond_stop:	Notifies whether kdamond should stop.
  * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
  *
- * For each monitoring request (damon_start()), a kernel thread for the
- * monitoring is created.  The pointer to the thread is stored in @kdamond.
+ * For each monitoring context, one kernel thread for the monitoring is
+ * created.  The pointer to the thread is stored in @kdamond.
  *
  * Once started, the monitoring thread runs until explicitly required to be
  * terminated or every monitoring target is invalid.  The validity of the
@@ -147,7 +147,7 @@ int damon_set_targets(struct damon_ctx *ctx,
 		unsigned long *ids, ssize_t nr_ids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long min_nr_reg);
-int damon_start(struct damon_ctx *ctx);
-int damon_stop(struct damon_ctx *ctx);
+int damon_start(struct damon_ctx *ctxs, int nr_ctxs);
+int damon_stop(struct damon_ctx *ctxs, int nr_ctxs);
 
 #endif

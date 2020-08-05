@@ -55,6 +55,9 @@
 /* Get a random number in [l, r) */
 #define damon_rand(l, r) (l + prandom_u32() % (r - l))
 
+static DEFINE_MUTEX(damon_lock);
+static int nr_running_ctxs;
+
 /*
  * Construct a damon_region struct
  *
@@ -314,13 +317,13 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
 	return running;
 }
 
-/**
- * damon_start() - Starts monitoring with given context.
+/*
+ * __damon_start() - Starts monitoring with given context.
  * @ctx:	monitoring context
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_start(struct damon_ctx *ctx)
+static int __damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
 
@@ -340,12 +343,48 @@ int damon_start(struct damon_ctx *ctx)
 }
 
 /**
- * damon_stop() - Stops monitoring of given context.
+ * damon_start() - Starts the monitorings for a given group of contexts.
+ * @ctxs:	an array of the contexts to start monitoring
+ * @nr_ctxs:	size of @ctxs
+ *
+ * This function starts a group of monitoring threads for a group of monitoring
+ * contexts.  One thread per each context is created and run concurrently.  The
+ * caller should handle synchronization between the threads by itself.  If a
+ * group of threads that created by other 'damon_start()' call is currently
+ * running, this function does nothing but returns -EBUSY.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_start(struct damon_ctx *ctxs, int nr_ctxs)
+{
+	int i;
+	int err = 0;
+
+	mutex_lock(&damon_lock);
+	if (nr_running_ctxs) {
+		mutex_unlock(&damon_lock);
+		return -EBUSY;
+	}
+
+	for (i = 0; i < nr_ctxs; i++) {
+		err = __damon_start(&ctxs[i]);
+		if (err)
+			break;
+		else
+			nr_running_ctxs++;
+	}
+	mutex_unlock(&damon_lock);
+
+	return err;
+}
+
+/*
+ * __damon_stop() - Stops monitoring of given context.
  * @ctx:	monitoring context
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_stop(struct damon_ctx *ctx)
+static int __damon_stop(struct damon_ctx *ctx)
 {
 	mutex_lock(&ctx->kdamond_lock);
 	if (ctx->kdamond) {
@@ -359,6 +398,27 @@ int damon_stop(struct damon_ctx *ctx)
 	mutex_unlock(&ctx->kdamond_lock);
 
 	return -EPERM;
+}
+
+/**
+ * damon_stop() - Stops the monitorings for a given group of contexts.
+ * @ctxs:	an array of the contexts to stop monitoring
+ * @nr_ctxs:	size of @ctxs
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_stop(struct damon_ctx *ctxs, int nr_ctxs)
+{
+	int i, err = 0;
+
+	for (i = 0; i < nr_ctxs; i++) {
+		/* nr_running_ctxs is decremented in kdamond_fn */
+		err = __damon_stop(&ctxs[i]);
+		if (err)
+			return err;
+	}
+
+	return err;
 }
 
 /**
