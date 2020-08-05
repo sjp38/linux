@@ -20,8 +20,6 @@
 
 #define pr_fmt(fmt) "damon: " fmt
 
-#define CREATE_TRACE_POINTS
-
 #include <linux/damon.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
@@ -33,6 +31,8 @@
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
 #include <linux/slab.h>
+
+#define CREATE_TRACE_POINTS
 #include <trace/events/damon.h>
 
 /* Minimal region size.  Every damon_region is aligned by this. */
