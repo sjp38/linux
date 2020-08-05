@@ -202,6 +202,8 @@ struct damos {
  *
  * @stop_cb is called from @kdamond just before its termination.  This would be
  * a good point for the cleanup of @priv.
+ *
+ * @list:		List head for running siblings.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -236,6 +238,8 @@ struct damon_ctx {
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 	void (*stop_cb)(struct damon_ctx *context);
+
+	struct list_head list;
 };
 
 /* Reference callback implementations for virtual memory */

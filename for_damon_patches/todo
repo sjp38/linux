@@ -5,6 +5,10 @@ TODOs
 - Make debugfs interface simple and clean
  - Atomically pass a copy of constructed context to damon_start()?
 - Avoid conflict between concurrent DAMON users
+ - Ask users to specify...
+  - Maximum address ranges it will monitor
+  - Type of the monitoring target (struct pid, paddr, ...)
+ - Fails monitoring if conflicting monitoring is running on now
 
 Done
 ====

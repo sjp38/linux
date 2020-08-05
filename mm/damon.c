@@ -98,6 +98,22 @@ static struct damon_ctx damon_user_ctx = {
 	.target_valid = kdamond_vm_target_valid,
 };
 
+static DEFINE_MUTEX(damon_lock);
+static LIST_HEAD(runnable_ctxs);
+
+#define damon_for_each_runnables(c) \
+	list_for_each_entry(c, &runnable_ctxs, list)
+
+static inline void damon_add_runnable(struct damon_ctx *c)
+{
+	list_add_tail(&c->list, &runnable_ctxs);
+}
+
+static void damon_del_runnable(struct damon_ctx *c)
+{
+	list_del(&c->list);
+}
+
 /*
  * Construct a damon_region struct
  *
@@ -1496,6 +1512,10 @@ static int kdamond_fn(void *data)
 	ctx->kdamond = NULL;
 	mutex_unlock(&ctx->kdamond_lock);
 
+	mutex_lock(&damon_lock);
+	damon_del_runnable(ctx);
+	mutex_unlock(&damon_lock);
+
 	do_exit(0);
 }
 
@@ -1514,6 +1534,16 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
 	return running;
 }
 
+static bool damon_conflict(struct damon_ctx *ctx)
+{
+	struct damon_ctx *c;
+
+	damon_for_each_runnables(c) {
+		return true;
+	}
+	return false;
+}
+
 /**
  * damon_start() - Starts monitoring with given context.
  * @ctx:	monitoring context
@@ -1523,6 +1553,14 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
 int damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
+
+	mutex_lock(&damon_lock);
+	if (damon_conflict(ctx)) {
+		mutex_unlock(&damon_lock);
+		return err;
+	}
+	damon_add_runnable(ctx);
+	mutex_unlock(&damon_lock);
 
 	mutex_lock(&ctx->kdamond_lock);
 	if (!ctx->kdamond) {
@@ -1535,6 +1573,12 @@ int damon_start(struct damon_ctx *ctx)
 			wake_up_process(ctx->kdamond);
 	}
 	mutex_unlock(&ctx->kdamond_lock);
+
+	if (err) {
+		mutex_lock(&damon_lock);
+		damon_del_runnable(ctx);
+		mutex_unlock(&damon_lock);
+	}
 
 	return err;
 }
