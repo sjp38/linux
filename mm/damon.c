@@ -550,7 +550,7 @@ void kdamond_init_vm_regions(struct damon_ctx *ctx)
  * The initial regions construction function for the physical address space.
  *
  * This default version does nothing in actual.  Users should set the initial
- * regions by themselves before passing their damon_ctx to 'start_damon()', or
+ * regions by themselves before passing their damon_ctx to 'damon_start()', or
  * implement their version of this and set '->init_target_regions' of their
  * damon_ctx to point it.
  */
