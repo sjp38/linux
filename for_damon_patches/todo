@@ -21,6 +21,9 @@ TODOs
      2. Type of the monitoring target (struct pid, paddr, ...)
 
      And judge conflicts as finest as we can.
+- Optimize buffer writeback (Alkaid)
+  - Reduce unnecessary open()/close()
+  - Add 'O_LARGEFILE' in filp_open()
 
 Done
 ====
