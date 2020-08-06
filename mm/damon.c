@@ -800,7 +800,8 @@ static void damon_flush_rbuffer(struct damon_ctx *ctx)
 	if (!ctx->rbuf_offset)
 		return;
 
-	rfile = filp_open(ctx->rfile_path, O_CREAT | O_RDWR | O_APPEND, 0644);
+	rfile = filp_open(ctx->rfile_path,
+			O_CREAT | O_RDWR | O_APPEND | O_LARGEFILE, 0644);
 	if (IS_ERR(rfile)) {
 		pr_err("Cannot open the result file %s\n",
 				ctx->rfile_path);
