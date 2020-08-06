@@ -21,11 +21,16 @@ TODOs
      2. Type of the monitoring target (struct pid, paddr, ...)
 
      And judge conflicts as finest as we can.
-- Optimize buffer writeback (Alkaid)
-  - Reduce unnecessary open()/close()
-  - Add 'O_LARGEFILE' in filp_open()
+
 
 Done
 ====
 
 - Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
+- Support large record file (Alkaid)
+
+
+Pending
+=======
+- Reduce unnecessary filp_(open|close)() (Alkaid)
+  Users can increase the in-memory buffer size to reduce this overhead.
