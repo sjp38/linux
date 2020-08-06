@@ -99,7 +99,7 @@ static struct damon_ctx damon_user_ctx = {
 };
 
 static DEFINE_MUTEX(damon_lock);
-static struct damon_ctx *current_ctx;
+static int nr_running_ctxs;
 
 /*
  * Construct a damon_region struct
@@ -1501,7 +1501,7 @@ static int kdamond_fn(void *data)
 	mutex_unlock(&ctx->kdamond_lock);
 
 	mutex_lock(&damon_lock);
-	current_ctx = NULL;
+	nr_running_ctxs--;
 	mutex_unlock(&damon_lock);
 
 	do_exit(0);
@@ -1522,23 +1522,15 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
 	return running;
 }
 
-/**
- * damon_start() - Starts monitoring with given context.
+/*
+ * __damon_start() - Starts monitoring with given context.
  * @ctx:	monitoring context
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_start(struct damon_ctx *ctx)
+static int __damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
-
-	mutex_lock(&damon_lock);
-	if (current_ctx) {
-		mutex_unlock(&damon_lock);
-		return err;
-	}
-	current_ctx = ctx;
-	mutex_unlock(&damon_lock);
 
 	mutex_lock(&ctx->kdamond_lock);
 	if (!ctx->kdamond) {
@@ -1552,11 +1544,39 @@ int damon_start(struct damon_ctx *ctx)
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
-	if (err) {
-		mutex_lock(&damon_lock);
-		current_ctx = NULL;
+	return err;
+}
+
+/**
+ * damon_start() - Starts the monitorings for a given group of contexts.
+ * @ctxs:	array of the monitoring contexts
+ * @nr_ctxs:	size of @ctxs
+ *
+ * This function starts monitoring threads for a multiple monitoring contexts.
+ * One thread per each context is created.  Because the threads run
+ * concurrently, the caller should handle synchronization between the threads
+ * by itself.  If the threads for different group of contexts are still
+ * running, this function does nothing but simply returns -EBUSY.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_start(struct damon_ctx *ctxs, int nr_ctxs)
+{
+	int i;
+	int err = 0;
+
+	mutex_lock(&damon_lock);
+	if (nr_running_ctxs) {
 		mutex_unlock(&damon_lock);
+		return -EBUSY;
 	}
+
+	for (i = 0; i < nr_ctxs; i++) {
+		err = __damon_start(&ctxs[i]);
+		if (!err)
+			nr_running_ctxs++;
+	}
+	mutex_unlock(&damon_lock);
 
 	return err;
 }
@@ -1784,7 +1804,7 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start(ctx);
+		err = damon_start(ctx, 1);
 	else if (!strncmp(kbuf, "off", count))
 		err = damon_stop(ctx);
 	else
