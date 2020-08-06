@@ -334,12 +334,12 @@ check it again::
 Users can also monitor the physical memory address space of the system by
 writing a special keyword, "``paddr\n``" to the file.  Because physical address
 space monitoring doesn't support multiple targets, reading the file will show a
-fake value, ``-1``, as below::
+fake value, ``42``, as below::
 
     # cd <debugfs>/damon
     # echo paddr > target_ids
     # cat target_ids
-    -1
+    42
 
 Note that setting the target ids doesn't start the monitoring.
 
