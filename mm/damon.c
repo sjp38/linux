@@ -1493,8 +1493,8 @@ static int kdamond_fn(void *data)
 			damon_destroy_region(r);
 	}
 
-	if (ctx->stop_cb)
-		ctx->stop_cb(ctx);
+	if (ctx->cleanup)
+		ctx->cleanup(ctx);
 
 	pr_debug("kdamond (%d) finishes\n", ctx->kdamond->pid);
 	mutex_lock(&ctx->kdamond_lock);

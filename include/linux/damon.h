@@ -193,15 +193,15 @@ struct damos {
  * last preparation and update the `->nr_accesses` of each region.
  * @target_valid should check whether the target is still valid for the
  * monitoring.
+ * @cleanup is called from @kdamond just before its termination.  After this
+ * call, only @kdamond_lock and @kdamond will be touched.  Hence, this callback
+ * could cleanup other fields and @priv.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
  * users can safely access to the monitoring results via @targets_list without
  * additional protection of @kdamond_lock.  For the reason, users are
  * recommended to use these callback for the accesses to the results.
- *
- * @stop_cb is called from @kdamond just before its termination.  This would be
- * a good point for the cleanup of @priv.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -233,9 +233,9 @@ struct damon_ctx {
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
 	bool (*target_valid)(struct damon_target *target);
+	void (*cleanup)(struct damon_ctx *context);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
-	void (*stop_cb)(struct damon_ctx *context);
 };
 
 /* Reference callback implementations for virtual memory */
