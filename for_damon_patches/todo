@@ -4,6 +4,7 @@ TODOs
 - Support pmem (already done?)
 - Make debugfs interface simple and clean
  - Atomically pass a copy of constructed context to damon_start()?
+- Add 'cleanup' callback and do 'put_pid()' for vaddr recording in the callback
 - Avoid conflict between concurrent DAMON users
   There could be several strategy
   1. Unconditionally mutual exclusive
