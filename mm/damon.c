@@ -96,6 +96,7 @@ static struct damon_ctx damon_user_ctx = {
 	.prepare_access_checks = kdamond_prepare_vm_access_checks,
 	.check_accesses = kdamond_check_vm_accesses,
 	.target_valid = kdamond_vm_target_valid,
+	.cleanup = kdamond_vm_cleanup,
 };
 
 static DEFINE_MUTEX(damon_lock);
@@ -1006,7 +1007,7 @@ unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx)
 }
 
 /*
- * Functions for the target validity check
+ * Functions for the target validity check and cleanup
  */
 
 bool kdamond_vm_target_valid(struct damon_target *t)
@@ -1020,6 +1021,16 @@ bool kdamond_vm_target_valid(struct damon_target *t)
 	}
 
 	return false;
+}
+
+void kdamond_vm_cleanup(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next;
+
+	damon_for_each_target_safe(t, next, ctx) {
+		put_pid((struct pid *)t->id);
+		damon_destroy_target(t);
+	}
 }
 
 /*
@@ -2072,7 +2083,6 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
-	struct damon_target *target;
 	int i;
 	int err;
 
@@ -2088,6 +2098,7 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 		ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
 		ctx->check_accesses = kdamond_check_phys_accesses;
 		ctx->target_valid = NULL;
+		ctx->cleanup = NULL;
 
 		/* target id is meaningless here, but we set it just for fun */
 		snprintf(kbuf, count, "42    ");
@@ -2098,6 +2109,7 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 		ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
 		ctx->check_accesses = kdamond_check_vm_accesses;
 		ctx->target_valid = kdamond_vm_target_valid;
+		ctx->cleanup = kdamond_vm_cleanup;
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
 			nrs = &kbuf[6];
@@ -2124,11 +2136,6 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	if (ctx->kdamond) {
 		ret = -EINVAL;
 		goto unlock_out;
-	}
-
-	if (targetid_is_pid(ctx)) {
-		damon_for_each_target(target, ctx)
-			put_pid((struct pid *)target->id);
 	}
 
 	err = damon_set_targets(ctx, targets, nr_targets);
