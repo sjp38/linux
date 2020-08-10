@@ -1487,14 +1487,15 @@ static int kdamond_fn(void *data)
 			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
-	if (ctx->stop_cb)
-		ctx->stop_cb(ctx);
-
 	damon_flush_rbuffer(ctx);
 	damon_for_each_target(t, ctx) {
 		damon_for_each_region_safe(r, next, t)
 			damon_destroy_region(r);
 	}
+
+	if (ctx->stop_cb)
+		ctx->stop_cb(ctx);
+
 	pr_debug("kdamond (%d) finishes\n", ctx->kdamond->pid);
 	mutex_lock(&ctx->kdamond_lock);
 	ctx->kdamond = NULL;
