@@ -29,6 +29,8 @@ Done
 
 - Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
 - Support large record file (Alkaid)
+- Update evaluation result with v20 DAMON-based damon/next branch
+- Change evaluation setup from desktop to i3.metal
 
 
 Pending
