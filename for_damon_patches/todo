@@ -32,6 +32,8 @@ Done
 - Change evaluation setup from desktop to i3.metal
 - Add 'cleanup' callback and do 'put_pid()' for vaddr recording in the callback
 
+- paddr: Use fake target id for paddr as 42
+
 
 Pending
 =======
