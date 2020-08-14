@@ -96,6 +96,7 @@ struct damon_target {
  * @prepare_access_checks:	Prepares next access check of target regions.
  * @check_accesses:		Checks the access of target regions.
  * @target_valid:		Determine if the target is valid.
+ * @cleanup:			Cleans up the context.
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
  *
@@ -114,6 +115,8 @@ struct damon_target {
  * last preparation and update the `->nr_accesses` of each region.
  * @target_valid should check whether the target is still valid for the
  * monitoring.
+ * @cleanup is called from @kdamond just before its termination.  After this
+ * call, only @kdamond_lock and @kdamond will be touched.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
@@ -139,6 +142,7 @@ struct damon_ctx {
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
 	bool (*target_valid)(struct damon_target *target);
+	void (*cleanup)(struct damon_ctx *context);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
