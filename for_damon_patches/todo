@@ -9,15 +9,7 @@ TODOs
 Done
 ====
 
-- Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
-- Support large record file (Alkaid)
-- Place 'put_pid()' of virtual monitoring targets in 'cleanup' callback
-- Avoid conflict between concurrent DAMON users
-- Update evaluation result document
-
-- paddr: Use fake target id for paddr as 42 instead of -1
-- paddr: Fix typo
-
+- paddr: Add Reviewed-by from Brendan Higgins
 
 Pending
 =======
