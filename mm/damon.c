@@ -836,13 +836,10 @@ unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
 /* access check functions for physical address based regions */
 
 /*
- * Get a page by @pfn if it is in the LRU list and mapped.  If the page needs
- * locked, do the lock and save the result in @locked.  Otherwise, returns
- * NULL.
+ * Get a page by pfn if it is in the LRU list.  Otherwise, returns NULL.
  *
- * The body of this function is mostly stollen from the 'page_idle_get_page()'.
- * We steal rather than reuse it not because we are great artists but the code
- * is quite simple.
+ * The body of this function is stollen from the 'page_idle_get_page()'.  We
+ * steal rather than reuse it because the code is quite simple.
  */
 static struct page *damon_phys_get_page(unsigned long pfn)
 {
@@ -857,8 +854,7 @@ static struct page *damon_phys_get_page(unsigned long pfn)
 	spin_lock_irq(&pgdat->lru_lock);
 	if (unlikely(!PageLRU(page))) {
 		put_page(page);
-		spin_unlock_irq(&pgdat->lru_lock);
-		return NULL;
+		page = NULL;
 	}
 	spin_unlock_irq(&pgdat->lru_lock);
 	return page;
@@ -878,7 +874,7 @@ static void damon_phys_mkold(unsigned long paddr)
 		.rmap_one = damon_page_mkold,
 		.anon_lock = page_lock_anon_vma_read,
 	};
-	bool locked;
+	bool need_lock;
 
 	if (!page)
 		return;
@@ -889,15 +885,15 @@ static void damon_phys_mkold(unsigned long paddr)
 		return;
 	}
 
-	locked = !PageAnon(page) || PageKsm(page);
-	if (locked && !trylock_page(page)) {
+	need_lock = !PageAnon(page) || PageKsm(page);
+	if (need_lock && !trylock_page(page)) {
 		put_page(page);
 		return;
 	}
 
 	rmap_walk(page, &rwc);
 
-	if (locked)
+	if (need_lock)
 		unlock_page(page);
 	put_page(page);
 }
@@ -949,7 +945,7 @@ static bool damon_phys_young(unsigned long paddr, unsigned long *page_sz)
 		.rmap_one = damon_page_accessed,
 		.anon_lock = page_lock_anon_vma_read,
 	};
-	bool locked;
+	bool need_lock;
 
 	if (!page)
 		return false;
@@ -963,15 +959,15 @@ static bool damon_phys_young(unsigned long paddr, unsigned long *page_sz)
 		goto out;
 	}
 
-	locked = !PageAnon(page) || PageKsm(page);
-	if (locked && !trylock_page(page)) {
+	need_lock = !PageAnon(page) || PageKsm(page);
+	if (need_lock && !trylock_page(page)) {
 		put_page(page);
 		return NULL;
 	}
 
 	rmap_walk(page, &rwc);
 
-	if (locked)
+	if (need_lock)
 		unlock_page(page);
 	put_page(page);
 
