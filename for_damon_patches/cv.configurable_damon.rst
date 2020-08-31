@@ -3,11 +3,16 @@ DAMON: Support Physical Memory Address Space Monitoring
 Changes from Previous Version
 =============================
 
-- Use 42 as the fake target id for paddr instead of -1
-- Fix a typo
+- paddr: Add missed 'put_page()' calls
+- Support unmapped LRU pages
 
 Introduction
 ============
+
+NOTE: This is only an RFC for future features of DAMON patchset[1], which is
+not merged in the mainline yet.  The aim of this RFC is to show how DAMON would
+be expanded once it is merged in.  So, if you have some interest in this RFC,
+please consider reviewing DAMON, either.
 
 DAMON[1] programming interface users can extend DAMON for any address space by
 configuring the address-space specific low level primitives with appropriate
@@ -24,9 +29,9 @@ links the implementation to the debugfs interface and the user space tool for
 the user space users.
 
 Note that the implementation supports only the user memory, as same to the idle
-page access tracking feature.
+page tracking feature.
 
-[1] https://lore.kernel.org/linux-mm/20200706115322.29598-1-sjpark@amazon.com/
+[1] https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@amazon.com/
 
 Baseline and Complete Git Trees
 ===============================
@@ -34,10 +39,10 @@ Baseline and Complete Git Trees
 The patches are based on the v5.8 plus DAMON v20 patchset[1] and DAMOS RFC v14
 patchset[2].  You can also clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b cdamon/rfc/v7
+    $ git clone git://github.com/sjp38/linux -b cdamon/rfc/v8
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/cdamon/rfc/v7
+https://github.com/sjp38/linux/releases/tag/cdamon/rfc/v8
 
 [1] https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@amazon.com/
 [2] https://lore.kernel.org/linux-mm/20200804142430.15384-1-sjpark@amazon.com/
@@ -61,6 +66,11 @@ space tool.  Finally, the 10th patch documents this new features.
 
 Patch History
 =============
+
+Changes from RFC v7
+(https://lore.kernel.org/linux-mm/20200818072501.30396-1-sjpark@amazon.com/)
+- paddr: Add missed 'put_page()' calls
+- Support unmapped LRU pages
 
 Changes from RFC v6
 (https://lore.kernel.org/linux-mm/20200805065951.18221-1-sjpark@amazon.com/)

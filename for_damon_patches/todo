@@ -13,6 +13,5 @@ TODOs
 Done
 ====
 
-- paddr: Fix 'put_page()' leaks
-  (https://lore.kernel.org/linux-mm/CAJFQjcOCDFGq7pNgYWpKbrhBM5FQo76d274H8UU1ma_8TWjvuQ@mail.gmail.com/)
+- paddr: Add missed 'put_page()' calls
 - Support unmapped physical memory address
