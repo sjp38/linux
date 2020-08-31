@@ -840,12 +840,11 @@ unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
  * locked, do the lock and save the result in @locked.  Otherwise, returns
  * NULL.
  *
- * The body of this function is mostly stollen from the 'page_idle_get_page()'
- * and 'page_idle_clear_pte_refs()'.  We steal rather than reuse it not because
- * we are great artists but the code is quite simple and we need to unify parts
- * of the two functions.
+ * The body of this function is mostly stollen from the 'page_idle_get_page()'.
+ * We steal rather than reuse it not because we are great artists but the code
+ * is quite simple.
  */
-static struct page *damon_phys_get_page(unsigned long pfn, bool *locked)
+static struct page *damon_phys_get_page(unsigned long pfn)
 {
 	struct page *page = pfn_to_online_page(pfn);
 	pg_data_t *pgdat;
@@ -862,18 +861,6 @@ static struct page *damon_phys_get_page(unsigned long pfn, bool *locked)
 		return NULL;
 	}
 	spin_unlock_irq(&pgdat->lru_lock);
-
-	if (!page_mapped(page) || !page_rmapping(page)) {
-		put_page(page);
-		return NULL;
-	}
-
-	*locked = !PageAnon(page) || PageKsm(page);
-	if (*locked && !trylock_page(page)) {
-		put_page(page);
-		return NULL;
-	}
-
 	return page;
 }
 
@@ -886,15 +873,27 @@ static bool damon_page_mkold(struct page *page, struct vm_area_struct *vma,
 
 static void damon_phys_mkold(unsigned long paddr)
 {
-	bool locked;
-	struct page *page = damon_phys_get_page(PHYS_PFN(paddr), &locked);
+	struct page *page = damon_phys_get_page(PHYS_PFN(paddr));
 	struct rmap_walk_control rwc = {
 		.rmap_one = damon_page_mkold,
 		.anon_lock = page_lock_anon_vma_read,
 	};
+	bool locked;
 
 	if (!page)
 		return;
+
+	if (!page_mapped(page) || !page_rmapping(page)) {
+		set_page_idle(page);
+		put_page(page);
+		return;
+	}
+
+	locked = !PageAnon(page) || PageKsm(page);
+	if (locked && !trylock_page(page)) {
+		put_page(page);
+		return;
+	}
 
 	rmap_walk(page, &rwc);
 
@@ -940,8 +939,7 @@ static bool damon_page_accessed(struct page *page, struct vm_area_struct *vma,
 
 static bool damon_phys_young(unsigned long paddr, unsigned long *page_sz)
 {
-	bool locked;
-	struct page *page = damon_phys_get_page(PHYS_PFN(paddr), &locked);
+	struct page *page = damon_phys_get_page(PHYS_PFN(paddr));
 	struct damon_phys_access_chk_result result = {
 		.page_sz = PAGE_SIZE,
 		.accessed = false,
@@ -951,9 +949,25 @@ static bool damon_phys_young(unsigned long paddr, unsigned long *page_sz)
 		.rmap_one = damon_page_accessed,
 		.anon_lock = page_lock_anon_vma_read,
 	};
+	bool locked;
 
 	if (!page)
 		return false;
+
+	if (!page_mapped(page) || !page_rmapping(page)) {
+		if (page_is_idle(page))
+			result.accessed = false;
+		else
+			result.accessed = true;
+		put_page(page);
+		goto out;
+	}
+
+	locked = !PageAnon(page) || PageKsm(page);
+	if (locked && !trylock_page(page)) {
+		put_page(page);
+		return NULL;
+	}
 
 	rmap_walk(page, &rwc);
 
@@ -961,6 +975,7 @@ static bool damon_phys_young(unsigned long paddr, unsigned long *page_sz)
 		unlock_page(page);
 	put_page(page);
 
+out:
 	*page_sz = result.page_sz;
 	return result.accessed;
 }
