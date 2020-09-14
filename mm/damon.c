@@ -2141,7 +2141,7 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 		ctx->cleanup = NULL;
 
 		/* target id is meaningless here, but we set it just for fun */
-		snprintf(kbuf, count, "42    ");
+		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
 		ctx->init_target_regions = kdamond_init_vm_regions;
