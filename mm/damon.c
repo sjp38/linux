@@ -1797,12 +1797,14 @@ static int damon_debugfs_open(struct inode *inode, struct file *file)
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = file->private_data;
 	char monitor_on_buf[5];
 	bool monitor_on;
 	int len;
 
-	monitor_on = damon_kdamond_running(ctx);
+	mutex_lock(&damon_lock);
+	monitor_on = nr_running_ctxs != 0;
+	mutex_unlock(&damon_lock);
+
 	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
 
 	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);
@@ -1837,7 +1839,6 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 static ssize_t debugfs_monitor_on_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = file->private_data;
 	ssize_t ret = count;
 	char *kbuf;
 	int err;
@@ -1850,9 +1851,9 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start(ctx, 1);
+		err = damon_start(damon_user_ctx, 1);
 	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop(ctx, 1);
+		err = damon_stop(damon_user_ctx, 1);
 	else
 		return -EINVAL;
 
@@ -2519,7 +2520,6 @@ out:
 
 static const struct file_operations monitor_on_fops = {
 	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
 	.read = debugfs_monitor_on_read,
 	.write = debugfs_monitor_on_write,
 };
@@ -2561,7 +2561,6 @@ static const struct file_operations attrs_fops = {
 
 static const struct file_operations nr_contexts_fops = {
 	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
 	.read = debugfs_nr_contexts_read,
 	.write = debugfs_nr_contexts_write,
 };
@@ -2602,7 +2601,7 @@ static int __init damon_debugfs_init(void)
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
 		if (!debugfs_create_file(file_names[i], 0600, debugfs_root,
-					damon_user_ctx, fops[i])) {
+					NULL, fops[i])) {
 			pr_err("failed to create %s file\n", file_names[i]);
 			return -ENOMEM;
 		}
