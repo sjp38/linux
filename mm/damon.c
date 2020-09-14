@@ -2014,7 +2014,7 @@ static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 
 	damon_for_each_target(t, c) {
 		damon_for_each_region(r, t) {
-			rc = snprintf(&buf[written], len - written,
+			rc = scnprintf(&buf[written], len - written,
 					"%lu %lu %lu\n",
 					t->id, r->ar.start, r->ar.end);
 			if (!rc)
