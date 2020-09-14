@@ -1787,10 +1787,17 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 /* A monitoring context for debugfs interface users. */
 static struct damon_ctx *damon_user_ctx;
 
+static int damon_debugfs_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+
+	return nonseekable_open(inode, file);
+}
+
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char monitor_on_buf[5];
 	bool monitor_on;
 	int len;
@@ -1830,7 +1837,7 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 static ssize_t debugfs_monitor_on_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	ssize_t ret = count;
 	char *kbuf;
 	int err;
@@ -1878,7 +1885,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t len;
 
@@ -1975,7 +1982,7 @@ fail:
 static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	struct damos **schemes;
 	ssize_t nr_schemes = 0, ret = count;
@@ -2040,7 +2047,7 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 static ssize_t debugfs_target_ids_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	ssize_t len;
 	char ids_buf[320];
 
@@ -2106,7 +2113,7 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 static ssize_t debugfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf, *nrs;
 	bool received_pidfds = false;
 	unsigned long *targets;
@@ -2181,7 +2188,7 @@ out:
 static ssize_t debugfs_record_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
@@ -2195,7 +2202,7 @@ static ssize_t debugfs_record_read(struct file *file,
 static ssize_t debugfs_record_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	unsigned int rbuf_len;
 	char rfile_path[MAX_RFILE_PATH_LEN];
@@ -2251,7 +2258,7 @@ static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_init_regions_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t len;
 
@@ -2344,7 +2351,7 @@ static ssize_t debugfs_init_regions_write(struct file *file,
 					  const char __user *buf, size_t count,
 					  loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t ret = count;
 	int err;
@@ -2372,7 +2379,7 @@ unlock_out:
 static ssize_t debugfs_attrs_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char kbuf[128];
 	int ret;
 
@@ -2389,7 +2396,7 @@ static ssize_t debugfs_attrs_read(struct file *file,
 static ssize_t debugfs_attrs_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	unsigned long s, a, r, minr, maxr;
 	char *kbuf;
 	ssize_t ret = count;
@@ -2512,42 +2519,49 @@ out:
 
 static const struct file_operations monitor_on_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_monitor_on_read,
 	.write = debugfs_monitor_on_write,
 };
 
 static const struct file_operations target_ids_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_target_ids_read,
 	.write = debugfs_target_ids_write,
 };
 
 static const struct file_operations schemes_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_schemes_read,
 	.write = debugfs_schemes_write,
 };
 
 static const struct file_operations record_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_record_read,
 	.write = debugfs_record_write,
 };
 
 static const struct file_operations init_regions_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_init_regions_read,
 	.write = debugfs_init_regions_write,
 };
 
 static const struct file_operations attrs_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_attrs_read,
 	.write = debugfs_attrs_write,
 };
 
 static const struct file_operations nr_contexts_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_nr_contexts_read,
 	.write = debugfs_nr_contexts_write,
 };
@@ -2562,8 +2576,8 @@ static int damon_debugfs_fill_context_dir(struct dentry *dir)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
-		if (!debugfs_create_file(file_names[i], 0600, dir, NULL,
-					fops[i])) {
+		if (!debugfs_create_file(file_names[i], 0600, dir,
+					damon_user_ctx, fops[i])) {
 			pr_err("failed to create %s file\n", file_names[i]);
 			return -ENOMEM;
 		}
@@ -2588,7 +2602,7 @@ static int __init damon_debugfs_init(void)
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
 		if (!debugfs_create_file(file_names[i], 0600, debugfs_root,
-					NULL, fops[i])) {
+					damon_user_ctx, fops[i])) {
 			pr_err("failed to create %s file\n", file_names[i]);
 			return -ENOMEM;
 		}
