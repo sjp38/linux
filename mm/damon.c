@@ -2481,7 +2481,7 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
 
-static struct damon_ctx *damon_dbgfs_new_ctx(void)
+static struct damon_ctx *debugfs_new_ctx(void)
 {
 	struct damon_ctx *ctx;
 
@@ -2595,7 +2595,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 			break;
 		}
 
-		debugfs_contexts[i] = damon_dbgfs_new_ctx();
+		debugfs_contexts[i] = debugfs_new_ctx();
 		if (!debugfs_contexts[i]) {
 			pr_err("ctx for %s creation failed\n", dirname);
 			ret = -ENOMEM;
@@ -2724,7 +2724,7 @@ static int __init damon_init(void)
 	int rc;
 
 	debugfs_contexts = kmalloc(sizeof(*debugfs_contexts), GFP_KERNEL);
-	debugfs_contexts[0] = damon_dbgfs_new_ctx();
+	debugfs_contexts[0] = debugfs_new_ctx();
 	if (!debugfs_contexts[0])
 		return -ENOMEM;
 
