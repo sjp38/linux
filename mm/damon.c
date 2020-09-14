@@ -2586,12 +2586,9 @@ static int damon_debugfs_fill_context_dir(struct dentry *dir)
 static int __init damon_debugfs_init(void)
 {
 	struct dentry *debugfs_root;
-	const char * const file_names[] = {"nr_contexts", "attrs",
-		"init_regions", "record", "schemes", "target_ids",
-		"monitor_on"};
-	const struct file_operations *fops[] = {&nr_contexts_fops, &attrs_fops,
-		&init_regions_fops, &record_fops, &schemes_fops,
-		&target_ids_fops, &monitor_on_fops};
+	const char * const file_names[] = {"nr_contexts", "monitor_on"};
+	const struct file_operations *fops[] = {&nr_contexts_fops,
+		&monitor_on_fops};
 	int i;
 
 	debugfs_root = debugfs_create_dir("damon", NULL);
@@ -2607,6 +2604,7 @@ static int __init damon_debugfs_init(void)
 			return -ENOMEM;
 		}
 	}
+	damon_debugfs_fill_context_dir(debugfs_root);
 
 	debugfs_ctx_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
 	debugfs_ctx_dirs[0] = debugfs_root;
