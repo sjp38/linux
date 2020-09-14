@@ -1927,8 +1927,6 @@ static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 	char *kbuf;
 	ssize_t len;
 
-	pr_info("%s called\n", __func__);
-
 	kbuf = kmalloc(count, GFP_KERNEL);
 	if (!kbuf)
 		return -ENOMEM;
