@@ -2432,19 +2432,17 @@ out:
 	return ret;
 }
 
+static unsigned long nr_debugfs_contexts = 1;
+
 static ssize_t debugfs_nr_contexts_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
-	char kbuf[128];
+	char kbuf[32];
 	int ret;
 
-	mutex_lock(&ctx->kdamond_lock);
-	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",
-			ctx->sample_interval, ctx->aggr_interval,
-			ctx->regions_update_interval, ctx->min_nr_regions,
-			ctx->max_nr_regions);
-	mutex_unlock(&ctx->kdamond_lock);
+	mutex_lock(&damon_lock);
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu\n", nr_debugfs_contexts);
+	mutex_unlock(&damon_lock);
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
@@ -2452,33 +2450,23 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 static ssize_t debugfs_nr_contexts_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
-	unsigned long s, a, r, minr, maxr;
 	char *kbuf;
 	ssize_t ret = count;
-	int err;
+	unsigned long nr_contexts;
 
 	kbuf = user_input_str(buf, count, ppos);
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
 
-	if (sscanf(kbuf, "%lu %lu %lu %lu %lu",
-				&s, &a, &r, &minr, &maxr) != 5) {
+	if (sscanf(kbuf, "%lu", &nr_contexts) != 1) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	mutex_lock(&ctx->kdamond_lock);
-	if (ctx->kdamond) {
-		ret = -EBUSY;
-		goto unlock_out;
-	}
+	mutex_lock(&damon_lock);
+	nr_debugfs_contexts = nr_contexts;
+	mutex_unlock(&damon_lock);
 
-	err = damon_set_attrs(ctx, s, a, r, minr, maxr);
-	if (err)
-		ret = err;
-unlock_out:
-	mutex_unlock(&ctx->kdamond_lock);
 out:
 	kfree(kbuf);
 	return ret;
