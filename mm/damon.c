@@ -86,22 +86,6 @@
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 
-/* A monitoring context for debugfs interface users. */
-static struct damon_ctx damon_user_ctx = {
-	.sample_interval = 5 * 1000,
-	.aggr_interval = 100 * 1000,
-	.regions_update_interval = 1000 * 1000,
-	.min_nr_regions = 10,
-	.max_nr_regions = 1000,
-
-	.init_target_regions = kdamond_init_vm_regions,
-	.update_target_regions = kdamond_update_vm_regions,
-	.prepare_access_checks = kdamond_prepare_vm_access_checks,
-	.check_accesses = kdamond_check_vm_accesses,
-	.target_valid = kdamond_vm_target_valid,
-	.cleanup = kdamond_vm_cleanup,
-};
-
 /*
  * Construct a damon_region struct
  *
@@ -1800,10 +1784,13 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
  * Functions for the DAMON debugfs interface
  */
 
+/* A monitoring context for debugfs interface users. */
+static struct damon_ctx *damon_user_ctx;
+
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char monitor_on_buf[5];
 	bool monitor_on;
 	int len;
@@ -1843,7 +1830,7 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 static ssize_t debugfs_monitor_on_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	ssize_t ret = count;
 	char *kbuf;
 	int err;
@@ -1891,9 +1878,11 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf;
 	ssize_t len;
+
+	pr_info("%s called\n", __func__);
 
 	kbuf = kmalloc(count, GFP_KERNEL);
 	if (!kbuf)
@@ -1986,7 +1975,7 @@ fail:
 static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf;
 	struct damos **schemes;
 	ssize_t nr_schemes = 0, ret = count;
@@ -2051,7 +2040,7 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 static ssize_t debugfs_target_ids_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	ssize_t len;
 	char ids_buf[320];
 
@@ -2117,7 +2106,7 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 static ssize_t debugfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf, *nrs;
 	bool received_pidfds = false;
 	unsigned long *targets;
@@ -2192,7 +2181,7 @@ out:
 static ssize_t debugfs_record_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
@@ -2206,7 +2195,7 @@ static ssize_t debugfs_record_read(struct file *file,
 static ssize_t debugfs_record_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf;
 	unsigned int rbuf_len;
 	char rfile_path[MAX_RFILE_PATH_LEN];
@@ -2262,7 +2251,7 @@ static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_init_regions_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf;
 	ssize_t len;
 
@@ -2355,7 +2344,7 @@ static ssize_t debugfs_init_regions_write(struct file *file,
 					  const char __user *buf, size_t count,
 					  loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char *kbuf;
 	ssize_t ret = count;
 	int err;
@@ -2383,7 +2372,7 @@ unlock_out:
 static ssize_t debugfs_attrs_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	char kbuf[128];
 	int ret;
 
@@ -2400,7 +2389,7 @@ static ssize_t debugfs_attrs_read(struct file *file,
 static ssize_t debugfs_attrs_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = damon_user_ctx;
 	unsigned long s, a, r, minr, maxr;
 	char *kbuf;
 	ssize_t ret = count;
@@ -2612,25 +2601,41 @@ static int __init damon_debugfs_init(void)
 	return 0;
 }
 
-static int __init damon_init_user_ctx(void)
+static struct damon_ctx *damon_dbgfs_new_ctx(void)
 {
-	int rc;
+	struct damon_ctx *ctx;
 
-	struct damon_ctx *ctx = &damon_user_ctx;
+	ctx = kmalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return NULL;
+
+	ctx->sample_interval = 5 * 1000;
+	ctx->aggr_interval = 100 * 1000;
+	ctx->regions_update_interval = 1000 * 1000;
+	ctx->min_nr_regions = 10;
+	ctx->max_nr_regions = 1000;
+
+	ctx->init_target_regions = kdamond_init_vm_regions;
+	ctx->update_target_regions = kdamond_update_vm_regions;
+	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+	ctx->check_accesses = kdamond_check_vm_accesses;
+	ctx->target_valid = kdamond_vm_target_valid;
+	ctx->cleanup = kdamond_vm_cleanup;
 
 	ktime_get_coarse_ts64(&ctx->last_aggregation);
 	ctx->last_regions_update = ctx->last_aggregation;
 
-	rc = damon_set_recording(ctx, 1024 * 1024, "/damon.data");
-	if (rc)
-		return rc;
+	if (damon_set_recording(ctx, 0, "none")) {
+		kfree(ctx);
+		return NULL;
+	}
 
 	mutex_init(&ctx->kdamond_lock);
 
 	INIT_LIST_HEAD(&ctx->targets_list);
 	INIT_LIST_HEAD(&ctx->schemes_list);
 
-	return 0;
+	return ctx;
 }
 
 /*
@@ -2641,9 +2646,9 @@ static int __init damon_init(void)
 {
 	int rc;
 
-	rc = damon_init_user_ctx();
-	if (rc)
-		return rc;
+	damon_user_ctx = damon_dbgfs_new_ctx();
+	if (!damon_user_ctx)
+		return -ENOMEM;
 
 	rc = damon_debugfs_init();
 	if (rc)
