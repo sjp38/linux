@@ -96,7 +96,10 @@ def current_attrs():
     with open(debugfs_record, 'r') as f:
         rattrs = f.read().split()
     attrs.append(int(rattrs[0]))
-    attrs.append(rattrs[1])
+    if len(rattrs) == 1:
+        attrs.append('')
+    else:
+        attrs.append(rattrs[1])
 
     with open(debugfs_schemes, 'r') as f:
         schemes = f.read()
