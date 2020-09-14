@@ -2448,6 +2448,8 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
 
+static int damon_debugfs_fill_context_dir(struct dentry *dir);
+
 static ssize_t debugfs_nr_contexts_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -2500,13 +2502,16 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		debugfs_ctx_dirs[i] = debugfs_create_dir(dirname, root);
 		if (!debugfs_ctx_dirs[i]) {
 			pr_err("dir %s creation failed\n", dirname);
-			debugfs_nr_contexts = i;
 			ret = -ENOMEM;
-			goto unlock_out;
+			break;
+		}
+		if (damon_debugfs_fill_context_dir(debugfs_ctx_dirs[i])) {
+			ret = -ENOMEM;
+			break;
 		}
 	}
 
-	debugfs_nr_contexts = nr_contexts;
+	debugfs_nr_contexts = i;
 
 unlock_out:
 	mutex_unlock(&damon_lock);
@@ -2557,6 +2562,26 @@ static const struct file_operations nr_contexts_fops = {
 	.read = debugfs_nr_contexts_read,
 	.write = debugfs_nr_contexts_write,
 };
+
+static int damon_debugfs_fill_context_dir(struct dentry *dir)
+{
+	const char * const file_names[] = {"attrs", "init_regions", "record",
+		"schemes", "target_ids"};
+	const struct file_operations *fops[] = {&attrs_fops,
+		&init_regions_fops, &record_fops, &schemes_fops,
+		&target_ids_fops};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
+		if (!debugfs_create_file(file_names[i], 0600, dir, NULL,
+					fops[i])) {
+			pr_err("failed to create %s file\n", file_names[i]);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
 
 static int __init damon_debugfs_init(void)
 {
