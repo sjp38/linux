@@ -2514,10 +2514,9 @@ static const struct file_operations nr_contexts_fops = {
 	.write = debugfs_nr_contexts_write,
 };
 
-static struct dentry *debugfs_root;
-
 static int __init damon_debugfs_init(void)
 {
+	struct dentry *debugfs_root;
 	const char * const file_names[] = {"nr_contexts", "attrs",
 		"init_regions", "record", "schemes", "target_ids",
 		"monitor_on"};
