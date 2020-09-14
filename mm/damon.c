@@ -2466,7 +2466,7 @@ out:
 	return ret;
 }
 
-static struct dentry **debugfs_ctx_dirs;
+static struct dentry **debugfs_dirs;
 
 static ssize_t debugfs_nr_contexts_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
@@ -2554,7 +2554,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 	}
 
 	for (i = nr_contexts; i < debugfs_nr_contexts; i++) {
-		debugfs_remove(debugfs_ctx_dirs[i]);
+		debugfs_remove(debugfs_dirs[i]);
 		kfree(debugfs_contexts[i]);
 	}
 
@@ -2572,15 +2572,15 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 	}
 
 	for (i = 0; i < debugfs_nr_contexts && i < nr_contexts; i++) {
-		new_dirs[i] = debugfs_ctx_dirs[i];
+		new_dirs[i] = debugfs_dirs[i];
 		new_ctxs[i] = debugfs_contexts[i];
 	}
-	kfree(debugfs_ctx_dirs);
-	debugfs_ctx_dirs = new_dirs;
+	kfree(debugfs_dirs);
+	debugfs_dirs = new_dirs;
 	kfree(debugfs_contexts);
 	debugfs_contexts = new_ctxs;
 
-	root = debugfs_ctx_dirs[0];
+	root = debugfs_dirs[0];
 	if (!root) {
 		ret = -ENOENT;
 		goto unlock_out;
@@ -2588,8 +2588,8 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 
 	for (i = debugfs_nr_contexts; i < nr_contexts; i++) {
 		scnprintf(dirname, sizeof(dirname), "ctx%lu", i);
-		debugfs_ctx_dirs[i] = debugfs_create_dir(dirname, root);
-		if (!debugfs_ctx_dirs[i]) {
+		debugfs_dirs[i] = debugfs_create_dir(dirname, root);
+		if (!debugfs_dirs[i]) {
 			pr_err("dir %s creation failed\n", dirname);
 			ret = -ENOMEM;
 			break;
@@ -2602,7 +2602,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 			break;
 		}
 
-		if (damon_debugfs_fill_context_dir(debugfs_ctx_dirs[i],
+		if (damon_debugfs_fill_context_dir(debugfs_dirs[i],
 					debugfs_contexts[i])) {
 			ret = -ENOMEM;
 			break;
@@ -2709,8 +2709,8 @@ static int __init damon_debugfs_init(void)
 	}
 	damon_debugfs_fill_context_dir(debugfs_root, debugfs_contexts[0]);
 
-	debugfs_ctx_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
-	debugfs_ctx_dirs[0] = debugfs_root;
+	debugfs_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
+	debugfs_dirs[0] = debugfs_root;
 
 	return 0;
 }
