@@ -1398,7 +1398,7 @@ static ssize_t debugfs_monitor_on_read(struct file *file,
 	int len;
 
 	monitor_on = damon_kdamond_running(ctx);
-	len = snprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
+	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
 
 	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);
 }
@@ -1472,14 +1472,14 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 			/* Show pid numbers to debugfs users */
 			id = (unsigned long)pid_vnr((struct pid *)id);
 
-		rc = snprintf(&buf[written], len - written, "%lu ", id);
+		rc = scnprintf(&buf[written], len - written, "%lu ", id);
 		if (!rc)
 			return -ENOMEM;
 		written += rc;
 	}
 	if (written)
 		written -= 1;
-	written += snprintf(&buf[written], len - written, "\n");
+	written += scnprintf(&buf[written], len - written, "\n");
 	return written;
 }
 
@@ -1581,7 +1581,7 @@ static ssize_t debugfs_record_read(struct file *file,
 	int ret;
 
 	mutex_lock(&ctx->kdamond_lock);
-	ret = snprintf(record_buf, ARRAY_SIZE(record_buf), "%u %s\n",
+	ret = scnprintf(record_buf, ARRAY_SIZE(record_buf), "%u %s\n",
 			ctx->rbuf_len, ctx->rfile_path);
 	mutex_unlock(&ctx->kdamond_lock);
 	return simple_read_from_buffer(buf, count, ppos, record_buf, ret);
@@ -1631,7 +1631,7 @@ static ssize_t debugfs_attrs_read(struct file *file,
 	int ret;
 
 	mutex_lock(&ctx->kdamond_lock);
-	ret = snprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",
 			ctx->sample_interval, ctx->aggr_interval,
 			ctx->regions_update_interval, ctx->min_nr_regions,
 			ctx->max_nr_regions);
