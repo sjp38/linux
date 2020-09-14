@@ -1653,7 +1653,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 	int rc;
 
 	damon_for_each_scheme(s, c) {
-		rc = snprintf(&buf[written], len - written,
+		rc = scnprintf(&buf[written], len - written,
 				"%lu %lu %u %u %u %u %d\n",
 				s->min_sz_region, s->max_sz_region,
 				s->min_nr_accesses, s->max_nr_accesses,
