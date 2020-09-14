@@ -2433,6 +2433,7 @@ out:
 }
 
 static unsigned long nr_debugfs_contexts = 1;
+static struct dentry **debugfs_ctx_dirs;
 
 static ssize_t debugfs_nr_contexts_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
@@ -2452,7 +2453,10 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 {
 	char *kbuf;
 	ssize_t ret = count;
-	unsigned long nr_contexts;
+	unsigned long nr_contexts, i;
+	char dirname[32];
+	struct dentry *root;
+	struct dentry **new_dirs;
 
 	kbuf = user_input_str(buf, count, ppos);
 	if (IS_ERR(kbuf))
@@ -2462,9 +2466,49 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		ret = -EINVAL;
 		goto out;
 	}
+	if (nr_contexts < 1) {
+		pr_err("nr_contexts should be >=1\n");
+		ret = -EINVAL;
+		goto out;
+	}
+	if (nr_contexts == nr_debugfs_contexts)
+		goto out;
 
 	mutex_lock(&damon_lock);
+	for (i = nr_contexts; i < nr_debugfs_contexts; i++)
+		debugfs_remove(debugfs_ctx_dirs[i]);
+
+	new_dirs = kmalloc_array(nr_contexts, sizeof(*new_dirs), GFP_KERNEL);
+	if (!new_dirs) {
+		ret = -ENOMEM;
+		goto unlock_out;
+	}
+
+	for (i = 0; i < nr_debugfs_contexts && i < nr_contexts; i++)
+		new_dirs[i] = debugfs_ctx_dirs[i];
+	kfree(debugfs_ctx_dirs);
+	debugfs_ctx_dirs = new_dirs;
+
+	root = debugfs_ctx_dirs[0];
+	if (!root) {
+		ret = -ENOENT;
+		goto unlock_out;
+	}
+
+	for (i = nr_debugfs_contexts; i < nr_contexts; i++) {
+		scnprintf(dirname, sizeof(dirname), "ctx%lu", i);
+		debugfs_ctx_dirs[i] = debugfs_create_dir(dirname, root);
+		if (!debugfs_ctx_dirs[i]) {
+			pr_err("dir %s creation failed\n", dirname);
+			nr_debugfs_contexts = i;
+			ret = -ENOMEM;
+			goto unlock_out;
+		}
+	}
+
 	nr_debugfs_contexts = nr_contexts;
+
+unlock_out:
 	mutex_unlock(&damon_lock);
 
 out:
@@ -2538,6 +2582,9 @@ static int __init damon_debugfs_init(void)
 			return -ENOMEM;
 		}
 	}
+
+	debugfs_ctx_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
+	debugfs_ctx_dirs[0] = debugfs_root;
 
 	return 0;
 }
