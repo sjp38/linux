@@ -2432,6 +2432,58 @@ out:
 	return ret;
 }
 
+static ssize_t debugfs_nr_contexts_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = &damon_user_ctx;
+	char kbuf[128];
+	int ret;
+
+	mutex_lock(&ctx->kdamond_lock);
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",
+			ctx->sample_interval, ctx->aggr_interval,
+			ctx->regions_update_interval, ctx->min_nr_regions,
+			ctx->max_nr_regions);
+	mutex_unlock(&ctx->kdamond_lock);
+
+	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
+}
+
+static ssize_t debugfs_nr_contexts_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = &damon_user_ctx;
+	unsigned long s, a, r, minr, maxr;
+	char *kbuf;
+	ssize_t ret = count;
+	int err;
+
+	kbuf = user_input_str(buf, count, ppos);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
+
+	if (sscanf(kbuf, "%lu %lu %lu %lu %lu",
+				&s, &a, &r, &minr, &maxr) != 5) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond) {
+		ret = -EBUSY;
+		goto unlock_out;
+	}
+
+	err = damon_set_attrs(ctx, s, a, r, minr, maxr);
+	if (err)
+		ret = err;
+unlock_out:
+	mutex_unlock(&ctx->kdamond_lock);
+out:
+	kfree(kbuf);
+	return ret;
+}
+
 static const struct file_operations monitor_on_fops = {
 	.owner = THIS_MODULE,
 	.read = debugfs_monitor_on_read,
@@ -2468,13 +2520,20 @@ static const struct file_operations attrs_fops = {
 	.write = debugfs_attrs_write,
 };
 
+static const struct file_operations nr_contexts_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_nr_contexts_read,
+	.write = debugfs_nr_contexts_write,
+};
+
 static struct dentry *debugfs_root;
 
 static int __init damon_debugfs_init(void)
 {
-	const char * const file_names[] = {"attrs", "init_regions", "record",
-		"schemes", "target_ids", "monitor_on"};
-	const struct file_operations *fops[] = {&attrs_fops,
+	const char * const file_names[] = {"nr_contexts", "attrs",
+		"init_regions", "record", "schemes", "target_ids",
+		"monitor_on"};
+	const struct file_operations *fops[] = {&nr_contexts_fops, &attrs_fops,
 		&init_regions_fops, &record_fops, &schemes_fops,
 		&target_ids_fops, &monitor_on_fops};
 	int i;
