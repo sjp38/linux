@@ -1824,13 +1824,6 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 static struct damon_ctx **debugfs_contexts;
 static unsigned long debugfs_nr_contexts = 1;
 
-static int damon_debugfs_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-
-	return nonseekable_open(inode, file);
-}
-
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
@@ -2464,8 +2457,6 @@ out:
 	return ret;
 }
 
-static struct dentry **debugfs_dirs;
-
 static ssize_t debugfs_nr_contexts_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
@@ -2516,7 +2507,9 @@ static struct damon_ctx *debugfs_new_ctx(void)
 	return ctx;
 }
 
-static int damon_debugfs_fill_context_dir(struct dentry *dir, struct damon_ctx *ctx);
+static struct dentry **debugfs_dirs;
+
+static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx);
 
 static ssize_t debugfs_nr_contexts_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
@@ -2600,7 +2593,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 			break;
 		}
 
-		if (damon_debugfs_fill_context_dir(debugfs_dirs[i],
+		if (debugfs_fill_ctx_dir(debugfs_dirs[i],
 					debugfs_contexts[i])) {
 			ret = -ENOMEM;
 			break;
@@ -2615,6 +2608,13 @@ unlock_out:
 out:
 	kfree(kbuf);
 	return ret;
+}
+
+static int damon_debugfs_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+
+	return nonseekable_open(inode, file);
 }
 
 static const struct file_operations monitor_on_fops = {
@@ -2664,7 +2664,7 @@ static const struct file_operations nr_contexts_fops = {
 	.write = debugfs_nr_contexts_write,
 };
 
-static int damon_debugfs_fill_context_dir(struct dentry *dir, struct damon_ctx *ctx)
+static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 {
 	const char * const file_names[] = {"attrs", "init_regions", "record",
 		"schemes", "target_ids"};
@@ -2705,7 +2705,7 @@ static int __init damon_debugfs_init(void)
 			return -ENOMEM;
 		}
 	}
-	damon_debugfs_fill_context_dir(debugfs_root, debugfs_contexts[0]);
+	debugfs_fill_ctx_dir(debugfs_root, debugfs_contexts[0]);
 
 	debugfs_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
 	debugfs_dirs[0] = debugfs_root;
