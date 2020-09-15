@@ -2595,7 +2595,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 	}
 
 	for (i = debugfs_nr_ctxs; i < nr_contexts; i++) {
-		scnprintf(dirname, sizeof(dirname), "ctx%lu", i);
+		scnprintf(dirname, sizeof(dirname), "ctx%d", i);
 		debugfs_dirs[i] = debugfs_create_dir(dirname, root);
 		if (!debugfs_dirs[i]) {
 			pr_err("dir %s creation failed\n", dirname);
