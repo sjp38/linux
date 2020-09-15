@@ -231,7 +231,7 @@ static void damon_destroy_scheme(struct damos *s)
 	damon_free_scheme(s);
 }
 
-static void damon_ctx_set_vaddr_callbacks(struct damon_ctx *ctx)
+static void damon_ctx_set_vaddr_primitives(struct damon_ctx *ctx)
 {
 	ctx->init_target_regions = kdamond_init_vm_regions;
 	ctx->update_target_regions = kdamond_update_vm_regions;
@@ -241,7 +241,7 @@ static void damon_ctx_set_vaddr_callbacks(struct damon_ctx *ctx)
 	ctx->cleanup = kdamond_vm_cleanup;
 }
 
-static void damon_ctx_set_paddr_callbacks(struct damon_ctx *ctx)
+static void damon_ctx_set_paddr_primitives(struct damon_ctx *ctx)
 {
 	ctx->init_target_regions = kdamond_init_phys_regions;
 	ctx->update_target_regions = kdamond_update_phys_regions;
@@ -265,7 +265,7 @@ static struct damon_ctx *damon_new_ctx(void)
 	ctx->min_nr_regions = 10;
 	ctx->max_nr_regions = 1000;
 
-	damon_ctx_set_vaddr_callbacks(ctx);
+	damon_ctx_set_vaddr_primitives(ctx);
 
 	ktime_get_coarse_ts64(&ctx->last_aggregation);
 	ctx->last_regions_update = ctx->last_aggregation;
@@ -2223,12 +2223,12 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	nrs = kbuf;
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		/* Configure the context for physical memory monitoring */
-		damon_ctx_set_paddr_callbacks(ctx);
+		damon_ctx_set_paddr_primitives(ctx);
 		/* target id is meaningless here, but we set it just for fun */
 		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
-		damon_ctx_set_vaddr_callbacks(ctx);
+		damon_ctx_set_vaddr_primitives(ctx);
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
 			nrs = &kbuf[6];
