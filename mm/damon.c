@@ -86,22 +86,6 @@
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 
-/* A monitoring context for debugfs interface users. */
-static struct damon_ctx damon_user_ctx = {
-	.sample_interval = 5 * 1000,
-	.aggr_interval = 100 * 1000,
-	.regions_update_interval = 1000 * 1000,
-	.min_nr_regions = 10,
-	.max_nr_regions = 1000,
-
-	.init_target_regions = kdamond_init_vm_regions,
-	.update_target_regions = kdamond_update_vm_regions,
-	.prepare_access_checks = kdamond_prepare_vm_access_checks,
-	.check_accesses = kdamond_check_vm_accesses,
-	.target_valid = kdamond_vm_target_valid,
-	.cleanup = kdamond_vm_cleanup,
-};
-
 /*
  * Construct a damon_region struct
  *
@@ -245,6 +229,72 @@ static void damon_destroy_scheme(struct damos *s)
 {
 	damon_del_scheme(s);
 	damon_free_scheme(s);
+}
+
+static void damon_set_vaddr_primitives(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_vm_regions;
+	ctx->update_target_regions = kdamond_update_vm_regions;
+	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+	ctx->check_accesses = kdamond_check_vm_accesses;
+	ctx->target_valid = kdamond_vm_target_valid;
+	ctx->cleanup = kdamond_vm_cleanup;
+}
+
+static void damon_set_paddr_primitives(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_phys_regions;
+	ctx->update_target_regions = kdamond_update_phys_regions;
+	ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
+	ctx->check_accesses = kdamond_check_phys_accesses;
+	ctx->target_valid = NULL;
+	ctx->cleanup = NULL;
+}
+
+static struct damon_ctx *damon_new_ctx(void)
+{
+	struct damon_ctx *ctx;
+
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return NULL;
+
+	ctx->sample_interval = 5 * 1000;
+	ctx->aggr_interval = 100 * 1000;
+	ctx->regions_update_interval = 1000 * 1000;
+	ctx->min_nr_regions = 10;
+	ctx->max_nr_regions = 1000;
+
+	damon_set_vaddr_primitives(ctx);
+
+	ktime_get_coarse_ts64(&ctx->last_aggregation);
+	ctx->last_regions_update = ctx->last_aggregation;
+
+	if (damon_set_recording(ctx, 0, "none")) {
+		kfree(ctx);
+		return NULL;
+	}
+
+	mutex_init(&ctx->kdamond_lock);
+
+	INIT_LIST_HEAD(&ctx->targets_list);
+	INIT_LIST_HEAD(&ctx->schemes_list);
+
+	return ctx;
+}
+
+static void damon_destroy_ctx(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next_t;
+	struct damos *s, *next_s;
+
+	damon_for_each_target_safe(t, next_t, ctx)
+		damon_destroy_target(t);
+
+	damon_for_each_scheme_safe(s, next_s, ctx)
+		damon_destroy_scheme(s);
+
+	kfree(ctx);
 }
 
 static unsigned int nr_damon_targets(struct damon_ctx *ctx)
@@ -1611,6 +1661,28 @@ int damon_start(struct damon_ctx *ctxs, int nr_ctxs)
 	return err;
 }
 
+int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+{
+	int i;
+	int err = 0;
+
+	mutex_lock(&damon_lock);
+	if (nr_running_ctxs) {
+		mutex_unlock(&damon_lock);
+		return -EBUSY;
+	}
+
+	for (i = 0; i < nr_ctxs; i++) {
+		err = __damon_start(ctxs[i]);
+		if (err)
+			break;
+		nr_running_ctxs++;
+	}
+	mutex_unlock(&damon_lock);
+
+	return err;
+}
+
 /*
  * __damon_stop() - Stops monitoring of given context.
  * @ctx:	monitoring context
@@ -1647,6 +1719,20 @@ int damon_stop(struct damon_ctx *ctxs, int nr_ctxs)
 	for (i = 0; i < nr_ctxs; i++) {
 		/* nr_running_ctxs is decremented in kdamond_fn */
 		err = __damon_stop(&ctxs[i]);
+		if (err)
+			return err;
+	}
+
+	return err;
+}
+
+int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+{
+	int i, err = 0;
+
+	for (i = 0; i < nr_ctxs; i++) {
+		/* nr_running_ctxs is decremented in kdamond_fn */
+		err = __damon_stop(ctxs[i]);
 		if (err)
 			return err;
 	}
@@ -1799,15 +1885,21 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
  * Functions for the DAMON debugfs interface
  */
 
+/* Monitoring contexts for debugfs interface users. */
+static struct damon_ctx **debugfs_ctxs;
+static int debugfs_nr_ctxs = 1;
+
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
 	char monitor_on_buf[5];
 	bool monitor_on;
 	int len;
 
-	monitor_on = damon_kdamond_running(ctx);
+	mutex_lock(&damon_lock);
+	monitor_on = nr_running_ctxs != 0;
+	mutex_unlock(&damon_lock);
+
 	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
 
 	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);
@@ -1842,7 +1934,6 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 static ssize_t debugfs_monitor_on_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
 	ssize_t ret = count;
 	char *kbuf;
 	int err;
@@ -1855,9 +1946,9 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start(ctx, 1);
+		err = damon_start_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop(ctx, 1);
+		err = damon_stop_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else
 		return -EINVAL;
 
@@ -1890,7 +1981,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t len;
 
@@ -1985,7 +2076,7 @@ fail:
 static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	struct damos **schemes;
 	ssize_t nr_schemes = 0, ret = count;
@@ -2050,7 +2141,7 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 static ssize_t debugfs_target_ids_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	ssize_t len;
 	char ids_buf[320];
 
@@ -2116,7 +2207,7 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 static ssize_t debugfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf, *nrs;
 	bool received_pidfds = false;
 	unsigned long *targets;
@@ -2132,23 +2223,12 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	nrs = kbuf;
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		/* Configure the context for physical memory monitoring */
-		ctx->init_target_regions = kdamond_init_phys_regions;
-		ctx->update_target_regions = kdamond_update_phys_regions;
-		ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
-		ctx->check_accesses = kdamond_check_phys_accesses;
-		ctx->target_valid = NULL;
-		ctx->cleanup = NULL;
-
+		damon_set_paddr_primitives(ctx);
 		/* target id is meaningless here, but we set it just for fun */
 		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
-		ctx->init_target_regions = kdamond_init_vm_regions;
-		ctx->update_target_regions = kdamond_update_vm_regions;
-		ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
-		ctx->check_accesses = kdamond_check_vm_accesses;
-		ctx->target_valid = kdamond_vm_target_valid;
-		ctx->cleanup = kdamond_vm_cleanup;
+		damon_set_vaddr_primitives(ctx);
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
 			nrs = &kbuf[6];
@@ -2191,7 +2271,7 @@ out:
 static ssize_t debugfs_record_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
@@ -2205,7 +2285,7 @@ static ssize_t debugfs_record_read(struct file *file,
 static ssize_t debugfs_record_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	unsigned int rbuf_len;
 	char rfile_path[MAX_RFILE_PATH_LEN];
@@ -2261,7 +2341,7 @@ static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 static ssize_t debugfs_init_regions_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t len;
 
@@ -2354,7 +2434,7 @@ static ssize_t debugfs_init_regions_write(struct file *file,
 					  const char __user *buf, size_t count,
 					  loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	ssize_t ret = count;
 	int err;
@@ -2382,7 +2462,7 @@ unlock_out:
 static ssize_t debugfs_attrs_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	char kbuf[128];
 	int ret;
 
@@ -2399,7 +2479,7 @@ static ssize_t debugfs_attrs_read(struct file *file,
 static ssize_t debugfs_attrs_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
-	struct damon_ctx *ctx = &damon_user_ctx;
+	struct damon_ctx *ctx = file->private_data;
 	unsigned long s, a, r, minr, maxr;
 	char *kbuf;
 	ssize_t ret = count;
@@ -2431,6 +2511,128 @@ out:
 	return ret;
 }
 
+static ssize_t debugfs_nr_contexts_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	char kbuf[32];
+	int ret;
+
+	mutex_lock(&damon_lock);
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%d\n", debugfs_nr_ctxs);
+	mutex_unlock(&damon_lock);
+
+	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
+}
+
+static struct dentry **debugfs_dirs;
+
+static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx);
+
+static ssize_t debugfs_nr_contexts_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	char *kbuf;
+	ssize_t ret = count;
+	int nr_contexts, i;
+	char dirname[32];
+	struct dentry *root;
+	struct dentry **new_dirs;
+	struct damon_ctx **new_ctxs;
+
+	kbuf = user_input_str(buf, count, ppos);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
+
+	if (sscanf(kbuf, "%d", &nr_contexts) != 1) {
+		ret = -EINVAL;
+		goto out;
+	}
+	if (nr_contexts < 1) {
+		pr_err("nr_contexts should be >=1\n");
+		ret = -EINVAL;
+		goto out;
+	}
+	if (nr_contexts == debugfs_nr_ctxs)
+		goto out;
+
+	mutex_lock(&damon_lock);
+	if (nr_running_ctxs) {
+		ret = -EBUSY;
+		goto unlock_out;
+	}
+
+	for (i = nr_contexts; i < debugfs_nr_ctxs; i++) {
+		debugfs_remove(debugfs_dirs[i]);
+		damon_destroy_ctx(debugfs_ctxs[i]);
+	}
+
+	new_dirs = kmalloc_array(nr_contexts, sizeof(*new_dirs), GFP_KERNEL);
+	if (!new_dirs) {
+		ret = -ENOMEM;
+		goto unlock_out;
+	}
+
+	new_ctxs = kmalloc_array(nr_contexts, sizeof(*debugfs_ctxs),
+			GFP_KERNEL);
+	if (!new_ctxs) {
+		ret = -ENOMEM;
+		goto unlock_out;
+	}
+
+	for (i = 0; i < debugfs_nr_ctxs && i < nr_contexts; i++) {
+		new_dirs[i] = debugfs_dirs[i];
+		new_ctxs[i] = debugfs_ctxs[i];
+	}
+	kfree(debugfs_dirs);
+	debugfs_dirs = new_dirs;
+	kfree(debugfs_ctxs);
+	debugfs_ctxs = new_ctxs;
+
+	root = debugfs_dirs[0];
+	if (!root) {
+		ret = -ENOENT;
+		goto unlock_out;
+	}
+
+	for (i = debugfs_nr_ctxs; i < nr_contexts; i++) {
+		scnprintf(dirname, sizeof(dirname), "ctx%d", i);
+		debugfs_dirs[i] = debugfs_create_dir(dirname, root);
+		if (!debugfs_dirs[i]) {
+			pr_err("dir %s creation failed\n", dirname);
+			ret = -ENOMEM;
+			break;
+		}
+
+		debugfs_ctxs[i] = damon_new_ctx();
+		if (!debugfs_ctxs[i]) {
+			pr_err("ctx for %s creation failed\n", dirname);
+			ret = -ENOMEM;
+			break;
+		}
+
+		if (debugfs_fill_ctx_dir(debugfs_dirs[i], debugfs_ctxs[i])) {
+			ret = -ENOMEM;
+			break;
+		}
+	}
+
+	debugfs_nr_ctxs = i;
+
+unlock_out:
+	mutex_unlock(&damon_lock);
+
+out:
+	kfree(kbuf);
+	return ret;
+}
+
+static int damon_debugfs_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+
+	return nonseekable_open(inode, file);
+}
+
 static const struct file_operations monitor_on_fops = {
 	.owner = THIS_MODULE,
 	.read = debugfs_monitor_on_read,
@@ -2439,43 +2641,71 @@ static const struct file_operations monitor_on_fops = {
 
 static const struct file_operations target_ids_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_target_ids_read,
 	.write = debugfs_target_ids_write,
 };
 
 static const struct file_operations schemes_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_schemes_read,
 	.write = debugfs_schemes_write,
 };
 
 static const struct file_operations record_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_record_read,
 	.write = debugfs_record_write,
 };
 
 static const struct file_operations init_regions_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_init_regions_read,
 	.write = debugfs_init_regions_write,
 };
 
 static const struct file_operations attrs_fops = {
 	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
 	.read = debugfs_attrs_read,
 	.write = debugfs_attrs_write,
 };
 
-static struct dentry *debugfs_root;
+static const struct file_operations nr_contexts_fops = {
+	.owner = THIS_MODULE,
+	.read = debugfs_nr_contexts_read,
+	.write = debugfs_nr_contexts_write,
+};
+
+static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
+{
+	const char * const file_names[] = {"attrs", "init_regions", "record",
+		"schemes", "target_ids"};
+	const struct file_operations *fops[] = {&attrs_fops,
+		&init_regions_fops, &record_fops, &schemes_fops,
+		&target_ids_fops};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
+		if (!debugfs_create_file(file_names[i], 0600, dir,
+					ctx, fops[i])) {
+			pr_err("failed to create %s file\n", file_names[i]);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
 
 static int __init damon_debugfs_init(void)
 {
-	const char * const file_names[] = {"attrs", "init_regions", "record",
-		"schemes", "target_ids", "monitor_on"};
-	const struct file_operations *fops[] = {&attrs_fops,
-		&init_regions_fops, &record_fops, &schemes_fops,
-		&target_ids_fops, &monitor_on_fops};
+	struct dentry *debugfs_root;
+	const char * const file_names[] = {"nr_contexts", "monitor_on"};
+	const struct file_operations *fops[] = {&nr_contexts_fops,
+		&monitor_on_fops};
 	int i;
 
 	debugfs_root = debugfs_create_dir("damon", NULL);
@@ -2491,27 +2721,10 @@ static int __init damon_debugfs_init(void)
 			return -ENOMEM;
 		}
 	}
+	debugfs_fill_ctx_dir(debugfs_root, debugfs_ctxs[0]);
 
-	return 0;
-}
-
-static int __init damon_init_user_ctx(void)
-{
-	int rc;
-
-	struct damon_ctx *ctx = &damon_user_ctx;
-
-	ktime_get_coarse_ts64(&ctx->last_aggregation);
-	ctx->last_regions_update = ctx->last_aggregation;
-
-	rc = damon_set_recording(ctx, 1024 * 1024, "/damon.data");
-	if (rc)
-		return rc;
-
-	mutex_init(&ctx->kdamond_lock);
-
-	INIT_LIST_HEAD(&ctx->targets_list);
-	INIT_LIST_HEAD(&ctx->schemes_list);
+	debugfs_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
+	debugfs_dirs[0] = debugfs_root;
 
 	return 0;
 }
@@ -2524,9 +2737,10 @@ static int __init damon_init(void)
 {
 	int rc;
 
-	rc = damon_init_user_ctx();
-	if (rc)
-		return rc;
+	debugfs_ctxs = kmalloc(sizeof(*debugfs_ctxs), GFP_KERNEL);
+	debugfs_ctxs[0] = damon_new_ctx();
+	if (!debugfs_ctxs[0])
+		return -ENOMEM;
 
 	rc = damon_debugfs_init();
 	if (rc)
