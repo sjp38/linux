@@ -1661,7 +1661,7 @@ int damon_start(struct damon_ctx *ctxs, int nr_ctxs)
 	return err;
 }
 
-int damon_start2(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i;
 	int err = 0;
@@ -1726,7 +1726,7 @@ int damon_stop(struct damon_ctx *ctxs, int nr_ctxs)
 	return err;
 }
 
-int damon_stop2(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i, err = 0;
 
@@ -1946,9 +1946,9 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start2(debugfs_ctxs, debugfs_nr_ctxs);
+		err = damon_start_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop2(debugfs_ctxs, debugfs_nr_ctxs);
+		err = damon_stop_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else
 		return -EINVAL;
 
