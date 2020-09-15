@@ -1552,6 +1552,8 @@ static bool damon_kdamond_running(struct damon_ctx *ctx)
  * __damon_start() - Starts monitoring with given context.
  * @ctx:	monitoring context
  *
+ * This function should be called while damon_lock is hold.
+ *
  * Return: 0 on success, negative error code otherwise.
  */
 static int __damon_start(struct damon_ctx *ctx)
@@ -1562,7 +1564,8 @@ static int __damon_start(struct damon_ctx *ctx)
 	if (!ctx->kdamond) {
 		err = 0;
 		ctx->kdamond_stop = false;
-		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond");
+		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond.%d.%d",
+				current ? current->pid : 0, nr_running_ctxs);
 		if (IS_ERR(ctx->kdamond))
 			err = PTR_ERR(ctx->kdamond);
 		else
