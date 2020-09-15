@@ -231,6 +231,26 @@ static void damon_destroy_scheme(struct damos *s)
 	damon_free_scheme(s);
 }
 
+static void damon_ctx_set_vaddr_callbacks(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_vm_regions;
+	ctx->update_target_regions = kdamond_update_vm_regions;
+	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+	ctx->check_accesses = kdamond_check_vm_accesses;
+	ctx->target_valid = kdamond_vm_target_valid;
+	ctx->cleanup = kdamond_vm_cleanup;
+}
+
+static void damon_ctx_set_paddr_callbacks(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_phys_regions;
+	ctx->update_target_regions = kdamond_update_phys_regions;
+	ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
+	ctx->check_accesses = kdamond_check_phys_accesses;
+	ctx->target_valid = NULL;
+	ctx->cleanup = NULL;
+}
+
 static unsigned int nr_damon_targets(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
@@ -2157,23 +2177,12 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	nrs = kbuf;
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		/* Configure the context for physical memory monitoring */
-		ctx->init_target_regions = kdamond_init_phys_regions;
-		ctx->update_target_regions = kdamond_update_phys_regions;
-		ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
-		ctx->check_accesses = kdamond_check_phys_accesses;
-		ctx->target_valid = NULL;
-		ctx->cleanup = NULL;
-
+		damon_ctx_set_paddr_callbacks(ctx);
 		/* target id is meaningless here, but we set it just for fun */
 		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
-		ctx->init_target_regions = kdamond_init_vm_regions;
-		ctx->update_target_regions = kdamond_update_vm_regions;
-		ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
-		ctx->check_accesses = kdamond_check_vm_accesses;
-		ctx->target_valid = kdamond_vm_target_valid;
-		ctx->cleanup = kdamond_vm_cleanup;
+		damon_ctx_set_vaddr_callbacks(ctx);
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
 			nrs = &kbuf[6];
