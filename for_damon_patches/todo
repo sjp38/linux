@@ -9,6 +9,8 @@ TODOs
 - Support multi contexts from user space
 - Charge kdamond CPU usage to requesting user space process
   (Could kdamonds name distinguishments help this?)
+- Fix damon_set_recording() kfree problem (damon_set_recording at mm/damon.c:1766)
+- Destroy contexts for nr_contexts write
 
 
 Done
