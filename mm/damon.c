@@ -1821,7 +1821,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 
 /* Monitoring contexts for debugfs interface users. */
 static struct damon_ctx **debugfs_ctxs;
-static unsigned long debugfs_nr_ctxs = 1;
+static int debugfs_nr_ctxs = 1;
 
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
@@ -2463,7 +2463,7 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 	int ret;
 
 	mutex_lock(&damon_lock);
-	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu\n", debugfs_nr_ctxs);
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%d\n", debugfs_nr_ctxs);
 	mutex_unlock(&damon_lock);
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
@@ -2529,7 +2529,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 {
 	char *kbuf;
 	ssize_t ret = count;
-	unsigned long nr_contexts, i;
+	int nr_contexts, i;
 	char dirname[32];
 	struct dentry *root;
 	struct dentry **new_dirs;
@@ -2539,7 +2539,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
 
-	if (sscanf(kbuf, "%lu", &nr_contexts) != 1) {
+	if (sscanf(kbuf, "%d", &nr_contexts) != 1) {
 		ret = -EINVAL;
 		goto out;
 	}
