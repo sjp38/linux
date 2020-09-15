@@ -2507,6 +2507,20 @@ static struct damon_ctx *damon_new_ctx(void)
 	return ctx;
 }
 
+static void damon_destroy_ctx(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next_t;
+	struct damos *s, *next_s;
+
+	damon_for_each_target_safe(t, next_t, ctx)
+		damon_destroy_target(t);
+
+	damon_for_each_scheme_safe(s, next_s, ctx)
+		damon_destroy_scheme(s);
+
+	kfree(ctx);
+}
+
 static struct dentry **debugfs_dirs;
 
 static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx);
@@ -2546,7 +2560,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 
 	for (i = nr_contexts; i < debugfs_nr_ctxs; i++) {
 		debugfs_remove(debugfs_dirs[i]);
-		kfree(debugfs_ctxs[i]);
+		damon_destroy_ctx(debugfs_ctxs[i]);
 	}
 
 	new_dirs = kmalloc_array(nr_contexts, sizeof(*new_dirs), GFP_KERNEL);
