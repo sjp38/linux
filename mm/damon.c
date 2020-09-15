@@ -1821,8 +1821,8 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
  */
 
 /* Monitoring contexts for debugfs interface users. */
-static struct damon_ctx **debugfs_contexts;
-static unsigned long debugfs_nr_contexts = 1;
+static struct damon_ctx **debugfs_ctxs;
+static unsigned long debugfs_nr_ctxs = 1;
 
 static ssize_t debugfs_monitor_on_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
@@ -1881,9 +1881,9 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start2(debugfs_contexts, debugfs_nr_contexts);
+		err = damon_start2(debugfs_ctxs, debugfs_nr_ctxs);
 	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop2(debugfs_contexts, debugfs_nr_contexts);
+		err = damon_stop2(debugfs_ctxs, debugfs_nr_ctxs);
 	else
 		return -EINVAL;
 
@@ -2464,13 +2464,13 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 	int ret;
 
 	mutex_lock(&damon_lock);
-	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu\n", debugfs_nr_contexts);
+	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu\n", debugfs_nr_ctxs);
 	mutex_unlock(&damon_lock);
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
 
-static struct damon_ctx *debugfs_new_ctx(void)
+static struct damon_ctx *damon_new_ctx(void)
 {
 	struct damon_ctx *ctx;
 
@@ -2535,7 +2535,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		ret = -EINVAL;
 		goto out;
 	}
-	if (nr_contexts == debugfs_nr_contexts)
+	if (nr_contexts == debugfs_nr_ctxs)
 		goto out;
 
 	mutex_lock(&damon_lock);
@@ -2544,9 +2544,9 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		goto unlock_out;
 	}
 
-	for (i = nr_contexts; i < debugfs_nr_contexts; i++) {
+	for (i = nr_contexts; i < debugfs_nr_ctxs; i++) {
 		debugfs_remove(debugfs_dirs[i]);
-		kfree(debugfs_contexts[i]);
+		kfree(debugfs_ctxs[i]);
 	}
 
 	new_dirs = kmalloc_array(nr_contexts, sizeof(*new_dirs), GFP_KERNEL);
@@ -2555,21 +2555,21 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		goto unlock_out;
 	}
 
-	new_ctxs = kmalloc_array(nr_contexts, sizeof(*debugfs_contexts),
+	new_ctxs = kmalloc_array(nr_contexts, sizeof(*debugfs_ctxs),
 			GFP_KERNEL);
 	if (!new_ctxs) {
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
 
-	for (i = 0; i < debugfs_nr_contexts && i < nr_contexts; i++) {
+	for (i = 0; i < debugfs_nr_ctxs && i < nr_contexts; i++) {
 		new_dirs[i] = debugfs_dirs[i];
-		new_ctxs[i] = debugfs_contexts[i];
+		new_ctxs[i] = debugfs_ctxs[i];
 	}
 	kfree(debugfs_dirs);
 	debugfs_dirs = new_dirs;
-	kfree(debugfs_contexts);
-	debugfs_contexts = new_ctxs;
+	kfree(debugfs_ctxs);
+	debugfs_ctxs = new_ctxs;
 
 	root = debugfs_dirs[0];
 	if (!root) {
@@ -2577,7 +2577,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 		goto unlock_out;
 	}
 
-	for (i = debugfs_nr_contexts; i < nr_contexts; i++) {
+	for (i = debugfs_nr_ctxs; i < nr_contexts; i++) {
 		scnprintf(dirname, sizeof(dirname), "ctx%lu", i);
 		debugfs_dirs[i] = debugfs_create_dir(dirname, root);
 		if (!debugfs_dirs[i]) {
@@ -2586,21 +2586,20 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 			break;
 		}
 
-		debugfs_contexts[i] = debugfs_new_ctx();
-		if (!debugfs_contexts[i]) {
+		debugfs_ctxs[i] = damon_new_ctx();
+		if (!debugfs_ctxs[i]) {
 			pr_err("ctx for %s creation failed\n", dirname);
 			ret = -ENOMEM;
 			break;
 		}
 
-		if (debugfs_fill_ctx_dir(debugfs_dirs[i],
-					debugfs_contexts[i])) {
+		if (debugfs_fill_ctx_dir(debugfs_dirs[i], debugfs_ctxs[i])) {
 			ret = -ENOMEM;
 			break;
 		}
 	}
 
-	debugfs_nr_contexts = i;
+	debugfs_nr_ctxs = i;
 
 unlock_out:
 	mutex_unlock(&damon_lock);
@@ -2705,7 +2704,7 @@ static int __init damon_debugfs_init(void)
 			return -ENOMEM;
 		}
 	}
-	debugfs_fill_ctx_dir(debugfs_root, debugfs_contexts[0]);
+	debugfs_fill_ctx_dir(debugfs_root, debugfs_ctxs[0]);
 
 	debugfs_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
 	debugfs_dirs[0] = debugfs_root;
@@ -2721,9 +2720,9 @@ static int __init damon_init(void)
 {
 	int rc;
 
-	debugfs_contexts = kmalloc(sizeof(*debugfs_contexts), GFP_KERNEL);
-	debugfs_contexts[0] = debugfs_new_ctx();
-	if (!debugfs_contexts[0])
+	debugfs_ctxs = kmalloc(sizeof(*debugfs_ctxs), GFP_KERNEL);
+	debugfs_ctxs[0] = damon_new_ctx();
+	if (!debugfs_ctxs[0])
 		return -ENOMEM;
 
 	rc = damon_debugfs_init();
