@@ -2474,7 +2474,7 @@ static struct damon_ctx *debugfs_new_ctx(void)
 {
 	struct damon_ctx *ctx;
 
-	ctx = kmalloc(sizeof(*ctx), GFP_KERNEL);
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return NULL;
 
