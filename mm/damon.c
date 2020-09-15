@@ -251,6 +251,52 @@ static void damon_ctx_set_paddr_callbacks(struct damon_ctx *ctx)
 	ctx->cleanup = NULL;
 }
 
+static struct damon_ctx *damon_new_ctx(void)
+{
+	struct damon_ctx *ctx;
+
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return NULL;
+
+	ctx->sample_interval = 5 * 1000;
+	ctx->aggr_interval = 100 * 1000;
+	ctx->regions_update_interval = 1000 * 1000;
+	ctx->min_nr_regions = 10;
+	ctx->max_nr_regions = 1000;
+
+	damon_ctx_set_vaddr_callbacks(ctx);
+
+	ktime_get_coarse_ts64(&ctx->last_aggregation);
+	ctx->last_regions_update = ctx->last_aggregation;
+
+	if (damon_set_recording(ctx, 0, "none")) {
+		kfree(ctx);
+		return NULL;
+	}
+
+	mutex_init(&ctx->kdamond_lock);
+
+	INIT_LIST_HEAD(&ctx->targets_list);
+	INIT_LIST_HEAD(&ctx->schemes_list);
+
+	return ctx;
+}
+
+static void damon_destroy_ctx(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next_t;
+	struct damos *s, *next_s;
+
+	damon_for_each_target_safe(t, next_t, ctx)
+		damon_destroy_target(t);
+
+	damon_for_each_scheme_safe(s, next_s, ctx)
+		damon_destroy_scheme(s);
+
+	kfree(ctx);
+}
+
 static unsigned int nr_damon_targets(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
@@ -2476,57 +2522,6 @@ static ssize_t debugfs_nr_contexts_read(struct file *file,
 	mutex_unlock(&damon_lock);
 
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
-}
-
-static struct damon_ctx *damon_new_ctx(void)
-{
-	struct damon_ctx *ctx;
-
-	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
-	if (!ctx)
-		return NULL;
-
-	ctx->sample_interval = 5 * 1000;
-	ctx->aggr_interval = 100 * 1000;
-	ctx->regions_update_interval = 1000 * 1000;
-	ctx->min_nr_regions = 10;
-	ctx->max_nr_regions = 1000;
-
-	ctx->init_target_regions = kdamond_init_vm_regions;
-	ctx->update_target_regions = kdamond_update_vm_regions;
-	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
-	ctx->check_accesses = kdamond_check_vm_accesses;
-	ctx->target_valid = kdamond_vm_target_valid;
-	ctx->cleanup = kdamond_vm_cleanup;
-
-	ktime_get_coarse_ts64(&ctx->last_aggregation);
-	ctx->last_regions_update = ctx->last_aggregation;
-
-	if (damon_set_recording(ctx, 0, "none")) {
-		kfree(ctx);
-		return NULL;
-	}
-
-	mutex_init(&ctx->kdamond_lock);
-
-	INIT_LIST_HEAD(&ctx->targets_list);
-	INIT_LIST_HEAD(&ctx->schemes_list);
-
-	return ctx;
-}
-
-static void damon_destroy_ctx(struct damon_ctx *ctx)
-{
-	struct damon_target *t, *next_t;
-	struct damos *s, *next_s;
-
-	damon_for_each_target_safe(t, next_t, ctx)
-		damon_destroy_target(t);
-
-	damon_for_each_scheme_safe(s, next_s, ctx)
-		damon_destroy_scheme(s);
-
-	kfree(ctx);
 }
 
 static struct dentry **debugfs_dirs;
