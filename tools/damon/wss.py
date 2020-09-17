@@ -17,7 +17,7 @@ def set_argparser(parser):
     parser.add_argument('--range', '-r', type=int, nargs=3,
             metavar=('<start>', '<stop>', '<step>'),
             help='range of wss percentiles to print')
-    parser.add_argument('--thres', '-t', type=int, default=1,
+    parser.add_argument('--acc_thres', '-t', type=int, default=1,
             metavar='<# accesses>',
             help='minimal number of accesses for treated as working set')
     parser.add_argument('--sortby', '-s', choices=['time', 'size'],
@@ -70,7 +70,7 @@ def main(args=None):
             wss = 0
             for p in snapshot:
                 # Ignore regions not accessed
-                if p[1] < args.thres:
+                if p[1] < args.acc_thres:
                     continue
                 wss += p[0]
             wss_dist.append(wss)
