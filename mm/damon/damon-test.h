@@ -14,70 +14,6 @@
 
 #include <kunit/test.h>
 
-static void damon_test_str_to_target_ids(struct kunit *test)
-{
-	char *question;
-	unsigned long *answers;
-	unsigned long expected[] = {12, 35, 46};
-	ssize_t nr_integers = 0, i;
-
-	question = "123";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);
-	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);
-	kfree(answers);
-
-	question = "123abc";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);
-	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);
-	kfree(answers);
-
-	question = "a123";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	kfree(answers);
-
-	question = "12 35";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)2, nr_integers);
-	for (i = 0; i < nr_integers; i++)
-		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);
-	kfree(answers);
-
-	question = "12 35 46";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)3, nr_integers);
-	for (i = 0; i < nr_integers; i++)
-		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);
-	kfree(answers);
-
-	question = "12 35 abc 46";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)2, nr_integers);
-	for (i = 0; i < 2; i++)
-		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);
-	kfree(answers);
-
-	question = "";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	kfree(answers);
-
-	question = "\n";
-	answers = str_to_target_ids(question, strnlen(question, 128),
-			&nr_integers);
-	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);
-	kfree(answers);
-}
-
 static void damon_test_regions(struct kunit *test)
 {
 	struct damon_region *r;
@@ -102,7 +38,7 @@ static void damon_test_regions(struct kunit *test)
 
 static void damon_test_target(struct kunit *test)
 {
-	struct damon_ctx *c = debugfs_ctxs[0];
+	struct damon_ctx *c = damon_new_ctx();
 	struct damon_target *t;
 
 	t = damon_new_target(42);
@@ -114,41 +50,13 @@ static void damon_test_target(struct kunit *test)
 
 	damon_destroy_target(t);
 	KUNIT_EXPECT_EQ(test, 0u, nr_damon_targets(c));
-}
 
-static void damon_test_set_targets(struct kunit *test)
-{
-	struct damon_ctx *ctx = debugfs_ctxs[0];
-	unsigned long ids[] = {1, 2, 3};
-	char buf[64];
-
-	/* Make DAMON consider target id as plain number */
-	ctx->target_valid = NULL;
-
-	damon_set_targets(ctx, ids, 3);
-	sprint_target_ids(ctx, buf, 64);
-	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2 3\n");
-
-	damon_set_targets(ctx, NULL, 0);
-	sprint_target_ids(ctx, buf, 64);
-	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");
-
-	damon_set_targets(ctx, (unsigned long []){1, 2}, 2);
-	sprint_target_ids(ctx, buf, 64);
-	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2\n");
-
-	damon_set_targets(ctx, (unsigned long []){2}, 1);
-	sprint_target_ids(ctx, buf, 64);
-	KUNIT_EXPECT_STREQ(test, (char *)buf, "2\n");
-
-	damon_set_targets(ctx, NULL, 0);
-	sprint_target_ids(ctx, buf, 64);
-	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");
+	damon_destroy_ctx(c);
 }
 
 static void damon_test_set_recording(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_ctxs[0];
+	struct damon_ctx *ctx = damon_new_ctx();
 	int err;
 
 	err = damon_set_recording(ctx, 42, "foo");
@@ -159,58 +67,8 @@ static void damon_test_set_recording(struct kunit *test)
 	damon_set_recording(ctx, 424242, "foo");
 	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 424242u);
 	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo");
-}
 
-static void damon_test_set_init_regions(struct kunit *test)
-{
-	struct damon_ctx *ctx = debugfs_ctxs[0];
-	unsigned long ids[] = {1, 2, 3};
-	/* Each line represents one region in ``<target id> <start> <end>`` */
-	char * const valid_inputs[] = {"2 10 20\n 2   20 30\n2 35 45",
-		"2 10 20\n",
-		"2 10 20\n1 39 59\n1 70 134\n  2  20 25\n",
-		""};
-	/* Reading the file again will show sorted, clean output */
-	char * const valid_expects[] = {"2 10 20\n2 20 30\n2 35 45\n",
-		"2 10 20\n",
-		"1 39 59\n1 70 134\n2 10 20\n2 20 25\n",
-		""};
-	char * const invalid_inputs[] = {"4 10 20\n",	/* target not exists */
-		"2 10 20\n 2 14 26\n",		/* regions overlap */
-		"1 10 20\n2 30 40\n 1 5 8"};	/* not sorted by address */
-	char *input, *expect;
-	int i, rc;
-	char buf[256];
-
-	damon_set_targets(ctx, ids, 3);
-
-	/* Put valid inputs and check the results */
-	for (i = 0; i < ARRAY_SIZE(valid_inputs); i++) {
-		input = valid_inputs[i];
-		expect = valid_expects[i];
-
-		rc = set_init_regions(ctx, input, strnlen(input, 256));
-		KUNIT_EXPECT_EQ(test, rc, 0);
-
-		memset(buf, 0, 256);
-		sprint_init_regions(ctx, buf, 256);
-
-		KUNIT_EXPECT_STREQ(test, (char *)buf, expect);
-	}
-	/* Put invlid inputs and check the return error code */
-	for (i = 0; i < ARRAY_SIZE(invalid_inputs); i++) {
-		input = invalid_inputs[i];
-		pr_info("input: %s\n", input);
-		rc = set_init_regions(ctx, input, strnlen(input, 256));
-		KUNIT_EXPECT_EQ(test, rc, -EINVAL);
-
-		memset(buf, 0, 256);
-		sprint_init_regions(ctx, buf, 256);
-
-		KUNIT_EXPECT_STREQ(test, (char *)buf, "");
-	}
-
-	damon_set_targets(ctx, NULL, 0);
+	damon_destroy_ctx(ctx);
 }
 
 static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
@@ -294,17 +152,6 @@ static void damon_test_three_regions_in_vmas(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 330ul, regions[2].end);
 }
 
-/* Clean up global state of damon */
-static void damon_cleanup_global_state(void)
-{
-	struct damon_target *t, *next;
-
-	damon_for_each_target_safe(t, next, debugfs_ctxs[0])
-		damon_destroy_target(t);
-
-	debugfs_ctxs[0]->rbuf_offset = 0;
-}
-
 /*
  * Test kdamond_reset_aggregated()
  *
@@ -317,7 +164,7 @@ static void damon_cleanup_global_state(void)
  */
 static void damon_test_aggregate(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_ctxs[0];
+	struct damon_ctx *ctx = damon_new_ctx();
 	unsigned long target_ids[] = {1, 2, 3};
 	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };
 	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };
@@ -361,16 +208,15 @@ static void damon_test_aggregate(struct kunit *test)
 	sz = sizeof(struct timespec64) + sizeof(unsigned int) + 3 * sp;
 	KUNIT_EXPECT_EQ(test, (unsigned int)sz, ctx->rbuf_offset);
 
-	damon_set_recording(ctx, 0, "damon.data");
-	damon_cleanup_global_state();
+	damon_destroy_ctx(ctx);
 }
 
 static void damon_test_write_rbuf(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_ctxs[0];
+	struct damon_ctx *ctx = damon_new_ctx();
 	char *data;
 
-	damon_set_recording(debugfs_ctxs[0], 4242, "damon.data");
+	damon_set_recording(ctx, 4242, "damon.data");
 
 	data = "hello";
 	damon_write_rbuf(ctx, data, strnlen(data, 256));
@@ -380,7 +226,8 @@ static void damon_test_write_rbuf(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ctx->rbuf_offset, 5u);
 
 	KUNIT_EXPECT_STREQ(test, (char *)ctx->rbuf, data);
-	damon_set_recording(debugfs_ctxs[0], 0, "damon.data");
+
+	damon_destroy_ctx(ctx);
 }
 
 static struct damon_region *__nth_region_of(struct damon_target *t, int idx)
@@ -423,6 +270,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 				struct damon_addr_range *three_regions,
 				unsigned long *expected, int nr_expected)
 {
+	struct damon_ctx *ctx = damon_new_ctx();
 	struct damon_target *t;
 	struct damon_region *r;
 	int i;
@@ -432,9 +280,9 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 		r = damon_new_region(regions[i * 2], regions[i * 2 + 1]);
 		damon_add_region(r, t);
 	}
-	damon_add_target(debugfs_ctxs[0], t);
+	damon_add_target(ctx, t);
 
-	damon_apply_three_regions(debugfs_ctxs[0], t, three_regions);
+	damon_apply_three_regions(ctx, t, three_regions);
 
 	for (i = 0; i < nr_expected / 2; i++) {
 		r = __nth_region_of(t, i);
@@ -442,7 +290,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 		KUNIT_EXPECT_EQ(test, r->ar.end, expected[i * 2 + 1]);
 	}
 
-	damon_cleanup_global_state();
+	damon_destroy_ctx(ctx);
 }
 
 /*
@@ -541,7 +389,7 @@ static void damon_test_apply_three_regions4(struct kunit *test)
 
 static void damon_test_split_evenly(struct kunit *test)
 {
-	struct damon_ctx *c = debugfs_ctxs[0];
+	struct damon_ctx *c = damon_new_ctx();
 	struct damon_target *t;
 	struct damon_region *r;
 	unsigned long i;
@@ -591,17 +439,19 @@ static void damon_test_split_evenly(struct kunit *test)
 		KUNIT_EXPECT_EQ(test, r->ar.end, 6ul);
 	}
 	damon_free_target(t);
+	damon_destroy_ctx(c);
 }
 
 static void damon_test_split_at(struct kunit *test)
 {
+	struct damon_ctx *c = damon_new_ctx();
 	struct damon_target *t;
 	struct damon_region *r;
 
 	t = damon_new_target(42);
 	r = damon_new_region(0, 100);
 	damon_add_region(r, t);
-	damon_split_region_at(debugfs_ctxs[0], r, 25);
+	damon_split_region_at(c, r, 25);
 	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
 	KUNIT_EXPECT_EQ(test, r->ar.end, 25ul);
 
@@ -610,6 +460,7 @@ static void damon_test_split_at(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, r->ar.end, 100ul);
 
 	damon_free_target(t);
+	damon_destroy_ctx(c);
 }
 
 static void damon_test_merge_two(struct kunit *test)
@@ -673,31 +524,30 @@ static void damon_test_merge_regions_of(struct kunit *test)
 
 static void damon_test_split_regions_of(struct kunit *test)
 {
+	struct damon_ctx *c = damon_new_ctx();
 	struct damon_target *t;
 	struct damon_region *r;
 
 	t = damon_new_target(42);
 	r = damon_new_region(0, 22);
 	damon_add_region(r, t);
-	damon_split_regions_of(debugfs_ctxs[0], t, 2);
+	damon_split_regions_of(c, t, 2);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 2u);
 	damon_free_target(t);
 
 	t = damon_new_target(42);
 	r = damon_new_region(0, 220);
 	damon_add_region(r, t);
-	damon_split_regions_of(debugfs_ctxs[0], t, 4);
+	damon_split_regions_of(c, t, 4);
 	KUNIT_EXPECT_EQ(test, nr_damon_regions(t), 4u);
 	damon_free_target(t);
+	damon_destroy_ctx(c);
 }
 
 static struct kunit_case damon_test_cases[] = {
-	KUNIT_CASE(damon_test_str_to_target_ids),
 	KUNIT_CASE(damon_test_target),
 	KUNIT_CASE(damon_test_regions),
-	KUNIT_CASE(damon_test_set_targets),
 	KUNIT_CASE(damon_test_set_recording),
-	KUNIT_CASE(damon_test_set_init_regions),
 	KUNIT_CASE(damon_test_three_regions_in_vmas),
 	KUNIT_CASE(damon_test_aggregate),
 	KUNIT_CASE(damon_test_write_rbuf),
