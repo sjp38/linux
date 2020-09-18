@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+menu "Data Access Monitoring"
+
+config DAMON
+	bool "Data Access Monitor"
+	help
+	  This feature allows to monitor access frequency of each memory
+	  region. The information can be useful for performance-centric DRAM
+	  level memory management.
+
+	  See https://damonitor.github.io/doc/html/latest-damon/index.html for
+	  more information.
+	  If unsure, say N.
+
+config DAMON_KUNIT_TEST
+	bool "Test for damon"
+	depends on DAMON && KUNIT
+	help
+	  This builds the DAMON Kunit test suite.
+
+	  For more information on KUnit and unit tests in general, please refer
+	  to the KUnit documentation.
+
+	  If unsure, say N.
+
+config DAMON_PRIMITIVES
+	bool "DAMON primitives for virtual/physical address spaces monitoring"
+	depends on DAMON && MMU && !IDLE_PAGE_TRACKING
+	select PAGE_EXTENSION if !64BIT
+	select PAGE_IDLE_FLAG
+	help
+	  This builds the default data access monitoring primitives for DAMON.
+	  The primitives supports virtual address spaces and physical address
+	  spaces using PG_idle flag.
+
+config DAMON_PRIMITIVES_KUNIT_TEST
+	bool "Test for DAMON primitives"
+	depends on DAMON_PRIMITIVES && KUNIT
+	help
+	  This builds the DAMON PRIMITIVES Kunit test suite.
+
+	  For more information on KUnit and unit tests in general, please refer
+	  to the KUnit documentation.
+
+	  If unsure, say N.
+
+config DAMON_DBGFS
+	bool "DAMON debugfs interface"
+	depends on DAMON_PRIMITIVES && DEBUG_FS
+	help
+	  This builds the debugfs interface for DAMON.  The user space admins
+	  can use the interface for arbitrary data access monitoring.
+
+	  If unsure, say N.
+
+config DAMON_DBGFS_KUNIT_TEST
+	bool "Test for damon debugfs interface"
+	depends on DAMON_DBGFS && KUNIT
+	help
+	  This builds the DAMON debugfs interface Kunit test suite.
+
+	  For more information on KUnit and unit tests in general, please refer
+	  to the KUnit documentation.
+
+	  If unsure, say N.
+
+endmenu

@@ -10,7 +10,6 @@
 #ifndef _DAMON_H_
 #define _DAMON_H_
 
-#include <linux/random.h>
 #include <linux/mutex.h>
 #include <linux/time64.h>
 #include <linux/types.h>
@@ -234,20 +233,58 @@ struct damon_ctx {
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
 
-/* Reference callback implementations for virtual memory */
-void kdamond_init_vm_regions(struct damon_ctx *ctx);
-void kdamond_update_vm_regions(struct damon_ctx *ctx);
-void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
-unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
-bool kdamond_vm_target_valid(struct damon_target *t);
-void kdamond_vm_cleanup(struct damon_ctx *ctx);
+#ifdef CONFIG_DAMON
 
-/* Reference callback implementations for physical memory */
-void kdamond_init_phys_regions(struct damon_ctx *ctx);
-void kdamond_update_phys_regions(struct damon_ctx *ctx);
-void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx);
-unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx);
+#define MIN_RECORD_BUFFER_LEN	1024
+#define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
+#define MAX_RFILE_PATH_LEN	256
 
+#define damon_next_region(r) \
+	(container_of(r->list.next, struct damon_region, list))
+
+#define damon_prev_region(r) \
+	(container_of(r->list.prev, struct damon_region, list))
+
+#define damon_for_each_region(r, t) \
+	list_for_each_entry(r, &t->regions_list, list)
+
+#define damon_for_each_region_safe(r, next, t) \
+	list_for_each_entry_safe(r, next, &t->regions_list, list)
+
+#define damon_for_each_target(t, ctx) \
+	list_for_each_entry(t, &(ctx)->targets_list, list)
+
+#define damon_for_each_target_safe(t, next, ctx) \
+	list_for_each_entry_safe(t, next, &(ctx)->targets_list, list)
+
+#define damon_for_each_scheme(s, ctx) \
+	list_for_each_entry(s, &(ctx)->schemes_list, list)
+
+#define damon_for_each_scheme_safe(s, next, ctx) \
+	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
+
+struct damon_region *damon_new_region(unsigned long start, unsigned long end);
+inline void damon_insert_region(struct damon_region *r,
+		struct damon_region *prev, struct damon_region *next);
+void damon_add_region(struct damon_region *r, struct damon_target *t);
+void damon_destroy_region(struct damon_region *r);
+
+struct damos *damon_new_scheme(
+		unsigned long min_sz_region, unsigned long max_sz_region,
+		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
+		unsigned int min_age_region, unsigned int max_age_region,
+		enum damos_action action);
+void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
+void damon_destroy_scheme(struct damos *s);
+
+struct damon_target *damon_new_target(unsigned long id);
+void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
+void damon_free_target(struct damon_target *t);
+void damon_destroy_target(struct damon_target *t);
+unsigned int damon_nr_regions(struct damon_target *t);
+
+struct damon_ctx *damon_new_ctx(void);
+void damon_destroy_ctx(struct damon_ctx *ctx);
 int damon_set_targets(struct damon_ctx *ctx,
 		unsigned long *ids, ssize_t nr_ids);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
@@ -257,9 +294,33 @@ int damon_set_schemes(struct damon_ctx *ctx,
 			struct damos **schemes, ssize_t nr_schemes);
 int damon_set_recording(struct damon_ctx *ctx,
 				unsigned int rbuf_len, char *rfile_path);
+int damon_nr_running_ctxs(void);
+
 int damon_start(struct damon_ctx *ctxs, int nr_ctxs);
 int damon_stop(struct damon_ctx *ctxs, int nr_ctxs);
 int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
 int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
+
+#endif	/* CONFIG_DAMON */
+
+#ifdef CONFIG_DAMON_PRIMITIVES
+
+/* Reference callback implementations for virtual memory */
+void kdamond_init_vm_regions(struct damon_ctx *ctx);
+void kdamond_update_vm_regions(struct damon_ctx *ctx);
+void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
+unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
+bool kdamond_vm_target_valid(struct damon_target *t);
+void kdamond_vm_cleanup(struct damon_ctx *ctx);
+void damon_set_vaddr_primitives(struct damon_ctx *ctx);
+
+/* Reference callback implementations for physical memory */
+void kdamond_init_phys_regions(struct damon_ctx *ctx);
+void kdamond_update_phys_regions(struct damon_ctx *ctx);
+void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx);
+unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx);
+void damon_set_paddr_primitives(struct damon_ctx *ctx);
+
+#endif	/* CONFIG_DAMON_PRIMITIVES */
 
 #endif
