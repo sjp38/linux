@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Data Access Monitor
+ * Data Access Monitoring Low Level Primitives
  *
  * Author: SeongJae Park <sjpark@amazon.de>
  *
  * This file is constructed in below parts.
  *
- * - Functions and macros for DAMON data structures
  * - Functions for the initial monitoring target regions construction
  * - Functions for the dynamic monitoring target regions update
  * - Functions for the access checking of the regions
  * - Functions for the target validity check and cleanup
- * - Functions for DAMON core logics and features
- * - Functions for the DAMON programming interface
- * - Functions for the initialization
  */
 
 #define pr_fmt(fmt) "damon: " fmt
@@ -794,4 +790,4 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 	}
 }
 
-#include "core-test.h"
+#include "primitives-test.h"

@@ -281,6 +281,7 @@ void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
 void damon_destroy_scheme(struct damos *s);
 struct damon_target *damon_new_target(unsigned long id);
 void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
+void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t);
 struct damon_region *damon_new_region(unsigned long start, unsigned long end);
 void damon_add_region(struct damon_region *r, struct damon_target *t);

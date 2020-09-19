@@ -136,7 +136,7 @@ static void damon_del_target(struct damon_target *t)
 	list_del(&t->list);
 }
 
-static void damon_free_target(struct damon_target *t)
+void damon_free_target(struct damon_target *t)
 {
 	struct damon_region *r, *next;
 
