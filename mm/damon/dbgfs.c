@@ -877,4 +877,4 @@ static int __init damon_dbgfs_init(void)
 
 module_init(damon_dbgfs_init);
 
-#include "damon-dbgfs-test.h"
+#include "dbgfs-test.h"
