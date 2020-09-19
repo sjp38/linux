@@ -859,7 +859,7 @@ static int __init damon_debugfs_init(void)
  * Functions for the initialization
  */
 
-static int __init damon_init(void)
+static int __init damon_dbgfs_init(void)
 {
 	int rc;
 
@@ -875,6 +875,6 @@ static int __init damon_init(void)
 	return rc;
 }
 
-module_init(damon_init);
+module_init(damon_dbgfs_init);
 
 #include "damon-dbgfs-test.h"
