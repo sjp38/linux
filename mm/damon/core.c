@@ -2,8 +2,6 @@
 /*
  * Data Access Monitor
  *
- * Copyright 2019-2020 Amazon.com, Inc. or its affiliates.
- *
  * Author: SeongJae Park <sjpark@amazon.de>
  *
  * This file is constructed in below parts.
@@ -15,7 +13,6 @@
  * - Functions for the target validity check and cleanup
  * - Functions for DAMON core logics and features
  * - Functions for the DAMON programming interface
- * - Functions for the DAMON debugfs interface
  * - Functions for the initialization
  */
 
@@ -23,7 +20,6 @@
 
 #include <asm-generic/mman-common.h>
 #include <linux/damon.h>
-#include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/memory_hotplug.h>
