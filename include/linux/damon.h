@@ -10,7 +10,6 @@
 #ifndef _DAMON_H_
 #define _DAMON_H_
 
-#include <linux/random.h>
 #include <linux/mutex.h>
 #include <linux/time64.h>
 #include <linux/types.h>
@@ -278,8 +277,15 @@ void damon_set_paddr_primitives(struct damon_ctx *ctx);
 #define damon_for_each_scheme_safe(s, next, ctx) \
 	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
 
+void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
+void damon_destroy_scheme(struct damos *s);
+struct damon_target *damon_new_target(unsigned long id);
+void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
+void damon_destroy_target(struct damon_target *t);
 struct damon_region *damon_new_region(unsigned long start, unsigned long end);
 void damon_add_region(struct damon_region *r, struct damon_target *t);
+inline void damon_insert_region(struct damon_region *r,
+		struct damon_region *prev, struct damon_region *next);
 void damon_destroy_region(struct damon_region *r);
 unsigned int nr_damon_regions(struct damon_target *t);
 struct damos *damon_new_scheme(
