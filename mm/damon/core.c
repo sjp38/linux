@@ -22,16 +22,9 @@
 #include <linux/damon.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
-#include <linux/memory_hotplug.h>
-#include <linux/mm.h>
-#include <linux/mmu_notifier.h>
 #include <linux/module.h>
-#include <linux/page_idle.h>
-#include <linux/pagemap.h>
 #include <linux/random.h>
-#include <linux/rmap.h>
 #include <linux/sched/mm.h>
-#include <linux/sched/task.h>
 #include <linux/slab.h>
 
 #include "damon.h"
