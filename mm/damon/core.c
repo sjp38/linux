@@ -7,10 +7,6 @@
  * This file is constructed in below parts.
  *
  * - Functions and macros for DAMON data structures
- * - Functions for the initial monitoring target regions construction
- * - Functions for the dynamic monitoring target regions update
- * - Functions for the access checking of the regions
- * - Functions for the target validity check and cleanup
  * - Functions for DAMON core logics and features
  * - Functions for the DAMON programming interface
  * - Functions for the initialization
