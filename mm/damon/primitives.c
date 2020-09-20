@@ -16,8 +16,6 @@
 
 #include <asm-generic/mman-common.h>
 #include <linux/damon.h>
-#include <linux/delay.h>
-#include <linux/kthread.h>
 #include <linux/memory_hotplug.h>
 #include <linux/mm.h>
 #include <linux/mmu_notifier.h>
