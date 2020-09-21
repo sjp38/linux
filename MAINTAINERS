@@ -4759,8 +4759,7 @@ F:	Documentation/admin-guide/mm/damon/*
 F:	Documentation/vm/damon/*
 F:	include/linux/damon.h
 F:	include/trace/events/damon.h
-F:	mm/damon-test.h
-F:	mm/damon.c
+F:	mm/damon/*
 F:	tools/damon/*
 F:	tools/testing/selftests/damon/*
 
