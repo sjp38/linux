@@ -21,13 +21,13 @@ User API
 ========
 
 The idle page tracking API is located at ``/sys/kernel/mm/page_idle``.
-Currently, it consists of the only read-write file,
-``/sys/kernel/mm/page_idle/bitmap``.
+Currently, it consists of two read-write file,
+``/sys/kernel/mm/page_idle/bitmap`` and ``/sys/kernel/mm/page_idle/lock``.
 
-The file implements a bitmap where each bit corresponds to a memory page. The
-bitmap is represented by an array of 8-byte integers, and the page at PFN #i is
-mapped to bit #i%64 of array element #i/64, byte order is native. When a bit is
-set, the corresponding page is idle.
+The ``bitmap`` file implements a bitmap where each bit corresponds to a memory
+page. The bitmap is represented by an array of 8-byte integers, and the page at
+PFN #i is mapped to bit #i%64 of array element #i/64, byte order is native.
+When a bit is set, the corresponding page is idle.
 
 A page is considered idle if it has not been accessed since it was marked idle
 (for more details on what "accessed" actually means see the :ref:`Implementation
@@ -73,6 +73,14 @@ their idle flag cleared in the interim.
 See :ref:`Documentation/admin-guide/mm/pagemap.rst <pagemap>` for more
 information about ``/proc/pid/pagemap``, ``/proc/kpageflags``, and
 ``/proc/kpagecgroup``.
+
+The ``lock`` file represents existence of current user of the ``bitmap`` file
+for avoidance of interference from concurrent users.  If the content of the
+``lock`` file is ``1``, it means the ``bitmap`` file is currently being used by
+someone.  While the content of the ``lock`` file is ``1``, writing ``1`` to the
+file fails.  Therefore, users should first successfully write ``1`` to the
+``lock`` file before starting use of ``bitmap`` file and write ``0`` to the
+``lock`` file after they finished use of the ``bitmap`` file.
 
 .. _impl_details:
 
