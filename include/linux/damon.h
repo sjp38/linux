@@ -249,6 +249,7 @@ void kdamond_init_phys_regions(struct damon_ctx *ctx);
 void kdamond_update_phys_regions(struct damon_ctx *ctx);
 void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx);
 unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx);
+void kdamond_phys_cleanup(struct damon_ctx *ctx);
 void damon_set_paddr_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_PRIMITIVES */
