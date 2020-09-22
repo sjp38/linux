@@ -7,7 +7,7 @@
  * Author: SeongJae Park <sjpark@amazon.de>
  */
 
-#ifdef CONFIG_DAMON_KUNIT_TEST
+#ifdef CONFIG_DAMON_PRIMITIVES_KUNIT_TEST
 
 #ifndef _DAMON_PRIMITIVES_TEST_H
 #define _DAMON_PRIMITIVES_TEST_H
@@ -325,4 +325,4 @@ kunit_test_suite(damon_test_suite);
 
 #endif /* _DAMON_PRIMITIVES_TEST_H */
 
-#endif	/* CONFIG_DAMON_KUNIT_TEST */
+#endif	/* CONFIG_DAMON_PRIMITIVES_KUNIT_TEST */
