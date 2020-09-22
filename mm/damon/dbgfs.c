@@ -12,6 +12,7 @@
 #include <linux/file.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/page_idle.h>
 #include <linux/slab.h>
 
 struct debugfs_recorder {
@@ -24,6 +25,7 @@ struct debugfs_recorder {
 /* Monitoring contexts for debugfs interface users. */
 static struct damon_ctx **debugfs_ctxs;
 static int debugfs_nr_ctxs = 1;
+static int debugfs_nr_terminated_ctxs;
 
 static DEFINE_MUTEX(damon_dbgfs_lock);
 
@@ -102,9 +104,20 @@ static void debugfs_init_vm_regions(struct damon_ctx *ctx)
 	kdamond_init_vm_regions(ctx);
 }
 
+static void debugfs_unlock_page_idle_lock(void)
+{
+	mutex_lock(&damon_dbgfs_lock);
+	if (++debugfs_nr_terminated_ctxs == debugfs_nr_ctxs) {
+		debugfs_nr_terminated_ctxs = 0;
+		mutex_unlock(&page_idle_lock);
+	}
+	mutex_unlock(&damon_dbgfs_lock);
+}
+
 static void debugfs_vm_cleanup(struct damon_ctx *ctx)
 {
 	debugfs_flush_rbuffer(ctx->private);
+	debugfs_unlock_page_idle_lock();
 	kdamond_vm_cleanup(ctx);
 }
 
@@ -116,6 +129,8 @@ static void debugfs_init_phys_regions(struct damon_ctx *ctx)
 static void debugfs_phys_cleanup(struct damon_ctx *ctx)
 {
 	debugfs_flush_rbuffer(ctx->private);
+	debugfs_unlock_page_idle_lock();
+
 }
 
 /*
@@ -193,6 +208,21 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 	return kbuf;
 }
 
+static int debugfs_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+{
+	int rc;
+
+	if (!mutex_trylock(&page_idle_lock))
+		return -EBUSY;
+
+	rc = damon_start_ctx_ptrs(ctxs, nr_ctxs);
+	if (rc)
+		mutex_unlock(&page_idle_lock);
+
+	return rc;
+}
+
+
 static ssize_t debugfs_monitor_on_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -208,7 +238,7 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = damon_start_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
+		err = debugfs_start_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else if (!strncmp(kbuf, "off", count))
 		err = damon_stop_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
 	else

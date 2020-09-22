@@ -30,6 +30,10 @@
 
 #include "damon.h"
 
+#ifndef CONFIG_IDLE_PAGE_TRACKING
+DEFINE_MUTEX(page_idle_lock);
+#endif
+
 /* Minimal region size.  Every damon_region is aligned by this. */
 #ifndef CONFIG_DAMON_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
@@ -776,6 +780,9 @@ bool kdamond_vm_target_valid(struct damon_target *t)
 {
 	struct task_struct *task;
 
+	if (!mutex_is_locked(&page_idle_lock))
+		return false;
+
 	task = damon_get_task_struct(t);
 	if (task) {
 		put_task_struct(task);
@@ -793,6 +800,13 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 		put_pid((struct pid *)t->id);
 		damon_destroy_target(t);
 	}
+}
+
+bool kdamond_phys_target_valid(struct damon_target *t)
+{
+	if (!mutex_is_locked(&page_idle_lock))
+		return false;
+	return true;
 }
 
 #ifndef CONFIG_ADVISE_SYSCALLS
