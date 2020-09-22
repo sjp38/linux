@@ -8,6 +8,8 @@
 
 #ifdef CONFIG_PAGE_IDLE_FLAG
 
+extern struct mutex page_idle_lock;
+
 #ifdef CONFIG_64BIT
 static inline bool page_is_young(struct page *page)
 {

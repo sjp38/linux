@@ -30,6 +30,13 @@
 
 #include "damon.h"
 
+#ifndef CONFIG_IDLE_PAGE_TRACKING
+DEFINE_MUTEX(page_idle_lock);
+#endif
+
+static DEFINE_MUTEX(damon_primitives_lock);
+static bool running;
+
 /* Minimal region size.  Every damon_region is aligned by this. */
 #ifndef CONFIG_DAMON_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
@@ -286,10 +293,32 @@ static void damon_init_vm_regions_of(struct damon_ctx *c,
 	}
 }
 
+static void primitives_mark_start(void)
+{
+	mutex_lock(&damon_primitives_lock);
+	if (!running) {
+		running = true;
+		mutex_lock(&page_idle_lock);
+	}
+	mutex_unlock(&damon_primitives_lock);
+}
+
+static void primitives_mark_end(void)
+{
+	mutex_lock(&damon_primitives_lock);
+	if (damon_nr_running_ctxs() == 1) {
+		mutex_unlock(&page_idle_lock);
+		running = false;
+	}
+	mutex_unlock(&damon_primitives_lock);
+}
+
 /* Initialize '->regions_list' of every target (task) */
 void kdamond_init_vm_regions(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
+
+	primitives_mark_start();
 
 	damon_for_each_target(t, ctx) {
 		/* the user may set the target regions as they want */
@@ -308,6 +337,7 @@ void kdamond_init_vm_regions(struct damon_ctx *ctx)
  */
 void kdamond_init_phys_regions(struct damon_ctx *ctx)
 {
+	primitives_mark_start();
 }
 
 /*
@@ -793,6 +823,13 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 		put_pid((struct pid *)t->id);
 		damon_destroy_target(t);
 	}
+
+	primitives_mark_end();
+}
+
+void kdamond_phys_cleanup(struct damon_ctx *ctx)
+{
+	primitives_mark_end();
 }
 
 #ifndef CONFIG_ADVISE_SYSCALLS
