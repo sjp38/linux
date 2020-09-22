@@ -16,7 +16,7 @@
 #define BITMAP_CHUNK_SIZE	sizeof(u64)
 #define BITMAP_CHUNK_BITS	(BITMAP_CHUNK_SIZE * BITS_PER_BYTE)
 
-static DEFINE_MUTEX(page_idle_lock);
+DEFINE_MUTEX(page_idle_lock);
 
 /*
  * Idle page tracking only considers user memory pages, for other types of
