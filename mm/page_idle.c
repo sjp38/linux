@@ -16,6 +16,8 @@
 #define BITMAP_CHUNK_SIZE	sizeof(u64)
 #define BITMAP_CHUNK_BITS	(BITMAP_CHUNK_SIZE * BITS_PER_BYTE)
 
+static DEFINE_MUTEX(page_idle_lock);
+
 /*
  * Idle page tracking only considers user memory pages, for other types of
  * pages the idle flag is always unset and an attempt to set it is silently
@@ -169,6 +171,9 @@ static ssize_t page_idle_bitmap_write(struct file *file, struct kobject *kobj,
 	unsigned long pfn, end_pfn;
 	int bit;
 
+	if (!mutex_is_locked(&page_idle_lock))
+		return -EPERM;
+
 	if (pos % BITMAP_CHUNK_SIZE || count % BITMAP_CHUNK_SIZE)
 		return -EINVAL;
 
@@ -197,17 +202,52 @@ static ssize_t page_idle_bitmap_write(struct file *file, struct kobject *kobj,
 	return (char *)in - buf;
 }
 
+static ssize_t page_idle_lock_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", mutex_is_locked(&page_idle_lock));
+}
+
+static ssize_t page_idle_lock_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	bool do_lock;
+	int ret;
+
+	ret = kstrtobool(buf, &do_lock);
+	if (ret < 0)
+		return ret;
+
+	if (do_lock) {
+		if (!mutex_trylock(&page_idle_lock))
+			return -EBUSY;
+	} else {
+		mutex_unlock(&page_idle_lock);
+	}
+
+	return count;
+}
+
 static struct bin_attribute page_idle_bitmap_attr =
 		__BIN_ATTR(bitmap, 0600,
 			   page_idle_bitmap_read, page_idle_bitmap_write, 0);
+
+static struct kobj_attribute page_idle_lock_attr =
+		__ATTR(lock, 0600, page_idle_lock_show, page_idle_lock_store);
 
 static struct bin_attribute *page_idle_bin_attrs[] = {
 	&page_idle_bitmap_attr,
 	NULL,
 };
 
+static struct attribute *page_idle_lock_attrs[] = {
+	&page_idle_lock_attr.attr,
+	NULL,
+};
+
 static const struct attribute_group page_idle_attr_group = {
 	.bin_attrs = page_idle_bin_attrs,
+	.attrs = page_idle_lock_attrs,
 	.name = "page_idle",
 };
 
