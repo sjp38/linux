@@ -879,6 +879,12 @@ static void reclaim_memory(struct xenbus_device *dev)
 
 /* ** Connection ** */
 
+/* Enable the persistent grants feature. */
+static bool feature_persistent = true;
+module_param(feature_persistent, bool, 0644);
+MODULE_PARM_DESC(feature_persistent,
+		"Enables the persistent grants feature");
+
 /*
  * Write the physical details regarding the block device to the store, and
  * switch to Connected state.
@@ -906,11 +912,15 @@ again:
 
 	xen_blkbk_barrier(xbt, be, be->blkif->vbd.flush_support);
 
-	err = xenbus_printf(xbt, dev->nodename, "feature-persistent", "%u", 1);
-	if (err) {
-		xenbus_dev_fatal(dev, err, "writing %s/feature-persistent",
-				 dev->nodename);
-		goto abort;
+	if (feature_persistent) {
+		err = xenbus_printf(xbt, dev->nodename, "feature-persistent",
+				"%u", feature_persistent);
+		if (err) {
+			xenbus_dev_fatal(dev, err,
+					"writing %s/feature-persistent",
+					dev->nodename);
+			goto abort;
+		}
 	}
 
 	err = xenbus_printf(xbt, dev->nodename, "sectors", "%llu",
@@ -1093,8 +1103,12 @@ static int connect_ring(struct backend_info *be)
 		xenbus_dev_fatal(dev, err, "unknown fe protocol %s", protocol);
 		return -ENOSYS;
 	}
-	pers_grants = xenbus_read_unsigned(dev->otherend, "feature-persistent",
-					   0);
+	if (feature_persistent)
+		pers_grants = xenbus_read_unsigned(dev->otherend,
+				"feature-persistent", 0);
+	else
+		pers_grants = 0;
+
 	blkif->vbd.feature_gnt_persistent = pers_grants;
 	blkif->vbd.overflow_max_grants = 0;
 
