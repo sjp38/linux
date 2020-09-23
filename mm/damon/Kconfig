@@ -47,7 +47,7 @@ config DAMON_PRIMITIVES_KUNIT_TEST
 
 config DAMON_DBGFS
 	bool "DAMON debugfs interface"
-	depends on DAMON_PRIMITIVES
+	depends on DAMON_PRIMITIVES && DEBUG_FS
 	help
 	  This builds the debugfs interface for DAMON.  The user space admins
 	  can use the interface for arbitrary data access monitoring.
