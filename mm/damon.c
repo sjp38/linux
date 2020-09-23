@@ -1614,8 +1614,8 @@ static int __damon_start(struct damon_ctx *ctx)
 	if (!ctx->kdamond) {
 		err = 0;
 		ctx->kdamond_stop = false;
-		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond.%d.%d",
-				current ? current->pid : 0, nr_running_ctxs);
+		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond.%d",
+				nr_running_ctxs);
 		if (IS_ERR(ctx->kdamond))
 			err = PTR_ERR(ctx->kdamond);
 		else
