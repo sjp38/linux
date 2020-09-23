@@ -187,26 +187,6 @@ void damon_destroy_scheme(struct damos *s)
 	damon_free_scheme(s);
 }
 
-void damon_set_vaddr_primitives(struct damon_ctx *ctx)
-{
-	ctx->init_target_regions = kdamond_init_vm_regions;
-	ctx->update_target_regions = kdamond_update_vm_regions;
-	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
-	ctx->check_accesses = kdamond_check_vm_accesses;
-	ctx->target_valid = kdamond_vm_target_valid;
-	ctx->cleanup = kdamond_vm_cleanup;
-}
-
-void damon_set_paddr_primitives(struct damon_ctx *ctx)
-{
-	ctx->init_target_regions = kdamond_init_phys_regions;
-	ctx->update_target_regions = kdamond_update_phys_regions;
-	ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
-	ctx->check_accesses = kdamond_check_phys_accesses;
-	ctx->target_valid = NULL;
-	ctx->cleanup = NULL;
-}
-
 struct damon_ctx *damon_new_ctx(void)
 {
 	struct damon_ctx *ctx;
@@ -220,8 +200,6 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->regions_update_interval = 1000 * 1000;
 	ctx->min_nr_regions = 10;
 	ctx->max_nr_regions = 1000;
-
-	damon_set_vaddr_primitives(ctx);
 
 	ktime_get_coarse_ts64(&ctx->last_aggregation);
 	ctx->last_regions_update = ctx->last_aggregation;

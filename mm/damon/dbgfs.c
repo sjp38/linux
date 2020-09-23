@@ -735,6 +735,7 @@ static ssize_t debugfs_nr_contexts_write(struct file *file,
 			ret = -ENOMEM;
 			break;
 		}
+		damon_set_vaddr_primitives(debugfs_ctxs[i]);
 
 		if (debugfs_fill_ctx_dir(debugfs_dirs[i], debugfs_ctxs[i])) {
 			ret = -ENOMEM;
@@ -867,6 +868,7 @@ static int __init damon_dbgfs_init(void)
 	debugfs_ctxs[0] = damon_new_ctx();
 	if (!debugfs_ctxs[0])
 		return -ENOMEM;
+	damon_set_vaddr_primitives(debugfs_ctxs[0]);
 
 	rc = damon_debugfs_init();
 	if (rc)

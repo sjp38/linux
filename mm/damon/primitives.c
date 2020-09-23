@@ -788,4 +788,24 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 	}
 }
 
+void damon_set_vaddr_primitives(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_vm_regions;
+	ctx->update_target_regions = kdamond_update_vm_regions;
+	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
+	ctx->check_accesses = kdamond_check_vm_accesses;
+	ctx->target_valid = kdamond_vm_target_valid;
+	ctx->cleanup = kdamond_vm_cleanup;
+}
+
+void damon_set_paddr_primitives(struct damon_ctx *ctx)
+{
+	ctx->init_target_regions = kdamond_init_phys_regions;
+	ctx->update_target_regions = kdamond_update_phys_regions;
+	ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
+	ctx->check_accesses = kdamond_check_phys_accesses;
+	ctx->target_valid = NULL;
+	ctx->cleanup = kdamond_phys_cleanup;
+}
+
 #include "primitives-test.h"

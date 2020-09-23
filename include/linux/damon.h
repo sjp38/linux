@@ -233,6 +233,8 @@ struct damon_ctx {
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
 
+#ifdef CONFIG_DAMON_PRIMITIVES
+
 /* Reference callback implementations for virtual memory */
 void kdamond_init_vm_regions(struct damon_ctx *ctx);
 void kdamond_update_vm_regions(struct damon_ctx *ctx);
@@ -248,6 +250,8 @@ void kdamond_update_phys_regions(struct damon_ctx *ctx);
 void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx);
 unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx);
 void damon_set_paddr_primitives(struct damon_ctx *ctx);
+
+#endif	/* CONFIG_DAMON_PRIMITIVES */
 
 #define MIN_RECORD_BUFFER_LEN	1024
 #define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
@@ -276,6 +280,8 @@ void damon_set_paddr_primitives(struct damon_ctx *ctx);
 
 #define damon_for_each_scheme_safe(s, next, ctx) \
 	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
+
+#ifdef CONFIG_DAMON
 
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
 void damon_destroy_scheme(struct damos *s);
@@ -310,5 +316,7 @@ int damon_start(struct damon_ctx *ctxs, int nr_ctxs);
 int damon_stop(struct damon_ctx *ctxs, int nr_ctxs);
 int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
 int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
+
+#endif	/* CONFIG_DAMON */
 
 #endif
