@@ -38,8 +38,11 @@
 #endif
 
 /*
- * Functions for the initial monitoring target regions construction
+ * 't->id' should be the pointer to the relevant 'struct pid' having reference
+ * count.  Caller must put the returned task, unless it is NULL.
  */
+#define damon_get_task_struct(t) \
+	(get_pid_task((struct pid *)t->id, PIDTYPE_PID))
 
 /*
  * Get the mm_struct of the given target
@@ -61,6 +64,10 @@ struct mm_struct *damon_get_mm(struct damon_target *t)
 	put_task_struct(task);
 	return mm;
 }
+
+/*
+ * Functions for the initial monitoring target regions construction
+ */
 
 /*
  * Size-evenly split a region into 'nr_pieces' small regions
@@ -788,6 +795,68 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 	}
 }
 
+#ifndef CONFIG_ADVISE_SYSCALLS
+static int damos_madvise(struct damon_target *target, struct damon_region *r,
+			int behavior)
+{
+	return -EINVAL;
+}
+#else
+static int damos_madvise(struct damon_target *target, struct damon_region *r,
+			int behavior)
+{
+	struct task_struct *t;
+	struct mm_struct *mm;
+	int ret = -ENOMEM;
+
+	t = damon_get_task_struct(target);
+	if (!t)
+		goto out;
+	mm = damon_get_mm(target);
+	if (!mm)
+		goto put_task_out;
+
+	ret = do_madvise(t, mm, PAGE_ALIGN(r->ar.start),
+			PAGE_ALIGN(r->ar.end - r->ar.start), behavior);
+	mmput(mm);
+put_task_out:
+	put_task_struct(t);
+out:
+	return ret;
+}
+#endif	/* CONFIG_ADVISE_SYSCALLS */
+
+int kdamond_vm_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
+		struct damon_region *r, struct damos *scheme)
+{
+	int madv_action;
+
+	switch (scheme->action) {
+	case DAMOS_WILLNEED:
+		madv_action = MADV_WILLNEED;
+		break;
+	case DAMOS_COLD:
+		madv_action = MADV_COLD;
+		break;
+	case DAMOS_PAGEOUT:
+		madv_action = MADV_PAGEOUT;
+		break;
+	case DAMOS_HUGEPAGE:
+		madv_action = MADV_HUGEPAGE;
+		break;
+	case DAMOS_NOHUGEPAGE:
+		madv_action = MADV_NOHUGEPAGE;
+		break;
+	case DAMOS_STAT:
+		return 0;
+	default:
+		pr_warn("Wrong action %d\n", scheme->action);
+		return -EINVAL;
+	}
+
+	return damos_madvise(t, r, madv_action);
+}
+
 void damon_set_vaddr_primitives(struct damon_ctx *ctx)
 {
 	ctx->init_target_regions = kdamond_init_vm_regions;
@@ -796,6 +865,7 @@ void damon_set_vaddr_primitives(struct damon_ctx *ctx)
 	ctx->check_accesses = kdamond_check_vm_accesses;
 	ctx->target_valid = kdamond_vm_target_valid;
 	ctx->cleanup = kdamond_vm_cleanup;
+	ctx->apply_scheme = kdamond_vm_apply_scheme;
 }
 
 void damon_set_paddr_primitives(struct damon_ctx *ctx)
@@ -806,6 +876,7 @@ void damon_set_paddr_primitives(struct damon_ctx *ctx)
 	ctx->check_accesses = kdamond_check_phys_accesses;
 	ctx->target_valid = NULL;
 	ctx->cleanup = NULL;
+	ctx->apply_scheme = NULL;
 }
 
 #include "primitives-test.h"

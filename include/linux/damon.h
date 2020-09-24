@@ -170,6 +170,7 @@ struct damos {
  * @check_accesses:		Checks the access of target regions.
  * @target_valid:		Determine if the target is valid.
  * @cleanup:			Cleans up the context.
+ * @apply_scheme:		Apply a DAMON-based operation scheme.
  * @sample_cb:			Called for each sampling interval.
  * @aggregate_cb:		Called for each aggregation interval.
  *
@@ -193,6 +194,9 @@ struct damos {
  * monitoring.
  * @cleanup is called from @kdamond just before its termination.  After this
  * call, only @kdamond_lock and @kdamond will be touched.
+ * @apply_scheme is called from @kdamond when a region for user provided
+ * DAMON-based operation scheme is found.  It should apply the scheme's action
+ * to the region.
  *
  * @sample_cb and @aggregate_cb are called from @kdamond for each of the
  * sampling intervals and aggregation intervals, respectively.  Therefore,
@@ -229,6 +233,8 @@ struct damon_ctx {
 	unsigned int (*check_accesses)(struct damon_ctx *context);
 	bool (*target_valid)(struct damon_target *target);
 	void (*cleanup)(struct damon_ctx *context);
+	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
+			struct damon_region *r, struct damos *scheme);
 	void (*sample_cb)(struct damon_ctx *context);
 	void (*aggregate_cb)(struct damon_ctx *context);
 };
@@ -312,6 +318,8 @@ void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
 unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
 bool kdamond_vm_target_valid(struct damon_target *t);
 void kdamond_vm_cleanup(struct damon_ctx *ctx);
+int kdamond_vm_apply_scheme(struct damon_ctx *context, struct damon_target *t,
+		struct damon_region *r, struct damos *scheme);
 void damon_set_vaddr_primitives(struct damon_ctx *ctx);
 
 /* Reference callback implementations for physical memory */
