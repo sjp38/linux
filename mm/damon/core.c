@@ -701,68 +701,6 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 	}
 }
 
-#ifndef CONFIG_ADVISE_SYSCALLS
-static int damos_madvise(struct damon_target *target, struct damon_region *r,
-			int behavior)
-{
-	return -EINVAL;
-}
-#else
-static int damos_madvise(struct damon_target *target, struct damon_region *r,
-			int behavior)
-{
-	struct task_struct *t;
-	struct mm_struct *mm;
-	int ret = -ENOMEM;
-
-	t = damon_get_task_struct(target);
-	if (!t)
-		goto out;
-	mm = damon_get_mm(target);
-	if (!mm)
-		goto put_task_out;
-
-	ret = do_madvise(t, mm, PAGE_ALIGN(r->ar.start),
-			PAGE_ALIGN(r->ar.end - r->ar.start), behavior);
-	mmput(mm);
-put_task_out:
-	put_task_struct(t);
-out:
-	return ret;
-}
-#endif	/* CONFIG_ADVISE_SYSCALLS */
-
-static int damos_do_action(struct damon_target *target, struct damon_region *r,
-			enum damos_action action)
-{
-	int madv_action;
-
-	switch (action) {
-	case DAMOS_WILLNEED:
-		madv_action = MADV_WILLNEED;
-		break;
-	case DAMOS_COLD:
-		madv_action = MADV_COLD;
-		break;
-	case DAMOS_PAGEOUT:
-		madv_action = MADV_PAGEOUT;
-		break;
-	case DAMOS_HUGEPAGE:
-		madv_action = MADV_HUGEPAGE;
-		break;
-	case DAMOS_NOHUGEPAGE:
-		madv_action = MADV_NOHUGEPAGE;
-		break;
-	case DAMOS_STAT:
-		return 0;
-	default:
-		pr_warn("Wrong action %d\n", action);
-		return -EINVAL;
-	}
-
-	return damos_madvise(target, r, madv_action);
-}
-
 static void damon_do_apply_schemes(struct damon_ctx *c,
 				   struct damon_target *t,
 				   struct damon_region *r)
@@ -781,7 +719,8 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			continue;
 		s->stat_count++;
 		s->stat_sz += sz;
-		damos_do_action(t, r, s->action);
+		if (c->apply_scheme)
+			c->apply_scheme(c, t, r, s);
 		if (s->action != DAMOS_STAT)
 			r->age = 0;
 	}
