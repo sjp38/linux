@@ -134,14 +134,6 @@ struct damos {
  * in case of virtual memory monitoring) and applies the changes for each
  * @regions_update_interval.  All time intervals are in micro-seconds.
  *
- * @rbuf: In-memory buffer for monitoring result recording.
- * @rbuf_len: The length of @rbuf.
- * @rbuf_offset: The offset for next write to @rbuf.
- * @rfile_path: Record file path.
- *
- * If @rbuf, @rbuf_len, and @rfile_path are set, the monitored results are
- * automatically stored in @rfile_path file.
- *
  * @kdamond:		Kernel thread who does the monitoring.
  * @kdamond_stop:	Notifies whether kdamond should stop.
  * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
@@ -163,6 +155,8 @@ struct damos {
  *
  * @targets_list:	Head of monitoring targets (&damon_target) list.
  * @schemes_list:	Head of schemes (&damos) list.
+ *
+ * @private		Private user data.
  *
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @update_target_regions:	Updates monitoring target regions.
@@ -214,17 +208,14 @@ struct damon_ctx {
 	struct timespec64 last_aggregation;
 	struct timespec64 last_regions_update;
 
-	unsigned char *rbuf;
-	unsigned int rbuf_len;
-	unsigned int rbuf_offset;
-	char *rfile_path;
-
 	struct task_struct *kdamond;
 	bool kdamond_stop;
 	struct mutex kdamond_lock;
 
 	struct list_head targets_list;	/* 'damon_target' objects */
 	struct list_head schemes_list;	/* 'damos' objects */
+
+	void *private;
 
 	/* callbacks */
 	void (*init_target_regions)(struct damon_ctx *context);
@@ -298,8 +289,6 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long min_nr_reg, unsigned long max_nr_reg);
 int damon_set_schemes(struct damon_ctx *ctx,
 			struct damos **schemes, ssize_t nr_schemes);
-int damon_set_recording(struct damon_ctx *ctx,
-				unsigned int rbuf_len, char *rfile_path);
 int damon_nr_running_ctxs(void);
 
 int damon_start(struct damon_ctx *ctxs, int nr_ctxs);
