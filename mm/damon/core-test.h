@@ -36,6 +36,17 @@ static void damon_test_regions(struct kunit *test)
 	damon_free_target(t);
 }
 
+static unsigned int nr_damon_targets(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	unsigned int nr_targets = 0;
+
+	damon_for_each_target(t, ctx)
+		nr_targets++;
+
+	return nr_targets;
+}
+
 static void damon_test_target(struct kunit *test)
 {
 	struct damon_ctx *c = damon_new_ctx();
@@ -52,23 +63,6 @@ static void damon_test_target(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, 0u, nr_damon_targets(c));
 
 	damon_destroy_ctx(c);
-}
-
-static void damon_test_set_recording(struct kunit *test)
-{
-	struct damon_ctx *ctx = damon_new_ctx();
-	int err;
-
-	err = damon_set_recording(ctx, 42, "foo");
-	KUNIT_EXPECT_EQ(test, err, -EINVAL);
-	damon_set_recording(ctx, 4242, "foo.bar");
-	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 4242u);
-	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo.bar");
-	damon_set_recording(ctx, 424242, "foo");
-	KUNIT_EXPECT_EQ(test, ctx->rbuf_len, 424242u);
-	KUNIT_EXPECT_STREQ(test, ctx->rfile_path, "foo");
-
-	damon_destroy_ctx(ctx);
 }
 
 /*
@@ -91,9 +85,7 @@ static void damon_test_aggregate(struct kunit *test)
 	struct damon_target *t;
 	struct damon_region *r;
 	int it, ir;
-	ssize_t sz, sr, sp;
 
-	damon_set_recording(ctx, 4242, "damon.data");
 	damon_set_targets(ctx, target_ids, 3);
 
 	it = 0;
@@ -120,31 +112,6 @@ static void damon_test_aggregate(struct kunit *test)
 	}
 	/* targets also should be preserved */
 	KUNIT_EXPECT_EQ(test, 3, it);
-
-	/* The aggregated information should be written in the buffer */
-	sr = sizeof(r->ar.start) + sizeof(r->ar.end) + sizeof(r->nr_accesses);
-	sp = sizeof(t->id) + sizeof(unsigned int) + 3 * sr;
-	sz = sizeof(struct timespec64) + sizeof(unsigned int) + 3 * sp;
-	KUNIT_EXPECT_EQ(test, (unsigned int)sz, ctx->rbuf_offset);
-
-	damon_destroy_ctx(ctx);
-}
-
-static void damon_test_write_rbuf(struct kunit *test)
-{
-	struct damon_ctx *ctx = damon_new_ctx();
-	char *data;
-
-	damon_set_recording(ctx, 4242, "damon.data");
-
-	data = "hello";
-	damon_write_rbuf(ctx, data, strnlen(data, 256));
-	KUNIT_EXPECT_EQ(test, ctx->rbuf_offset, 5u);
-
-	damon_write_rbuf(ctx, data, 0);
-	KUNIT_EXPECT_EQ(test, ctx->rbuf_offset, 5u);
-
-	KUNIT_EXPECT_STREQ(test, (char *)ctx->rbuf, data);
 
 	damon_destroy_ctx(ctx);
 }
@@ -267,9 +234,7 @@ static void damon_test_split_regions_of(struct kunit *test)
 static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damon_test_target),
 	KUNIT_CASE(damon_test_regions),
-	KUNIT_CASE(damon_test_set_recording),
 	KUNIT_CASE(damon_test_aggregate),
-	KUNIT_CASE(damon_test_write_rbuf),
 	KUNIT_CASE(damon_test_split_at),
 	KUNIT_CASE(damon_test_merge_two),
 	KUNIT_CASE(damon_test_merge_regions_of),
