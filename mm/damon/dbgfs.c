@@ -253,6 +253,32 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	return ret;
 }
 
+static ssize_t debugfs_kdamond_pid_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = file->private_data;
+	char *kbuf;
+	ssize_t len;
+
+	kbuf = kmalloc(count, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond)
+		len = scnprintf(kbuf, count, "%d\n", ctx->kdamond->pid);
+	else
+		len = scnprintf(kbuf, count, "none\n");
+	mutex_unlock(&ctx->kdamond_lock);
+	if (!len)
+		goto out;
+	len = simple_read_from_buffer(buf, count, ppos, kbuf, len);
+
+out:
+	kfree(kbuf);
+	return len;
+}
+
 static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 {
 	struct damos *s;
@@ -1043,6 +1069,12 @@ static const struct file_operations monitor_on_fops = {
 	.write = debugfs_monitor_on_write,
 };
 
+static const struct file_operations kdamond_pid = {
+	.owner = THIS_MODULE,
+	.open = damon_debugfs_open,
+	.read = debugfs_kdamond_pid_read,
+};
+
 static const struct file_operations target_ids_fops = {
 	.owner = THIS_MODULE,
 	.open = damon_debugfs_open,
@@ -1087,10 +1119,10 @@ static const struct file_operations nr_contexts_fops = {
 static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 {
 	const char * const file_names[] = {"attrs", "init_regions", "record",
-		"schemes", "target_ids"};
+		"schemes", "target_ids", "kdamond_pid"};
 	const struct file_operations *fops[] = {&attrs_fops,
 		&init_regions_fops, &record_fops, &schemes_fops,
-		&target_ids_fops};
+		&target_ids_fops, &kdamond_pid};
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
