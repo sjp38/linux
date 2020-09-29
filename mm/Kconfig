@@ -905,4 +905,7 @@ config SECRETMEM
 # struct io_mapping based helper.  Selected by drivers that need them
 config IO_MAPPING
 	bool
+
+source "mm/damon/Kconfig"
+
 endmenu
