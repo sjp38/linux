@@ -8,6 +8,8 @@
 #ifndef _DAMON_H_
 #define _DAMON_H_
 
+#include <linux/mutex.h>
+#include <linux/time64.h>
 #include <linux/types.h>
 
 /**
@@ -23,11 +25,13 @@ struct damon_addr_range {
 /**
  * struct damon_region - Represents a monitoring target region.
  * @ar:			The address range of the region.
+ * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
  * @list:		List head for siblings.
  */
 struct damon_region {
 	struct damon_addr_range ar;
+	unsigned long sampling_addr;
 	unsigned int nr_accesses;
 	struct list_head list;
 };
@@ -50,12 +54,130 @@ struct damon_target {
 	struct list_head list;
 };
 
+struct damon_ctx;
+
 /**
- * struct damon_ctx - Represents a context for each monitoring.
+ * struct damon_primitive	Monitoring primitives for given use cases.
+ *
+ * @init_target_regions:	Constructs initial monitoring target regions.
+ * @prepare_access_checks:	Prepares next access check of target regions.
+ * @check_accesses:		Checks the access of target regions.
+ * @target_valid:		Determine if the target is valid.
+ * @cleanup:			Cleans up the context.
+ *
+ * DAMON can be extended for various address spaces and usages.  For this,
+ * users should register the low level primitives for their target address
+ * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread
+ * calls @init_target_regions before starting the monitoring and
+ * @prepare_access_checks, @check_accesses, and @target_valid for each
+ * @sample_interval.
+ *
+ * @init_target_regions should construct proper monitoring target regions and
+ * link those to the DAMON context struct.
+ * @prepare_access_checks should manipulate the monitoring regions to be
+ * prepare for the next access check.
+ * @check_accesses should check the accesses to each region that made after the
+ * last preparation and update the `->nr_accesses` of each region.  It should
+ * also return max &damon_region.nr_accesses that made as a result of its
+ * update.
+ * @target_valid should check whether the target is still valid for the
+ * monitoring.
+ * @cleanup is called from @kdamond just before its termination.  After this
+ * call, only @kdamond_lock and @kdamond will be touched.
+ */
+struct damon_primitive {
+	void (*init_target_regions)(struct damon_ctx *context);
+	void (*prepare_access_checks)(struct damon_ctx *context);
+	unsigned int (*check_accesses)(struct damon_ctx *context);
+	bool (*target_valid)(struct damon_target *target);
+	void (*cleanup)(struct damon_ctx *context);
+};
+
+/*
+ * struct damon_callback	Monitoring events notification callbacks.
+ *
+ * @before_start:	Called before starting the monitoring.
+ * @after_sampling:	Called after each sampling.
+ * @after_aggregation:	Called after each aggregation.
+ * @before_terminate:	Called before terminating the monitoring.
+ * @private:		User private data.
+ *
+ * The monitoring thread (&damon_ctx->kdamond) calls @before_start and
+ * @before_terminate just before starting the monitoring and just before
+ * finishing the monitoring.  Therefore, those are good places for installing
+ * and cleaning @private.
+ *
+ * The monitoring thread calls @after_sampling and @after_aggregation for each
+ * of the sampling intervals and aggregation intervals, respectively.
+ * Therefore, users can safely access the monitoring results via
+ * &damon_ctx.targets_list without additional protection of
+ * damon_ctx.kdamond_lock.  For the reason, users are recommended to use these
+ * callback for the accesses to the results.
+ *
+ * If any callback returns non-zero, monitoring stops.
+ */
+struct damon_callback {
+	void *private;
+
+	int (*before_start)(struct damon_ctx *context);
+	int (*after_sampling)(struct damon_ctx *context);
+	int (*after_aggregation)(struct damon_ctx *context);
+	int (*before_terminate)(struct damon_ctx *context);
+};
+
+/**
+ * struct damon_ctx - Represents a context for each monitoring.  This is the
+ * main interface that allows users to set the attributes and get the results
+ * of the monitoring.
+ *
+ * @sample_interval:		The time between access samplings.
+ * @aggr_interval:		The time between monitor results aggregations.
+ * @nr_regions:			The number of monitoring regions.
+ *
+ * For each @sample_interval, DAMON checks whether each region is accessed or
+ * not.  It aggregates and keeps the access information (number of accesses to
+ * each region) for @aggr_interval time.  All time intervals are in
+ * micro-seconds.
+ *
+ * @kdamond:		Kernel thread who does the monitoring.
+ * @kdamond_stop:	Notifies whether kdamond should stop.
+ * @kdamond_lock:	Mutex for the synchronizations with @kdamond.
+ *
+ * For each monitoring context, one kernel thread for the monitoring is
+ * created.  The pointer to the thread is stored in @kdamond.
+ *
+ * Once started, the monitoring thread runs until explicitly required to be
+ * terminated or every monitoring target is invalid.  The validity of the
+ * targets is checked via the @target_valid callback.  The termination can also
+ * be explicitly requested by writing non-zero to @kdamond_stop.  The thread
+ * sets @kdamond to NULL when it terminates.  Therefore, users can know whether
+ * the monitoring is ongoing or terminated by reading @kdamond.  Reads and
+ * writes to @kdamond and @kdamond_stop from outside of the monitoring thread
+ * must be protected by @kdamond_lock.
+ *
+ * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
+ * @kdamond_lock.  Accesses to other fields must be protected by themselves.
+ *
  * @targets_list:	Head of monitoring targets (&damon_target) list.
+ *
+ * @primitive:	Set of monitoring primitives for given use cases.
+ * @callback:	Set of callbacks for monitoring events notifications.
  */
 struct damon_ctx {
+	unsigned long sample_interval;
+	unsigned long aggr_interval;
+	unsigned long nr_regions;
+
+	struct timespec64 last_aggregation;
+
+	struct task_struct *kdamond;
+	bool kdamond_stop;
+	struct mutex kdamond_lock;
+
 	struct list_head targets_list;	/* 'damon_target' objects */
+
+	struct damon_primitive primitive;
+	struct damon_callback callback;
 };
 
 #define damon_next_region(r) \
@@ -89,6 +211,15 @@ void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
 void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t);
 unsigned int damon_nr_regions(struct damon_target *t);
+
+int damon_set_targets(struct damon_ctx *ctx,
+		unsigned long *ids, ssize_t nr_ids);
+int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
+		unsigned long aggr_int, unsigned long nr_reg);
+
+int damon_nr_running_ctxs(void);
+int damon_start(struct damon_ctx **ctxs, int nr_ctxs);
+int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
 
 #endif	/* CONFIG_DAMON */
 
