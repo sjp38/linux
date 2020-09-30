@@ -297,22 +297,22 @@ int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
 #ifdef CONFIG_DAMON_PRIMITIVES
 
 /* Reference callback implementations for virtual memory */
-void kdamond_init_vm_regions(struct damon_ctx *ctx);
-void kdamond_update_vm_regions(struct damon_ctx *ctx);
-void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx);
-unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx);
-bool kdamond_vm_target_valid(struct damon_target *t);
-void kdamond_vm_cleanup(struct damon_ctx *ctx);
-int kdamond_vm_apply_scheme(struct damon_ctx *context, struct damon_target *t,
+void damon_va_init_regions(struct damon_ctx *ctx);
+void damon_va_update_regions(struct damon_ctx *ctx);
+void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx);
+unsigned int damon_va_check_accesses(struct damon_ctx *ctx);
+bool damon_va_target_valid(struct damon_target *t);
+void damon_va_cleanup(struct damon_ctx *ctx);
+int damon_va_apply_scheme(struct damon_ctx *context, struct damon_target *t,
 		struct damon_region *r, struct damos *scheme);
 void damon_set_vaddr_primitives(struct damon_ctx *ctx);
 
 /* Reference callback implementations for physical memory */
-void kdamond_init_phys_regions(struct damon_ctx *ctx);
-void kdamond_update_phys_regions(struct damon_ctx *ctx);
-void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx);
-unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx);
-bool kdamond_phys_target_valid(struct damon_target *t);
+void damon_pa_init_regions(struct damon_ctx *ctx);
+void damon_pa_update_regions(struct damon_ctx *ctx);
+void damon_pa_prepare_access_checks(struct damon_ctx *ctx);
+unsigned int damon_pa_check_accesses(struct damon_ctx *ctx);
+bool damon_pa_target_valid(struct damon_target *t);
 void damon_set_paddr_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_PRIMITIVES */

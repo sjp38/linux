@@ -105,7 +105,7 @@ static void debugfs_write_record_header(struct damon_ctx *ctx)
 static void debugfs_init_vm_regions(struct damon_ctx *ctx)
 {
 	debugfs_write_record_header(ctx);
-	kdamond_init_vm_regions(ctx);
+	damon_va_init_regions(ctx);
 }
 
 static void debugfs_unlock_page_idle_lock(void)
@@ -122,7 +122,7 @@ static void debugfs_vm_cleanup(struct damon_ctx *ctx)
 {
 	debugfs_flush_rbuffer(ctx->private);
 	debugfs_unlock_page_idle_lock();
-	kdamond_vm_cleanup(ctx);
+	damon_va_cleanup(ctx);
 }
 
 static void debugfs_init_phys_regions(struct damon_ctx *ctx)
@@ -434,7 +434,7 @@ out:
 }
 
 #define targetid_is_pid(ctx)	\
-	(ctx->target_valid == kdamond_vm_target_valid)
+	(ctx->target_valid == damon_va_target_valid)
 
 static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 {

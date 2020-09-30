@@ -291,7 +291,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c,
 }
 
 /* Initialize '->regions_list' of every target (task) */
-void kdamond_init_vm_regions(struct damon_ctx *ctx)
+void damon_va_init_regions(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 
@@ -310,7 +310,7 @@ void kdamond_init_vm_regions(struct damon_ctx *ctx)
  * implement their version of this and set '->init_target_regions' of their
  * damon_ctx to point it.
  */
-void kdamond_init_phys_regions(struct damon_ctx *ctx)
+void damon_pa_init_regions(struct damon_ctx *ctx)
 {
 }
 
@@ -385,7 +385,7 @@ static void damon_apply_three_regions(struct damon_ctx *ctx,
 /*
  * Update regions for current memory mappings
  */
-void kdamond_update_vm_regions(struct damon_ctx *ctx)
+void damon_va_update_regions(struct damon_ctx *ctx)
 {
 	struct damon_addr_range three_regions[3];
 	struct damon_target *t;
@@ -406,7 +406,7 @@ void kdamond_update_vm_regions(struct damon_ctx *ctx)
  * version of this and set the '->init_target_regions' of their damon_ctx to
  * point it.
  */
-void kdamond_update_phys_regions(struct damon_ctx *ctx)
+void damon_pa_update_regions(struct damon_ctx *ctx)
 {
 }
 
@@ -487,7 +487,7 @@ static void damon_prepare_vm_access_check(struct damon_ctx *ctx,
 	damon_mkold(mm, r->sampling_addr);
 }
 
-void kdamond_prepare_vm_access_checks(struct damon_ctx *ctx)
+void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct mm_struct *mm;
@@ -564,7 +564,7 @@ static void damon_check_vm_access(struct damon_ctx *ctx,
 	last_addr = r->sampling_addr;
 }
 
-unsigned int kdamond_check_vm_accesses(struct damon_ctx *ctx)
+unsigned int damon_va_check_accesses(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct mm_struct *mm;
@@ -658,7 +658,7 @@ static void damon_prepare_phys_access_check(struct damon_ctx *ctx,
 	damon_phys_mkold(r->sampling_addr);
 }
 
-void kdamond_prepare_phys_access_checks(struct damon_ctx *ctx)
+void damon_pa_prepare_access_checks(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct damon_region *r;
@@ -756,7 +756,7 @@ static void damon_check_phys_access(struct damon_ctx *ctx,
 	last_addr = r->sampling_addr;
 }
 
-unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx)
+unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct damon_region *r;
@@ -776,7 +776,7 @@ unsigned int kdamond_check_phys_accesses(struct damon_ctx *ctx)
  * Functions for the target validity check and cleanup
  */
 
-bool kdamond_vm_target_valid(struct damon_target *t)
+bool damon_va_target_valid(struct damon_target *t)
 {
 	struct task_struct *task;
 
@@ -792,7 +792,7 @@ bool kdamond_vm_target_valid(struct damon_target *t)
 	return false;
 }
 
-void kdamond_vm_cleanup(struct damon_ctx *ctx)
+void damon_va_cleanup(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next;
 
@@ -802,7 +802,7 @@ void kdamond_vm_cleanup(struct damon_ctx *ctx)
 	}
 }
 
-bool kdamond_phys_target_valid(struct damon_target *t)
+bool damon_pa_target_valid(struct damon_target *t)
 {
 	if (!mutex_is_locked(&page_idle_lock))
 		return false;
@@ -840,7 +840,7 @@ out:
 }
 #endif	/* CONFIG_ADVISE_SYSCALLS */
 
-int kdamond_vm_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
+int damon_va_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 		struct damon_region *r, struct damos *scheme)
 {
 	int madv_action;
@@ -873,22 +873,22 @@ int kdamond_vm_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 
 void damon_set_vaddr_primitives(struct damon_ctx *ctx)
 {
-	ctx->init_target_regions = kdamond_init_vm_regions;
-	ctx->update_target_regions = kdamond_update_vm_regions;
-	ctx->prepare_access_checks = kdamond_prepare_vm_access_checks;
-	ctx->check_accesses = kdamond_check_vm_accesses;
-	ctx->target_valid = kdamond_vm_target_valid;
-	ctx->cleanup = kdamond_vm_cleanup;
-	ctx->apply_scheme = kdamond_vm_apply_scheme;
+	ctx->init_target_regions = damon_va_init_regions;
+	ctx->update_target_regions = damon_va_update_regions;
+	ctx->prepare_access_checks = damon_va_prepare_vm_access_checks;
+	ctx->check_accesses = damon_va_check_accesses;
+	ctx->target_valid = damon_va_target_valid;
+	ctx->cleanup = damon_va_cleanup;
+	ctx->apply_scheme = damon_va_apply_scheme;
 }
 
 void damon_set_paddr_primitives(struct damon_ctx *ctx)
 {
-	ctx->init_target_regions = kdamond_init_phys_regions;
-	ctx->update_target_regions = kdamond_update_phys_regions;
-	ctx->prepare_access_checks = kdamond_prepare_phys_access_checks;
-	ctx->check_accesses = kdamond_check_phys_accesses;
-	ctx->target_valid = kdamond_phys_target_valid;
+	ctx->init_target_regions = damon_pa_init_regions;
+	ctx->update_target_regions = damon_pa_update_regions;
+	ctx->prepare_access_checks = damon_pa_prepare_access_checks;
+	ctx->check_accesses = damon_pa_check_accesses;
+	ctx->target_valid = damon_pa_target_valid;
 	ctx->cleanup = NULL;
 	ctx->apply_scheme = NULL;
 }
