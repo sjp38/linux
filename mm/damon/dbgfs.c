@@ -212,14 +212,14 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 	return kbuf;
 }
 
-static int debugfs_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+static int debugfs_start_ctxs(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int rc;
 
 	if (!mutex_trylock(&page_idle_lock))
 		return -EBUSY;
 
-	rc = damon_start_ctx_ptrs(ctxs, nr_ctxs);
+	rc = damon_start(ctxs, nr_ctxs);
 	if (rc)
 		mutex_unlock(&page_idle_lock);
 
@@ -242,9 +242,9 @@ static ssize_t debugfs_monitor_on_write(struct file *file,
 	if (sscanf(kbuf, "%s", kbuf) != 1)
 		return -EINVAL;
 	if (!strncmp(kbuf, "on", count))
-		err = debugfs_start_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
+		err = debugfs_start_ctxs(debugfs_ctxs, debugfs_nr_ctxs);
 	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop_ctx_ptrs(debugfs_ctxs, debugfs_nr_ctxs);
+		err = damon_stop(debugfs_ctxs, debugfs_nr_ctxs);
 	else
 		return -EINVAL;
 

@@ -287,10 +287,8 @@ int damon_set_schemes(struct damon_ctx *ctx,
 			struct damos **schemes, ssize_t nr_schemes);
 int damon_nr_running_ctxs(void);
 
-int damon_start(struct damon_ctx *ctxs, int nr_ctxs);
-int damon_stop(struct damon_ctx *ctxs, int nr_ctxs);
-int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
-int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs);
+int damon_start(struct damon_ctx **ctxs, int nr_ctxs);
+int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
 
 #endif	/* CONFIG_DAMON */
 

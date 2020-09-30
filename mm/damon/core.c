@@ -400,7 +400,7 @@ static int __damon_start(struct damon_ctx *ctx)
 
 /**
  * damon_start() - Starts the monitorings for a given group of contexts.
- * @ctxs:	an array of the contexts to start monitoring
+ * @ctxs:	an array of the pointers for contexts to start monitoring
  * @nr_ctxs:	size of @ctxs
  *
  * This function starts a group of monitoring threads for a group of monitoring
@@ -411,29 +411,7 @@ static int __damon_start(struct damon_ctx *ctx)
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_start(struct damon_ctx *ctxs, int nr_ctxs)
-{
-	int i;
-	int err = 0;
-
-	mutex_lock(&damon_lock);
-	if (nr_running_ctxs) {
-		mutex_unlock(&damon_lock);
-		return -EBUSY;
-	}
-
-	for (i = 0; i < nr_ctxs; i++) {
-		err = __damon_start(&ctxs[i]);
-		if (err)
-			break;
-		nr_running_ctxs++;
-	}
-	mutex_unlock(&damon_lock);
-
-	return err;
-}
-
-int damon_start_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_start(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i;
 	int err = 0;
@@ -479,26 +457,12 @@ static int __damon_stop(struct damon_ctx *ctx)
 
 /**
  * damon_stop() - Stops the monitorings for a given group of contexts.
- * @ctxs:	an array of the contexts to stop monitoring
+ * @ctxs:	an array of the pointers for contexts to stop monitoring
  * @nr_ctxs:	size of @ctxs
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_stop(struct damon_ctx *ctxs, int nr_ctxs)
-{
-	int i, err = 0;
-
-	for (i = 0; i < nr_ctxs; i++) {
-		/* nr_running_ctxs is decremented in kdamond_fn */
-		err = __damon_stop(&ctxs[i]);
-		if (err)
-			return err;
-	}
-
-	return err;
-}
-
-int damon_stop_ctx_ptrs(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_stop(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i, err = 0;
 
