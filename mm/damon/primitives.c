@@ -1,18 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Data Access Monitoring Low Level Primitives
+ * Low Level Primitives for Data Access Monitoring
  *
  * Author: SeongJae Park <sjpark@amazon.de>
- *
- * This file is constructed in below parts.
- *
- * - Functions for the initial monitoring target regions construction
- * - Functions for the dynamic monitoring target regions update
- * - Functions for the access checking of the regions
- * - Functions for the target validity check and cleanup
  */
 
-#define pr_fmt(fmt) "damon: " fmt
+#define pr_fmt(fmt) "damon-prmt: " fmt
 
 #include <asm-generic/mman-common.h>
 #include <linux/damon.h>
@@ -82,7 +75,7 @@ struct mm_struct *damon_get_mm(struct damon_target *t)
  *
  * Returns 0 on success, or negative error code otherwise.
  */
-static int damon_split_region_evenly(struct damon_ctx *ctx,
+static int damon_va_evenly_split_region(struct damon_ctx *ctx,
 		struct damon_region *r, unsigned int nr_pieces)
 {
 	unsigned long sz_orig, sz_piece, orig_end;
@@ -139,12 +132,12 @@ static void swap_ranges(struct damon_addr_range *r1,
  *
  * This function receives an address space and finds three regions in it which
  * separated by the two biggest unmapped regions in the space.  Please refer to
- * below comments of 'damon_init_vm_regions_of()' function to know why this is
+ * below comments of '__damon_va_init_regions()' function to know why this is
  * necessary.
  *
  * Returns 0 if success, or negative error code otherwise.
  */
-static int damon_three_regions_in_vmas(struct vm_area_struct *vma,
+static int __damon_va_three_regions(struct vm_area_struct *vma,
 				       struct damon_addr_range regions[3])
 {
 	struct damon_addr_range gap = {0}, first_gap = {0}, second_gap = {0};
@@ -200,7 +193,7 @@ next:
  *
  * Returns 0 on success, negative error code otherwise.
  */
-static int damon_three_regions_of(struct damon_target *t,
+static int damon_va_three_regions(struct damon_target *t,
 				struct damon_addr_range regions[3])
 {
 	struct mm_struct *mm;
@@ -211,7 +204,7 @@ static int damon_three_regions_of(struct damon_target *t,
 		return -EINVAL;
 
 	mmap_read_lock(mm);
-	rc = damon_three_regions_in_vmas(mm->mmap, regions);
+	rc = __damon_va_three_regions(mm->mmap, regions);
 	mmap_read_unlock(mm);
 
 	mmput(mm);
@@ -260,7 +253,7 @@ static int damon_three_regions_of(struct damon_target *t,
  *   <BIG UNMAPPED REGION 2>
  *   <stack>
  */
-static void damon_init_vm_regions_of(struct damon_ctx *c,
+static void __damon_va_init_regions(struct damon_ctx *c,
 				     struct damon_target *t)
 {
 	struct damon_region *r;
@@ -268,7 +261,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c,
 	unsigned long sz = 0, nr_pieces;
 	int i;
 
-	if (damon_three_regions_of(t, regions)) {
+	if (damon_va_three_regions(t, regions)) {
 		pr_err("Failed to get three regions of target %lu\n", t->id);
 		return;
 	}
@@ -290,7 +283,7 @@ static void damon_init_vm_regions_of(struct damon_ctx *c,
 		damon_add_region(r, t);
 
 		nr_pieces = (regions[i].end - regions[i].start) / sz;
-		damon_split_region_evenly(c, r, nr_pieces);
+		damon_va_evenly_split_region(c, r, nr_pieces);
 	}
 }
 
@@ -302,7 +295,7 @@ void damon_va_init_regions(struct damon_ctx *ctx)
 	damon_for_each_target(t, ctx) {
 		/* the user may set the target regions as they want */
 		if (!damon_nr_regions(t))
-			damon_init_vm_regions_of(ctx, t);
+			__damon_va_init_regions(ctx, t);
 	}
 }
 
@@ -326,7 +319,7 @@ static bool damon_intersect(struct damon_region *r, struct damon_addr_range *re)
  * t		the given target
  * bregions	the three big regions of the target
  */
-static void damon_apply_three_regions(struct damon_ctx *ctx,
+static void damon_va_apply_three_regions(struct damon_ctx *ctx,
 		struct damon_target *t, struct damon_addr_range bregions[3])
 {
 	struct damon_region *r, *next;
@@ -383,9 +376,9 @@ void damon_va_update_regions(struct damon_ctx *ctx)
 	struct damon_target *t;
 
 	damon_for_each_target(t, ctx) {
-		if (damon_three_regions_of(t, three_regions))
+		if (damon_va_three_regions(t, three_regions))
 			continue;
-		damon_apply_three_regions(ctx, t, three_regions);
+		damon_va_apply_three_regions(ctx, t, three_regions);
 	}
 }
 
@@ -440,7 +433,7 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
-static void damon_mkold(struct mm_struct *mm, unsigned long addr)
+static void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 {
 	pte_t *pte = NULL;
 	pmd_t *pmd = NULL;
@@ -458,12 +451,12 @@ static void damon_mkold(struct mm_struct *mm, unsigned long addr)
 	}
 }
 
-static void damon_prepare_vm_access_check(struct damon_ctx *ctx,
+static void damon_va_prepare_vm_access_check(struct damon_ctx *ctx,
 			struct mm_struct *mm, struct damon_region *r)
 {
 	r->sampling_addr = damon_rand(r->ar.start, r->ar.end);
 
-	damon_mkold(mm, r->sampling_addr);
+	damon_va_mkold(mm, r->sampling_addr);
 }
 
 void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx)
@@ -477,12 +470,12 @@ void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx)
 		if (!mm)
 			continue;
 		damon_for_each_region(r, t)
-			damon_prepare_vm_access_check(ctx, mm, r);
+			damon_va_prepare_vm_access_check(ctx, mm, r);
 		mmput(mm);
 	}
 }
 
-static bool damon_young(struct mm_struct *mm, unsigned long addr,
+static bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 			unsigned long *page_sz)
 {
 	pte_t *pte = NULL;
@@ -519,7 +512,7 @@ static bool damon_young(struct mm_struct *mm, unsigned long addr,
  * mm	'mm_struct' for the given virtual address space
  * r	the region to be checked
  */
-static void damon_check_vm_access(struct damon_ctx *ctx,
+static void damon_va_check_access(struct damon_ctx *ctx,
 			       struct mm_struct *mm, struct damon_region *r)
 {
 	static struct mm_struct *last_mm;
@@ -535,7 +528,7 @@ static void damon_check_vm_access(struct damon_ctx *ctx,
 		return;
 	}
 
-	last_accessed = damon_young(mm, r->sampling_addr, &last_page_sz);
+	last_accessed = damon_va_young(mm, r->sampling_addr, &last_page_sz);
 	if (last_accessed)
 		r->nr_accesses++;
 
@@ -555,7 +548,7 @@ unsigned int damon_va_check_accesses(struct damon_ctx *ctx)
 		if (!mm)
 			continue;
 		damon_for_each_region(r, t) {
-			damon_check_vm_access(ctx, mm, r);
+			damon_va_check_access(ctx, mm, r);
 			max_nr_accesses = max(r->nr_accesses, max_nr_accesses);
 		}
 		mmput(mm);
@@ -592,13 +585,6 @@ void damon_va_cleanup(struct damon_ctx *ctx)
 		put_pid((struct pid *)t->id);
 		damon_destroy_target(t);
 	}
-}
-
-bool damon_pa_target_valid(struct damon_target *t)
-{
-	if (!mutex_is_locked(&page_idle_lock))
-		return false;
-	return true;
 }
 
 #ifndef CONFIG_ADVISE_SYSCALLS
@@ -663,7 +649,7 @@ int damon_va_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 	return damos_madvise(t, r, madv_action);
 }
 
-void damon_set_vaddr_primitives(struct damon_ctx *ctx)
+void damon_va_set_primitives(struct damon_ctx *ctx)
 {
 	ctx->init_target_regions = damon_va_init_regions;
 	ctx->update_target_regions = damon_va_update_regions;
@@ -733,7 +719,7 @@ static struct page *damon_pa_get_page(unsigned long pfn)
 static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
-	damon_mkold(vma->vm_mm, addr);
+	damon_va_mkold(vma->vm_mm, addr);
 	return true;
 }
 
@@ -797,7 +783,7 @@ static bool damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
 {
 	struct damon_pa_access_chk_result *result = arg;
 
-	result->accessed = damon_young(vma->vm_mm, addr, &result->page_sz);
+	result->accessed = damon_va_young(vma->vm_mm, addr, &result->page_sz);
 
 	/* If accessed, stop walking */
 	return !result->accessed;
@@ -890,7 +876,14 @@ unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
-void damon_set_paddr_primitives(struct damon_ctx *ctx)
+bool damon_pa_target_valid(struct damon_target *t)
+{
+	if (!mutex_is_locked(&page_idle_lock))
+		return false;
+	return true;
+}
+
+void damon_pa_set_primitives(struct damon_ctx *ctx)
 {
 	ctx->init_target_regions = damon_pa_init_regions;
 	ctx->update_target_regions = damon_pa_update_regions;

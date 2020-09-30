@@ -44,7 +44,7 @@ static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
 }
 
 /*
- * Test damon_three_regions_in_vmas() function
+ * Test __damon_va_three_regions() function
  *
  * In case of virtual memory address spaces monitoring, DAMON converts the
  * complex and dynamic memory mappings of each target task to three
@@ -55,7 +55,7 @@ static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)
  * Because these two unmapped areas are very huge but obviously never accessed,
  * covering the region is just a waste.
  *
- * 'damon_three_regions_in_vmas() receives an address space of a process.  It
+ * '__damon_va_three_regions() receives an address space of a process.  It
  * first identifies the start of mappings, end of mappings, and the two biggest
  * unmapped areas.  After that, based on the information, it constructs the
  * three regions and returns.  For more detail, refer to the comment of
@@ -85,7 +85,7 @@ static void damon_test_three_regions_in_vmas(struct kunit *test)
 
 	__link_vmas(vmas, 6);
 
-	damon_three_regions_in_vmas(&vmas[0], regions);
+	__damon_va_three_regions(&vmas[0], regions);
 
 	KUNIT_EXPECT_EQ(test, 10ul, regions[0].start);
 	KUNIT_EXPECT_EQ(test, 25ul, regions[0].end);
@@ -109,7 +109,7 @@ static struct damon_region *__nth_region_of(struct damon_target *t, int idx)
 }
 
 /*
- * Test 'damon_apply_three_regions()'
+ * Test 'damon_va_apply_three_regions()'
  *
  * test			kunit object
  * regions		an array containing start/end addresses of current
@@ -124,7 +124,7 @@ static struct damon_region *__nth_region_of(struct damon_target *t, int idx)
  * the change, DAMON periodically reads the mappings, simplifies it to the
  * three regions, and updates the monitoring target regions to fit in the three
  * regions.  The update of current target regions is the role of
- * 'damon_apply_three_regions()'.
+ * 'damon_va_apply_three_regions()'.
  *
  * This test passes the given target regions and the new three regions that
  * need to be applied to the function and check whether it updates the regions
@@ -147,7 +147,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 	}
 	damon_add_target(ctx, t);
 
-	damon_apply_three_regions(ctx, t, three_regions);
+	damon_va_apply_three_regions(ctx, t, three_regions);
 
 	for (i = 0; i < nr_expected / 2; i++) {
 		r = __nth_region_of(t, i);
@@ -259,14 +259,14 @@ static void damon_test_split_evenly(struct kunit *test)
 	struct damon_region *r;
 	unsigned long i;
 
-	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, NULL, 5), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, NULL, 5), -EINVAL);
 
 	t = damon_new_target(42);
 	r = damon_new_region(0, 100);
-	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 0), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 0), -EINVAL);
 
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 10), 0);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 10), 0);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 10u);
 
 	i = 0;
@@ -279,7 +279,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	t = damon_new_target(42);
 	r = damon_new_region(5, 59);
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 5), 0);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 5), 0);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 5u);
 
 	i = 0;
@@ -296,7 +296,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	t = damon_new_target(42);
 	r = damon_new_region(5, 6);
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_split_region_evenly(c, r, 2), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 2), -EINVAL);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 1u);
 
 	damon_for_each_region(r, t) {

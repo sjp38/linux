@@ -528,14 +528,14 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 
 static void debugfs_set_vaddr_primitives(struct damon_ctx *ctx)
 {
-	damon_set_vaddr_primitives(ctx);
+	damon_va_set_primitives(ctx);
 	ctx->init_target_regions = debugfs_init_vm_regions;
 	ctx->cleanup = debugfs_vm_cleanup;
 }
 
 static void debugfs_set_paddr_primitives(struct damon_ctx *ctx)
 {
-	damon_set_paddr_primitives(ctx);
+	damon_pa_set_primitives(ctx);
 	ctx->init_target_regions = debugfs_init_phys_regions;
 	ctx->cleanup = debugfs_phys_cleanup;
 }
