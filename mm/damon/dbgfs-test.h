@@ -78,7 +78,7 @@ static void damon_dbgfs_test_str_to_target_ids(struct kunit *test)
 
 static void damon_dbgfs_test_set_targets(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_new_ctx();
+	struct damon_ctx *ctx = dbgfs_new_ctx();
 	unsigned long ids[] = {1, 2, 3};
 	char buf[64];
 
@@ -105,58 +105,58 @@ static void damon_dbgfs_test_set_targets(struct kunit *test)
 	sprint_target_ids(ctx, buf, 64);
 	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");
 
-	debugfs_destroy_ctx(ctx);
+	dbgfs_destroy_ctx(ctx);
 }
 
 static void damon_dbgfs_test_set_recording(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_new_ctx();
-	struct debugfs_recorder *rec = ctx->private;
+	struct damon_ctx *ctx = dbgfs_new_ctx();
+	struct dbgfs_recorder *rec = ctx->private;
 	int err;
 
-	err = debugfs_set_recording(ctx, 42, "foo");
+	err = dbgfs_set_recording(ctx, 42, "foo");
 	KUNIT_EXPECT_EQ(test, err, -EINVAL);
-	debugfs_set_recording(ctx, 4242, "foo.bar");
+	dbgfs_set_recording(ctx, 4242, "foo.bar");
 	KUNIT_EXPECT_EQ(test, rec->rbuf_len, 4242u);
 	KUNIT_EXPECT_STREQ(test, rec->rfile_path, "foo.bar");
-	debugfs_set_recording(ctx, 424242, "foo");
+	dbgfs_set_recording(ctx, 424242, "foo");
 	KUNIT_EXPECT_EQ(test, rec->rbuf_len, 424242u);
 	KUNIT_EXPECT_STREQ(test, rec->rfile_path, "foo");
 
-	debugfs_destroy_ctx(ctx);
+	dbgfs_destroy_ctx(ctx);
 }
 
 static void damon_dbgfs_test_write_rbuf(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_new_ctx();
-	struct debugfs_recorder *rec = ctx->private;
+	struct damon_ctx *ctx = dbgfs_new_ctx();
+	struct dbgfs_recorder *rec = ctx->private;
 	char *data;
 
-	debugfs_set_recording(ctx, 4242, "damon.data");
+	dbgfs_set_recording(ctx, 4242, "damon.data");
 
 	data = "hello";
-	debugfs_write_rbuf(ctx, data, strnlen(data, 256));
+	dbgfs_write_rbuf(ctx, data, strnlen(data, 256));
 	KUNIT_EXPECT_EQ(test, rec->rbuf_offset, 5u);
 
-	debugfs_write_rbuf(ctx, data, 0);
+	dbgfs_write_rbuf(ctx, data, 0);
 	KUNIT_EXPECT_EQ(test, rec->rbuf_offset, 5u);
 
 	KUNIT_EXPECT_STREQ(test, (char *)rec->rbuf, data);
 
-	debugfs_destroy_ctx(ctx);
+	dbgfs_destroy_ctx(ctx);
 }
 
 /*
- * Test debugfs_aggregate_cb()
+ * Test dbgfs_aggregate_cb()
  *
- * dbgfs sets debugfs_aggregate_cb() as aggregate callback.  It stores the
+ * dbgfs sets dbgfs_aggregate_cb() as aggregate callback.  It stores the
  * aggregated monitoring information ('->nr_accesses' of each regions) to the
  * result buffer.
  */
 static void damon_dbgfs_test_aggregate(struct kunit *test)
 {
-	struct damon_ctx *ctx = debugfs_new_ctx();
-	struct debugfs_recorder *rec = ctx->private;
+	struct damon_ctx *ctx = dbgfs_new_ctx();
+	struct dbgfs_recorder *rec = ctx->private;
 	unsigned long target_ids[] = {1, 2, 3};
 	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };
 	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };
@@ -166,7 +166,7 @@ static void damon_dbgfs_test_aggregate(struct kunit *test)
 	int it, ir;
 	ssize_t sz, sr, sp;
 
-	debugfs_set_recording(ctx, 4242, "damon.data");
+	dbgfs_set_recording(ctx, 4242, "damon.data");
 	damon_set_targets(ctx, target_ids, 3);
 
 	it = 0;
@@ -178,7 +178,7 @@ static void damon_dbgfs_test_aggregate(struct kunit *test)
 		}
 		it++;
 	}
-	debugfs_aggregate_cb(ctx);
+	dbgfs_aggregate_cb(ctx);
 
 	/* The aggregated information should be written in the buffer */
 	sr = sizeof(r->ar.start) + sizeof(r->ar.end) + sizeof(r->nr_accesses);

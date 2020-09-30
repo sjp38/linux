@@ -19,7 +19,7 @@
 #define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
 #define MAX_RFILE_PATH_LEN	256
 
-struct debugfs_recorder {
+struct dbgfs_recorder {
 	unsigned char *rbuf;
 	unsigned int rbuf_len;
 	unsigned int rbuf_offset;
@@ -27,16 +27,16 @@ struct debugfs_recorder {
 };
 
 /* Monitoring contexts for debugfs interface users. */
-static struct damon_ctx **debugfs_ctxs;
-static int debugfs_nr_ctxs = 1;
-static int debugfs_nr_terminated_ctxs;
+static struct damon_ctx **dbgfs_ctxs;
+static int dbgfs_nr_ctxs = 1;
+static int dbgfs_nr_terminated_ctxs;
 
 static DEFINE_MUTEX(damon_dbgfs_lock);
 
 /*
  * Flush the content in the result buffer to the result file
  */
-static void debugfs_flush_rbuffer(struct debugfs_recorder *rec)
+static void dbgfs_flush_rbuffer(struct dbgfs_recorder *rec)
 {
 	ssize_t sz;
 	loff_t pos = 0;
@@ -65,14 +65,14 @@ static void debugfs_flush_rbuffer(struct debugfs_recorder *rec)
 /*
  * Write a data into the result buffer
  */
-static void debugfs_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
+static void dbgfs_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
 {
-	struct debugfs_recorder *rec = (struct debugfs_recorder *)ctx->private;
+	struct dbgfs_recorder *rec = (struct dbgfs_recorder *)ctx->private;
 
 	if (!rec->rbuf_len || !rec->rbuf || !rec->rfile_path)
 		return;
 	if (rec->rbuf_offset + size > rec->rbuf_len)
-		debugfs_flush_rbuffer(ctx->private);
+		dbgfs_flush_rbuffer(ctx->private);
 	if (rec->rbuf_offset + size > rec->rbuf_len) {
 		pr_warn("%s: flush failed, or wrong size given(%u, %zu)\n",
 				__func__, rec->rbuf_offset, size);
@@ -83,46 +83,46 @@ static void debugfs_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
 	rec->rbuf_offset += size;
 }
 
-static void debugfs_write_record_header(struct damon_ctx *ctx)
+static void dbgfs_write_record_header(struct damon_ctx *ctx)
 {
 	int recfmt_ver = 2;
 
-	debugfs_write_rbuf(ctx, "damon_recfmt_ver", 16);
-	debugfs_write_rbuf(ctx, &recfmt_ver, sizeof(recfmt_ver));
+	dbgfs_write_rbuf(ctx, "damon_recfmt_ver", 16);
+	dbgfs_write_rbuf(ctx, &recfmt_ver, sizeof(recfmt_ver));
 }
 
-static void debugfs_init_vm_regions(struct damon_ctx *ctx)
+static void dbgfs_init_vm_regions(struct damon_ctx *ctx)
 {
-	debugfs_write_record_header(ctx);
+	dbgfs_write_record_header(ctx);
 	damon_va_init_regions(ctx);
 }
 
-static void debugfs_unlock_page_idle_lock(void)
+static void dbgfs_unlock_page_idle_lock(void)
 {
 	mutex_lock(&damon_dbgfs_lock);
-	if (++debugfs_nr_terminated_ctxs == debugfs_nr_ctxs) {
-		debugfs_nr_terminated_ctxs = 0;
+	if (++dbgfs_nr_terminated_ctxs == dbgfs_nr_ctxs) {
+		dbgfs_nr_terminated_ctxs = 0;
 		mutex_unlock(&page_idle_lock);
 	}
 	mutex_unlock(&damon_dbgfs_lock);
 }
 
-static void debugfs_vm_cleanup(struct damon_ctx *ctx)
+static void dbgfs_vm_cleanup(struct damon_ctx *ctx)
 {
-	debugfs_flush_rbuffer(ctx->private);
-	debugfs_unlock_page_idle_lock();
+	dbgfs_flush_rbuffer(ctx->private);
+	dbgfs_unlock_page_idle_lock();
 	damon_va_cleanup(ctx);
 }
 
-static void debugfs_init_phys_regions(struct damon_ctx *ctx)
+static void dbgfs_init_phys_regions(struct damon_ctx *ctx)
 {
-	debugfs_write_record_header(ctx);
+	dbgfs_write_record_header(ctx);
 }
 
-static void debugfs_phys_cleanup(struct damon_ctx *ctx)
+static void dbgfs_phys_cleanup(struct damon_ctx *ctx)
 {
-	debugfs_flush_rbuffer(ctx->private);
-	debugfs_unlock_page_idle_lock();
+	dbgfs_flush_rbuffer(ctx->private);
+	dbgfs_unlock_page_idle_lock();
 
 }
 
@@ -147,7 +147,7 @@ static unsigned int nr_damon_targets(struct damon_ctx *ctx)
  *   target info: <id> <number of regions> <array of region infos>
  *   region info: <start address> <end address> <nr_accesses>
  */
-static void debugfs_aggregate_cb(struct damon_ctx *c)
+static void dbgfs_aggregate_cb(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct timespec64 now;
@@ -155,35 +155,23 @@ static void debugfs_aggregate_cb(struct damon_ctx *c)
 
 	ktime_get_coarse_ts64(&now);
 
-	debugfs_write_rbuf(c, &now, sizeof(now));
+	dbgfs_write_rbuf(c, &now, sizeof(now));
 	nr = nr_damon_targets(c);
-	debugfs_write_rbuf(c, &nr, sizeof(nr));
+	dbgfs_write_rbuf(c, &nr, sizeof(nr));
 
 	damon_for_each_target(t, c) {
 		struct damon_region *r;
 
-		debugfs_write_rbuf(c, &t->id, sizeof(t->id));
+		dbgfs_write_rbuf(c, &t->id, sizeof(t->id));
 		nr = damon_nr_regions(t);
-		debugfs_write_rbuf(c, &nr, sizeof(nr));
+		dbgfs_write_rbuf(c, &nr, sizeof(nr));
 		damon_for_each_region(r, t) {
-			debugfs_write_rbuf(c, &r->ar.start, sizeof(r->ar.start));
-			debugfs_write_rbuf(c, &r->ar.end, sizeof(r->ar.end));
-			debugfs_write_rbuf(c, &r->nr_accesses,
+			dbgfs_write_rbuf(c, &r->ar.start, sizeof(r->ar.start));
+			dbgfs_write_rbuf(c, &r->ar.end, sizeof(r->ar.end));
+			dbgfs_write_rbuf(c, &r->nr_accesses,
 					sizeof(r->nr_accesses));
 		}
 	}
-}
-
-static ssize_t debugfs_monitor_on_read(struct file *file,
-		char __user *buf, size_t count, loff_t *ppos)
-{
-	char monitor_on_buf[5];
-	bool monitor_on = damon_nr_running_ctxs() != 0;
-	int len;
-
-	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
-
-	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);
 }
 
 /*
@@ -212,48 +200,7 @@ static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 	return kbuf;
 }
 
-static int debugfs_start_ctxs(struct damon_ctx **ctxs, int nr_ctxs)
-{
-	int rc;
-
-	if (!mutex_trylock(&page_idle_lock))
-		return -EBUSY;
-
-	rc = damon_start(ctxs, nr_ctxs);
-	if (rc)
-		mutex_unlock(&page_idle_lock);
-
-	return rc;
-}
-
-
-static ssize_t debugfs_monitor_on_write(struct file *file,
-		const char __user *buf, size_t count, loff_t *ppos)
-{
-	ssize_t ret = count;
-	char *kbuf;
-	int err;
-
-	kbuf = user_input_str(buf, count, ppos);
-	if (IS_ERR(kbuf))
-		return PTR_ERR(kbuf);
-
-	/* Remove white space */
-	if (sscanf(kbuf, "%s", kbuf) != 1)
-		return -EINVAL;
-	if (!strncmp(kbuf, "on", count))
-		err = debugfs_start_ctxs(debugfs_ctxs, debugfs_nr_ctxs);
-	else if (!strncmp(kbuf, "off", count))
-		err = damon_stop(debugfs_ctxs, debugfs_nr_ctxs);
-	else
-		return -EINVAL;
-
-	if (err)
-		ret = err;
-	return ret;
-}
-
-static ssize_t debugfs_kdamond_pid_read(struct file *file,
+static ssize_t dbgfs_kdamond_pid_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -300,7 +247,7 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 	return written;
 }
 
-static ssize_t debugfs_schemes_read(struct file *file, char __user *buf,
+static ssize_t dbgfs_schemes_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -395,7 +342,7 @@ fail:
 	return NULL;
 }
 
-static ssize_t debugfs_schemes_write(struct file *file, const char __user *buf,
+static ssize_t dbgfs_schemes_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -460,7 +407,7 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 	return written;
 }
 
-static ssize_t debugfs_target_ids_read(struct file *file,
+static ssize_t dbgfs_target_ids_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -526,21 +473,21 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 	return pid;
 }
 
-static void debugfs_set_vaddr_primitives(struct damon_ctx *ctx)
+static void dbgfs_set_vaddr_primitives(struct damon_ctx *ctx)
 {
 	damon_va_set_primitives(ctx);
-	ctx->init_target_regions = debugfs_init_vm_regions;
-	ctx->cleanup = debugfs_vm_cleanup;
+	ctx->init_target_regions = dbgfs_init_vm_regions;
+	ctx->cleanup = dbgfs_vm_cleanup;
 }
 
-static void debugfs_set_paddr_primitives(struct damon_ctx *ctx)
+static void dbgfs_set_paddr_primitives(struct damon_ctx *ctx)
 {
 	damon_pa_set_primitives(ctx);
-	ctx->init_target_regions = debugfs_init_phys_regions;
-	ctx->cleanup = debugfs_phys_cleanup;
+	ctx->init_target_regions = dbgfs_init_phys_regions;
+	ctx->cleanup = dbgfs_phys_cleanup;
 }
 
-static ssize_t debugfs_target_ids_write(struct file *file,
+static ssize_t dbgfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -559,12 +506,12 @@ static ssize_t debugfs_target_ids_write(struct file *file,
 	nrs = kbuf;
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		/* Configure the context for physical memory monitoring */
-		debugfs_set_paddr_primitives(ctx);
+		dbgfs_set_paddr_primitives(ctx);
 		/* target id is meaningless here, but we set it just for fun */
 		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
-		debugfs_set_vaddr_primitives(ctx);
+		dbgfs_set_vaddr_primitives(ctx);
 
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
@@ -605,11 +552,11 @@ out:
 	return ret;
 }
 
-static ssize_t debugfs_record_read(struct file *file,
+static ssize_t dbgfs_record_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
-	struct debugfs_recorder *rec = ctx->private;
+	struct dbgfs_recorder *rec = ctx->private;
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
@@ -621,7 +568,7 @@ static ssize_t debugfs_record_read(struct file *file,
 }
 
 /*
- * debugfs_set_recording() - Set attributes for the recording.
+ * dbgfs_set_recording() - Set attributes for the recording.
  * @ctx:	target kdamond context
  * @rbuf_len:	length of the result buffer
  * @rfile_path:	path to the monitor result files
@@ -632,10 +579,10 @@ static ssize_t debugfs_record_read(struct file *file,
  *
  * Return: 0 on success, negative error code otherwise.
  */
-static int debugfs_set_recording(struct damon_ctx *ctx,
+static int dbgfs_set_recording(struct damon_ctx *ctx,
 			unsigned int rbuf_len, char *rfile_path)
 {
-	struct debugfs_recorder *recorder;
+	struct dbgfs_recorder *recorder;
 	size_t rfile_path_len;
 
 	if (rbuf_len && (rbuf_len > MAX_RECORD_BUFFER_LEN ||
@@ -679,7 +626,7 @@ static int debugfs_set_recording(struct damon_ctx *ctx,
 	return 0;
 }
 
-static ssize_t debugfs_record_write(struct file *file,
+static ssize_t dbgfs_record_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -705,7 +652,7 @@ static ssize_t debugfs_record_write(struct file *file,
 		goto unlock_out;
 	}
 
-	err = debugfs_set_recording(ctx, rbuf_len, rfile_path);
+	err = dbgfs_set_recording(ctx, rbuf_len, rfile_path);
 	if (err)
 		ret = err;
 unlock_out:
@@ -735,7 +682,7 @@ static ssize_t sprint_init_regions(struct damon_ctx *c, char *buf, ssize_t len)
 	return written;
 }
 
-static ssize_t debugfs_init_regions_read(struct file *file, char __user *buf,
+static ssize_t dbgfs_init_regions_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -827,7 +774,7 @@ fail:
 	return err;
 }
 
-static ssize_t debugfs_init_regions_write(struct file *file,
+static ssize_t dbgfs_init_regions_write(struct file *file,
 					  const char __user *buf, size_t count,
 					  loff_t *ppos)
 {
@@ -856,7 +803,7 @@ unlock_out:
 	return ret;
 }
 
-static ssize_t debugfs_attrs_read(struct file *file,
+static ssize_t dbgfs_attrs_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -873,7 +820,7 @@ static ssize_t debugfs_attrs_read(struct file *file,
 	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);
 }
 
-static ssize_t debugfs_attrs_write(struct file *file,
+static ssize_t dbgfs_attrs_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
@@ -908,18 +855,86 @@ out:
 	return ret;
 }
 
-static struct dentry **debugfs_dirs;
+static struct dentry **dbgfs_dirs;
 
-static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx);
+static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx);
 
-static void debugfs_free_recorder(struct debugfs_recorder *recorder)
+static void dbgfs_free_recorder(struct dbgfs_recorder *recorder)
 {
 	kfree(recorder->rbuf);
 	kfree(recorder->rfile_path);
 	kfree(recorder);
 }
 
-static struct damon_ctx *debugfs_new_ctx(void)
+static int damon_dbgfs_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+
+	return nonseekable_open(inode, file);
+}
+
+static const struct file_operations kdamond_pid = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_kdamond_pid_read,
+};
+
+static const struct file_operations target_ids_fops = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_target_ids_read,
+	.write = dbgfs_target_ids_write,
+};
+
+static const struct file_operations schemes_fops = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_schemes_read,
+	.write = dbgfs_schemes_write,
+};
+
+static const struct file_operations record_fops = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_record_read,
+	.write = dbgfs_record_write,
+};
+
+static const struct file_operations init_regions_fops = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_init_regions_read,
+	.write = dbgfs_init_regions_write,
+};
+
+static const struct file_operations attrs_fops = {
+	.owner = THIS_MODULE,
+	.open = damon_dbgfs_open,
+	.read = dbgfs_attrs_read,
+	.write = dbgfs_attrs_write,
+};
+
+static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
+{
+	const char * const file_names[] = {"attrs", "init_regions", "record",
+		"schemes", "target_ids", "kdamond_pid"};
+	const struct file_operations *fops[] = {&attrs_fops,
+		&init_regions_fops, &record_fops, &schemes_fops,
+		&target_ids_fops, &kdamond_pid};
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
+		if (!debugfs_create_file(file_names[i], 0600, dir,
+					ctx, fops[i])) {
+			pr_err("failed to create %s file\n", file_names[i]);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
+
+static struct damon_ctx *dbgfs_new_ctx(void)
 {
 	struct damon_ctx *ctx;
 
@@ -927,23 +942,23 @@ static struct damon_ctx *debugfs_new_ctx(void)
 	if (!ctx)
 		return NULL;
 
-	if (debugfs_set_recording(ctx, 0, "none")) {
+	if (dbgfs_set_recording(ctx, 0, "none")) {
 		damon_destroy_ctx(ctx);
 		return NULL;
 	}
 
-	debugfs_set_vaddr_primitives(ctx);
-	ctx->aggregate_cb = debugfs_aggregate_cb;
+	dbgfs_set_vaddr_primitives(ctx);
+	ctx->aggregate_cb = dbgfs_aggregate_cb;
 	return ctx;
 }
 
-static void debugfs_destroy_ctx(struct damon_ctx *ctx)
+static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 {
-	debugfs_free_recorder(ctx->private);
+	dbgfs_free_recorder(ctx->private);
 	damon_destroy_ctx(ctx);
 }
 
-static ssize_t debugfs_mk_context_write(struct file *file,
+static ssize_t dbgfs_mk_context_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	char *kbuf;
@@ -973,51 +988,51 @@ static ssize_t debugfs_mk_context_write(struct file *file,
 		goto unlock_out;
 	}
 
-	new_ctxs = krealloc(debugfs_ctxs, sizeof(*debugfs_ctxs) *
-			(debugfs_nr_ctxs + 1), GFP_KERNEL);
+	new_ctxs = krealloc(dbgfs_ctxs, sizeof(*dbgfs_ctxs) *
+			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
 	if (!new_ctxs) {
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
-	new_dirs = krealloc(debugfs_dirs, sizeof(*debugfs_dirs) *
-			(debugfs_nr_ctxs + 1), GFP_KERNEL);
+	new_dirs = krealloc(dbgfs_dirs, sizeof(*dbgfs_dirs) *
+			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
 	if (!new_dirs) {
 		kfree(new_ctxs);
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
 
-	debugfs_ctxs = new_ctxs;
-	debugfs_dirs = new_dirs;
+	dbgfs_ctxs = new_ctxs;
+	dbgfs_dirs = new_dirs;
 
-	root = debugfs_dirs[0];
+	root = dbgfs_dirs[0];
 	if (!root) {
 		ret = -ENOENT;
 		goto unlock_out;
 	}
 
-	debugfs_dirs[debugfs_nr_ctxs] = debugfs_create_dir(ctx_name, root);
-	if (!debugfs_dirs[debugfs_nr_ctxs]) {
+	dbgfs_dirs[dbgfs_nr_ctxs] = debugfs_create_dir(ctx_name, root);
+	if (!dbgfs_dirs[dbgfs_nr_ctxs]) {
 		pr_err("dir %s creation failed\n", ctx_name);
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
 
-	debugfs_ctxs[debugfs_nr_ctxs] = debugfs_new_ctx();
-	if (!debugfs_ctxs[debugfs_nr_ctxs]) {
+	dbgfs_ctxs[dbgfs_nr_ctxs] = dbgfs_new_ctx();
+	if (!dbgfs_ctxs[dbgfs_nr_ctxs]) {
 		pr_err("ctx %s creation failed\n", ctx_name);
-		debugfs_remove(debugfs_dirs[debugfs_nr_ctxs]);
+		debugfs_remove(dbgfs_dirs[dbgfs_nr_ctxs]);
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
 
-	if (debugfs_fill_ctx_dir(debugfs_dirs[debugfs_nr_ctxs],
-				debugfs_ctxs[debugfs_nr_ctxs])) {
+	if (dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
+				dbgfs_ctxs[dbgfs_nr_ctxs])) {
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
 
-	debugfs_nr_ctxs++;
+	dbgfs_nr_ctxs++;
 
 unlock_out:
 	mutex_unlock(&damon_dbgfs_lock);
@@ -1028,7 +1043,7 @@ out:
 	return ret;
 }
 
-static ssize_t debugfs_rm_context_write(struct file *file,
+static ssize_t dbgfs_rm_context_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	char *kbuf;
@@ -1059,7 +1074,7 @@ static ssize_t debugfs_rm_context_write(struct file *file,
 		goto unlock_out;
 	}
 
-	root = debugfs_dirs[0];
+	root = dbgfs_dirs[0];
 	if (!root) {
 		ret = -ENOENT;
 		goto unlock_out;
@@ -1071,13 +1086,13 @@ static ssize_t debugfs_rm_context_write(struct file *file,
 		goto unlock_out;
 	}
 
-	new_dirs = kmalloc_array(debugfs_nr_ctxs - 1, sizeof(*debugfs_dirs),
+	new_dirs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_dirs),
 			GFP_KERNEL);
 	if (!new_dirs) {
 		ret = -ENOMEM;
 		goto unlock_out;
 	}
-	new_ctxs = kmalloc_array(debugfs_nr_ctxs - 1, sizeof(*debugfs_ctxs),
+	new_ctxs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_ctxs),
 			GFP_KERNEL);
 	if (!new_ctxs) {
 		kfree(new_dirs);
@@ -1085,19 +1100,19 @@ static ssize_t debugfs_rm_context_write(struct file *file,
 		goto unlock_out;
 	}
 
-	for (i = 0, j = 0; i < debugfs_nr_ctxs; i++) {
-		if (debugfs_dirs[i] == dir) {
-			debugfs_remove(debugfs_dirs[i]);
-			debugfs_destroy_ctx(debugfs_ctxs[i]);
+	for (i = 0, j = 0; i < dbgfs_nr_ctxs; i++) {
+		if (dbgfs_dirs[i] == dir) {
+			debugfs_remove(dbgfs_dirs[i]);
+			dbgfs_destroy_ctx(dbgfs_ctxs[i]);
 			continue;
 		}
-		new_dirs[j] = debugfs_dirs[i];
-		new_ctxs[j++] = debugfs_ctxs[i];
+		new_dirs[j] = dbgfs_dirs[i];
+		new_ctxs[j++] = dbgfs_ctxs[i];
 	}
 
-	debugfs_dirs = new_dirs;
-	debugfs_ctxs = new_ctxs;
-	debugfs_nr_ctxs--;
+	dbgfs_dirs = new_dirs;
+	dbgfs_ctxs = new_ctxs;
+	dbgfs_nr_ctxs--;
 
 unlock_out:
 	mutex_unlock(&damon_dbgfs_lock);
@@ -1107,116 +1122,100 @@ out:
 	return ret;
 }
 
-static int damon_debugfs_open(struct inode *inode, struct file *file)
+static ssize_t dbgfs_monitor_on_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
 {
-	file->private_data = inode->i_private;
+	char monitor_on_buf[5];
+	bool monitor_on = damon_nr_running_ctxs() != 0;
+	int len;
 
-	return nonseekable_open(inode, file);
+	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");
+
+	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);
 }
 
-static const struct file_operations monitor_on_fops = {
-	.owner = THIS_MODULE,
-	.read = debugfs_monitor_on_read,
-	.write = debugfs_monitor_on_write,
-};
+static int dbgfs_start_ctxs(struct damon_ctx **ctxs, int nr_ctxs)
+{
+	int rc;
 
-static const struct file_operations kdamond_pid = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_kdamond_pid_read,
-};
+	if (!mutex_trylock(&page_idle_lock))
+		return -EBUSY;
 
-static const struct file_operations target_ids_fops = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_target_ids_read,
-	.write = debugfs_target_ids_write,
-};
+	rc = damon_start(ctxs, nr_ctxs);
+	if (rc)
+		mutex_unlock(&page_idle_lock);
 
-static const struct file_operations schemes_fops = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_schemes_read,
-	.write = debugfs_schemes_write,
-};
+	return rc;
+}
 
-static const struct file_operations record_fops = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_record_read,
-	.write = debugfs_record_write,
-};
+static ssize_t dbgfs_monitor_on_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	ssize_t ret = count;
+	char *kbuf;
+	int err;
 
-static const struct file_operations init_regions_fops = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_init_regions_read,
-	.write = debugfs_init_regions_write,
-};
+	kbuf = user_input_str(buf, count, ppos);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
 
-static const struct file_operations attrs_fops = {
-	.owner = THIS_MODULE,
-	.open = damon_debugfs_open,
-	.read = debugfs_attrs_read,
-	.write = debugfs_attrs_write,
-};
+	/* Remove white space */
+	if (sscanf(kbuf, "%s", kbuf) != 1)
+		return -EINVAL;
+	if (!strncmp(kbuf, "on", count))
+		err = dbgfs_start_ctxs(dbgfs_ctxs, dbgfs_nr_ctxs);
+	else if (!strncmp(kbuf, "off", count))
+		err = damon_stop(dbgfs_ctxs, dbgfs_nr_ctxs);
+	else
+		return -EINVAL;
+
+	if (err)
+		ret = err;
+	return ret;
+}
 
 static const struct file_operations mk_contexts_fops = {
 	.owner = THIS_MODULE,
-	.write = debugfs_mk_context_write,
+	.write = dbgfs_mk_context_write,
 };
 
 static const struct file_operations rm_contexts_fops = {
 	.owner = THIS_MODULE,
-	.write = debugfs_rm_context_write,
+	.write = dbgfs_rm_context_write,
 };
 
-static int debugfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
+static const struct file_operations monitor_on_fops = {
+	.owner = THIS_MODULE,
+	.read = dbgfs_monitor_on_read,
+	.write = dbgfs_monitor_on_write,
+};
+
+static int __init __damon_dbgfs_init(void)
 {
-	const char * const file_names[] = {"attrs", "init_regions", "record",
-		"schemes", "target_ids", "kdamond_pid"};
-	const struct file_operations *fops[] = {&attrs_fops,
-		&init_regions_fops, &record_fops, &schemes_fops,
-		&target_ids_fops, &kdamond_pid};
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
-		if (!debugfs_create_file(file_names[i], 0600, dir,
-					ctx, fops[i])) {
-			pr_err("failed to create %s file\n", file_names[i]);
-			return -ENOMEM;
-		}
-	}
-
-	return 0;
-}
-
-static int __init damon_debugfs_init(void)
-{
-	struct dentry *debugfs_root;
+	struct dentry *dbgfs_root;
 	const char * const file_names[] = { "mk_contexts", "rm_contexts",
 		"monitor_on"};
 	const struct file_operations *fops[] = { &mk_contexts_fops,
 		&rm_contexts_fops, &monitor_on_fops};
 	int i;
 
-	debugfs_root = debugfs_create_dir("damon", NULL);
-	if (!debugfs_root) {
-		pr_err("failed to create the debugfs dir\n");
+	dbgfs_root = debugfs_create_dir("damon", NULL);
+	if (!dbgfs_root) {
+		pr_err("failed to create the dbgfs dir\n");
 		return -ENOMEM;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
-		if (!debugfs_create_file(file_names[i], 0600, debugfs_root,
+		if (!debugfs_create_file(file_names[i], 0600, dbgfs_root,
 					NULL, fops[i])) {
 			pr_err("failed to create %s file\n", file_names[i]);
 			return -ENOMEM;
 		}
 	}
-	debugfs_fill_ctx_dir(debugfs_root, debugfs_ctxs[0]);
+	dbgfs_fill_ctx_dir(dbgfs_root, dbgfs_ctxs[0]);
 
-	debugfs_dirs = kmalloc_array(1, sizeof(debugfs_root), GFP_KERNEL);
-	debugfs_dirs[0] = debugfs_root;
+	dbgfs_dirs = kmalloc_array(1, sizeof(dbgfs_root), GFP_KERNEL);
+	dbgfs_dirs[0] = dbgfs_root;
 
 	return 0;
 }
@@ -1229,14 +1228,14 @@ static int __init damon_dbgfs_init(void)
 {
 	int rc;
 
-	debugfs_ctxs = kmalloc(sizeof(*debugfs_ctxs), GFP_KERNEL);
-	debugfs_ctxs[0] = debugfs_new_ctx();
-	if (!debugfs_ctxs[0])
+	dbgfs_ctxs = kmalloc(sizeof(*dbgfs_ctxs), GFP_KERNEL);
+	dbgfs_ctxs[0] = dbgfs_new_ctx();
+	if (!dbgfs_ctxs[0])
 		return -ENOMEM;
 
-	rc = damon_debugfs_init();
+	rc = __damon_dbgfs_init();
 	if (rc)
-		pr_err("%s: debugfs init failed\n", __func__);
+		pr_err("%s: dbgfs init failed\n", __func__);
 
 	return rc;
 }
