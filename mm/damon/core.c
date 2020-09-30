@@ -518,14 +518,12 @@ static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)
 static void kdamond_reset_aggregated(struct damon_ctx *c)
 {
 	struct damon_target *t;
-	unsigned int nr;
 
 	damon_for_each_target(t, c) {
 		struct damon_region *r;
 
-		nr = damon_nr_regions(t);
 		damon_for_each_region(r, t) {
-			trace_damon_aggregated(t, r, nr);
+			trace_damon_aggregated(t, r, damon_nr_regions(t));
 			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
 		}
