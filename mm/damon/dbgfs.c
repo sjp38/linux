@@ -33,17 +33,6 @@ static int debugfs_nr_terminated_ctxs;
 
 static DEFINE_MUTEX(damon_dbgfs_lock);
 
-static unsigned int nr_damon_targets(struct damon_ctx *ctx)
-{
-	struct damon_target *t;
-	unsigned int nr_targets = 0;
-
-	damon_for_each_target(t, ctx)
-		nr_targets++;
-
-	return nr_targets;
-}
-
 /*
  * Flush the content in the result buffer to the result file
  */
@@ -135,6 +124,17 @@ static void debugfs_phys_cleanup(struct damon_ctx *ctx)
 	debugfs_flush_rbuffer(ctx->private);
 	debugfs_unlock_page_idle_lock();
 
+}
+
+static unsigned int nr_damon_targets(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	unsigned int nr_targets = 0;
+
+	damon_for_each_target(t, ctx)
+		nr_targets++;
+
+	return nr_targets;
 }
 
 /*
