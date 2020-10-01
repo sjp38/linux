@@ -92,6 +92,8 @@ struct damon_target {
  *
  * @targets_list:	Head of monitoring targets (&damon_target) list.
  *
+ * @private		Private user data.
+ *
  * @init_target_regions:	Constructs initial monitoring target regions.
  * @update_target_regions:	Updates monitoring target regions.
  * @prepare_access_checks:	Prepares next access check of target regions.
@@ -143,6 +145,8 @@ struct damon_ctx {
 	struct mutex kdamond_lock;
 
 	struct list_head targets_list;	/* 'damon_target' objects */
+
+	void *private;
 
 	/* callbacks */
 	void (*init_target_regions)(struct damon_ctx *context);
