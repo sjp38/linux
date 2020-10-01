@@ -1207,16 +1207,16 @@ static const struct file_operations monitor_on_fops = {
 static int __init __damon_dbgfs_init(void)
 {
 	struct dentry *dbgfs_root;
-	const char * const file_names[] = { "mk_contexts", "rm_contexts",
+	const char * const file_names[] = {"mk_contexts", "rm_contexts",
 		"monitor_on"};
-	const struct file_operations *fops[] = { &mk_contexts_fops,
+	const struct file_operations *fops[] = {&mk_contexts_fops,
 		&rm_contexts_fops, &monitor_on_fops};
 	int i;
 
 	dbgfs_root = debugfs_create_dir("damon", NULL);
-	if (!dbgfs_root) {
+	if (IS_ERR(dbgfs_root)) {
 		pr_err("failed to create the dbgfs dir\n");
-		return -ENOMEM;
+		return PTR_ERR(dbgfs_root);
 	}
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
