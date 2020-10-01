@@ -135,6 +135,40 @@ unsigned int damon_nr_regions(struct damon_target *t)
 	return nr_regions;
 }
 
+struct damon_ctx *damon_new_ctx(void)
+{
+	struct damon_ctx *ctx;
+
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return NULL;
+
+	ctx->sample_interval = 5 * 1000;
+	ctx->aggr_interval = 100 * 1000;
+	ctx->regions_update_interval = 1000 * 1000;
+	ctx->min_nr_regions = 10;
+	ctx->max_nr_regions = 1000;
+
+	ktime_get_coarse_ts64(&ctx->last_aggregation);
+	ctx->last_regions_update = ctx->last_aggregation;
+
+	mutex_init(&ctx->kdamond_lock);
+
+	INIT_LIST_HEAD(&ctx->targets_list);
+
+	return ctx;
+}
+
+void damon_destroy_ctx(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next_t;
+
+	damon_for_each_target_safe(t, next_t, ctx)
+		damon_destroy_target(t);
+
+	kfree(ctx);
+}
+
 /**
  * damon_set_targets() - Set monitoring targets.
  * @ctx:	monitoring context
@@ -202,6 +236,20 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 	ctx->max_nr_regions = max_nr_reg;
 
 	return 0;
+}
+
+/**
+ * damon_nr_running_ctxs() - Return number of currently running contexts.
+ */
+int damon_nr_running_ctxs(void)
+{
+	int nr_ctxs;
+
+	mutex_lock(&damon_lock);
+	nr_ctxs = nr_running_ctxs;
+	mutex_unlock(&damon_lock);
+
+	return nr_ctxs;
 }
 
 /* Returns the size upper limit for each monitoring region */
