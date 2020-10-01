@@ -958,14 +958,68 @@ static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 	damon_destroy_ctx(ctx);
 }
 
+/*
+ * This function should be called while holding damon_dbgfs_lock.
+ *
+ * Returns 0 on success, negative error code otherwise.
+ */
+static int dbgfs_mk_context(char *name)
+{
+	struct dentry *root, **new_dirs, *new_dir;
+	struct damon_ctx **new_ctxs, *new_ctx;
+	int err;
+
+	if (damon_nr_running_ctxs())
+		return -EBUSY;
+
+	new_ctxs = krealloc(dbgfs_ctxs, sizeof(*dbgfs_ctxs) *
+			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
+	if (!new_ctxs)
+		return -ENOMEM;
+
+	new_dirs = krealloc(dbgfs_dirs, sizeof(*dbgfs_dirs) *
+			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
+	if (!new_dirs) {
+		kfree(new_ctxs);
+		return -ENOMEM;
+	}
+
+	dbgfs_ctxs = new_ctxs;
+	dbgfs_dirs = new_dirs;
+
+	root = dbgfs_dirs[0];
+	if (!root)
+		return -ENOENT;
+
+	new_dir = debugfs_create_dir(name, root);
+	if (IS_ERR(new_dir))
+		return PTR_ERR(new_dir);
+	dbgfs_dirs[dbgfs_nr_ctxs] = new_dir;
+
+	new_ctx = dbgfs_new_ctx();
+	if (!new_ctx) {
+		debugfs_remove(new_dir);
+		dbgfs_dirs[dbgfs_nr_ctxs] = NULL;
+		return -ENOMEM;
+	}
+	dbgfs_ctxs[dbgfs_nr_ctxs] = new_ctx;
+
+	err = dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
+			dbgfs_ctxs[dbgfs_nr_ctxs]);
+	if (err)
+		return err;
+
+	dbgfs_nr_ctxs++;
+	return 0;
+}
+
 static ssize_t dbgfs_mk_context_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	char *kbuf;
-	ssize_t ret = count;
 	char *ctx_name;
-	struct dentry *root, **new_dirs;
-	struct damon_ctx **new_ctxs;
+	ssize_t ret = count;
+	int err;
 
 	kbuf = user_input_str(buf, count, ppos);
 	if (IS_ERR(kbuf))
@@ -983,58 +1037,9 @@ static ssize_t dbgfs_mk_context_write(struct file *file,
 	}
 
 	mutex_lock(&damon_dbgfs_lock);
-	if (damon_nr_running_ctxs()) {
-		ret = -EBUSY;
-		goto unlock_out;
-	}
-
-	new_ctxs = krealloc(dbgfs_ctxs, sizeof(*dbgfs_ctxs) *
-			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
-	if (!new_ctxs) {
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
-	new_dirs = krealloc(dbgfs_dirs, sizeof(*dbgfs_dirs) *
-			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
-	if (!new_dirs) {
-		kfree(new_ctxs);
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
-
-	dbgfs_ctxs = new_ctxs;
-	dbgfs_dirs = new_dirs;
-
-	root = dbgfs_dirs[0];
-	if (!root) {
-		ret = -ENOENT;
-		goto unlock_out;
-	}
-
-	dbgfs_dirs[dbgfs_nr_ctxs] = debugfs_create_dir(ctx_name, root);
-	if (!dbgfs_dirs[dbgfs_nr_ctxs]) {
-		pr_err("dir %s creation failed\n", ctx_name);
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
-
-	dbgfs_ctxs[dbgfs_nr_ctxs] = dbgfs_new_ctx();
-	if (!dbgfs_ctxs[dbgfs_nr_ctxs]) {
-		pr_err("ctx %s creation failed\n", ctx_name);
-		debugfs_remove(dbgfs_dirs[dbgfs_nr_ctxs]);
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
-
-	if (dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
-				dbgfs_ctxs[dbgfs_nr_ctxs])) {
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
-
-	dbgfs_nr_ctxs++;
-
-unlock_out:
+	err = dbgfs_mk_context(ctx_name);
+	if (err)
+		ret = err;
 	mutex_unlock(&damon_dbgfs_lock);
 
 out:
@@ -1043,61 +1048,37 @@ out:
 	return ret;
 }
 
-static ssize_t dbgfs_rm_context_write(struct file *file,
-		const char __user *buf, size_t count, loff_t *ppos)
+/*
+ * This function should be called while holding damon_dbgfs_lock.
+ * Return 0 on success, negative error code otherwise.
+ */
+static int dbgfs_rm_context(char *name)
 {
-	char *kbuf;
-	ssize_t ret = count;
-	char *ctx_name;
 	struct dentry *root, *dir, **new_dirs;
 	struct damon_ctx **new_ctxs;
 	int i, j;
 
-	kbuf = user_input_str(buf, count, ppos);
-	if (IS_ERR(kbuf))
-		return PTR_ERR(kbuf);
-	ctx_name = kmalloc(count + 1, GFP_KERNEL);
-	if (!ctx_name) {
-		kfree(kbuf);
-		return -ENOMEM;
-	}
-
-	/* Trim white space */
-	if (sscanf(kbuf, "%s", ctx_name) != 1) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	mutex_lock(&damon_dbgfs_lock);
-	if (damon_nr_running_ctxs()) {
-		ret = -EBUSY;
-		goto unlock_out;
-	}
+	if (damon_nr_running_ctxs())
+		return -EBUSY;
 
 	root = dbgfs_dirs[0];
-	if (!root) {
-		ret = -ENOENT;
-		goto unlock_out;
-	}
+	if (!root)
+		return -ENOENT;
 
-	dir = debugfs_lookup(ctx_name, root);
-	if (!dir) {
-		ret = -ENOENT;
-		goto unlock_out;
-	}
+	dir = debugfs_lookup(name, root);
+	if (!dir)
+		return -ENOENT;
 
 	new_dirs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_dirs),
 			GFP_KERNEL);
-	if (!new_dirs) {
-		ret = -ENOMEM;
-		goto unlock_out;
-	}
+	if (!new_dirs)
+		return -ENOMEM;
+
 	new_ctxs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_ctxs),
 			GFP_KERNEL);
 	if (!new_ctxs) {
 		kfree(new_dirs);
-		ret = -ENOMEM;
-		goto unlock_out;
+		return -ENOMEM;
 	}
 
 	for (i = 0, j = 0; i < dbgfs_nr_ctxs; i++) {
@@ -1110,15 +1091,48 @@ static ssize_t dbgfs_rm_context_write(struct file *file,
 		new_ctxs[j++] = dbgfs_ctxs[i];
 	}
 
+	kfree(dbgfs_dirs);
+	kfree(dbgfs_ctxs);
+
 	dbgfs_dirs = new_dirs;
 	dbgfs_ctxs = new_ctxs;
 	dbgfs_nr_ctxs--;
 
-unlock_out:
+	return 0;
+}
+
+static ssize_t dbgfs_rm_context_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	char *kbuf;
+	ssize_t ret = count;
+	int err;
+	char *ctx_name;
+
+	kbuf = user_input_str(buf, count, ppos);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
+	ctx_name = kmalloc(count + 1, GFP_KERNEL);
+	if (!ctx_name) {
+		kfree(kbuf);
+		return -ENOMEM;
+	}
+
+	/* Trim white space */
+	if (sscanf(kbuf, "%s", ctx_name) != 1) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	mutex_lock(&damon_dbgfs_lock);
+	err = dbgfs_rm_context(ctx_name);
+	if (err)
+		ret = err;
 	mutex_unlock(&damon_dbgfs_lock);
 
 out:
 	kfree(kbuf);
+	kfree(ctx_name);
 	return ret;
 }
 
