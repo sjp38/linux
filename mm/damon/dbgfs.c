@@ -959,6 +959,8 @@ static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 }
 
 /*
+ * Make a context of @name and create a debugfs directory for it.
+ *
  * This function should be called while holding damon_dbgfs_lock.
  *
  * Returns 0 on success, negative error code otherwise.
@@ -1049,7 +1051,10 @@ out:
 }
 
 /*
+ * Remove a context of @name and its debugfs directory.
+ *
  * This function should be called while holding damon_dbgfs_lock.
+ *
  * Return 0 on success, negative error code otherwise.
  */
 static int dbgfs_rm_context(char *name)
