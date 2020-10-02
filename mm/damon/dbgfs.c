@@ -114,7 +114,7 @@ static ssize_t dbgfs_record_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
-	struct dbgfs_recorder *rec = ctx->private;
+	struct dbgfs_recorder *rec = ctx->callback.private;
 	char record_buf[20 + MAX_RFILE_PATH_LEN];
 	int ret;
 
@@ -157,12 +157,12 @@ static int dbgfs_set_recording(struct damon_ctx *ctx,
 		return -EINVAL;
 	}
 
-	recorder = ctx->private;
+	recorder = ctx->callback.private;
 	if (!recorder) {
 		recorder = kzalloc(sizeof(*recorder), GFP_KERNEL);
 		if (!recorder)
 			return -ENOMEM;
-		ctx->private = recorder;
+		ctx->callback.private = recorder;
 	}
 
 	recorder->rbuf_len = rbuf_len;
@@ -375,7 +375,7 @@ out:
 }
 
 #define targetid_is_pid(ctx)	\
-	(ctx->target_valid == damon_va_target_valid)
+	(ctx->primitive.target_valid == damon_va_target_valid)
 
 static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 {
@@ -467,9 +467,6 @@ static struct pid *damon_get_pidfd_pid(unsigned int pidfd)
 	return pid;
 }
 
-static void dbgfs_set_pa_primitives(struct damon_ctx *ctx);
-static void dbgfs_set_va_primitives(struct damon_ctx *ctx);
-
 static ssize_t dbgfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -489,12 +486,12 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	nrs = kbuf;
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		/* Configure the context for physical memory monitoring */
-		dbgfs_set_pa_primitives(ctx);
+		damon_pa_set_primitives(ctx);
 		/* target id is meaningless here, but we set it just for fun */
 		scnprintf(kbuf, count, "42    ");
 	} else {
 		/* Configure the context for virtual memory monitoring */
-		dbgfs_set_va_primitives(ctx);
+		damon_va_set_primitives(ctx);
 
 		if (!strncmp(kbuf, "pidfd ", 6)) {
 			received_pidfds = true;
@@ -804,12 +801,12 @@ static void dbgfs_flush_rbuffer(struct dbgfs_recorder *rec)
  */
 static void dbgfs_write_rbuf(struct damon_ctx *ctx, void *data, ssize_t size)
 {
-	struct dbgfs_recorder *rec = (struct dbgfs_recorder *)ctx->private;
+	struct dbgfs_recorder *rec = ctx->callback.private;
 
 	if (!rec->rbuf_len || !rec->rbuf || !rec->rfile_path)
 		return;
 	if (rec->rbuf_offset + size > rec->rbuf_len)
-		dbgfs_flush_rbuffer(ctx->private);
+		dbgfs_flush_rbuffer(ctx->callback.private);
 	if (rec->rbuf_offset + size > rec->rbuf_len) {
 		pr_warn("%s: flush failed, or wrong size given(%u, %zu)\n",
 				__func__, rec->rbuf_offset, size);
@@ -846,6 +843,12 @@ static unsigned int nr_damon_targets(struct damon_ctx *ctx)
 	return nr_targets;
 }
 
+static int dbgfs_before_start(struct damon_ctx *ctx)
+{
+	dbgfs_write_record_header(ctx);
+	return 0;
+}
+
 /*
  * Store the aggregated monitoring results to the result buffer
  *
@@ -856,7 +859,7 @@ static unsigned int nr_damon_targets(struct damon_ctx *ctx)
  *   target info: <id> <number of regions> <array of region infos>
  *   region info: <start address> <end address> <nr_accesses>
  */
-static void dbgfs_aggregate_cb(struct damon_ctx *c)
+static int dbgfs_after_aggregation(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct timespec64 now;
@@ -881,12 +884,8 @@ static void dbgfs_aggregate_cb(struct damon_ctx *c)
 					sizeof(r->nr_accesses));
 		}
 	}
-}
 
-static void dbgfs_va_init_regions(struct damon_ctx *ctx)
-{
-	dbgfs_write_record_header(ctx);
-	damon_va_init_regions(ctx);
+	return 0;
 }
 
 static void dbgfs_unlock_page_idle_lock(void)
@@ -899,36 +898,11 @@ static void dbgfs_unlock_page_idle_lock(void)
 	mutex_unlock(&damon_dbgfs_lock);
 }
 
-static void dbgfs_va_cleanup(struct damon_ctx *ctx)
+static int dbgfs_before_terminate(struct damon_ctx *ctx)
 {
-	dbgfs_flush_rbuffer(ctx->private);
+	dbgfs_flush_rbuffer(ctx->callback.private);
 	dbgfs_unlock_page_idle_lock();
-	damon_va_cleanup(ctx);
-}
-
-static void dbgfs_pa_init_regions(struct damon_ctx *ctx)
-{
-	dbgfs_write_record_header(ctx);
-}
-
-static void dbgfs_pa_cleanup(struct damon_ctx *ctx)
-{
-	dbgfs_flush_rbuffer(ctx->private);
-	dbgfs_unlock_page_idle_lock();
-}
-
-static void dbgfs_set_va_primitives(struct damon_ctx *ctx)
-{
-	damon_va_set_primitives(ctx);
-	ctx->init_target_regions = dbgfs_va_init_regions;
-	ctx->cleanup = dbgfs_va_cleanup;
-}
-
-static void dbgfs_set_pa_primitives(struct damon_ctx *ctx)
-{
-	damon_pa_set_primitives(ctx);
-	ctx->init_target_regions = dbgfs_pa_init_regions;
-	ctx->cleanup = dbgfs_pa_cleanup;
+	return 0;
 }
 
 static struct damon_ctx *dbgfs_new_ctx(void)
@@ -944,14 +918,16 @@ static struct damon_ctx *dbgfs_new_ctx(void)
 		return NULL;
 	}
 
-	dbgfs_set_va_primitives(ctx);
-	ctx->aggregate_cb = dbgfs_aggregate_cb;
+	damon_va_set_primitives(ctx);
+	ctx->callback.before_start = dbgfs_before_start;
+	ctx->callback.after_aggregation = dbgfs_after_aggregation;
+	ctx->callback.before_terminate = dbgfs_before_terminate;
 	return ctx;
 }
 
 static void dbgfs_destroy_ctx(struct damon_ctx *ctx)
 {
-	dbgfs_free_recorder(ctx->private);
+	dbgfs_free_recorder(ctx->callback.private);
 	damon_destroy_ctx(ctx);
 }
 

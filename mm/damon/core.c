@@ -548,8 +548,8 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			continue;
 		s->stat_count++;
 		s->stat_sz += sz;
-		if (c->apply_scheme)
-			c->apply_scheme(c, t, r, s);
+		if (c->primitive.apply_scheme)
+			c->primitive.apply_scheme(c, t, r, s);
 		if (s->action != DAMOS_STAT)
 			r->age = 0;
 	}
@@ -745,16 +745,35 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	if (stop)
 		return true;
 
-	if (!ctx->target_valid)
+	if (!ctx->primitive.target_valid)
 		return false;
 
 	damon_for_each_target(t, ctx) {
-		if (ctx->target_valid(t))
+		if (ctx->primitive.target_valid(t))
 			return false;
 	}
 
 	return true;
 }
+
+static void set_kdamond_stop(struct damon_ctx *ctx, bool stop)
+{
+	mutex_lock(&ctx->kdamond_lock);
+	ctx->kdamond_stop = stop;
+	mutex_unlock(&ctx->kdamond_lock);
+}
+
+#define kdamond_call_prmt(ctx, fn)			\
+	do {						\
+		if (ctx->primitive.fn)			\
+			ctx->primitive.fn(ctx);		\
+	} while (0)
+
+#define kdamond_callback(ctx, fn)				\
+	do {							\
+		if (ctx->callback.fn && ctx->callback.fn(ctx))	\
+			set_kdamond_stop(ctx, true);		\
+	} while (0)
 
 /*
  * The monitoring daemon that runs as a kernel thread
@@ -768,34 +787,32 @@ static int kdamond_fn(void *data)
 	unsigned long sz_limit = 0;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
-	if (ctx->init_target_regions)
-		ctx->init_target_regions(ctx);
+
+	kdamond_call_prmt(ctx, init_target_regions);
+	kdamond_callback(ctx, before_start);
+
 	sz_limit = damon_region_sz_limit(ctx);
 
 	while (!kdamond_need_stop(ctx)) {
-		if (ctx->prepare_access_checks)
-			ctx->prepare_access_checks(ctx);
-		if (ctx->sample_cb)
-			ctx->sample_cb(ctx);
+		kdamond_call_prmt(ctx, prepare_access_checks);
+		kdamond_callback(ctx, after_sampling);
 
 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);
 
-		if (ctx->check_accesses)
-			max_nr_accesses = ctx->check_accesses(ctx);
+		if (ctx->primitive.check_accesses)
+			max_nr_accesses = ctx->primitive.check_accesses(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			kdamond_merge_regions(ctx, max_nr_accesses / 10,
 					sz_limit);
-			if (ctx->aggregate_cb)
-				ctx->aggregate_cb(ctx);
+			kdamond_callback(ctx, after_aggregation);
 			kdamond_apply_schemes(ctx);
 			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
 		}
 
 		if (kdamond_need_update_regions(ctx)) {
-			if (ctx->update_target_regions)
-				ctx->update_target_regions(ctx);
+			kdamond_call_prmt(ctx, update_target_regions);
 			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
@@ -804,8 +821,8 @@ static int kdamond_fn(void *data)
 			damon_destroy_region(r);
 	}
 
-	if (ctx->cleanup)
-		ctx->cleanup(ctx);
+	kdamond_callback(ctx, before_terminate);
+	kdamond_call_prmt(ctx, cleanup);
 
 	pr_debug("kdamond (%d) finishes\n", ctx->kdamond->pid);
 	mutex_lock(&ctx->kdamond_lock);

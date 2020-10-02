@@ -83,7 +83,7 @@ static void damon_dbgfs_test_set_targets(struct kunit *test)
 	char buf[64];
 
 	/* Make DAMON consider target id as plain number */
-	ctx->target_valid = NULL;
+	ctx->primitive.target_valid = NULL;
 
 	damon_set_targets(ctx, ids, 3);
 	sprint_target_ids(ctx, buf, 64);
@@ -111,7 +111,7 @@ static void damon_dbgfs_test_set_targets(struct kunit *test)
 static void damon_dbgfs_test_set_recording(struct kunit *test)
 {
 	struct damon_ctx *ctx = dbgfs_new_ctx();
-	struct dbgfs_recorder *rec = ctx->private;
+	struct dbgfs_recorder *rec = ctx->callback.private;
 	int err;
 
 	err = dbgfs_set_recording(ctx, 42, "foo");
@@ -129,7 +129,7 @@ static void damon_dbgfs_test_set_recording(struct kunit *test)
 static void damon_dbgfs_test_write_rbuf(struct kunit *test)
 {
 	struct damon_ctx *ctx = dbgfs_new_ctx();
-	struct dbgfs_recorder *rec = ctx->private;
+	struct dbgfs_recorder *rec = ctx->callback.private;
 	char *data;
 
 	dbgfs_set_recording(ctx, 4242, "damon.data");
@@ -147,16 +147,16 @@ static void damon_dbgfs_test_write_rbuf(struct kunit *test)
 }
 
 /*
- * Test dbgfs_aggregate_cb()
+ * Test dbgfs_after_aggregation()
  *
- * dbgfs sets dbgfs_aggregate_cb() as aggregate callback.  It stores the
+ * dbgfs sets dbgfs_after_aggregation() as aggregate callback.  It stores the
  * aggregated monitoring information ('->nr_accesses' of each regions) to the
  * result buffer.
  */
 static void damon_dbgfs_test_aggregate(struct kunit *test)
 {
 	struct damon_ctx *ctx = dbgfs_new_ctx();
-	struct dbgfs_recorder *rec = ctx->private;
+	struct dbgfs_recorder *rec = ctx->callback.private;
 	unsigned long target_ids[] = {1, 2, 3};
 	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };
 	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };
@@ -178,7 +178,7 @@ static void damon_dbgfs_test_aggregate(struct kunit *test)
 		}
 		it++;
 	}
-	dbgfs_aggregate_cb(ctx);
+	dbgfs_after_aggregation(ctx);
 
 	/* The aggregated information should be written in the buffer */
 	sr = sizeof(r->ar.start) + sizeof(r->ar.end) + sizeof(r->nr_accesses);

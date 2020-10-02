@@ -651,13 +651,13 @@ int damon_va_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 
 void damon_va_set_primitives(struct damon_ctx *ctx)
 {
-	ctx->init_target_regions = damon_va_init_regions;
-	ctx->update_target_regions = damon_va_update_regions;
-	ctx->prepare_access_checks = damon_va_prepare_vm_access_checks;
-	ctx->check_accesses = damon_va_check_accesses;
-	ctx->target_valid = damon_va_target_valid;
-	ctx->cleanup = damon_va_cleanup;
-	ctx->apply_scheme = damon_va_apply_scheme;
+	ctx->primitive.init_target_regions = damon_va_init_regions;
+	ctx->primitive.update_target_regions = damon_va_update_regions;
+	ctx->primitive.prepare_access_checks = damon_va_prepare_vm_access_checks;
+	ctx->primitive.check_accesses = damon_va_check_accesses;
+	ctx->primitive.target_valid = damon_va_target_valid;
+	ctx->primitive.cleanup = damon_va_cleanup;
+	ctx->primitive.apply_scheme = damon_va_apply_scheme;
 }
 
 /*
@@ -681,7 +681,7 @@ void damon_pa_init_regions(struct damon_ctx *ctx)
  * address space.
  *
  * This default version does nothing in actual.  Users should update the
- * regions in other callbacks such as '->aggregate_cb', or implement their
+ * regions in other callbacks such as '->after_aggregation', or implement their
  * version of this and set the '->init_target_regions' of their damon_ctx to
  * point it.
  */
@@ -885,13 +885,13 @@ bool damon_pa_target_valid(struct damon_target *t)
 
 void damon_pa_set_primitives(struct damon_ctx *ctx)
 {
-	ctx->init_target_regions = damon_pa_init_regions;
-	ctx->update_target_regions = damon_pa_update_regions;
-	ctx->prepare_access_checks = damon_pa_prepare_access_checks;
-	ctx->check_accesses = damon_pa_check_accesses;
-	ctx->target_valid = damon_pa_target_valid;
-	ctx->cleanup = NULL;
-	ctx->apply_scheme = NULL;
+	ctx->primitive.init_target_regions = damon_pa_init_regions;
+	ctx->primitive.update_target_regions = damon_pa_update_regions;
+	ctx->primitive.prepare_access_checks = damon_pa_prepare_access_checks;
+	ctx->primitive.check_accesses = damon_pa_check_accesses;
+	ctx->primitive.target_valid = damon_pa_target_valid;
+	ctx->primitive.cleanup = NULL;
+	ctx->primitive.apply_scheme = NULL;
 }
 
 #include "primitives-test.h"

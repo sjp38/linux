@@ -116,6 +116,88 @@ struct damos {
 	struct list_head list;
 };
 
+struct damon_ctx;
+
+/**
+ * struct damon_primitive	Monitoring primitives for given use cases.
+ *
+ * @init_target_regions:	Constructs initial monitoring target regions.
+ * @update_target_regions:	Updates monitoring target regions.
+ * @prepare_access_checks:	Prepares next access check of target regions.
+ * @check_accesses:		Checks the access of target regions.
+ * @apply_scheme:		Apply a DAMON-based operation scheme.
+ * @target_valid:		Determine if the target is valid.
+ * @cleanup:			Cleans up the context.
+ *
+ * DAMON can be extended for various address spaces and usages.  For this,
+ * users should register the low level primitives for their target address
+ * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread
+ * calls @init_target_regions before starting the monitoring,
+ * @update_target_regions for each @regions_update_interval, and
+ * @prepare_access_checks, @check_accesses, and @target_valid for each
+ * @sample_interval.
+ *
+ * @init_target_regions should construct proper monitoring target regions and
+ * link those to the DAMON context struct.
+ * @update_target_regions should update the monitoring target regions for
+ * current status.
+ * @prepare_access_checks should manipulate the monitoring regions to be
+ * prepare for the next access check.
+ * @check_accesses should check the accesses to each region that made after the
+ * last preparation and update the `->nr_accesses` of each region.  It should
+ * also return max &damon_region.nr_accesses that made as a result of its
+ * update.
+ * * @apply_scheme is called from @kdamond when a region for user provided
+ * DAMON-based operation scheme is found.  It should apply the scheme's action
+ * to the region.
+ * @target_valid should check whether the target is still valid for the
+ * monitoring.
+ * @cleanup is called from @kdamond just before its termination.  After this
+ * call, only @kdamond_lock and @kdamond will be touched.
+ */
+struct damon_primitive {
+	void (*init_target_regions)(struct damon_ctx *context);
+	void (*update_target_regions)(struct damon_ctx *context);
+	void (*prepare_access_checks)(struct damon_ctx *context);
+	unsigned int (*check_accesses)(struct damon_ctx *context);
+	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
+			struct damon_region *r, struct damos *scheme);
+	bool (*target_valid)(struct damon_target *target);
+	void (*cleanup)(struct damon_ctx *context);
+};
+
+/*
+ * struct damon_callback	Monitoring events notification callbacks.
+ *
+ * @before_start:	Called before starting the monitoring.
+ * @after_sampling:	Called after each sampling.
+ * @after_aggregation:	Called after each aggregation.
+ * @before_terminate:	Called before terminating the monitoring.
+ * @private:		User private data.
+ *
+ * The monitoring thread (&damon_ctx->kdamond) calls @before_start and
+ * @before_terminate just before starting the monitoring and just before
+ * finishing the monitoring.  Therefore, those are good places for installing
+ * and cleaning @private.
+ *
+ * The monitoring thread calls @after_sampling and @after_aggregation for each
+ * of the sampling intervals and aggregation intervals, respectively.
+ * Therefore, users can safely access the monitoring results via
+ * &damon_ctx.targets_list without additional protection of
+ * damon_ctx.kdamond_lock.  For the reason, users are recommended to use these
+ * callback for the accesses to the results.
+ *
+ * If any callback returns non-zero, monitoring stops.
+ */
+struct damon_callback {
+	void *private;
+
+	int (*before_start)(struct damon_ctx *context);
+	int (*after_sampling)(struct damon_ctx *context);
+	int (*after_aggregation)(struct damon_ctx *context);
+	int (*before_terminate)(struct damon_ctx *context);
+};
+
 /**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
@@ -156,47 +238,8 @@ struct damos {
  * @targets_list:	Head of monitoring targets (&damon_target) list.
  * @schemes_list:	Head of schemes (&damos) list.
  *
- * @private		Private user data.
- *
- * @init_target_regions:	Constructs initial monitoring target regions.
- * @update_target_regions:	Updates monitoring target regions.
- * @prepare_access_checks:	Prepares next access check of target regions.
- * @check_accesses:		Checks the access of target regions.
- * @target_valid:		Determine if the target is valid.
- * @cleanup:			Cleans up the context.
- * @apply_scheme:		Apply a DAMON-based operation scheme.
- * @sample_cb:			Called for each sampling interval.
- * @aggregate_cb:		Called for each aggregation interval.
- *
- * DAMON can be extended for various address spaces by users.  For this, users
- * can register the target address space dependent low level functions for
- * their usecases via the callback pointers of the context.  The monitoring
- * thread calls @init_target_regions before starting the monitoring,
- * @update_target_regions for each @regions_update_interval, and
- * @prepare_access_checks, @check_accesses, and @target_valid for each
- * @sample_interval.
- *
- * @init_target_regions should construct proper monitoring target regions and
- * link those to the DAMON context struct.
- * @update_target_regions should update the monitoring target regions for
- * current status.
- * @prepare_access_checks should manipulate the monitoring regions to be
- * prepare for the next access check.
- * @check_accesses should check the accesses to each region that made after the
- * last preparation and update the `->nr_accesses` of each region.
- * @target_valid should check whether the target is still valid for the
- * monitoring.
- * @cleanup is called from @kdamond just before its termination.  After this
- * call, only @kdamond_lock and @kdamond will be touched.
- * @apply_scheme is called from @kdamond when a region for user provided
- * DAMON-based operation scheme is found.  It should apply the scheme's action
- * to the region.
- *
- * @sample_cb and @aggregate_cb are called from @kdamond for each of the
- * sampling intervals and aggregation intervals, respectively.  Therefore,
- * users can safely access to the monitoring results via @targets_list without
- * additional protection of @kdamond_lock.  For the reason, users are
- * recommended to use these callback for the accesses to the results.
+ * @primitive:	Set of monitoring primitives for given use cases.
+ * @callback:	Set of callbacks for monitoring events notifications.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -215,19 +258,8 @@ struct damon_ctx {
 	struct list_head targets_list;	/* 'damon_target' objects */
 	struct list_head schemes_list;	/* 'damos' objects */
 
-	void *private;
-
-	/* callbacks */
-	void (*init_target_regions)(struct damon_ctx *context);
-	void (*update_target_regions)(struct damon_ctx *context);
-	void (*prepare_access_checks)(struct damon_ctx *context);
-	unsigned int (*check_accesses)(struct damon_ctx *context);
-	bool (*target_valid)(struct damon_target *target);
-	void (*cleanup)(struct damon_ctx *context);
-	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
-			struct damon_region *r, struct damos *scheme);
-	void (*sample_cb)(struct damon_ctx *context);
-	void (*aggregate_cb)(struct damon_ctx *context);
+	struct damon_primitive primitive;
+	struct damon_callback callback;
 };
 
 #ifdef CONFIG_DAMON
