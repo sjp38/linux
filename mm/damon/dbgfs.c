@@ -620,3 +620,5 @@ static int __init damon_dbgfs_init(void)
 }
 
 module_init(damon_dbgfs_init);
+
+#include "dbgfs-test.h"
