@@ -16,6 +16,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/damon.h>
 
+#ifdef CONFIG_DAMON_KUNIT_TEST
+#define DAMON_MIN_REGION 1
+#endif
+
 /*
  * Functions and macros for DAMON data structures
  */
@@ -716,3 +720,5 @@ static int kdamond_fn(void *data)
 
 	do_exit(0);
 }
+
+#include "core-test.h"
