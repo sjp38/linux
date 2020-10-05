@@ -20,7 +20,11 @@ DEFINE_MUTEX(page_idle_lock);
 #endif
 
 /* Minimal region size.  Every damon_region is aligned by this. */
+#ifndef CONFIG_DAMON_PRIMITIVES_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
+#else
+#define MIN_REGION 1
+#endif
 
 /* Get a random number in [l, r) */
 #define damon_rand(l, r) (l + prandom_u32_max(r - l))
@@ -587,3 +591,5 @@ void damon_va_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.target_valid = damon_va_target_valid;
 	ctx->primitive.cleanup = damon_va_cleanup;
 }
+
+#include "primitives-test.h"
