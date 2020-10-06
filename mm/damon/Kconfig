@@ -14,7 +14,7 @@ config DAMON
 
 config DAMON_KUNIT_TEST
 	bool "Test for damon"
-	depends on DAMON && KUNIT
+	depends on DAMON && KUNIT=y
 	help
 	  This builds the DAMON Kunit test suite.
 
@@ -35,7 +35,7 @@ config DAMON_PRIMITIVES
 
 config DAMON_PRIMITIVES_KUNIT_TEST
 	bool "Test for DAMON primitives"
-	depends on DAMON_PRIMITIVES && KUNIT
+	depends on DAMON_PRIMITIVES && KUNIT=y
 	help
 	  This builds the DAMON PRIMITIVES Kunit test suite.
 
@@ -55,7 +55,7 @@ config DAMON_DBGFS
 
 config DAMON_DBGFS_KUNIT_TEST
 	bool "Test for damon debugfs interface"
-	depends on DAMON_DBGFS && KUNIT
+	depends on DAMON_DBGFS && KUNIT=y
 	help
 	  This builds the DAMON debugfs interface Kunit test suite.
 
