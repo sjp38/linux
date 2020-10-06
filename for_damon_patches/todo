@@ -1,0 +1,34 @@
+TODOs
+=====
+
+- Support cgroups
+- Use DAMON's own file system (say, damonfs) for user space interface
+
+Done
+====
+
+DAMON
+-----
+
+
+
+DAMOS
+-----
+
+- Fixup wrong kernel doc
+
+
+More address spaces
+-------------------
+
+- Rebase on v5.11
+  - paddr: Drop use of lru_lock (6168d0da2b47, 880fc6ba624c)
+- Fix a memory leak (Coverity SAST)
+- Move arbitrary target type support here (Shakeel Butt)
+- Do put_pid() safely
+
+User space tools
+----------------
+
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
