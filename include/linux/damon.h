@@ -2,8 +2,6 @@
 /*
  * DAMON api
  *
- * Copyright 2019-2020 Amazon.com, Inc. or its affiliates.
- *
  * Author: SeongJae Park <sjpark@amazon.de>
  */
 
@@ -147,7 +145,7 @@ struct damon_ctx;
  * last preparation and update the `->nr_accesses` of each region.  It should
  * also return max &damon_region.nr_accesses that made as a result of its
  * update.
- * * @apply_scheme is called from @kdamond when a region for user provided
+ * @apply_scheme is called from @kdamond when a region for user provided
  * DAMON-based operation scheme is found.  It should apply the scheme's action
  * to the region.
  * @target_valid should check whether the target is still valid for the
@@ -262,8 +260,6 @@ struct damon_ctx {
 	struct damon_callback callback;
 };
 
-#ifdef CONFIG_DAMON
-
 #define damon_next_region(r) \
 	(container_of(r->list.next, struct damon_region, list))
 
@@ -287,6 +283,8 @@ struct damon_ctx {
 
 #define damon_for_each_scheme_safe(s, next, ctx) \
 	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
+
+#ifdef CONFIG_DAMON
 
 struct damon_region *damon_new_region(unsigned long start, unsigned long end);
 inline void damon_insert_region(struct damon_region *r,
@@ -329,7 +327,7 @@ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
 /* Reference callback implementations for virtual memory */
 void damon_va_init_regions(struct damon_ctx *ctx);
 void damon_va_update_regions(struct damon_ctx *ctx);
-void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx);
+void damon_va_prepare_access_checks(struct damon_ctx *ctx);
 unsigned int damon_va_check_accesses(struct damon_ctx *ctx);
 bool damon_va_target_valid(struct damon_target *t);
 void damon_va_cleanup(struct damon_ctx *ctx);

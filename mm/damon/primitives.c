@@ -21,18 +21,19 @@
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 
-#include "damon.h"
-
 #ifndef CONFIG_IDLE_PAGE_TRACKING
 DEFINE_MUTEX(page_idle_lock);
 #endif
 
 /* Minimal region size.  Every damon_region is aligned by this. */
-#ifndef CONFIG_DAMON_KUNIT_TEST
+#ifndef CONFIG_DAMON_PRIMITIVES_KUNIT_TEST
 #define MIN_REGION PAGE_SIZE
 #else
 #define MIN_REGION 1
 #endif
+
+/* Get a random number in [l, r) */
+#define damon_rand(l, r) (l + prandom_u32_max(r - l))
 
 /*
  * 't->id' should be the pointer to the relevant 'struct pid' having reference
@@ -48,7 +49,7 @@ DEFINE_MUTEX(page_idle_lock);
  *
  * Returns the mm_struct of the target on success, NULL on failure
  */
-struct mm_struct *damon_get_mm(struct damon_target *t)
+static struct mm_struct *damon_get_mm(struct damon_target *t)
 {
 	struct task_struct *task;
 	struct mm_struct *mm;
@@ -459,7 +460,7 @@ static void damon_va_prepare_vm_access_check(struct damon_ctx *ctx,
 	damon_va_mkold(mm, r->sampling_addr);
 }
 
-void damon_va_prepare_vm_access_checks(struct damon_ctx *ctx)
+void damon_va_prepare_access_checks(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct mm_struct *mm;
@@ -653,7 +654,7 @@ void damon_va_set_primitives(struct damon_ctx *ctx)
 {
 	ctx->primitive.init_target_regions = damon_va_init_regions;
 	ctx->primitive.update_target_regions = damon_va_update_regions;
-	ctx->primitive.prepare_access_checks = damon_va_prepare_vm_access_checks;
+	ctx->primitive.prepare_access_checks = damon_va_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_va_check_accesses;
 	ctx->primitive.target_valid = damon_va_target_valid;
 	ctx->primitive.cleanup = damon_va_cleanup;
