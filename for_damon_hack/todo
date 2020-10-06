@@ -1,0 +1,48 @@
+TODOs
+=====
+
+- Refactor monitoring_primitives
+  - Rename to damon_ops
+  - Make it registered to DAMON core
+  - This will help supporting CONFIG_VADDR && !CONFIG_PADDR like situation.
+
+- Implement reliable DAMON interface via sysfs (allow online params update)
+  - Basic directory hierarchy is done
+  - TODO: Link to DAMON API, so that it really works
+  - TODO: kselftest
+- Announce damon-dbgfs deprecation
+  (will work until end of 2022, but no more new features)
+
+- DARC: Allow online parameters update
+- DARC: Automatically handle hot(un)plugged memory regions
+
+- Implement DAMON-based Proactive LRU (De)activation
+  - PoC with vaddr+DAMOS_COLD
+
+- Implement DAMON-based Proactive Compaction
+- Allow multiple contexts run by single kdamond (ask same monitoring attribute)
+
+- Support page gran idleness monitoring (maybe only for a sample)
+  - Support page gran idleness set-only/read-only monitoring
+  - Support better page granularity monitoring
+
+- Make DAMON_RECLAIM work in autopilot mode
+  - Set watermarks based on min_freebytes
+  - Adjust coldness threshold with PSI
+- DAMON-based THP hinting
+- Improve regions-based monitoring quality
+- Support cgroups
+- Periodically flush TLB[1] # Maybe this could be work-arounded in user space?
+
+
+[1] https://lore.kernel.org/all/a2fb10bd-b44a-350e-f693-82ecfa6f54a8@huawei.com/
+
+Done
+====
+
+- Writedown and share the future plans
+  https://lore.kernel.org/linux-mm/20220119133110.24901-1-sj@kernel.org/
+- Use safe type for target id via union[3]
+  Repost https://lore.kernel.org/linux-mm/20211230100723.2238-1-sj@kernel.org/
+
+[3] https://lore.kernel.org/linux-mm/20211013154535.4aaeaaf9d0182922e405dd1e@linux-foundation.org/
