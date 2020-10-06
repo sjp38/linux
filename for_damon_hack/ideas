@@ -1,0 +1,72 @@
+Support cgroups
+===============
+
+LRU index-as-an-address
+-----------------------
+
+Use the index of each page in its LRU list as its address.
+
+For accuracy improvement
+========================
+
+Dynamic monitoring attributes adjustment
+----------------------------------------
+
+Based on current monitoring results, adjust sampling interval and/or number of
+regions.
+
+Monitoring results-based Address Adjustment
+-------------------------------------------
+
+Migrating memory regions on the address space so that memory regions having
+similar access pattern are nearly placed.
+
+Yet another address space for DAMON
+-----------------------------------
+
+The monitoring results-based address adjustment works for LRU
+index-as-an-address case only.  We can make internal address translation
+mechanism and do the monitoring via the DAMON-internal address space.
+
+
+DAMON filesystem
+================
+
+Develop dedicated filesystem for DAMON interface like tracefs, to be
+independent from the debugfs and providing better interface.
+
+The idea of the new interface is, making one file for one value.  For example,
+
+    damon/
+    │ monitor_on
+    │ ctx1/
+    │ │ target_ids
+    │ │ attrs/
+    │ │ │ sampling_interval
+    │ │ │ aggr_interval
+    │ │ │ update_interval
+    │ │ │ min_nr_regions
+    │ │ │ max_nr_regions
+    │ │ init_regions/
+    │ │ │ region1/
+    │ │ │   start
+    │ │ │   end
+    │ │ schemes/
+    │ │ │ scheme1/
+    │ │ │ │ min_sz
+    │ │ │ │ max_sz
+    │ │ │ │ min_nr_accesses
+    │ │ │ │ max_nr_accesses
+    │ │ │ │ min_age
+    │ │ │ │ max_age
+    │ │ │ │ ...
+    │ │ │ ...
+    │ │ kdamond_pid
+    │ │ ...
+    │ ctx2/
+    │ ...
+
+/sys/kernel/mm/damon/ would be the good mount point.
+User can add contexts my 'mkdir <context name>' from damon/.
+Then, target_ids, kdamond_pid, attrs/, init_regions/, and schemes/ would
+automatically populated.
