@@ -1,0 +1,276 @@
+Changes from v33
+(https://lore.kernel.org/linux-mm/20210713123356.6924-1-sj38.park@gmail.com/),
+- Rebase on latest -mm tree (v5.14-rc1-mmots-2021-07-15-18-47)
+- Remove unnecessary asterisks from the MAINTAINERS file update (Joe Perches)
+
+Changes from v32
+(https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/)
+- Rebase on latest mainline (7d0fc5c62385)
+- Collect 'Acked-by:' tags from Shakeel Butt
+
+Chages from v31
+(https://lore.kernel.org/linux-mm/20210621083108.17589-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.13-rc7-mmots-2021-06-24-20-54)
+- Add 'Acked-by:' tags from Shakeel Butt
+- Use 'kthread_run()' (Shakeel Butt)
+- Change default 'update_interval' to 60 seconds (Shakeel Butt)
+- Utilize 'nr_regions' field in each 'damon_target' object (Shakeel Butt)
+- Remove unused parameters in some functions (Shakeel Butt)
+- Use variable name 'ctx' for 'damon_ctx' (Shakeel Butt)
+- Make 'dbgfs' to completely manage pid reference counting (Shakeel Butt)
+- Remove '.owner' of debugfs files (Shakeel Butt)
+
+Changes from v30
+(https://lore.kernel.org/linux-mm/20210616073119.16758-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.13-rc6-mmots-2021-06-16-22-17)
+- selftest: Fix wrong file content comparison (Markus Boehme)
+- Collect 'Reviewed-by:' tags from Markus
+
+Changes from v29
+(https://lore.kernel.org/linux-mm/20210520075629.4332-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.13-rc6-mmots-2021-06-15-20-28)
+- Remove unnecessary documents
+- Wordsmith commit message for PAGE_IDLE separation (Amit Shah)
+- selftests: Fix shellcheck warnings and cleanup (Maximilian Heyne)
+- Wordsmith the document (Markus Boehme)
+- Fix a typo in comments (Fernand Sieber)
+- Collect 'Reviewed-by:' tags from "Fernand Sieber <sieberf@amazon.com>"
+
+Changes from v28
+(https://lore.kernel.org/linux-mm/20210413142904.556-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.13-rc1-mmots-2021-05-13-17-23)
+
+Changes from v27
+(https://lore.kernel.org/linux-mm/20210408134854.31625-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.12-rc7-mmots-2021-04-11-20-49)
+- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
+- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
+
+Changes from v26
+(https://lore.kernel.org/linux-mm/20210330090537.12143-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.12-rc6-mmots-2021-04-06-22-33)
+- Check kmalloc() failures in dbgfs init (Greg KH)
+- Fix a typo: s/stollen/stolen/ (Stefan Nuernberger)
+- Update document for updated user space tool path
+
+Changes from v25
+(https://lore.kernel.org/linux-mm/20210318100856.34715-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.12-rc4-mmots-2021-03-28-16-40)
+- Remove unnecessary test code that dependent on record feature
+- Handle special mappings having no corresponding 'struct page' (Guoju Fang)
+
+Changes from v24
+(https://lore.kernel.org/linux-mm/20210204153150.15948-1-sjpark@amazon.com/)
+- Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)
+- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)
+- Remove 'recording' feature (Shakeel Butt)
+- Remove user space tool and recording description in the documentation
+
+Changes from v23
+(https://lore.kernel.org/linux-mm/20201215115448.25633-1-sjpark@amazon.com/)
+- Wordsmith commit messages (Shakeel Butt)
+- Call missed mmu_notifier_test_young() (Shakeel Butt)
+- Add one 'Reviewed-by' tag for PG_Idle reuse patch (Shakeel Butt)
+- Rename core code to be region-neutral (Shakeel Butt)
+- Add missed null check of 'damon_new_region()' return value (Coverity SAST)
+- Put pids in dbgfs error cases (Shakeel Butt)
+- Move arbitrary target type support out of DAMON patchset series (Shakeel Butt)
+- Move user space tool patch out of DAMON patchset series
+- Update evaluation result with DAMOOS-tuned prcl schemes
+
+Changes from v22
+(https://lore.kernel.org/linux-mm/20201020085940.13875-1-sjpark@amazon.com/)
+- Support arbitrary targets; now DAMON incurs only zero space overhead for page
+  granularity idleness monitoring
+- Reorder patches for easier review (Shakeel Butt)
+  - Introduce arbitrary targets with sampling first, then the overhead-accuracy
+    control logic
+  - Introduce data structure manipulation functions when it really used.
+- Call callbacks explicitly, without macro (Shakeel Butt)
+- Rename DAMON_PRIMITIVES to DAMON_VADDR (Shakeel Butt)
+- Remove 'page_idle_lock' patch (Shakeel Butt)
+- Drop pidfd support in debugfs (Shakeel Butt)
+
+Changes from v21
+(https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/)
+- Fix build warnings and errors (kernel test robot)
+- Fix a memory leak (kmemleak)
+- Respect KUNIT_ALL_TESTS
+- Rebase on v5.9
+- Update the evaluation results
+
+Changes from v20
+(https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@amazon.com/)
+- s/snprintf()/scnprintf() (Marco Elver)
+- Support multiple contexts for user space users (Shakeel Butt)
+- Export pid of monitoring thread to user space (Shakeel Butt)
+- Let coexistable with Idle Page Tracking
+- Place three parts of DAMON (core, primitives, and dbgfs) in different files
+
+Changes from v19
+(https://lore.kernel.org/linux-mm/20200804091416.31039-1-sjpark@amazon.com/)
+- Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)
+- Support large record file (Alkaid)
+- Place 'put_pid()' of virtual monitoring targets in 'cleanup' callback
+- Avoid conflict between concurrent DAMON users
+- Update evaluation result document
+
+Changes from v18
+(https://lore.kernel.org/linux-mm/20200713084144.4430-1-sjpark@amazon.com/)
+- Drop loadable module support (Mike Rapoport)
+- Select PAGE_EXTENSION if !64BIT for 'set_page_young()'
+- Take care of the MMU notification subscribers (Shakeel Butt)
+- Substitute 'struct damon_task' with 'struct damon_target' for better abstract
+- Use 'struct pid' instead of 'pid_t' as the target (Shakeel Butt)
+- Support pidfd from the debugfs interface (Shakeel Butt)
+- Fix typos (Greg Thelen)
+- Properly isolate DAMON from other pmd/pte Accessed bit users (Greg Thelen)
+- Rebase on v5.8
+
+Changes from v17
+(https://lore.kernel.org/linux-mm/20200706115322.29598-1-sjpark@amazon.com/)
+- Reorganize the doc and remove png blobs (Mike Rapoport)
+- Wordsmith mechnisms doc and commit messages
+- tools/wss: Set default working set access frequency threshold
+- Avoid race in damon deamon start
+
+Changes from v16
+(https://lore.kernel.org/linux-mm/20200615161927.12637-1-sjpark@amazon.com/)
+ - Wordsmith/cleanup the documentations and the code
+ - user space tool: Simplify the code and add wss option for reuse histogram
+ - recording: Check disablement condition properly
+ - recording: Force minimal recording buffer size (1KB)
+
+Changes from v15
+(https://lore.kernel.org/linux-mm/20200608114047.26589-1-sjpark@amazon.com/)
+ - Refine commit messages (David Hildenbrand)
+ - Optimizes three vma regions search (Varad Gautam)
+ - Support static granularity monitoring (Shakeel Butt)
+ - Cleanup code and re-organize the sequence of patches
+
+Changes from v14
+(https://lore.kernel.org/linux-mm/20200602130125.20467-1-sjpark@amazon.com/)
+ - Directly pass region and task to tracepoint (Steven Rostedt)
+ - Refine comments for better read
+ - Add more 'Reviewed-by's (Leonard Foerster, Brendan Higgins)
+
+Changes from v13
+(https://lore.kernel.org/linux-mm/20200525091512.30391-1-sjpark@amazon.com/)
+ - Fix a typo (Leonard Foerster)
+ - Fix wring condition of three sub ranges split (Leonard Foerster)
+ - Rebase on v5.7
+
+Changes from v12
+(https://lore.kernel.org/linux-mm/20200518100018.2293-1-sjpark@amazon.com/)
+ - Avoid races between debugfs readers and writers
+ - Add kernel-doc comments in damon.h
+
+Changes from v11
+(https://lore.kernel.org/linux-mm/20200511123302.12520-1-sjpark@amazon.com/)
+ - Rewrite the document (Stefan Nuernberger)
+ - Make 'damon_for_each_*' argument order consistent (Leonard Foerster)
+ - Fix wrong comment in 'kdamond_merge_regions()' (Leonard Foerster)
+
+Changes from v10
+(https://lore.kernel.org/linux-mm/20200505110815.10532-1-sjpark@amazon.com/)
+ - Reduce aggressive split overhead by doing it only if required
+
+Changes from v9
+(https://lore.kernel.org/linux-mm/20200427120442.24179-1-sjpark@amazon.com/)
+ - Split each region into 4 subregions if possible (Jonathan Cameraon)
+ - Update kunit test for the split code change
+
+Changes from v8
+(https://lore.kernel.org/linux-mm/20200406130938.14066-1-sjpark@amazon.com/)
+ - Make regions always aligned by minimal region size that can be changed
+   (Stefan Nuernberger)
+ - Store binary format version in the recording file (Stefan Nuernberger)
+ - Use 'int' for pid instead of 'unsigned long' (Stefan Nuernberger)
+ - Fix a race condition in damon thread termination (Stefan Nuernberger)
+ - Optimize random value generation and recording (Stefan Nuernberger)
+ - Clean up commit messages and comments (Stefan Nuernberger)
+ - Clean up code (Stefan Nuernberger)
+ - Use explicit signalling and 'do_exit()' for damon thread termination 
+ - Add more typos to spelling.txt
+ - Update the performance evaluation results
+ - Describe future plans in the cover letter
+
+Changes from v7
+(https://lore.kernel.org/linux-mm/20200318112722.30143-1-sjpark@amazon.com/)
+ - Cleanup variable names (Jonathan Cameron)
+ - Split sampling address setup from access_check() (Jonathan Cameron)
+ - Make sampling address to always locate in the region (Jonathan Cameron)
+ - Make initial region's sampling addr to be old (Jonathan Cameron)
+ - Split kdamond on/off function to seperate functions (Jonathan Cameron)
+ - Fix wrong kernel doc comments (Jonathan Cameron)
+ - Reset 'last_accessed' to false in kdamond_check_access() if necessary
+ - Rebase on v5.6
+
+Changes from v6
+(https://lore.kernel.org/linux-mm/20200224123047.32506-1-sjpark@amazon.com/)
+ - Wordsmith cover letter (Shakeel Butt)
+ - Cleanup code and commit messages (Jonathan Cameron)
+ - Avoid kthread_run() under spinlock critical section (Jonathan Cameron)
+ - Use kthread_stop() (Jonathan Cameron)
+ - Change tracepoint to trace regions (Jonathan Cameron)
+ - Implement API from the beginning (Jonathan Cameron)
+ - Fix typos (Jonathan Cameron)
+ - Fix access checking to properly handle regions smaller than single page
+   (Jonathan Cameron)
+ - Add found typos to 'scripts/spelling.txt'
+ - Add recent evaluation results including DAMON-based Operation Schemes
+
+Changes from v5
+(https://lore.kernel.org/linux-mm/20200217103110.30817-1-sjpark@amazon.com/)
+ - Fix minor bugs (sampling, record attributes, debugfs and user space tool)
+ - selftests: Add debugfs interface tests for the bugs
+ - Modify the user space tool to use its self default values for parameters
+ - Fix pmg huge page access check
+
+Changes from v4
+(https://lore.kernel.org/linux-mm/20200210144812.26845-1-sjpark@amazon.com/)
+ - Add 'Reviewed-by' for the kunit tests patch (Brendan Higgins)
+ - Make the unit test to depedns on 'DAMON=y' (Randy Dunlap and kbuild bot)
+   Reported-by: kbuild test robot <lkp@intel.com>
+ - Fix m68k module build issue
+   Reported-by: kbuild test robot <lkp@intel.com>
+ - Add selftests
+ - Seperate patches for low level users from core logics for better reading
+ - Clean up debugfs interface
+ - Trivial nitpicks
+
+Changes from v3
+(https://lore.kernel.org/linux-mm/20200204062312.19913-1-sj38.park@gmail.com/)
+ - Fix i386 build issue
+   Reported-by: kbuild test robot <lkp@intel.com>
+ - Increase the default size of the monitoring result buffer to 1 MiB
+ - Fix misc bugs in debugfs interface
+
+Changes from v2
+(https://lore.kernel.org/linux-mm/20200128085742.14566-1-sjpark@amazon.com/)
+ - Move MAINTAINERS changes to last commit (Brendan Higgins)
+ - Add descriptions for kunittest: why not only entire mappings and what the 4
+   input sets are trying to test (Brendan Higgins)
+ - Remove 'kdamond_need_stop()' test (Brendan Higgins)
+ - Discuss about the 'perf mem' and DAMON (Peter Zijlstra)
+ - Make CV clearly say what it actually does (Peter Zijlstra)
+ - Answer why new module (Qian Cai)
+ - Diable DAMON by default (Randy Dunlap)
+ - Change the interface: Seperate recording attributes
+   (attrs, record, rules) and allow multiple kdamond instances
+ - Implement kernel API interface
+
+Changes from v1
+(https://lore.kernel.org/linux-mm/20200120162757.32375-1-sjpark@amazon.com/)
+ - Rebase on v5.5
+ - Add a tracepoint for integration with other tracers (Kirill A. Shutemov)
+ - document: Add more description for the user space tool (Brendan Higgins)
+ - unittest: Improve readability (Brendan Higgins)
+ - unittest: Use consistent name and helpers function (Brendan Higgins)
+ - Update PG_Young to avoid reclaim logic interference (Yunjae Lee)
+
+Changes from RFC
+(https://lore.kernel.org/linux-mm/20200110131522.29964-1-sjpark@amazon.com/)
+ - Specify an ambiguous plan of access pattern based mm optimizations
+ - Support loadable module build
+ - Cleanup code
