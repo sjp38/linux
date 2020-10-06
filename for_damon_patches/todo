@@ -1,0 +1,42 @@
+TODOs
+=====
+
+- Support cgroups
+- Use DAMON's own file system (say, damonfs) for user space interface
+
+DAMON
+-----
+
+
+Done
+====
+
+DAMON
+-----
+
+- Rebase on latest -mm tree (v5.12-rc7-mmots-2021-04-11-20-49)
+- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
+- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
+
+
+
+DAMOS
+-----
+
+- Fixup wrong kernel doc
+
+
+More address spaces
+-------------------
+
+- Rebase on latest -mm
+- Fix a memory leak (Coverity SAST)
+- Move arbitrary target type support here (Shakeel Butt)
+- Do put_pid() safely
+- Support manual init regions setting for vaddr (Guoju Fang)
+
+User space tools
+----------------
+
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
