@@ -3,14 +3,13 @@ Implement Data Access Monitoring-based Memory Operation Schemes
 Changes from Previous Version
 =============================
 
-- Drop loadable module support
-- Use dedicated valid action checker function
-- Rebase on v5.8 plus v19 DAMON
+- s/snprintf()/scnprintf() (Marco Elver)
+- Place three parts of DAMON (core, primitives, and dbgfs) in different files
 
 Introduction
 ============
 
-DAMON[1] can be used as a primitive for data access awared memory management
+DAMON[1] can be used as a primitive for data access aware memory management
 optimizations.  For that, users who want such optimizations should run DAMON,
 read the monitoring results, analyze it, plan a new memory management scheme,
 and apply the new scheme by themselves.  Such efforts will be inevitable for
@@ -24,10 +23,10 @@ region larger than 100 MiB keeping only rare accesses more than 2 minutes", or
 than 1 seconds".
 
 This RFC patchset makes DAMON to handle such data access monitoring-based
-operation schemes.  With this change, users can do the data access aware
-optimizations by simply specifying their schemes to DAMON.
+Operation Schemes (DAMOS).  With this change, users can do the data access
+aware optimizations by simply specifying their schemes.
 
-[1] https://lore.kernel.org/linux-mm/20200706115322.29598-1-sjpark@amazon.com/
+[1] https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/
 
 Evaluations
 ===========
@@ -76,20 +75,20 @@ are
 Baseline and Complete Git Tree
 ==============================
 
-The patches are based on the v5.8 plus v19 DAMON patchset[1] and Minchan's
+The patches are based on the v5.8 plus v21 DAMON patchset[1] and Minchan's
 ``do_madvise()`` patch[2], which retrieved from the -next tree.  You can also
 clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b damos/rfc/v14
+    $ git clone git://github.com/sjp38/linux -b damos/rfc/v15
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damos/rfc/v14
+https://github.com/sjp38/linux/releases/tag/damos/rfc/v15
 
 There are a couple of trees for entire DAMON patchset series that future
 features are included.  The first one[3] contains the changes for latest
 release, while the other one[4] contains the changes for next release.
 
-[1] https://lore.kernel.org/linux-mm/20200804091416.31039-1-sjpark@amazon.com/
+[1] https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/
 [2] https://lore.kernel.org/linux-mm/20200302193630.68771-2-minchan@kernel.org/
 [3] https://github.com/sjp38/linux/tree/damon/master
 [4] https://github.com/sjp38/linux/tree/damon/next
@@ -98,16 +97,22 @@ Sequence Of Patches
 ===================
 
 The 1st patch accounts age of each region.  The 2nd patch implements the
-handling of the schemes in DAMON and exports a kernel space programming
-interface for it.  The 3rd patch implements a debugfs interface for the
-privileged people and user programs.  The 4th patch implements schemes
-statistics feature for easier tuning of the schemes and runtime access pattern
-analysis.  The 5th patche adds selftests for these changes, and the 6th patch
-adds human friendly schemes support to the user space tool for DAMON.  Finally,
-the 7th patch documents this new feature in the document.
+handling of the schemes in DAMON core.  The 3rd patch makes 'damon-primitives',
+the default primitives for the virtual address spaces monitoring to support the
+schemes.  From this point, the kernel space users can use DAMOS.  The 4th patch
+implements a debugfs interface for the privileged people and user programs.
+The 5th patch implements schemes statistics feature for easier tuning of the
+schemes and runtime access pattern analysis.  The 6th patche adds selftests for
+these changes, and the 7th patch adds human friendly schemes support to the
+user space tool for DAMON.  Finally, the 8th patch documents this new feature.
 
 Patch History
 =============
+
+Changes from RFC v14
+(https://lore.kernel.org/linux-mm/20200804142430.15384-1-sjpark@amazon.com/)
+- s/snprintf()/scnprintf() (Marco Elver)
+- Place three parts of DAMON (core, primitives, and dbgfs) in different files
 
 Changes from RFC v13
 (https://lore.kernel.org/linux-mm/20200707093805.4775-1-sjpark@amazon.com/)
