@@ -147,6 +147,7 @@ struct damon_callback {
  * not.  It aggregates and keeps the access information (number of accesses to
  * each region) for @aggr_interval time.  DAMON also checks whether the target
  * memory regions need update (e.g., by ``mmap()`` calls from the application,
+ * in case of virtual memory monitoring) and applies the changes for each
  * @regions_update_interval.  All time intervals are in micro-seconds.
  *
  * @kdamond:		Kernel thread who does the monitoring.
