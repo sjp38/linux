@@ -1,0 +1,18 @@
+TODOs
+=====
+
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Support cgroups
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
+
+Done
+====
+
+- DAMOS: Fixup wrong kernel doc
+
+- CDAMON: Fix a memory leak (Coverity SAST)
+- CDAMON: Implement page-gran access check primitive
+- CDAMON: Move arbitrary target type here (Shakeel Butt)
+- CDAMON: Do put_pid safely
