@@ -1,0 +1,35 @@
+TODOs
+=====
+
+- Writedown and share the future plans
+- Periodically flush TLB[1]
+- Use safe type for target id via union[3]
+- Support cgroups
+- Support page gran monitoring (restore anonymous target patch series in
+  damon/next-2021-12-03-12-14-on-v5.16-rc3-mmotm-assembled-by-sj-2021-11-30-12-29)
+- Support better page granularity monitoring
+- Use DAMON's own file system (say, damonfs) for user space interface
+- Implement DAMON-based LRU pages (de)prioritization
+
+[1] https://lore.kernel.org/all/a2fb10bd-b44a-350e-f693-82ecfa6f54a8@huawei.com/
+[3] https://lore.kernel.org/linux-mm/20211013154535.4aaeaaf9d0182922e405dd1e@linux-foundation.org/
+
+Done
+====
+
+- Convert macro functions to static inline functions
+- Document DAMOS quotas and prioritization
+- Implement DAMON_RECLAIM stats
+
+Posted
+======
+
+Merged in -mm
+=============
+
+- Sleep in interruptible status[2]
+- Remove unnecessary kernel logs
+- Add kselftest
+- Split kselftest
+
+[2] https://lore.kernel.org/all/20211123083636.5603-1-sj@kernel.org/
