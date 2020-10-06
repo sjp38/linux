@@ -1,0 +1,31 @@
+DAMOS
+=====
+
+For increasing aggressiveness
+-----------------------------
+
+The scheme could be bottlenecked by the quota or access pattern (size/access
+frequency/age).
+
+If bottlenecked by the quota, increase size quota.
+Would make sense to keep the CPU quota, though.
+
+If not bottlenecked by the quota, adjust access pattern.
+First, age.
+Secondly, access frequency.
+Adjusting size wouldn't make sense.
+
+
+For decreasing aggressiveness
+-----------------------------
+
+Simply decreasing the quota would make sense here.
+
+
+Discussion
+----------
+
+Given the prioritization, could adjusting access pattern make sense at all?
+Maybe making access pattern just the hard limit, and letting the user to
+specify minimum time to wait before start scheme operation would make more
+sense?
