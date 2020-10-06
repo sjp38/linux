@@ -58,8 +58,8 @@ bool damon_pgi_target_valid(void *target)
 
 void damon_pgi_set_primitives(struct damon_ctx *ctx)
 {
-	ctx->primitive.init_target_regions = NULL;
-	ctx->primitive.update_target_regions = NULL;
+	ctx->primitive.init = NULL;
+	ctx->primitive.update = NULL;
 	ctx->primitive.prepare_access_checks = damon_pgi_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_pgi_check_accesses;
 	ctx->primitive.reset_aggregated = NULL;
