@@ -1,0 +1,147 @@
+===============================
+Introduce DAMON sysfs interface
+===============================
+
+DAMON's debugfs-based user interface unnecessarily depends on debugfs, while
+DAMON is not aimed to be used for only debugging.  Also, the interface receives
+multiple values via one file.  For example, schemes file receives 18 values.
+As a result, it is not only hard to be used, but also difficult to be extended.
+Especially, keeping backward compatibility from user space tool is getting only
+challenging.  It would be better to implement another reliable and easily
+extensible interface, and deprecate the debugfs interface.
+
+For the reason, this patchset introduces a sysfs-based new user interface of
+DAMON.  The idea of the new interface is, using directory hierarchies and
+making one file for one value.  For a short example, users can do the virtual
+address monitoring via the interface as below:
+
+    # cd /sys/kernel/mm/damon/admin/
+    # echo 1 > kdamonds/nr
+    # echo 1 > kdamonds/0/contexts/nr
+    # echo vaddr > kdamonds/0/contexts/0/damon_type
+    # echo 1 > kdamonds/0/contexts/0/targets/nr
+    # echo $(pidof <workload>) > kdamonds/0/contexts/0/targets/0/pid
+    # echo on > kdamonds/0/state
+
+The Hierarchy
+=============
+
+In a glance, the files hierarchy of the sysfs interface is as below.
+
+    /sys/kernel/mm/damon/admin
+    │ kdamonds
+    │ │ nr
+    │ │ 0/
+    │ │ │ state,pid
+    │ │ │ contexts
+    │ │ │ │ nr
+    │ │ │ │ 0/
+    │ │ │ │ │ damon_type
+    │ │ │ │ │ monitoring_attrs/
+    │ │ │ │ │ │ intervals/sampling,aggr,update
+    │ │ │ │ │ │ nr_regions/min,max
+    │ │ │ │ │ targets/
+    │ │ │ │ │ │ nr
+    │ │ │ │ │ │ 0/
+    │ │ │ │ │ │ │ pid
+    │ │ │ │ │ │ │ regions/
+    │ │ │ │ │ │ │ │ nr
+    │ │ │ │ │ │ │ │ 0/
+    │ │ │ │ │ │ │ │ │ start,end
+    │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ ...
+    │ │ │ │ │ ...
+    │ │ ...
+
+Root
+----
+
+The root of the DAMON sysfs is /sys/kernel/mm/damon/, and it has one directory
+named 'admin'.  The directory contains the interface for sysadmins.  In a
+future, sibling directories for non-admin or fine tuning/debugging of in-kernel
+DAMON-based policies could be created.
+
+kdamonds/
+---------
+
+The combination of data access monitoring and its results are called DAMON
+context.  DAMON executes a set of the contexts with a kernel thread called
+kdamond (for now, only one context per kdamond is supported), and multiple
+kdamonds could run in parallel.  This directory has files for controlling the
+kdamonds.
+
+In the beginning, this directory has only one file, 'nr'.  Writing a number
+(`N`) to the file creates the number of child directories named as `0` to
+`N-1`.  Each directory represent each kdamond.
+
+kdamonds/<N>/
+-------------
+
+In each kdamond directory, two files (`state` and `pid`) and one directory
+(`contexts`) reside.
+
+Reading `state` returns `on` if the kdamond is currently running, or `off` if
+it is not running.  Writing `on` or `off` makes the kdamond be in the state.
+If the state is `on`, reading `pid` shows the pid of the kdamond thread.
+
+`contexts` directory resembles `kdamonds`.  It contains files for controlling
+the monitoring contexts that this kdamond will execute.
+
+kdamonds/<N>/contexts/
+----------------------
+
+In the beginning, this directory has only one file, 'nr'.  Writing a number
+(`N`) to the file creates the number of child directories named as `0` to
+`N-1`.  Each directory represent each monitoring context.  At the moment, only
+one context per kdamond is supported, so only `0` or `1` can be written to the
+file.
+
+contexts/<N>/
+-------------
+
+In each context directory, one file (`damon_type`) and two directories
+(`monitoring_attrs` and `targets`) reside.
+
+DAMON supports multiple types of monitoring, including those for virtual
+address space and physical address space.  You can set and show what type of
+monitoring you want to do by writing one of below keywords to, and reading the
+file.
+
+- vaddr: Monitor virtual address spaces of specific processes
+
+Files for specifying attributes of the monitoring including required quality
+and efficiency of the monitoring are in `monitoring_attrs` directory, while
+files for specifying to what memory regions the monitoring should be done are
+in `targets` directory.
+
+contexts/<N>/monitoring_attrs/
+------------------------------
+
+In this directory, you can show two directories, `intervals` and `nr_regions`.
+
+Under `intervals` directory, three files for DAMON's sampling interval
+(`sample_us`), aggregation interval (`aggr_us`) and regions update interval
+(`update_us`) exist.  You can set and get the values by writing to and reading
+from the files.
+
+Under `nr_regions` directory, two files for the lower-bound and upper-bound of
+DAMON's monitoring regions (`min` and `max`, respectively), which controls the
+monitoring overhead, reside.  You can set and get the values by writing to and
+rading from the files.
+
+For more details about the intervals and monitoring regions range, please read
+the Design document[1].
+
+[1] https://docs.kernel.org/vm/damon/design.html
+
+contexts/<N>/targets/
+---------------------
+
+In the beginning, this directory has only one file, 'nr'.  Writing a number
+(`N`) to the file creates the number of child directories named as `0` to
+`N-1`.  Each directory represent each monitoring target.
+
+targets/<N>/
+------------
+
+
