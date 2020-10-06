@@ -1,0 +1,17 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Minimize fixed granularity overhead
+- Support cgroups
+- damo/wss: Adjust the nr_accesses for work_time
+
+
+Done
+====
+
+- Fix build warnings/errors (Reported by linux test bot)
+- Update document for changed file organization
+- Fix a memleak (Reported by kmemleaks)
