@@ -1,0 +1,79 @@
+TODOs
+=====
+
+Off the top of the head during LPC
+----------------------------------
+
+- Contig memory access util monitoring
+- WSS/RSS based processes sorting
+- LRU-based monitoring ops
+
+By Priorities
+-------------
+
+- Write-only monitoring
+  There is a patch doing the work already: https://lore.kernel.org/lkml/20220203131237.298090-1-pedrodemargomes@gmail.com/
+  Need to wait until soft-dirty bugs are fixed, though.
+
+- Export monitoring results in sysfs
+  ('Efficient Monitoring Results Collection' of https://lore.kernel.org/damon/20220602002935.62334-1-sj@kernel.org/)
+
+- Unify DAMON_RECLAIM and DAMON_PLRUS
+
+- Multiple contexts per kdamond
+  (to avoid interference between different contexts)
+
+- Monitoring time quota
+  Let users set time quota and automatically adjust
+  {min,max}_nr_regions based on the time usage (per-context).
+
+- Automatic paddr regions detection
+  (handle hot(un)plugged memory regions)
+
+- DAMOS denylist (or, more detailed target specification)
+  Don't bother knowlegeable user space processes
+  (adding target regions, type---anon,file-backed,numaxx,zonexx---, ...)
+
+- DAMON-based Compaction Target Scanning
+
+- Fixed granularity idleness monitoring
+  - Must be useful for further DAMON overhead/accuracy evaluation
+
+- Autotuning for DAMOS
+  - Provide feedback sysfs file: Users could set values, or special keyword
+    - keyword psi makes it works like TMO
+  - Set watermarks based on min_freebytes
+
+- DAMON-based THP hinting
+
+- Improve regions-based monitoring quality
+
+- Support cgroups
+
+
+[1] https://lore.kernel.org/all/a2fb10bd-b44a-350e-f693-82ecfa6f54a8@huawei.com/
+
+
+----
+
+By Categorization
+-----------------
+
+DAMON Improvement
+ - page-gran monitoring
+ - accuracy improvement
+ - more address spaces: read/write, numa, cgroups, files
+ - intuitive overhead unit (CPU time quota instead of nr_{min,max}_regions)
+
+DAMOS Improvement
+ - more actions: THP, NUMA migration, ...
+ - denylist
+ - autotuning: feedback sysfs file accepting values and special keywords
+   - writing big value makes the scheme more aggressive and vice versa
+   - writing PSI_TMO makes it works like DAMON-based TMO
+
+For Better Profiling
+
+For Ultimate User-driven Optimization
+
+For Access-aware Linux Tuning Assistant

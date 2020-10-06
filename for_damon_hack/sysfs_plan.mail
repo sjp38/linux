@@ -1,0 +1,177 @@
+Subject: [RFC] A few plans for DAMON sysfs extensions
+To: damon@lists.linux.dev,
+Cc: rientjes@google.com, gthelen@google.com
+Cc: baolin.wang@linux.alibaba.com, xhao@linux.alibaba.com
+Cc: tuhailong@gmail.com, wangkefeng.wang@huawei.com, tangmeng@uniontech.com, hanyihao@vivo.com
+
+Hello all,
+
+
+I have discussed with several people about how they want to use DAMON for their
+specific use cases.  For supporting those in perfectly optimal way, we might
+need to make yet another user interface.  However, IMHO, almost all of the use
+cases could be covered by extending DAMON sysfs interface[1].  Hence, I'd like
+to share my rough and humble ideas here.  It would be great if you could give
+some comments.
+
+[1] https://docs.kernel.org/admin-guide/mm/damon/usage.html#sysfs-interface
+
+Non-root Users
+--------------
+
+Someone told me they want to use DAMON from non-root user, for the user's
+processes.  My DAMON sysfs interface extension idea for this usage is adding a
+special directory under the DAMON sysfs root (/sys/kernel/mm/damon/) as a
+sibling of the admin/ directory.  The name would be, say, non-root-users/
+(please blame my bad naming sense and suggest something better).  The non-root
+users who want to use DAMON would be able to populate a directory under the
+directory.  Then, the non-root user populated directory will have its files
+hierarchy same to that of the admin/ directory.  The files will work same to
+those under admin/ directory but fails when the monitoring target is out of the
+user's permission.  An example usage would be something like below:
+
+    $ ls /sys/kernel/mm/damon
+    admin non-root-users
+    $ cd /sys/kernel/mm/damon/non-root-users
+    $ mkdir for_my_damon_usage; cd for_my_damon_usage/kdamonds/
+    $ echo 1 > nr_kdamonds; cd 0/
+    $ echo 1 > /contexts/nr_contexts
+    $ echo vaddr > 0/contexts/0/operations
+    $ echo 1 > 0/contexts/0/targets/nr_targets
+    $ echo $(pidof my_process) > 0/contexts/0/targets/0/pid_target
+    $ echo on > state
+
+The files tree would be something like below:
+
+    /sys/kernel/mm/damon/
+    │ non-root-users/		<- This is the new directory
+    │ │ for_my_damon_usage/
+    │ │ │ kdamonds/nr_kdamonds
+    │ │ │ │ 0/state,pid
+    │ │ │ ...
+    │ admin/
+    │ │ kdamonds/nr_kdamonds
+    │ │ │ 0/state,pid
+    │ │ │ │ contexts/nr_contexts
+    │ │ │ │ │ 0/avail_operations,operations
+    │ │ │ │ │ │ monitoring_attrs/
+    │ │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
+    │ │ │ │ │ │ │ nr_regions/min,max
+    │ │ │ │ │ │ targets/nr_targets
+    │ │ │ │ │ │ │ 0/pid_target
+    │ │ │ │ │ │ │ │ regions/nr_regions
+    │ │ │ │ │ │ │ │ │ 0/start,end
+    │ │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ ...
+    │ │ │ │ │ ...
+    │ │ │ ...
+
+No kdamond
+----------
+
+Currently, DAMON creates worker kernel threads called kdamond and does
+requested works on those.  There was a request asking the work to be done on
+the requester's process for easier resource usage charging.  For this, we could
+add a new directory under the user-specific DAMON sysfs root directory, called,
+say, self-service/ (again, blame my bad naming sense please).  It will have
+files similar to the contexts/ directory.  Then, DAMON code will run on the
+process that writes 'on' to the 'state' file under the self_service/ directory.
+
+For an example, below files tree is imaginable.
+
+    /sys/kernel/mm/damon/
+    │ non-root-users/
+    │ │ for_my_damon_usage/
+    │ │ │ self_service/			<- This is the new directory
+    │ │ │ │ state
+    │ │ │ │ contexts/nr_contexts
+    │ │ │ │ │ 0/avail_operations,operations
+    │ │ │ │ │ ...
+    │ │ │ kdamonds/nr_kdamonds
+    │ │ │ │ 0/state,pid
+    │ │ │ ...
+    │ admin/
+    │ │ self_service/			<- This is the new directory
+    │ │ │ state
+    │ │ │ contexts/nr_contexts
+    │ │ │ │ 0/avail_operations,operations
+    │ │ │ │ ...
+    │ │ kdamonds/nr_kdamonds
+    │ │ │ 0/state,pid
+    │ │ │ │ contexts/nr_contexts
+    │ │ │ │ │ 0/avail_operations,operations
+    │ │ │ │ │ │ monitoring_attrs/
+    │ │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
+    │ │ │ │ │ │ │ nr_regions/min,max
+    │ │ │ │ │ │ targets/nr_targets
+    │ │ │ │ │ │ │ 0/pid_target
+    │ │ │ │ │ │ │ │ regions/nr_regions
+    │ │ │ │ │ │ │ │ │ 0/start,end
+    │ │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ ...
+    │ │ │ │ │ ...
+    │ │ │ ...
+
+
+Efficient Monitoring Results Collection
+---------------------------------------
+
+Currently, damon:damon_aggregated tracepoint is the only way to get the DAMON
+monitoring results in full.  I heard some users don't want to get the full
+results, but only the monitoring results of specific address range having
+special access pattern.  For the use case, the tracepoint is inefficient.
+
+DAMON sysfs already provides some of the results via the stats/ directory under
+scheme directory, though.  We could further extend it for more efficient and
+more detailed results collection.  The idea is, adding a file under each scheme
+directory, say, report_the_detail.  Writing Y to the file will create a
+directory called, say, 'report'.  The file will have files similar to that
+under 'targets/<N>/regions/', and have contents that represents monitoring
+results of the address ranges that fulfills the scheme's target access pattern.
+
+For example, below hierarchy is imaginable.
+
+    /sys/kernel/mm/damon/admin
+    │ kdamonds/nr_kdamonds
+    │ │ 0/state,pid
+    │ │ │ contexts/nr_contexts
+    │ │ │ │ 0/avail_operations,operations
+    │ │ │ │ │ monitoring_attrs/
+    │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
+    │ │ │ │ │ │ nr_regions/min,max
+    │ │ │ │ │ targets/nr_targets
+    │ │ │ │ │ │ 0/pid_target
+    │ │ │ │ │ │ │ regions/nr_regions
+    │ │ │ │ │ │ │ │ 0/start,end
+    │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ ...
+    │ │ │ │ │ schemes/nr_schemes
+    │ │ │ │ │ │ 0/action
+    │ │ │ │ │ │ │ report_the_detail	<- this is the new file
+    │ │ │ │ │ │ │ report/		<- this is the new directory
+    │ │ │ │ │ │ │ │ regions/nr_regions  <- nr_regions would be read-only
+    │ │ │ │ │ │ │ │ │ 0/start,end,nr_accesses,age
+    │ │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ │ access_pattern/
+    │ │ │ │ │ │ │ │ sz/min,max
+    │ │ │ │ │ │ │ │ nr_accesses/min,max
+    │ │ │ │ │ │ │ │ age/min,max
+    │ │ │ │ │ │ │ quotas/ms,bytes,reset_interval_ms
+    │ │ │ │ │ │ │ │ weights/sz_permil,nr_accesses_permil,age_permil
+    │ │ │ │ │ │ │ watermarks/metric,interval_us,high,mid,low
+    │ │ │ │ │ │ │ stats/nr_tried,sz_tried,nr_applied,sz_applied,qt_exceeds
+    │ │ │ │ │ │ ...
+    │ │ │ │ ...
+    │ │ ...
+
+As I told at the beginning, these are just my rough and humble ideas, and there
+could be some important things I'm missing.  Also, I don't have ETAs for each
+of the plans, but currently have biggest interest in the efficient monitoring
+results collection.  All are in my TODO list, though.  All questions, comments,
+and suggestons are welcome as always!
+
+
+Thanks,
+SJ
