@@ -1,0 +1,262 @@
+From: SeongJae Park <sj@kernel.org>
+Cc: akpm@linux-foundation.org Jonathan.Cameron@Huawei.com amit@kernel.org
+  benh@kernel.crashing.org corbet@lwn.net david@redhat.com dwmw@amazon.com
+  elver@google.com foersleo@amazon.de gthelen@google.com markubo@amazon.de
+  rientjes@google.com shakeelb@google.com 
+  baolin.wang@linux.alibaba.com guoqing.jiang@linux.dev xhao@linux.alibaba.com
+  hanyihao@vivo.com changbin.du@gmail.com kuba@kernel.org
+  rongwei.wang@linux.alibaba.com rikard.falkeborn@gmail.com geert@linux-m68k.org
+  kilobyte@angband.pl
+  linux-damon@amazon.com
+  linux-mm@kvack.org
+  linux-kernel@vger.kernel.org
+Subject: [RFC PLAN] Some humble ideas for DAMON future works
+
+Hello,
+
+
+After the DAMON code is merged (kudos to the community for the great helps), a
+few people asked me about my plan for DAMON future works, and if DAMON will be
+somewhat usable for their use cases.  I indeed have some humble plans, though
+those are only in rough brainsorming level at the moment. so I'd like to share
+those here before going forward and start coding, so that I can get some
+feedback to fail fast.
+
+User-space Policy or In-kernel Policy?  Both.
+=============================================
+
+When discussing about a sort of kernel involved system efficiency
+optimizations, I show two kinds of people who have slightly different opinions.
+The first party prefer to implement only simple but efficient mechanisms in the
+kernel and export it to user space, so that users can make smart user space
+policy.  Meanwhile, the second party prefer the kernel just works.  I agree
+with both parties.
+
+I think the first opinion makes sense as there are some valuable information
+that only user space can know.  I think only such approaches could achieve the
+ultimate efficiency in such cases.
+I also agree to the second party, though, because there could be some people
+who don't have special information that only their applications know, or
+resources to do the additional work.  In-kernel simple policies will be still
+beneficial for some users even though those are sub-optimal compared to the
+highly tuned user space policy, if it provides some extent of efficiency gain
+and no regressions for most cases.
+
+I'd like to help both.  For the reason, I made DAMON as an in-kernel mechanism
+for both user and kernel-space policies.  It provides highly tunable general
+user space interface to help the first party.  It also provides in-kernel
+policies which built on top of DAMON using its kernel-space API for specific
+common use cases with conservative default parameters that assumed to incur no
+regression but some extent of benefits in most cases, namely DAMON-based
+proactive reclamation.  I will continue pursuing the two ways.
+
+Imaginable DAMON-based Policies
+===============================
+
+I'd like to start from listing some imaginable data access-aware operation
+policies that I hope to eventually be made.  The list will hopefully shed light
+on how DAMON should be evolved to efficiently support the policies.
+
+DAMON-based Proactive LRU-pages (de)Activation
+----------------------------------------------
+
+The reclamation mechanism which selects reclaim target using the
+active/inactive LRU lists sometimes doesn't work well.  According to my
+previous work, providing access pattern-based hints can significantly improve
+the performance under memory pressure[1,2].
+
+Proactive reclamation is known to be useful for many memory intensive systems,
+and now we have a DAMON-based implementation of it[3].  However, the proactive
+reclamation wouldn't be so welcome to some systems having high cost of I/O.
+Also, even though the system runs proactive reclamation, memory pressure can
+still occasionally triggered.
+
+My idea for helping this situation is manipulating the orders of pages in LRU
+lists using DAMON-provided monitoring results.  That is, making DAMON
+proactively finds hot/cold memory regions and moves pages of the hot regions to
+the head of the active list, while moving pages of the cold regions to the tail
+of the inactive list.  This will help eventual reclamation under memory
+pressure to evict cold pages first, so incur less additional page faults.
+
+[1] https://www.usenix.org/conference/hotstorage19/presentation/park
+[2] https://linuxplumbersconf.org/event/4/contributions/548/
+[3] https://docs.kernel.org/admin-guide/mm/damon/reclaim.html
+
+DAMON-based THP Coalesce/Split
+------------------------------
+
+THP is know to significantly improve performance, but also increase memory
+footprint[1].  We can minimize the memory overhead while preserving the
+performance benefit by asking DAMON to provide MADV_HUGEPAGE-like hints for hot
+memory regions of >= 2MiB size, and MADV_NOHUGEPAGE-like hints for cold memory
+regions.  Our experimental user space policy implementation[2] of this idea
+removes 76.15% of THP memory waste while preserving 51.25% of THP speedup in
+total.
+
+[1] https://www.usenix.org/conference/osdi16/technical-sessions/presentation/kwon
+[2] https://damonitor.github.io/doc/html/v34/vm/damon/eval.html
+
+DAMON-based Tiered Memory (Pro|De)motion
+----------------------------------------
+
+In tiered memory systems utilizing DRAM and PMEM[1], we can promote hot pages to
+DRAM and demote cold pages to PMEM using DAMON.  A patch for allowing
+access-aware demotion user space policy development is already submitted[2] by
+Baolin.
+
+[1] https://www.intel.com/content/www/us/en/products/details/memory-storage/optane-memory.html
+[2] https://lore.kernel.org/linux-mm/cover.1640171137.git.baolin.wang@linux.alibaba.com/
+
+DAMON-based Proactive Compaction
+--------------------------------
+
+Compaction uses migration scanner to find migration source pages.  Hot pages
+would be more likely to be unmovable compared to cold pages, so it would be
+better to try migration of cold pages first.  DAMON could be used here.  That
+is, proactively monitoring accesses via DAMON and start compaction so that the
+migration scanner scan cold memory ranges first.  I should admit I'm not
+familiar with compaction code and I have no PoC data for this but just the
+groundless idea, though.
+
+How We Can Implement These
+--------------------------
+
+Implementing most of the above mentioned policies wouldn't be too difficult
+because we have DAMON-based Operation Schemes (DAMOS).  That is, we will need
+to implement some more DAMOS action for each policy.  Some existing kernel
+functions can be reused.  Such actions would include LRU (de)activation, THP
+coalesce/split hints, memory (pro|de)motion, and cold pages first scanning
+compaction.  Then, supporting those actions with the user space interface will
+allows implementing user space policies.  If we find reasonably good default
+DAMOS parameters and some kernel side control mechanism, we can further make
+those as kernel policies in form of, say, builtin modules.
+
+How DAMON Should Be Evolved For Supporting Those
+================================================
+
+Let's discuss what kind of changes in DAMON will be needed to efficiently
+support above mentioned policies.
+
+Simultaneously Monitoring Different Types of Address Spaces
+-----------------------------------------------------------
+
+It would be better to run all the above mentioned policies simultaneously on
+single system.  As some policies such as LRU-pages (de)activation would better
+to run on physical address space while some policies such as THP coalesce/split
+would need to run on virtual address spaces, DAMON should support concurrently
+monitoring different address spaces.  We can always do this by creating one
+DAMON context for each address space and running those.  However, as the
+address spaces will conflict, each other will be interfered.  Current idea for
+avoiding this is allowing multiple DAMON contexts to run on a single thread,
+forcing them to have same monitoring contexts.
+
+Online Parameters Updates
+-------------------------
+
+Someone would also want to dynamically turn on/off and/or tune each policy.
+This is impossible with current DAMON, because it prohibits updating any
+parameter while it is running.  We disallow the online parameters update
+mainly because we want to avoid doing additional synchronization between the
+running kdamond and the parameters updater.  The idea for supporting the use
+case while avoiding the additional synchronization is, allowing users to pause
+DAMON and update parameters while it is paused.
+
+A Better DAMON interface
+------------------------
+
+DAMON is currently exposing its major functionality to the user space via the
+debugfs.  After all, DAMON is not for only debugging.  Also, this makes the
+interface depends on debugfs unnecessarily, and considered unreliable.  Also,
+the interface is quite unflexible for future interface extension.  I admit it
+was not a good choice.
+
+It would be better to implement another reliable and easily extensible
+interface, and deprecate the debugfs interface.  The idea is exposing the
+interface via sysfs using hierarchical Kobjects under mm_kobject.  For example,
+the usage would be something like below:
+
+    # cd /sys/kernel/mm/damon
+    # echo 1 > nr_kdamonds
+    # echo 1 > kdamond_1/contexts/nr_contexts
+    # echo va > kdamond_1/contexts/context_1/target_type
+    # echo 1 > kdamond_1/contexts/context_1/targets/nr_targets
+    # echo $(pidof <workload>) > \
+                    kdamond_1/contexts/context_1/targets/target_1/pid
+    # echo Y > monitor_on
+
+The underlying files hierarchy could be something like below.
+
+    /sys/kernel/mm/damon/
+    │ monitor_on
+    │ kdamonds
+    │ │ nr_kdamonds
+    │ │ kdamond_1/
+    │ │ │ kdamond_pid
+    │ │ │ contexts
+    │ │ │ │ nr_contexts
+    │ │ │ │ context_1/
+    │ │ │ │ │ target_type (va | pa)
+    │ │ │ │ │ attrs/
+    │ │ │ │ │ │ intervals/sampling,aggr,update
+    │ │ │ │ │ │ nr_regions/min,max
+    │ │ │ │ │ targets/
+    │ │ │ │ │ │ nr_targets
+    │ │ │ │ │ │ target_1/
+    │ │ │ │ │ │ │ pid
+    │ │ │ │ │ │ │ init_regions/
+    │ │ │ │ │ │ │ │ region1/
+    │ │ │ │ │ │ │ │ │ start,end
+    │ │ │ │ │ │ │ │ ...
+    │ │ │ │ │ │ ...
+    │ │ │ │ │ schemes/
+    │ │ │ │ │ │ nr_schemes
+    │ │ │ │ │ │ scheme_1/
+    │ │ │ │ │ │ │ action
+    │ │ │ │ │ │ │ target_access_pattern/
+    │ │ │ │ │ │ │ │ sz/min,max
+    │ │ │ │ │ │ │ │ nr_accesses/min,max
+    │ │ │ │ │ │ │ │ age/min,max
+    │ │ │ │ │ │ │ quotas/
+    │ │ │ │ │ │ │ │ ms,bytes,reset_interval
+    │ │ │ │ │ │ │ │ prioritization_weights/
+    │ │ │ │ │ │ │ │   sz,nr_accesses,age
+    │ │ │ │ │ │ │ watermarks/
+    │ │ │ │ │ │ │   metric,check_interval,high,mid,low
+    │ │ │ │ │ │ │ stats/
+    │ │ │ │ │ │ │ │ quota_exceeds
+    │ │ │ │ │ │ │ │ tried/nr,sz
+    │ │ │ │ │ │ │ │ applied/nr,sz
+    │ │ │ │ │ │ │ ...
+    │ │ │ │ ...
+    │ │ ...
+
+More DAMON Future Works
+=======================
+
+In addition to above mentioned things, there are many works to do.  It would be
+better to extend DAMON for more use cases and address spaces support, including
+page granularity, idleness only, read/write only, page cache only, and cgroups
+monitoring supports.
+
+Also it would be valuable to improve the accuracy of monitoring, using some
+adaptive monitoring attributes tuning or some new fancy idea[1].
+
+DAMOS could also be improved by utilizing its own autotuning feature, for
+example, by monitoring PSI and other metrics related to the given action.
+
+[1] https://linuxplumbersconf.org/event/11/contributions/984/
+
+
+Thank you For Reading This
+==========================
+
+So, I shared current rough and immature plans off the top of my head here.
+Hope this helps you understanding what I'm thinking about for the future of
+DAMON.  Please note again that those are only in brainstorming level and some
+are only groundless idea.  Some might be just insane ideas.  Hence, everything
+is open for change or failure.  If you have any comment, please feel free to
+let me know.
+
+
+Thanks,
+SJ
