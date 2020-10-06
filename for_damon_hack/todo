@@ -1,0 +1,49 @@
+TODOs
+=====
+
+- Online parameter updates
+  (sysfs, DARC: echo update_sysfs > status)
+
+- Monitoring results in sysfs
+  (Apply nr_accesses and age of regions to sysfs region dirs)
+  (echo update_kdamond > status)
+
+- DAMON-based Proactive LRU Sorting (DAMON_PLRUS)
+  (Make hot LRU pages placed near the head of their LRU lists)
+  - PoC with vaddr+DAMOS_COLD
+
+--- aims to do above before the v5.18 release ---
+
+- Multiple contexts per kdamond
+  (to avoid interference between different contexts)
+
+- Monitoring time quota
+  Let users set time quota and automatically adjust
+  {min,max}_nr_regions based on the time usage (per-context).
+
+- Automatic paddr regions detection
+  (handle hot(un)plugged memory regions)
+
+- Fixed monitoring target range for vaddr monitoring
+  New damon_ops (echo fvaddr > ops) or sysfs file (echo N > auto_regions_update)
+
+- DAMOS denylist
+  Don't bother knowlegeable user space processes
+
+- DAMON-based Proactive Compaction
+
+- Fixed granularity idleness monitoring
+  - Must be useful for further DAMON overhead/accuracy evaluation
+
+- Autopilot for DAMOS
+  - Set watermarks based on min_freebytes
+  - Adjust coldness threshold with PSI
+
+- DAMON-based THP hinting
+
+- Improve regions-based monitoring quality
+
+- Support cgroups
+
+
+[1] https://lore.kernel.org/all/a2fb10bd-b44a-350e-f693-82ecfa6f54a8@huawei.com/

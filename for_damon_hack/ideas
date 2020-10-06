@@ -1,0 +1,100 @@
+Support cgroups
+===============
+
+LRU index-as-an-address
+-----------------------
+
+Use the index of each page in its LRU list as its address.
+
+For accuracy improvement
+========================
+
+Dynamic monitoring attributes adjustment
+----------------------------------------
+
+Based on current monitoring results, adjust sampling interval and/or number of
+regions.
+
+Monitoring results-based Address Adjustment
+-------------------------------------------
+
+Migrating memory regions on the address space so that memory regions having
+similar access pattern are nearly placed.
+
+Yet another address space for DAMON
+-----------------------------------
+
+The monitoring results-based address adjustment works for LRU
+index-as-an-address case only.  We can make internal address translation
+mechanism and do the monitoring via the DAMON-internal address space.
+
+
+DAMON filesystem
+================
+
+Develop dedicated filesystem for DAMON interface like tracefs, to be
+independent from the debugfs and providing better interface.
+
+The idea of the new interface is, using directory hierarchies and making one
+file for one value.  For example,
+
+    damon/
+    │ monitor_on
+    │ contexts
+    │ │ mk_context,rm_context
+    │ │ ctx1/
+    │ │ │ kdamond_pid
+    │ │ │ target_type (va | pa)
+    │ │ │ attrs/
+    │ │ │ │ intervals/
+    │ │ │ │   sampling,aggr,update
+    │ │ │ │ nr_regions/
+    │ │ │ │   min,max
+    │ │ │ targets/
+    │ │ │ │ mk_target,rm_target
+    │ │ │ │ target1/
+    │ │ │ │ │ pid
+    │ │ │ │ │ init_regions/
+    │ │ │ │ │ │ region1/
+    │ │ │ │ │ │ │ start,end
+    │ │ │ │ │ │ ...
+    │ │ │ │ ...
+    │ │ │ schemes/
+    │ │ │ │ mk_scheme,rm_scheme
+    │ │ │ │ scheme1/
+    │ │ │ │ │ action
+    │ │ │ │ │ target_access_pattern/
+    │ │ │ │ │ │ sz/
+    │ │ │ │ │ │   min,max
+    │ │ │ │ │ │ nr_accesses/
+    │ │ │ │ │ │   min,max
+    │ │ │ │ │ │ age/
+    │ │ │ │ │ │   min,max
+    │ │ │ │ │ quotas/
+    │ │ │ │ │ │ ms,bytes,reset_interval
+    │ │ │ │ │ │ prioritization_weights/
+    │ │ │ │ │ │   sz,nr_accesses,age
+    │ │ │ │ │ watermarks/
+    │ │ │ │ │   metric,check_interval,high,mid,low
+    │ │ │ │ │ stats/
+    │ │ │ │ │ │ quota_exceeds
+    │ │ │ │ │ │ tried/
+    │ │ │ │ │ │   nr,sz
+    │ │ │ │ │ │ applied/
+    │ │ │ │ │ │   nr,sz
+    │ │ │ │ │ ...
+    │ │ │ │ ...
+    │ │ ...
+
+/sys/kernel/mm/damon/ would be the good mount point.
+User can add contexts my 'mkdir <context name>' from damon/.
+Then, target_ids, kdamond_pid, attrs/, init_regions/, and schemes/ would
+automatically populated.
+
+Adding more layers could be helpful.
+
+damon/admin/...
+     /kernel_subsys/reclaim/autopilot/
+                           /manual/
+                   /thp/
+                   /integrated/
