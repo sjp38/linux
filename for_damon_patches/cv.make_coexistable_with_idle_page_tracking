@@ -1,0 +1,70 @@
+Subject: DAMON: Make coexistable with Idle Page Tracking
+
+NOTE: This is an RFC for future change of DAMON patchsets[1,2,3], which is not
+merged in the mainline yet.  The aim of this RFC is to show how the patchset
+would be changed in the next version.  So, if you have some interest in this
+RFC, please consider reviewing the DAMON patchset, either.
+
+Currently, DAMON is configured to be exclusive with Idle Page Tracking because
+both of the subsystems use PG_Idle flag and there is no way to synchronize with
+Idle Page Tracking.  Though there are many use cases DAMON could do better than
+Idle Page Tracking, DAMON cannot fully replace Idle Page Tracking, since
+
+- DAMON doesn't support all features of Idle Page Tracking from the beginning
+  (e.g., physical address space is supported from the third DAMON patchset[3]),
+  and
+- there are some use cases Idle Page Tracking could be more efficient (e.g.,
+  page size granularity working set size calculation).
+
+Therefore, this patchset makes DAMON coexistable with Idle Page Tracking.  As
+the first decision of making DAMON exclusive was not a good idea, this change
+will be merged in the next versions of the original patchsets[1,2,3].
+Therefore, you could skip detail of the changes but wait for postings of the
+next versions of the patchsets, except the 4th patch.
+
+The changes significantly refactor the code, especially 'damon.c' and
+'damon-test.c'.  Though the refactoring changes are only straightforward, if
+you gave 'Reviewed-by' before and you want to drop it due to the changes,
+please let me know.
+
+[1] https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@amazon.com/
+[2] https://lore.kernel.org/linux-mm/20200804142430.15384-1-sjpark@amazon.com/
+[3] https://lore.kernel.org/linux-mm/20200831104730.28970-1-sjpark@amazon.com/
+
+Sequence of Patches
+===================
+
+The 1st patch separates DAMON components that unnecessarily implemented in one
+source file and depend on one config option (CONFIG_DAMON)
+to multiple files and apply fine-grained dependency.  As a result, the core
+framework part of DAMON becomes coexistable with Idle Page Tracking.
+
+Following two patches further refactor the code for cleaner bound between the
+components.
+
+The 4th patch implements a synchronization infrastructure for PG_idle flag
+users.  We implement it to eventually used for DAMON, but the change is
+independent with DAMON and the also required for Idle Page Tracking itself.
+This could be picked before DAMON patchsets merged.
+
+Finally, the 5th patch updates DAMON to use the PG_idle synchronization
+infrastructure and fully coexistable with Page Idle Tracking.
+
+Baseline and Complete Git Trees
+===============================
+
+The patches are based on the v5.8 plus DAMON v20 patchset[1], RFC v14 of DAMOS
+patchset, RFC v8 of physical address space support patchset, RFC v1 of user
+space improvement[4], and some more trivial fixes (s/snprintf/scnprintf).  You
+can also clone the complete git tree:
+
+    $ git clone git://github.com/sjp38/linux -b damon-usi/rfc/v1
+
+The web is also available:
+https://github.com/sjp38/linux/releases/tag/damon-usi/rfc/v1
+
+
+[1] https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@amazon.com/
+[2] https://lore.kernel.org/linux-mm/20200804142430.15384-1-sjpark@amazon.com/
+[3] https://lore.kernel.org/linux-mm/20200831104730.28970-1-sjpark@amazon.com/
+[4] https://lore.kernel.org/linux-mm/20200915180807.18812-1-sjpark@amazon.com/
