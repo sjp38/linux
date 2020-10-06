@@ -1,0 +1,26 @@
+TODOs
+=====
+
+- Support pmem (already done?)
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Minimize fixed granularity overhead
+- Support cgroups
+- Support multi contexts from user space
+- Charge kdamond CPU usage to requesting user space process
+  (Could kdamonds name distinguishments help this?)
+- Separate code to multiple files
+  - damon/core.c, primitives.c, dbgfs.c, fs.c
+- damonfs: Support mkdir/rmdir (maybe we should write damonfs)
+- damonfs: Export pid of kdamond via a file
+- damo/wss: Adjust the nr_accesses for work_time
+
+
+Done
+====
+
+- s/snprintf()/scnprintf() (Marco Elver)
+- Let kdamonds from user space/kernel space distinguishable by the name
+- Move unnecessarily global variable (debugfs_root) to local
+- Move code to separate directory, mm/damon/
+- Separate debugfs interface code from the framework
