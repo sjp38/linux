@@ -1,0 +1,43 @@
+Subject: brief and incomplete summary of the first instance of the series
+To: damon@lists.linux.dev, linux-damon@amazon.com
+Cc: linux-mm@kvack.org, linux-kernel@vger.kernel.org
+In-reply-to: 20220810225102.124459-1-sj@kernel.org
+
+Hello,
+
+
+Yesterday, we had the first instance of the DAMON Beer/Coffee/Tea chat
+series[1], which is intended to be an open, regular, and informal
+community-based bi-weekly syncup meeting for DAMON.  I was very excited to meet
+with the community people who have interest in DAMON and exchange our name in
+voice.  Thank you again to all people who joined in yesterday.  Below is a
+brief and incomplete summary of the yesterday meeting.  Note that I will only
+occasionally post this kind of summaries, not for every instance of the series.
+
+- Several people from various org including Tencent, Intel, AWS, and some
+  universities joined.
+- We introduced ourselves and for what we want to use DAMON.
+- SJ introduced current DAMON development process, long term future plans, and
+  near-future plans.
+- There were some questions.
+  - Why DAMON debugfs has number of target ids limit of 32?
+    - No reason at all.  Please feel free to post a patch for increasing or
+      removing the limit.
+  - What's the plan for DAMON's cgroup support?
+    - The rough idea is to receive cgroup id as the target id of DAMON.
+    - Definitely need more works.
+
+If there is something I missed or wrong, please let me know.
+
+Next instance of the series will be held at 2022-08-30 09:00 PDT using the
+Google Meet[2].  Please feel free to propose any agenda on the Google Doc[3].
+
+Looking forward to meet more community people there!
+
+[1] https://lore.kernel.org/damon/20220810225102.124459-1-sj@kernel.org/
+[2] https://meet.google.com/ndx-evoc-gbu
+[3] https://docs.google.com/document/d/1v43Kcj3ly4CYqmAkMaZzLiM2GEnWfgdGbZAH3mi2vpM/edit?usp=sharing
+
+
+Thanks,
+SJ
