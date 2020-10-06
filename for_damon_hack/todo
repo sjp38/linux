@@ -1,0 +1,29 @@
+TODOs
+=====
+
+- Writedown and share the future plans
+- Document DAMOS quotas and prioritization
+- Periodically flush TLB[1]
+- Implement DAMON_RECLAIM stats
+- Use safe type for target id via union
+- Support cgroups
+- Support better page granularity monitoring
+- Use DAMON's own file system (say, damonfs) for user space interface
+- Implement DAMON-based LRU pages (de)prioritization
+
+[1] https://lore.kernel.org/all/a2fb10bd-b44a-350e-f693-82ecfa6f54a8@huawei.com/
+
+
+Done
+====
+
+
+Merged in -mm
+=============
+
+- Sleep in interruptible status[2]
+- Remove unnecessary kernel logs
+- Add kselftest
+- Split kselftest
+
+[2] https://lore.kernel.org/all/20211123083636.5603-1-sj@kernel.org/
