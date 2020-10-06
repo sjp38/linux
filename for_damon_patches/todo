@@ -1,0 +1,51 @@
+TODOs
+=====
+
+- Support cgroups
+- Use DAMON's own file system (say, damonfs) for user space interface
+
+DAMON
+-----
+
+
+DARC
+----
+
+
+Done
+====
+
+DAMON
+-----
+
+
+
+DAMOS
+-----
+
+- Fixup wrong kernel doc
+
+
+More address spaces
+-------------------
+
+- Rebase on latest -mm
+- Fix a memory leak (Coverity SAST)
+- Move arbitrary target type support here (Shakeel Butt)
+- Do put_pid() safely
+- Support manual init regions setting for vaddr (Guoju Fang)
+
+User space tools
+----------------
+
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
+
+DARC
+----
+
+- Rebase on latest -mm tree plus DAMON v34 patchset[1]
+- Make reclamation restarts from exactly the point it stopped due to the limit
+- Implement a time quota (limits the time for trying reclamation of cold pages)
+
+[1] https://lore.kernel.org/linux-mm/20210716081449.22187-1-sj38.park@gmail.com/
