@@ -1,0 +1,20 @@
+TODOs
+=====
+
+- Make debugfs interface simple and clean
+ - Atomically pass a copy of constructed context to damon_start()?
+- Support cgroups
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
+
+Done
+====
+
+- Fix typos in commit messages (Shakeel Butt)
+- Update pseudo code in commit messages (Shakeel Butt)
+- Call missed mmu_notifier_test_young() (Shakeel Butt)
+- Add one 'Reviewed-by' tag for one patch (Shakeel Butt)
+- Rename init() and update() to region-neutral
+- Move out user space tool patch from DAMON patchset series
+
+- Implement page-gran access check primitive
