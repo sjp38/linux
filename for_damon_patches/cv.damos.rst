@@ -1,5 +1,10 @@
 Implement Data Access Monitoring-based Memory Operation Schemes
 
+NOTE: This is only an RFC for future features of DAMON patchset[1], which is
+not merged in the mainline yet.  The aim of this RFC is to show how DAMON would
+be evolved once it is merged in.  So, if you have some interest in this RFC,
+please consider reviewing the DAMON patchset, either.
+
 Changes from Previous Version
 =============================
 
