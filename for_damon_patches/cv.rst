@@ -6,7 +6,7 @@ Changes from Previous Version (v20)
 - s/snprintf()/scnprintf() (Marco Elver)
 - Support multiple contexts for user space users (Shakeel Butt)
 - Export pid of monitoring thread to user space (Shakeel Butt)
-- Let coexistable with Idle Pages Tracking
+- Let coexistable with Idle Page Tracking
 - Place three parts of DAMON (core, primitives, and dbgfs) in different files
 
 Introduction
@@ -61,10 +61,10 @@ results.
 
 [1] https://damonitor.github.io/doc/html/latest-damon/admin-guide/mm/damon/eval.html
 
-Comparison with Idle Pages Tracking
-===================================
+Comparison with Idle Page Tracking
+==================================
 
-Idle Pages Tracking allow users to set and read idleness of pages using a
+Idle Page Tracking allow users to set and read idleness of pages using a
 bitmap file which represents each page with each bit of the file.  One
 recommended usage of it is working set size detection.  Users can do that by
 
@@ -76,16 +76,16 @@ recommended usage of it is working set size detection.  Users can do that by
 NOTE: DAMON is primarily for kernel code, but the interface can easily be
 exposed to user space.  This section only assumes such user space use of DAMON.
 
-For what use cases Idle Pages Tracking would be better?
--------------------------------------------------------
+For what use cases Idle Page Tracking would be better?
+------------------------------------------------------
 
 1. Page granularity working set size detection.
 
 DAMON maintains additional metadata for each of the monitoring target regions.
 So, in this page granularity monitoring use case, DAMON would incur (number of
 monitoring target pages * sizeof metadata) memory overhead.  Size of the single
-metadata item is about 54 bytes, so about 1.3% of monitoring target pages will
-be additionally used.
+metadata item is about 54 bytes, so assuming 4KB pages, about 1.3% of
+monitoring target pages will be additionally used.
 
 All essential metadata for Idle Page Tracking are embedded in 'struct page' and
 page table entries.  Therefore, in this use case, only one counter variable for
@@ -109,7 +109,7 @@ Therefore, for physical memory monitoring, you should implement your own
 primitives and use it, or simply use Idle Page Tracking.
 
 Nonetheless, RFC patchsets[1] for the physical memory address space primitives
-is already available.  It also support user memory same to Idle Page Tracking.
+is already available.  It also supports user memory same to Idle Page Tracking.
 
 [1] https://lore.kernel.org/linux-mm/20200831104730.28970-1-sjpark@amazon.com/
 
@@ -246,7 +246,7 @@ Changes from v20
 - s/snprintf()/scnprintf() (Marco Elver)
 - Support multiple contexts for user space users (Shakeel Butt)
 - Export pid of monitoring thread to user space (Shakeel Butt)
-- Let coexistable with Idle Pages Tracking
+- Let coexistable with Idle Page Tracking
 - Place three parts of DAMON (core, primitives, and dbgfs) in different files
 
 Changes from v19
