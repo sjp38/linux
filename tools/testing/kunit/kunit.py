@@ -45,7 +45,7 @@ class KunitStatus(Enum):
 	TEST_FAILURE = auto()
 
 def create_default_kunitconfig(build_dir=''):
-	kunitconfig = os.path.join(build_dir, kunit_kernel.kunitconfig_path)
+	kunitconfig = os.path.join(build_dir, kunit_kernel.KUNITCONFIG_PATH)
 	if not os.path.exists(kunitconfig):
 		shutil.copyfile('arch/um/configs/kunit_defconfig', kunitconfig)
 
@@ -259,7 +259,7 @@ def main(argv, linux=None):
 		os.chdir(get_kernel_root_path())
 
 	kunitconfig_path = os.path.join(cli_args.build_dir,
-			kunit_kernel.kunitconfig_path)
+			kunit_kernel.KUNITCONFIG_PATH)
 	if cli_args.subcommand == 'run':
 		if not os.path.exists(cli_args.build_dir):
 			os.mkdir(cli_args.build_dir)
@@ -285,7 +285,7 @@ def main(argv, linux=None):
 				not os.path.exists(cli_args.build_dir)):
 			os.mkdir(cli_args.build_dir)
 
-		if not os.path.exists(kunit_kernel.kunitconfig_path):
+		if not os.path.exists(kunitconfig_path):
 			create_default_kunitconfig(cli_args.build_dir)
 
 		if not linux:
