@@ -44,10 +44,10 @@ class KunitStatus(Enum):
 	BUILD_FAILURE = auto()
 	TEST_FAILURE = auto()
 
-def create_default_kunitconfig():
-	if not os.path.exists(kunit_kernel.kunitconfig_path):
-		shutil.copyfile('arch/um/configs/kunit_defconfig',
-				kunit_kernel.kunitconfig_path)
+def create_default_kunitconfig(build_dir=''):
+	kunitconfig = os.path.join(build_dir, kunit_kernel.kunitconfig_path)
+	if not os.path.exists(kunitconfig):
+		shutil.copyfile('arch/um/configs/kunit_defconfig', kunitconfig)
 
 def get_kernel_root_path():
 	parts = sys.argv[0] if not __file__ else __file__
@@ -61,7 +61,7 @@ def config_tests(linux: kunit_kernel.LinuxSourceTree,
 	kunit_parser.print_with_timestamp('Configuring KUnit Kernel ...')
 
 	config_start = time.time()
-	create_default_kunitconfig()
+	create_default_kunitconfig(request.build_dir)
 	success = linux.build_reconfig(request.build_dir, request.make_options)
 	config_end = time.time()
 	if not success:
@@ -258,15 +258,17 @@ def main(argv, linux=None):
 	if get_kernel_root_path():
 		os.chdir(get_kernel_root_path())
 
+	kunitconfig_path = os.path.join(cli_args.build_dir,
+			kunit_kernel.kunitconfig_path)
 	if cli_args.subcommand == 'run':
 		if not os.path.exists(cli_args.build_dir):
 			os.mkdir(cli_args.build_dir)
 
-		if not os.path.exists(kunit_kernel.kunitconfig_path):
-			create_default_kunitconfig()
+		if not os.path.exists(kunitconfig_path):
+			create_default_kunitconfig(cli_args.build_dir)
 
 		if not linux:
-			linux = kunit_kernel.LinuxSourceTree()
+			linux = kunit_kernel.LinuxSourceTree(cli_args.build_dir)
 
 		request = KunitRequest(cli_args.raw_output,
 				       cli_args.timeout,
@@ -284,10 +286,10 @@ def main(argv, linux=None):
 			os.mkdir(cli_args.build_dir)
 
 		if not os.path.exists(kunit_kernel.kunitconfig_path):
-			create_default_kunitconfig()
+			create_default_kunitconfig(cli_args.build_dir)
 
 		if not linux:
-			linux = kunit_kernel.LinuxSourceTree()
+			linux = kunit_kernel.LinuxSourceTree(cli_args.build_dir)
 
 		request = KunitConfigRequest(cli_args.build_dir,
 					     cli_args.make_options)
@@ -299,7 +301,7 @@ def main(argv, linux=None):
 			sys.exit(1)
 	elif cli_args.subcommand == 'build':
 		if not linux:
-			linux = kunit_kernel.LinuxSourceTree()
+			linux = kunit_kernel.LinuxSourceTree(cli_args.build_dir)
 
 		request = KunitBuildRequest(cli_args.jobs,
 					    cli_args.build_dir,
@@ -313,7 +315,7 @@ def main(argv, linux=None):
 			sys.exit(1)
 	elif cli_args.subcommand == 'exec':
 		if not linux:
-			linux = kunit_kernel.LinuxSourceTree()
+			linux = kunit_kernel.LinuxSourceTree(cli_args.build_dir)
 
 		exec_request = KunitExecRequest(cli_args.timeout,
 						cli_args.build_dir,
