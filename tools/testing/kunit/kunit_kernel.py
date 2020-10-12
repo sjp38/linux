@@ -18,7 +18,7 @@ import kunit_config
 import kunit_parser
 
 KCONFIG_PATH = '.config'
-kunitconfig_path = '.kunitconfig'
+KUNITCONFIG_PATH = '.kunitconfig'
 BROKEN_ALLCONFIG_PATH = 'tools/testing/kunit/configs/broken_on_uml.config'
 
 class ConfigError(Exception):
@@ -106,7 +106,7 @@ class LinuxSourceTree(object):
 
 	def __init__(self, build_dir):
 		self._kconfig = kunit_config.Kconfig()
-		self._kconfig.read_from_file(os.path.join(build_dir, kunitconfig_path))
+		self._kconfig.read_from_file(os.path.join(build_dir, KUNITCONFIG_PATH))
 		self._ops = LinuxSourceTreeOperations()
 		signal.signal(signal.SIGINT, self.signal_handler)
 
