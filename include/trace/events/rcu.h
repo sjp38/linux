@@ -477,7 +477,6 @@ TRACE_EVENT_RCU(rcu_dyntick,
  * Tracepoint for the registration of a single RCU callback function.
  * The first argument is the type of RCU, the second argument is
  * a pointer to the RCU callback itself, the third element is the
- * number of lazy callbacks queued, and the fourth element is the
  * total number of callbacks queued.
  */
 TRACE_EVENT_RCU(rcu_callback,
