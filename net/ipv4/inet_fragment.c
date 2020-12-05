@@ -145,12 +145,17 @@ static void inet_frags_free_cb(void *ptr, void *arg)
 		inet_frag_destroy(fq);
 }
 
-static void fqdir_work_fn(struct work_struct *work)
-{
-	struct fqdir *fqdir = container_of(work, struct fqdir, destroy_work);
-	struct inet_frags *f = fqdir->f;
+static struct workqueue_struct *fqdir_wq;
+static LLIST_HEAD(free_list);
 
-	rhashtable_free_and_destroy(&fqdir->rhashtable, inet_frags_free_cb, NULL);
+static void fqdir_free_fn(struct work_struct *work)
+{
+	struct llist_node *kill_list;
+	struct fqdir *fqdir, *tmp;
+	struct inet_frags *f;
+
+	/* Atomically snapshot the list of fqdirs to free */
+	kill_list = llist_del_all(&free_list);
 
 	/* We need to make sure all ongoing call_rcu(..., inet_frag_destroy_rcu)
 	 * have completed, since they need to dereference fqdir.
@@ -158,11 +163,37 @@ static void fqdir_work_fn(struct work_struct *work)
 	 */
 	rcu_barrier();
 
-	if (refcount_dec_and_test(&f->refcnt))
-		complete(&f->completion);
+	llist_for_each_entry_safe(fqdir, tmp, kill_list, free_list) {
+		f = fqdir->f;
+		if (refcount_dec_and_test(&f->refcnt))
+			complete(&f->completion);
 
-	kfree(fqdir);
+		kfree(fqdir);
+	}
 }
+
+static DECLARE_WORK(fqdir_free_work, fqdir_free_fn);
+
+static void fqdir_work_fn(struct work_struct *work)
+{
+	struct fqdir *fqdir = container_of(work, struct fqdir, destroy_work);
+
+	rhashtable_free_and_destroy(&fqdir->rhashtable, inet_frags_free_cb, NULL);
+
+	if (llist_add(&fqdir->free_list, &free_list))
+		queue_work(fqdir_wq, &fqdir_free_work);
+}
+
+static int __init fqdir_wq_init(void)
+{
+	fqdir_wq = create_singlethread_workqueue("fqdir");
+	if (!fqdir_wq)
+		panic("Could not create fqdir workq");
+	return 0;
+}
+
+pure_initcall(fqdir_wq_init);
+
 
 int fqdir_init(struct fqdir **fqdirp, struct inet_frags *f, struct net *net)
 {
