@@ -145,12 +145,19 @@ static void inet_frags_free_cb(void *ptr, void *arg)
 		inet_frag_destroy(fq);
 }
 
+static LLIST_HEAD(destroy_list);
+
 static void fqdir_work_fn(struct work_struct *work)
 {
-	struct fqdir *fqdir = container_of(work, struct fqdir, destroy_work);
-	struct inet_frags *f = fqdir->f;
+	struct llist_node *kill_list;
+	struct fqdir *fqdir, *tmp;
+	struct inet_frags *f;
 
-	rhashtable_free_and_destroy(&fqdir->rhashtable, inet_frags_free_cb, NULL);
+	/* Atomically snapshot the list of fqdirs to destroy */
+	kill_list = llist_del_all(&destroy_list);
+
+	llist_for_each_entry(fqdir, kill_list, destroy_list)
+		rhashtable_free_and_destroy(&fqdir->rhashtable, inet_frags_free_cb, NULL);
 
 	/* We need to make sure all ongoing call_rcu(..., inet_frag_destroy_rcu)
 	 * have completed, since they need to dereference fqdir.
@@ -158,10 +165,13 @@ static void fqdir_work_fn(struct work_struct *work)
 	 */
 	rcu_barrier();
 
-	if (refcount_dec_and_test(&f->refcnt))
-		complete(&f->completion);
+	llist_for_each_entry_safe(fqdir, tmp, kill_list, destroy_list) {
+		f = fqdir->f;
+		if (refcount_dec_and_test(&f->refcnt))
+			complete(&f->completion);
 
-	kfree(fqdir);
+		kfree(fqdir);
+	}
 }
 
 int fqdir_init(struct fqdir **fqdirp, struct inet_frags *f, struct net *net)
@@ -184,10 +194,12 @@ int fqdir_init(struct fqdir **fqdirp, struct inet_frags *f, struct net *net)
 }
 EXPORT_SYMBOL(fqdir_init);
 
+static DECLARE_WORK(fqdir_destroy_work, fqdir_work_fn);
+
 void fqdir_exit(struct fqdir *fqdir)
 {
-	INIT_WORK(&fqdir->destroy_work, fqdir_work_fn);
-	queue_work(system_wq, &fqdir->destroy_work);
+	if (llist_add(&fqdir->destroy_list, &destroy_list))
+		queue_work(system_wq, &fqdir_destroy_work);
 }
 EXPORT_SYMBOL(fqdir_exit);
 
