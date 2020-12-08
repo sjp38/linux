@@ -180,10 +180,9 @@ struct damon_primitive {
  *
  * The monitoring thread calls @after_sampling and @after_aggregation for each
  * of the sampling intervals and aggregation intervals, respectively.
- * Therefore, users can safely access the monitoring results via
- * &damon_ctx.targets_list without additional protection of
- * damon_ctx.kdamond_lock.  For the reason, users are recommended to use these
- * callback for the accesses to the results.
+ * Therefore, users can safely access the monitoring results without additional
+ * protection of damon_ctx.kdamond_lock.  For the reason, users are recommended
+ * to use these callback for the accesses to the results.
  *
  * If any callback returns non-zero, monitoring stops.
  */
@@ -197,6 +196,17 @@ struct damon_callback {
 };
 
 /**
+ * enum damon_target_type - Represents the type of the monitoring target.
+ *
+ * @DAMON_ADAPTIVE_TARGET:	Adaptive regions adjustment applied target.
+ * @DAMON_ARBITRARY_TARGET:	User-defined arbitrary type target.
+ */
+enum damon_target_type {
+	DAMON_ADAPTIVE_TARGET,
+	DAMON_ARBITRARY_TARGET,
+};
+
+/**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
@@ -204,8 +214,6 @@ struct damon_callback {
  * @sample_interval:		The time between access samplings.
  * @aggr_interval:		The time between monitor results aggregations.
  * @regions_update_interval:	The time between monitor regions updates.
- * @min_nr_regions:		The minimum number of monitoring regions.
- * @max_nr_regions:		The maximum number of monitoring regions.
  *
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not.  It aggregates and keeps the access information (number of accesses to
@@ -233,18 +241,26 @@ struct damon_callback {
  * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
  * @kdamond_lock.  Accesses to other fields must be protected by themselves.
  *
- * @targets_list:	Head of monitoring targets (&damon_target) list.
- * @schemes_list:	Head of schemes (&damos) list.
- *
  * @primitive:	Set of monitoring primitives for given use cases.
  * @callback:	Set of callbacks for monitoring events notifications.
+ *
+ * @target_type:	Type of the monitoring target.
+ *
+ * @min_nr_regions:	The minimum number of adaptive monitoring regions.
+ * @max_nr_regions:	The maximum number of adaptive monitoring regions.
+ * @adaptive_targets:	Head of monitoring targets (&damon_target) list.
+ * @schemes:		Head of schemes (&damos) list.
+ *
+ * @arbitrary_target:	Pointer to arbitrary type target.
+ *
+ * @min_nr_regions, @max_nr_regions, @adaptive_targets and @schemes are valid
+ * only if @target_type is DAMON_ADAPTIVE_TARGET.  @arbitrary_target is valid
+ * only if @target_type is DAMON_ARBITRARY_TARGET.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
 	unsigned long aggr_interval;
 	unsigned long regions_update_interval;
-	unsigned long min_nr_regions;
-	unsigned long max_nr_regions;
 
 	struct timespec64 last_aggregation;
 	struct timespec64 last_regions_update;
@@ -253,11 +269,20 @@ struct damon_ctx {
 	bool kdamond_stop;
 	struct mutex kdamond_lock;
 
-	struct list_head targets_list;	/* 'damon_target' objects */
-	struct list_head schemes_list;	/* 'damos' objects */
-
 	struct damon_primitive primitive;
 	struct damon_callback callback;
+
+	enum damon_target_type target_type;
+	union {
+		struct {		/* DAMON_ADAPTIVE_TARGET */
+			unsigned long min_nr_regions;
+			unsigned long max_nr_regions;
+			struct list_head adaptive_targets;
+			struct list_head schemes;
+		};
+
+		void *arbitrary_target;	/* DAMON_ARBITRARY_TARGET */
+	};
 };
 
 #define damon_next_region(r) \
@@ -273,16 +298,16 @@ struct damon_ctx {
 	list_for_each_entry_safe(r, next, &t->regions_list, list)
 
 #define damon_for_each_target(t, ctx) \
-	list_for_each_entry(t, &(ctx)->targets_list, list)
+	list_for_each_entry(t, &(ctx)->adaptive_targets, list)
 
-#define damon_for_each_target_safe(t, next, ctx) \
-	list_for_each_entry_safe(t, next, &(ctx)->targets_list, list)
+#define damon_for_each_target_safe(t, next, ctx)	\
+	list_for_each_entry_safe(t, next, &(ctx)->adaptive_targets, list)
 
 #define damon_for_each_scheme(s, ctx) \
-	list_for_each_entry(s, &(ctx)->schemes_list, list)
+	list_for_each_entry(s, &(ctx)->schemes, list)
 
-#define damon_for_each_scheme_safe(s, next, ctx) \
-	list_for_each_entry_safe(s, next, &(ctx)->schemes_list, list)
+#define damon_for_each_scheme_safe(s, next, ctx)	\
+	list_for_each_entry_safe(s, next, &(ctx)->schemes, list)
 
 #ifdef CONFIG_DAMON
 
@@ -306,7 +331,7 @@ void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t);
 unsigned int damon_nr_regions(struct damon_target *t);
 
-struct damon_ctx *damon_new_ctx(void);
+struct damon_ctx *damon_new_ctx(enum damon_target_type type);
 void damon_destroy_ctx(struct damon_ctx *ctx);
 int damon_set_targets(struct damon_ctx *ctx,
 		unsigned long *ids, ssize_t nr_ids);
