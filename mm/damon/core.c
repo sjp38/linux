@@ -759,24 +759,12 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	return true;
 }
 
-static void set_kdamond_stop(struct damon_ctx *ctx, bool stop)
+static void set_kdamond_stop(struct damon_ctx *ctx)
 {
 	mutex_lock(&ctx->kdamond_lock);
-	ctx->kdamond_stop = stop;
+	ctx->kdamond_stop = true;
 	mutex_unlock(&ctx->kdamond_lock);
 }
-
-#define kdamond_call_prmt(ctx, fn)			\
-	do {						\
-		if (ctx->primitive.fn)			\
-			ctx->primitive.fn(ctx);		\
-	} while (0)
-
-#define kdamond_callback(ctx, fn)				\
-	do {							\
-		if (ctx->callback.fn && ctx->callback.fn(ctx))	\
-			set_kdamond_stop(ctx, true);		\
-	} while (0)
 
 /*
  * The monitoring daemon that runs as a kernel thread
@@ -791,14 +779,19 @@ static int kdamond_fn(void *data)
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 
-	kdamond_call_prmt(ctx, init_target_regions);
-	kdamond_callback(ctx, before_start);
+	if (ctx->primitive.init_target_regions)
+		ctx->primitive.init_target_regions(ctx);
+	if (ctx->callback.before_start && ctx->callback.before_start(ctx))
+		set_kdamond_stop(ctx);
 
 	sz_limit = damon_region_sz_limit(ctx);
 
 	while (!kdamond_need_stop(ctx)) {
-		kdamond_call_prmt(ctx, prepare_access_checks);
-		kdamond_callback(ctx, after_sampling);
+		if (ctx->primitive.prepare_access_checks)
+			ctx->primitive.prepare_access_checks(ctx);
+		if (ctx->callback.after_sampling &&
+				ctx->callback.after_sampling(ctx))
+			set_kdamond_stop(ctx);
 
 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);
 
@@ -810,7 +803,9 @@ static int kdamond_fn(void *data)
 				kdamond_merge_regions(ctx,
 						max_nr_accesses / 10,
 						sz_limit);
-			kdamond_callback(ctx, after_aggregation);
+			if (ctx->callback.after_aggregation &&
+					ctx->callback.after_aggregation(ctx))
+				set_kdamond_stop(ctx);
 			if (ctx->target_type == DAMON_ADAPTIVE_TARGET)
 				kdamond_apply_schemes(ctx);
 			kdamond_reset_aggregated(ctx);
@@ -819,7 +814,8 @@ static int kdamond_fn(void *data)
 		}
 
 		if (kdamond_need_update_regions(ctx)) {
-			kdamond_call_prmt(ctx, update_target_regions);
+			if (ctx->primitive.update_target_regions)
+				ctx->primitive.update_target_regions(ctx);
 			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
@@ -830,8 +826,11 @@ static int kdamond_fn(void *data)
 		}
 	}
 
-	kdamond_callback(ctx, before_terminate);
-	kdamond_call_prmt(ctx, cleanup);
+	if (ctx->callback.before_terminate &&
+			ctx->callback.before_terminate(ctx))
+		set_kdamond_stop(ctx);
+	if (ctx->primitive.cleanup)
+		ctx->primitive.cleanup(ctx);
 
 	pr_debug("kdamond (%d) finishes\n", ctx->kdamond->pid);
 	mutex_lock(&ctx->kdamond_lock);
