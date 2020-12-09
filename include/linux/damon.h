@@ -138,7 +138,7 @@ struct damon_ctx;
  * @reset_aggregated is called after each &damon_ctx.aggr_interval.
  *
  * @init_target_regions should construct proper monitoring target regions and
- * link those to the DAMON context struct.  The region should be defined by
+ * link those to the DAMON context struct.  The regions should be defined by
  * user and saved in @damon_ctx.arbitrary_target if @damon_ctx.target_type is
  * &DAMON_ARBITRARY_TARGET.  Otherwise, &struct damon_region should be used.
  * @update_target_regions should update the monitoring target regions for
