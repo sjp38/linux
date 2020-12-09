@@ -25,6 +25,4 @@ For v23, suggested by Shakeel
 Done
 ====
 
-- Fix build warnings/errors (Reported by linux test bot)
-- Update document for changed file organization
-- Fix a memleak (Reported by kmemleaks)
+- Add 'reset_aggregated' primitive
