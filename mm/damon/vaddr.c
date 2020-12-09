@@ -7,17 +7,9 @@
 
 #define pr_fmt(fmt) "damon-va: " fmt
 
-#include "prmtv-common.h"
-
 #include <asm-generic/mman-common.h>
-#include <linux/damon.h>
-#include <linux/mm.h>
-#include <linux/mmu_notifier.h>
-#include <linux/page_idle.h>
-#include <linux/pagemap.h>
-#include <linux/random.h>
-#include <linux/sched/mm.h>
-#include <linux/slab.h>
+
+#include "prmtv-common.h"
 
 /* Minimal region size.  Every damon_region is aligned by this. */
 #ifndef CONFIG_DAMON_VADDR_KUNIT_TEST

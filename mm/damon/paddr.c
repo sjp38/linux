@@ -7,9 +7,9 @@
 
 #define pr_fmt(fmt) "damon-pa: " fmt
 
-#include "prmtv-common.h"
-
 #include <linux/rmap.h>
+
+#include "prmtv-common.h"
 
 /*
  * Primitives for the physical address space
