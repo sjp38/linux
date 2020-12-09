@@ -12,6 +12,48 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 
+/**
+ * struct damon_addr_range - Represents an address region of [@start, @end).
+ * @start:	Start address of the region (inclusive).
+ * @end:	End address of the region (exclusive).
+ */
+struct damon_addr_range {
+	unsigned long start;
+	unsigned long end;
+};
+
+/**
+ * struct damon_region - Represents a monitoring target region.
+ * @ar:			The address range of the region.
+ * @sampling_addr:	Address of the sample for the next access check.
+ * @nr_accesses:	Access frequency of this region.
+ * @list:		List head for siblings.
+ */
+struct damon_region {
+	struct damon_addr_range ar;
+	unsigned long sampling_addr;
+	unsigned int nr_accesses;
+	struct list_head list;
+};
+
+/**
+ * struct damon_target - Represents a monitoring target.
+ * @id:			Unique identifier for this target.
+ * @regions_list:	Head of the monitoring target regions of this target.
+ * @list:		List head for siblings.
+ *
+ * Each monitoring context could have multiple targets.  For example, a context
+ * for virtual memory address spaces could have multiple target processes.  The
+ * @id of each target should be unique among the targets of the context.  For
+ * example, in the virtual address monitoring context, it could be a pidfd or
+ * an address of an mm_struct.
+ */
+struct damon_target {
+	unsigned long id;
+	struct list_head regions_list;
+	struct list_head list;
+};
+
 struct damon_ctx;
 
 /**
@@ -36,7 +78,8 @@ struct damon_ctx;
  *
  * @init_target_regions should construct proper monitoring target regions and
  * link those to the DAMON context struct.  The regions should be defined by
- * user and saved in @damon_ctx.target.
+ * user and saved in @damon_ctx.arbitrary_target if @damon_ctx.target_type is
+ * &DAMON_ARBITRARY_TARGET.  Otherwise, &struct damon_region should be used.
  * @update_target_regions should update the monitoring target regions for
  * current status.
  * @prepare_access_checks should manipulate the monitoring regions to be
@@ -46,7 +89,8 @@ struct damon_ctx;
  * @reset_aggregated should reset the access monitoring results that aggregated
  * by @check_accesses.
  * @target_valid should check whether the target is still valid for the
- * monitoring.
+ * monitoring.  It receives &damon_ctx.arbitrary_target or &struct damon_target
+ * pointer depends on &damon_ctx.target_type.
  * @cleanup is called from @kdamond just before its termination.  After this
  * call, only @kdamond_lock and @kdamond will be touched.
  */
@@ -92,6 +136,17 @@ struct damon_callback {
 };
 
 /**
+ * enum damon_target_type - Represents the type of the monitoring target.
+ *
+ * @DAMON_REGION_SAMPLING_TARGET:	Region based sampling target.
+ * @DAMON_ARBITRARY_TARGET:		User-defined arbitrary type target.
+ */
+enum damon_target_type {
+	DAMON_REGION_SAMPLING_TARGET,
+	DAMON_ARBITRARY_TARGET,
+};
+
+/**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
@@ -130,7 +185,15 @@ struct damon_callback {
  * @primitive:	Set of monitoring primitives for given use cases.
  * @callback:	Set of callbacks for monitoring events notifications.
  *
- * @target:	Pointer to the user-defined monitoring target.
+ * @target_type:	Type of the monitoring target.
+ *
+ * @region_targets:	Head of monitoring targets (&damon_target) list.
+ *
+ * @arbitrary_target:	Pointer to arbitrary type target.
+ *
+ * @region_targets are valid only if @target_type is
+ * DAMON_REGION_SAMPLING_TARGET.  @arbitrary_target is valid only if
+ * @target_type is DAMON_ARBITRARY_TARGET.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -147,12 +210,48 @@ struct damon_ctx {
 	struct damon_primitive primitive;
 	struct damon_callback callback;
 
-	void *target;
+	enum damon_target_type target_type;
+	union {
+		/* DAMON_REGION_SAMPLING_TARGET */
+		struct list_head region_targets;
+
+		/* DAMON_ARBITRARY_TARGET */
+		void *arbitrary_target;
+	};
 };
+
+#define damon_next_region(r) \
+	(container_of(r->list.next, struct damon_region, list))
+
+#define damon_prev_region(r) \
+	(container_of(r->list.prev, struct damon_region, list))
+
+#define damon_for_each_region(r, t) \
+	list_for_each_entry(r, &t->regions_list, list)
+
+#define damon_for_each_region_safe(r, next, t) \
+	list_for_each_entry_safe(r, next, &t->regions_list, list)
+
+#define damon_for_each_target(t, ctx) \
+	list_for_each_entry(t, &(ctx)->region_targets, list)
+
+#define damon_for_each_target_safe(t, next, ctx)	\
+	list_for_each_entry_safe(t, next, &(ctx)->region_targets, list)
 
 #ifdef CONFIG_DAMON
 
-struct damon_ctx *damon_new_ctx(void);
+struct damon_region *damon_new_region(unsigned long start, unsigned long end);
+inline void damon_insert_region(struct damon_region *r,
+		struct damon_region *prev, struct damon_region *next);
+void damon_add_region(struct damon_region *r, struct damon_target *t);
+void damon_destroy_region(struct damon_region *r);
+
+struct damon_target *damon_new_target(unsigned long id);
+void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
+void damon_free_target(struct damon_target *t);
+void damon_destroy_target(struct damon_target *t);
+
+struct damon_ctx *damon_new_ctx(enum damon_target_type type);
 void damon_destroy_ctx(struct damon_ctx *ctx);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 		unsigned long aggr_int, unsigned long regions_update_int);
