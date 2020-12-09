@@ -206,7 +206,7 @@ struct damon_ctx *damon_new_ctx(enum damon_target_type type)
 	mutex_init(&ctx->kdamond_lock);
 
 	ctx->target_type = type;
-	if (type == DAMON_ADAPTIVE_TARGET) {
+	if (type != DAMON_ARBITRARY_TARGET) {
 		ctx->min_nr_regions = 10;
 		ctx->max_nr_regions = 1000;
 
@@ -294,7 +294,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 	ctx->sample_interval = sample_int;
 	ctx->aggr_interval = aggr_int;
 	ctx->regions_update_interval = regions_update_int;
-	if (ctx->target_type == DAMON_ADAPTIVE_TARGET) {
+	if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
 		ctx->min_nr_regions = min_nr_reg;
 		ctx->max_nr_regions = max_nr_reg;
 	}
@@ -802,14 +802,14 @@ static int kdamond_fn(void *data)
 			max_nr_accesses = ctx->primitive.check_accesses(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
-			if (ctx->target_type == DAMON_ADAPTIVE_TARGET)
+			if (ctx->target_type != DAMON_ARBITRARY_TARGET)
 				kdamond_merge_regions(ctx,
 						max_nr_accesses / 10,
 						sz_limit);
 			if (ctx->callback.after_aggregation &&
 					ctx->callback.after_aggregation(ctx))
 				set_kdamond_stop(ctx);
-			if (ctx->target_type == DAMON_ADAPTIVE_TARGET) {
+			if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
 				kdamond_apply_schemes(ctx);
 				kdamond_reset_aggregated(ctx);
 				kdamond_split_regions(ctx);
@@ -824,7 +824,7 @@ static int kdamond_fn(void *data)
 			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
-	if (ctx->target_type == DAMON_ADAPTIVE_TARGET) {
+	if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
 		damon_for_each_target(t, ctx) {
 			damon_for_each_region_safe(r, next, t)
 				damon_destroy_region(r);
