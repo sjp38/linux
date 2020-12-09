@@ -263,8 +263,8 @@ enum damon_target_type {
  * @arbitrary_target:	Pointer to arbitrary type target.
  *
  * @min_nr_regions, @max_nr_regions, @adaptive_targets and @schemes are valid
- * only if @target_type is DAMON_ADAPTIVE_TARGET.  @arbitrary_target is valid
- * only if @target_type is DAMON_ARBITRARY_TARGET.
+ * only if @target_type is &DAMON_ADAPTIVE_TARGET.  @arbitrary_target is valid
+ * only if @target_type is &DAMON_ARBITRARY_TARGET.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
