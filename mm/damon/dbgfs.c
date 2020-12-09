@@ -28,7 +28,6 @@ struct dbgfs_recorder {
 
 static struct damon_ctx **dbgfs_ctxs;
 static int dbgfs_nr_ctxs = 1;
-static int dbgfs_nr_terminated_ctxs;
 static struct dentry **dbgfs_dirs;
 static DEFINE_MUTEX(damon_dbgfs_lock);
 
@@ -888,20 +887,9 @@ static int dbgfs_after_aggregation(struct damon_ctx *c)
 	return 0;
 }
 
-static void dbgfs_unlock_page_idle_lock(void)
-{
-	mutex_lock(&damon_dbgfs_lock);
-	if (++dbgfs_nr_terminated_ctxs == dbgfs_nr_ctxs) {
-		dbgfs_nr_terminated_ctxs = 0;
-		mutex_unlock(&page_idle_lock);
-	}
-	mutex_unlock(&damon_dbgfs_lock);
-}
-
 static int dbgfs_before_terminate(struct damon_ctx *ctx)
 {
 	dbgfs_flush_rbuffer(ctx->callback.private);
-	dbgfs_unlock_page_idle_lock();
 	return 0;
 }
 
@@ -1128,16 +1116,7 @@ static ssize_t dbgfs_monitor_on_read(struct file *file,
 
 static int dbgfs_start_ctxs(struct damon_ctx **ctxs, int nr_ctxs)
 {
-	int rc;
-
-	if (!mutex_trylock(&page_idle_lock))
-		return -EBUSY;
-
-	rc = damon_start(ctxs, nr_ctxs);
-	if (rc)
-		mutex_unlock(&page_idle_lock);
-
-	return rc;
+	return damon_start(ctxs, nr_ctxs);
 }
 
 static ssize_t dbgfs_monitor_on_write(struct file *file,

@@ -24,22 +24,30 @@ config DAMON_KUNIT_TEST
 
 	  If unsure, say N.
 
-config DAMON_PRIMITIVES
-	bool "Monitoring primitives for virtual address spaces monitoring"
+config DAMON_VADDR
+	bool "Data access monitoring primitives for virtual address spaces"
 	depends on DAMON && MMU
 	select PAGE_EXTENSION if !64BIT
 	select PAGE_IDLE_FLAG
 	help
-	  This builds the default data access monitoring primitives for DAMON.
-	  The primitives support only virtual address spaces.  If this cannot
-	  cover your use case, you can implement and use your own primitives.
+	  This builds the default data access monitoring primitives for DAMON
+	  that works for virtual address spaces.
 
-config DAMON_PRIMITIVES_KUNIT_TEST
+config DAMON_PADDR
+	bool "Data access monitoring primitives for the physical address space"
+	depends on DAMON && MMU
+	select PAGE_EXTENSION if !64BIT
+	select PAGE_IDLE_FLAG
+	help
+	  This builds the default data access monitoring primitives for DAMON
+	  that works for physical address spaces.
+
+config DAMON_VADDR_KUNIT_TEST
 	bool "Test for DAMON primitives" if !KUNIT_ALL_TESTS
-	depends on DAMON_PRIMITIVES && KUNIT=y
+	depends on DAMON_VADDR && KUNIT=y
 	default KUNIT_ALL_TESTS
 	help
-	  This builds the DAMON PRIMITIVES Kunit test suite.
+	  This builds the DAMON virtual addresses primitives Kunit test suite.
 
 	  For more information on KUnit and unit tests in general, please refer
 	  to the KUnit documentation.
@@ -48,7 +56,7 @@ config DAMON_PRIMITIVES_KUNIT_TEST
 
 config DAMON_DBGFS
 	bool "DAMON debugfs interface"
-	depends on DAMON_PRIMITIVES && DEBUG_FS
+	depends on DAMON_VADDR && DAMON_PADDR && DEBUG_FS
 	help
 	  This builds the debugfs interface for DAMON.  The user space admins
 	  can use the interface for arbitrary data access monitoring.
