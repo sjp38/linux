@@ -26,7 +26,7 @@ config DAMON_KUNIT_TEST
 
 config DAMON_PRIMITIVES
 	bool "Monitoring primitives for virtual address spaces monitoring"
-	depends on DAMON && MMU
+	depends on DAMON && MMU && !IDLE_PAGE_TRACKING
 	select PAGE_EXTENSION if !64BIT
 	select PAGE_IDLE_FLAG
 	help
