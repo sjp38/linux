@@ -15,7 +15,102 @@
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 
-struct damon_ctx *damon_new_ctx(void)
+/*
+ * Construct a damon_region struct
+ *
+ * Returns the pointer to the new struct if success, or NULL otherwise
+ */
+struct damon_region *damon_new_region(unsigned long start, unsigned long end)
+{
+	struct damon_region *region;
+
+	region = kmalloc(sizeof(*region), GFP_KERNEL);
+	if (!region)
+		return NULL;
+
+	region->ar.start = start;
+	region->ar.end = end;
+	region->nr_accesses = 0;
+	INIT_LIST_HEAD(&region->list);
+
+	return region;
+}
+
+/*
+ * Add a region between two other regions
+ */
+inline void damon_insert_region(struct damon_region *r,
+		struct damon_region *prev, struct damon_region *next)
+{
+	__list_add(&r->list, &prev->list, &next->list);
+}
+
+void damon_add_region(struct damon_region *r, struct damon_target *t)
+{
+	list_add_tail(&r->list, &t->regions_list);
+}
+
+static void damon_del_region(struct damon_region *r)
+{
+	list_del(&r->list);
+}
+
+static void damon_free_region(struct damon_region *r)
+{
+	kfree(r);
+}
+
+void damon_destroy_region(struct damon_region *r)
+{
+	damon_del_region(r);
+	damon_free_region(r);
+}
+
+/*
+ * Construct a damon_target struct
+ *
+ * Returns the pointer to the new struct if success, or NULL otherwise
+ */
+struct damon_target *damon_new_target(unsigned long id)
+{
+	struct damon_target *t;
+
+	t = kmalloc(sizeof(*t), GFP_KERNEL);
+	if (!t)
+		return NULL;
+
+	t->id = id;
+	INIT_LIST_HEAD(&t->regions_list);
+
+	return t;
+}
+
+void damon_add_target(struct damon_ctx *ctx, struct damon_target *t)
+{
+	list_add_tail(&t->list, &ctx->region_targets);
+}
+
+static void damon_del_target(struct damon_target *t)
+{
+	list_del(&t->list);
+}
+
+void damon_free_target(struct damon_target *t)
+{
+	struct damon_region *r, *next;
+
+	damon_for_each_region_safe(r, next, t)
+		damon_free_region(r);
+	kfree(t);
+}
+
+void damon_destroy_target(struct damon_target *t)
+{
+	damon_del_target(t);
+	damon_free_target(t);
+}
+
+struct damon_ctx *damon_new_ctx(enum damon_target_type type)
 {
 	struct damon_ctx *ctx;
 
@@ -32,13 +127,20 @@ struct damon_ctx *damon_new_ctx(void)
 
 	mutex_init(&ctx->kdamond_lock);
 
-	ctx->target = NULL;
+	ctx->target_type = type;
+	if (type != DAMON_ARBITRARY_TARGET)
+		INIT_LIST_HEAD(&ctx->region_targets);
 
 	return ctx;
 }
 
 void damon_destroy_ctx(struct damon_ctx *ctx)
 {
+	struct damon_target *t, *next_t;
+
+	damon_for_each_target_safe(t, next_t, ctx)
+		damon_destroy_target(t);
+
 	kfree(ctx);
 }
 
@@ -216,6 +318,21 @@ static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)
 }
 
 /*
+ * Reset the aggregated monitoring results ('nr_accesses' of each region).
+ */
+static void kdamond_reset_aggregated(struct damon_ctx *c)
+{
+	struct damon_target *t;
+
+	damon_for_each_target(t, c) {
+		struct damon_region *r;
+
+		damon_for_each_region(r, t)
+			r->nr_accesses = 0;
+	}
+}
+
+/*
  * Check whether it is time to check and apply the target monitoring regions
  *
  * Returns true if it is.
@@ -236,6 +353,7 @@ static bool kdamond_need_update_regions(struct damon_ctx *ctx)
  */
 static bool kdamond_need_stop(struct damon_ctx *ctx)
 {
+	struct damon_target *t;
 	bool stop;
 
 	mutex_lock(&ctx->kdamond_lock);
@@ -247,7 +365,15 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	if (!ctx->primitive.target_valid)
 		return false;
 
-	return !ctx->primitive.target_valid(ctx->target);
+	if (ctx->target_type == DAMON_ARBITRARY_TARGET)
+		return !ctx->primitive.target_valid(ctx->arbitrary_target);
+
+	damon_for_each_target(t, ctx) {
+		if (ctx->primitive.target_valid(t))
+			return false;
+	}
+
+	return true;
 }
 
 static void set_kdamond_stop(struct damon_ctx *ctx)
@@ -263,6 +389,8 @@ static void set_kdamond_stop(struct damon_ctx *ctx)
 static int kdamond_fn(void *data)
 {
 	struct damon_ctx *ctx = (struct damon_ctx *)data;
+	struct damon_target *t;
+	struct damon_region *r, *next;
 
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
 
@@ -287,6 +415,8 @@ static int kdamond_fn(void *data)
 			if (ctx->callback.after_aggregation &&
 					ctx->callback.after_aggregation(ctx))
 				set_kdamond_stop(ctx);
+			if (ctx->target_type != DAMON_ARBITRARY_TARGET)
+				kdamond_reset_aggregated(ctx);
 			if (ctx->primitive.reset_aggregated)
 				ctx->primitive.reset_aggregated(ctx);
 		}
@@ -294,6 +424,12 @@ static int kdamond_fn(void *data)
 		if (kdamond_need_update_regions(ctx)) {
 			if (ctx->primitive.update_target_regions)
 				ctx->primitive.update_target_regions(ctx);
+		}
+	}
+	if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
+		damon_for_each_target(t, ctx) {
+			damon_for_each_region_safe(r, next, t)
+				damon_destroy_region(r);
 		}
 	}
 
