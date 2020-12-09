@@ -806,11 +806,11 @@ static int kdamond_fn(void *data)
 			if (ctx->callback.after_aggregation &&
 					ctx->callback.after_aggregation(ctx))
 				set_kdamond_stop(ctx);
-			if (ctx->target_type == DAMON_ADAPTIVE_TARGET)
+			if (ctx->target_type == DAMON_ADAPTIVE_TARGET) {
 				kdamond_apply_schemes(ctx);
-			kdamond_reset_aggregated(ctx);
-			if (ctx->target_type == DAMON_ADAPTIVE_TARGET)
+				kdamond_reset_aggregated(ctx);
 				kdamond_split_regions(ctx);
+			}
 		}
 
 		if (kdamond_need_update_regions(ctx)) {
