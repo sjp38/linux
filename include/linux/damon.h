@@ -12,6 +12,9 @@
 #include <linux/time64.h>
 #include <linux/types.h>
 
+/* Minimal region size.  Every damon_region is aligned by this. */
+#define DAMON_MIN_REGION	PAGE_SIZE
+
 /**
  * struct damon_addr_range - Represents an address region of [@start, @end).
  * @start:	Start address of the region (inclusive).
@@ -86,6 +89,8 @@ struct damon_ctx;
  * prepared for the next access check.
  * @check_accesses should check the accesses to each region that made after the
  * last preparation and update the number of observed accesses of each region.
+ * It should also return max number of observed accesses that made as a result
+ * of its update.
  * @reset_aggregated should reset the access monitoring results that aggregated
  * by @check_accesses.
  * @target_valid should check whether the target is still valid for the
@@ -98,7 +103,7 @@ struct damon_primitive {
 	void (*init_target_regions)(struct damon_ctx *context);
 	void (*update_target_regions)(struct damon_ctx *context);
 	void (*prepare_access_checks)(struct damon_ctx *context);
-	void (*check_accesses)(struct damon_ctx *context);
+	unsigned int (*check_accesses)(struct damon_ctx *context);
 	void (*reset_aggregated)(struct damon_ctx *context);
 	bool (*target_valid)(void *target);
 	void (*cleanup)(struct damon_ctx *context);
@@ -138,11 +143,11 @@ struct damon_callback {
 /**
  * enum damon_target_type - Represents the type of the monitoring target.
  *
- * @DAMON_REGION_SAMPLING_TARGET:	Region based sampling target.
- * @DAMON_ARBITRARY_TARGET:		User-defined arbitrary type target.
+ * @DAMON_ADAPTIVE_TARGET:	Adaptive regions adjustment applied target.
+ * @DAMON_ARBITRARY_TARGET:	User-defined arbitrary type target.
  */
 enum damon_target_type {
-	DAMON_REGION_SAMPLING_TARGET,
+	DAMON_ADAPTIVE_TARGET,
 	DAMON_ARBITRARY_TARGET,
 };
 
@@ -187,13 +192,15 @@ enum damon_target_type {
  *
  * @target_type:	Type of the monitoring target.
  *
- * @region_targets:	Head of monitoring targets (&damon_target) list.
+ * @min_nr_regions:	The minimum number of adaptive monitoring regions.
+ * @max_nr_regions:	The maximum number of adaptive monitoring regions.
+ * @adaptive_targets:	Head of monitoring targets (&damon_target) list.
  *
  * @arbitrary_target:	Pointer to arbitrary type target.
  *
- * @region_targets are valid only if @target_type is
- * DAMON_REGION_SAMPLING_TARGET.  @arbitrary_target is valid only if
- * @target_type is DAMON_ARBITRARY_TARGET.
+ * @min_nr_regions, @max_nr_regions and @adaptive_targets are valid only if
+ * @target_type is &DAMON_ADAPTIVE_TARGET.  @arbitrary_target is valid only if
+ * @target_type is &DAMON_ARBITRARY_TARGET.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -214,11 +221,13 @@ struct damon_ctx {
 
 	enum damon_target_type target_type;
 	union {
-		/* DAMON_REGION_SAMPLING_TARGET */
-		struct list_head region_targets;
+		struct {		/* DAMON_ADAPTIVE_TARGET */
+			unsigned long min_nr_regions;
+			unsigned long max_nr_regions;
+			struct list_head adaptive_targets;
+		};
 
-		/* DAMON_ARBITRARY_TARGET */
-		void *arbitrary_target;
+		void *arbitrary_target;	/* DAMON_ARBITRARY_TARGET */
 	};
 };
 
@@ -235,10 +244,10 @@ struct damon_ctx {
 	list_for_each_entry_safe(r, next, &t->regions_list, list)
 
 #define damon_for_each_target(t, ctx) \
-	list_for_each_entry(t, &(ctx)->region_targets, list)
+	list_for_each_entry(t, &(ctx)->adaptive_targets, list)
 
 #define damon_for_each_target_safe(t, next, ctx)	\
-	list_for_each_entry_safe(t, next, &(ctx)->region_targets, list)
+	list_for_each_entry_safe(t, next, &(ctx)->adaptive_targets, list)
 
 #ifdef CONFIG_DAMON
 
@@ -252,11 +261,13 @@ struct damon_target *damon_new_target(unsigned long id);
 void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
 void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t);
+unsigned int damon_nr_regions(struct damon_target *t);
 
 struct damon_ctx *damon_new_ctx(enum damon_target_type type);
 void damon_destroy_ctx(struct damon_ctx *ctx);
 int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
-		unsigned long aggr_int, unsigned long regions_update_int);
+		unsigned long aggr_int, unsigned long regions_update_int,
+		unsigned long min_nr_reg, unsigned long max_nr_reg);
 
 int damon_start(struct damon_ctx **ctxs, int nr_ctxs);
 int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
