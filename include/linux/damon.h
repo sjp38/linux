@@ -130,24 +130,26 @@ struct damon_ctx;
  * DAMON can be extended for various address spaces and usages.  For this,
  * users should register the low level primitives for their target address
  * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread
- * calls @init_target_regions before starting the monitoring,
- * @update_target_regions for each @regions_update_interval, and
- * @prepare_access_checks, @check_accesses, and @target_valid for each
+ * calls @init_target_regions and @prepare_access_checks before starting the
+ * monitoring, @update_target_regions after each @regions_update_interval, and
+ * @check_accesses, @target_valid and @prepare_access_checks after each
  * @sample_interval.
  *
  * @init_target_regions should construct proper monitoring target regions and
- * link those to the DAMON context struct.
+ * link those to the DAMON context struct.  The region should be defined by
+ * user and saved in @damon_ctx.arbitrary_target if @damon_ctx.target_type is
+ * &DAMON_ARBITRARY_TARGET.  Otherwise, &struct damon_region should be used.
  * @update_target_regions should update the monitoring target regions for
  * current status.
  * @prepare_access_checks should manipulate the monitoring regions to be
- * prepare for the next access check.
+ * prepared for the next access check.
  * @check_accesses should check the accesses to each region that made after the
- * last preparation and update the `->nr_accesses` of each region.  It should
- * also return max &damon_region.nr_accesses that made as a result of its
- * update.
+ * last preparation and update the number of observed accesses of each region.
+ * It should also return max number of observed accesses that made as a result
+ * of its update.
  * @apply_scheme is called from @kdamond when a region for user provided
  * DAMON-based operation scheme is found.  It should apply the scheme's action
- * to the region.
+ * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
  * @target_valid should check whether the target is still valid for the
  * monitoring.
  * @cleanup is called from @kdamond just before its termination.  After this
@@ -174,15 +176,15 @@ struct damon_primitive {
  * @private:		User private data.
  *
  * The monitoring thread (&damon_ctx->kdamond) calls @before_start and
- * @before_terminate just before starting the monitoring and just before
- * finishing the monitoring.  Therefore, those are good places for installing
- * and cleaning @private.
+ * @before_terminate just before starting and finishing the monitoring,
+ * respectively.  Therefore, those are good places for installing and cleaning
+ * @private.
  *
  * The monitoring thread calls @after_sampling and @after_aggregation for each
  * of the sampling intervals and aggregation intervals, respectively.
  * Therefore, users can safely access the monitoring results without additional
- * protection of damon_ctx.kdamond_lock.  For the reason, users are recommended
- * to use these callback for the accesses to the results.
+ * protection.  For the reason, users are recommended to use these callback for
+ * the accesses to the results.
  *
  * If any callback returns non-zero, monitoring stops.
  */
@@ -220,7 +222,8 @@ enum damon_target_type {
  * each region) for @aggr_interval time.  DAMON also checks whether the target
  * memory regions need update (e.g., by ``mmap()`` calls from the application,
  * in case of virtual memory monitoring) and applies the changes for each
- * @regions_update_interval.  All time intervals are in micro-seconds.
+ * @regions_update_interval.  All time intervals are in micro-seconds.  Please
+ * refer to &struct damon_primitive and &struct damon_callback for more detail.
  *
  * @kdamond:		Kernel thread who does the monitoring.
  * @kdamond_stop:	Notifies whether kdamond should stop.

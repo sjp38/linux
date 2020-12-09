@@ -266,8 +266,8 @@ int damon_set_targets(struct damon_ctx *ctx,
  * damon_set_attrs() - Set attributes for the monitoring.
  * @ctx:		monitoring context
  * @sample_int:		time interval between samplings
- * @regions_update_int:	time interval between target regions update
  * @aggr_int:		time interval between aggregations
+ * @regions_update_int:	time interval between target regions update
  * @min_nr_reg:		minimal number of regions
  * @max_nr_reg:		maximum number of regions
  *
