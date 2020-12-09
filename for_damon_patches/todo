@@ -7,6 +7,7 @@ TODOs
 - Minimize fixed granularity overhead
 - Support cgroups
 - damo/wss: Adjust the nr_accesses for work_time
+- Implement page-gran access check primitive
 
 For v23, suggested by Shakeel
 -----------------------------
