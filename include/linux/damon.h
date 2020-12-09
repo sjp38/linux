@@ -231,12 +231,12 @@ enum damon_target_type {
  *
  * Once started, the monitoring thread runs until explicitly required to be
  * terminated or every monitoring target is invalid.  The validity of the
- * targets is checked via the @target_valid callback.  The termination can also
- * be explicitly requested by writing non-zero to @kdamond_stop.  The thread
- * sets @kdamond to NULL when it terminates.  Therefore, users can know whether
- * the monitoring is ongoing or terminated by reading @kdamond.  Reads and
- * writes to @kdamond and @kdamond_stop from outside of the monitoring thread
- * must be protected by @kdamond_lock.
+ * targets is checked via the &damon_primitive.target_valid of @primitive.  The
+ * termination can also be explicitly requested by writing non-zero to
+ * @kdamond_stop.  The thread sets @kdamond to NULL when it terminates.
+ * Therefore, users can know whether the monitoring is ongoing or terminated by
+ * reading @kdamond.  Reads and writes to @kdamond and @kdamond_stop from
+ * outside of the monitoring thread must be protected by @kdamond_lock.
  *
  * Note that the monitoring thread protects only @kdamond and @kdamond_stop via
  * @kdamond_lock.  Accesses to other fields must be protected by themselves.
@@ -374,4 +374,4 @@ void damon_pa_set_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_PADDR */
 
-#endif
+#endif	/* _DAMON_H */
