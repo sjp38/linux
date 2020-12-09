@@ -238,6 +238,7 @@ void damon_pa_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.update_target_regions = damon_pa_update_regions;
 	ctx->primitive.prepare_access_checks = damon_pa_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_pa_check_accesses;
+	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_pa_target_valid;
 	ctx->primitive.cleanup = NULL;
 	ctx->primitive.apply_scheme = NULL;

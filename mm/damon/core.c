@@ -811,6 +811,8 @@ static int kdamond_fn(void *data)
 				kdamond_reset_aggregated(ctx);
 				kdamond_split_regions(ctx);
 			}
+			if (ctx->primitive.reset_aggregated)
+				ctx->primitive.reset_aggregated(ctx);
 		}
 
 		if (kdamond_need_update_regions(ctx)) {

@@ -123,6 +123,7 @@ struct damon_ctx;
  * @update_target_regions:	Updates monitoring target regions.
  * @prepare_access_checks:	Prepares next access check of target regions.
  * @check_accesses:		Checks the access of target regions.
+ * @reset_aggregated:		Resets aggregated accesses monitoring results.
  * @apply_scheme:		Apply a DAMON-based operation scheme.
  * @target_valid:		Determine if the target is valid.
  * @cleanup:			Cleans up the context.
@@ -131,9 +132,10 @@ struct damon_ctx;
  * users should register the low level primitives for their target address
  * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread
  * calls @init_target_regions and @prepare_access_checks before starting the
- * monitoring, @update_target_regions after each @regions_update_interval, and
- * @check_accesses, @target_valid and @prepare_access_checks after each
- * @sample_interval.
+ * monitoring, @update_target_regions after each
+ * &damon_ctx.regions_update_interval, and @check_accesses, @target_valid and
+ * @prepare_access_checks after each &damon_ctx.sample_interval.  Finally,
+ * @reset_aggregated is called after each &damon_ctx.aggr_interval.
  *
  * @init_target_regions should construct proper monitoring target regions and
  * link those to the DAMON context struct.  The region should be defined by
@@ -147,6 +149,8 @@ struct damon_ctx;
  * last preparation and update the number of observed accesses of each region.
  * It should also return max number of observed accesses that made as a result
  * of its update.
+ * @reset_aggregated should reset the access monitoring results that aggregated
+ * by @check_accesses.
  * @apply_scheme is called from @kdamond when a region for user provided
  * DAMON-based operation scheme is found.  It should apply the scheme's action
  * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
@@ -160,6 +164,7 @@ struct damon_primitive {
 	void (*update_target_regions)(struct damon_ctx *context);
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
+	void (*reset_aggregated)(struct damon_ctx *context);
 	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
 			struct damon_region *r, struct damos *scheme);
 	bool (*target_valid)(struct damon_target *target);
