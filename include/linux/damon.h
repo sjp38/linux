@@ -155,7 +155,8 @@ struct damon_ctx;
  * DAMON-based operation scheme is found.  It should apply the scheme's action
  * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
  * @target_valid should check whether the target is still valid for the
- * monitoring.
+ * monitoring.  It receives &damon_ctx.arbitrary_target or &struct damon_target
+ * pointer depends on &damon_ctx.target_type.
  * @cleanup is called from @kdamond just before its termination.  After this
  * call, only @kdamond_lock and @kdamond will be touched.
  */
@@ -167,7 +168,7 @@ struct damon_primitive {
 	void (*reset_aggregated)(struct damon_ctx *context);
 	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
 			struct damon_region *r, struct damos *scheme);
-	bool (*target_valid)(struct damon_target *target);
+	bool (*target_valid)(void *target);
 	void (*cleanup)(struct damon_ctx *context);
 };
 
@@ -362,7 +363,7 @@ void damon_va_init_regions(struct damon_ctx *ctx);
 void damon_va_update_regions(struct damon_ctx *ctx);
 void damon_va_prepare_access_checks(struct damon_ctx *ctx);
 unsigned int damon_va_check_accesses(struct damon_ctx *ctx);
-bool damon_va_target_valid(struct damon_target *t);
+bool damon_va_target_valid(void *t);
 void damon_va_cleanup(struct damon_ctx *ctx);
 int damon_va_apply_scheme(struct damon_ctx *context, struct damon_target *t,
 		struct damon_region *r, struct damos *scheme);
@@ -377,7 +378,7 @@ void damon_pa_init_regions(struct damon_ctx *ctx);
 void damon_pa_update_regions(struct damon_ctx *ctx);
 void damon_pa_prepare_access_checks(struct damon_ctx *ctx);
 unsigned int damon_pa_check_accesses(struct damon_ctx *ctx);
-bool damon_pa_target_valid(struct damon_target *t);
+bool damon_pa_target_valid(void *t);
 void damon_pa_set_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_PADDR */

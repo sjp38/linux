@@ -751,6 +751,9 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	if (!ctx->primitive.target_valid)
 		return false;
 
+	if (ctx->target_type == DAMON_ARBITRARY_TARGET)
+		return !ctx->primitive.target_valid(ctx->arbitrary_target);
+
 	damon_for_each_target(t, ctx) {
 		if (ctx->primitive.target_valid(t))
 			return false;
