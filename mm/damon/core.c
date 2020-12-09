@@ -16,11 +16,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/damon.h>
 
-/* Minimal region size.  Every damon_region is aligned by this. */
-#ifndef CONFIG_DAMON_KUNIT_TEST
-#define MIN_REGION PAGE_SIZE
-#else
-#define MIN_REGION 1
+#ifdef CONFIG_DAMON_KUNIT_TEST
+#define DAMON_MIN_REGION 1
 #endif
 
 /*
@@ -354,8 +351,8 @@ static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
 
 	if (ctx->min_nr_regions)
 		sz /= ctx->min_nr_regions;
-	if (sz < MIN_REGION)
-		sz = MIN_REGION;
+	if (sz < DAMON_MIN_REGION)
+		sz = DAMON_MIN_REGION;
 
 	return sz;
 }
@@ -667,13 +664,13 @@ static void damon_split_regions_of(struct damon_ctx *ctx,
 		sz_region = r->ar.end - r->ar.start;
 
 		for (i = 0; i < nr_subs - 1 &&
-				sz_region > 2 * MIN_REGION; i++) {
+				sz_region > 2 * DAMON_MIN_REGION; i++) {
 			/*
 			 * Randomly select size of left sub-region to be at
 			 * least 10 percent and at most 90% of original region
 			 */
 			sz_sub = ALIGN_DOWN(damon_rand(1, 10) *
-					sz_region / 10, MIN_REGION);
+					sz_region / 10, DAMON_MIN_REGION);
 			/* Do not allow blank region */
 			if (sz_sub == 0 || sz_sub >= sz_region)
 				continue;

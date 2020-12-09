@@ -12,10 +12,8 @@
 #include "prmtv-common.h"
 
 /* Minimal region size.  Every damon_region is aligned by this. */
-#ifndef CONFIG_DAMON_VADDR_KUNIT_TEST
-#define MIN_REGION PAGE_SIZE
-#else
-#define MIN_REGION 1
+#ifdef CONFIG_DAMON_VADDR_KUNIT_TEST
+#define DAMON_MIN_REGION 1
 #endif
 
 /*
@@ -67,7 +65,7 @@ static int damon_va_evenly_split_region(struct damon_ctx *ctx,
 
 	orig_end = r->ar.end;
 	sz_orig = r->ar.end - r->ar.start;
-	sz_piece = ALIGN_DOWN(sz_orig / nr_pieces, MIN_REGION);
+	sz_piece = ALIGN_DOWN(sz_orig / nr_pieces, DAMON_MIN_REGION);
 
 	if (!sz_piece)
 		return -EINVAL;
@@ -158,12 +156,12 @@ next:
 		swap_ranges(&first_gap, &second_gap);
 
 	/* Store the result */
-	regions[0].start = ALIGN(start, MIN_REGION);
-	regions[0].end = ALIGN(first_gap.start, MIN_REGION);
-	regions[1].start = ALIGN(first_gap.end, MIN_REGION);
-	regions[1].end = ALIGN(second_gap.start, MIN_REGION);
-	regions[2].start = ALIGN(second_gap.end, MIN_REGION);
-	regions[2].end = ALIGN(last_vma->vm_end, MIN_REGION);
+	regions[0].start = ALIGN(start, DAMON_MIN_REGION);
+	regions[0].end = ALIGN(first_gap.start, DAMON_MIN_REGION);
+	regions[1].start = ALIGN(first_gap.end, DAMON_MIN_REGION);
+	regions[1].end = ALIGN(second_gap.start, DAMON_MIN_REGION);
+	regions[2].start = ALIGN(second_gap.end, DAMON_MIN_REGION);
+	regions[2].end = ALIGN(last_vma->vm_end, DAMON_MIN_REGION);
 
 	return 0;
 }
@@ -250,8 +248,8 @@ static void __damon_va_init_regions(struct damon_ctx *c,
 		sz += regions[i].end - regions[i].start;
 	if (c->min_nr_regions)
 		sz /= c->min_nr_regions;
-	if (sz < MIN_REGION)
-		sz = MIN_REGION;
+	if (sz < DAMON_MIN_REGION)
+		sz = DAMON_MIN_REGION;
 
 	/* Set the initial three regions of the target */
 	for (i = 0; i < 3; i++) {
@@ -335,14 +333,16 @@ static void damon_va_apply_three_regions(struct damon_ctx *ctx,
 		if (!first) {
 			/* no damon_region intersects with this big region */
 			newr = damon_new_region(
-					ALIGN_DOWN(br->start, MIN_REGION),
-					ALIGN(br->end, MIN_REGION));
+					ALIGN_DOWN(br->start,
+						DAMON_MIN_REGION),
+					ALIGN(br->end, DAMON_MIN_REGION));
 			if (!newr)
 				continue;
 			damon_insert_region(newr, damon_prev_region(r), r);
 		} else {
-			first->ar.start = ALIGN_DOWN(br->start, MIN_REGION);
-			last->ar.end = ALIGN(br->end, MIN_REGION);
+			first->ar.start = ALIGN_DOWN(br->start,
+					DAMON_MIN_REGION);
+			last->ar.end = ALIGN(br->end, DAMON_MIN_REGION);
 		}
 	}
 }
