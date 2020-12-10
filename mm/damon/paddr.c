@@ -7,8 +7,6 @@
 
 #define pr_fmt(fmt) "damon-pa: " fmt
 
-#include <linux/rmap.h>
-
 #include "prmtv-common.h"
 
 /*
