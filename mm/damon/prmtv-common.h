@@ -9,6 +9,7 @@
 #include <linux/mm.h>
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
+#include <linux/pagemap.h>
 #include <linux/random.h>
 #include <linux/rmap.h>
 #include <linux/sched/mm.h>
