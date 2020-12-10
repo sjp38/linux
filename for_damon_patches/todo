@@ -7,11 +7,22 @@ TODOs
 - Minimize fixed granularity overhead
 - Support cgroups
 - damo/wss: Adjust the nr_accesses for work_time
+- Implement page-gran access check primitive
+
+For v23, suggested by Shakeel
+-----------------------------
+
+- Reorder patches.  ARBITRARY_TARGETS first, with sampling
+  - Add code with real usages
+- Rewrite description of separation of primitives
+- Call callbacks explicitly, without macro
+- Rename DAMON_PRIMITIVES to DAMON_PRIMITIVES_VADDR
+- Rename primitives.c to primitives_vaddr.c
+- Remove 'page_idle_lock' patch
+- Drop pidfd support in debugfs
 
 
 Done
 ====
 
-- Fix build warnings/errors (Reported by linux test bot)
-- Update document for changed file organization
-- Fix a memleak (Reported by kmemleaks)
+- Add 'reset_aggregated' primitive
