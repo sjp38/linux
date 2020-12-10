@@ -3,4 +3,5 @@
 obj-$(CONFIG_DAMON)		:= core.o
 obj-$(CONFIG_DAMON_VADDR)	+= vaddr.o
 obj-$(CONFIG_DAMON_PADDR)	+= paddr.o
+obj-$(CONFIG_DAMON_PGIDLE)	+= pgidle.o
 obj-$(CONFIG_DAMON_DBGFS)	+= dbgfs.o
