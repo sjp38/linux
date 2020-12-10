@@ -5,6 +5,8 @@
  * Author: SeongJae Park <sjpark@amazon.de>
  */
 
+#include <linux/pagemap.h>
+
 #include "prmtv-common.h"
 
 static void damon_ptep_mkold(pte_t *pte, struct mm_struct *mm,
