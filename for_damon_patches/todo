@@ -9,20 +9,17 @@ TODOs
 - damo/wss: Adjust the nr_accesses for work_time
 - Implement page-gran access check primitive
 
-For v23, suggested by Shakeel
------------------------------
-
-- Reorder patches.  ARBITRARY_TARGETS first, with sampling
-  - Add code with real usages
-- Rewrite description of separation of primitives
-- Call callbacks explicitly, without macro
-- Rename DAMON_PRIMITIVES to DAMON_PRIMITIVES_VADDR
-- Rename primitives.c to primitives_vaddr.c
-- Remove 'page_idle_lock' patch
-- Drop pidfd support in debugfs
-
 
 Done
 ====
 
-- Add 'reset_aggregated' primitive
+- Support arbitrary targets for zero space overhead on page granularity
+  idleness monitoring
+- Reorder patches for easier review (Shakeel Butt)
+  - Introduce arbitrary targets with sampling first, then the overhead-accuracy
+    control logic
+  - Introduce data structure manipulation functions when it really used.
+- Call callbacks explicitly, without macro (Shakeel Butt)
+- Rename DAMON_PRIMITIVES to DAMON_VADDR (Shakeel Butt)
+- Remove 'page_idle_lock' patch (Shakeel Butt)
+- Drop pidfd support in debugfs (Shakeel Butt)
