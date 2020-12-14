@@ -583,22 +583,16 @@ static int damos_madvise(struct damon_target *target, struct damon_region *r,
 static int damos_madvise(struct damon_target *target, struct damon_region *r,
 			int behavior)
 {
-	struct task_struct *t;
 	struct mm_struct *mm;
 	int ret = -ENOMEM;
 
-	t = damon_get_task_struct(target);
-	if (!t)
-		goto out;
 	mm = damon_get_mm(target);
 	if (!mm)
-		goto put_task_out;
+		goto out;
 
-	ret = do_madvise(t, mm, PAGE_ALIGN(r->ar.start),
+	ret = do_madvise(mm, PAGE_ALIGN(r->ar.start),
 			PAGE_ALIGN(r->ar.end - r->ar.start), behavior);
 	mmput(mm);
-put_task_out:
-	put_task_struct(t);
 out:
 	return ret;
 }
