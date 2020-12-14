@@ -1,15 +1,18 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v21)
+Changes from Previous Version (v22)
 ===================================
 
-This version contains below minor changes.
-
-- Fix build warnings and errors (kernel test robot)
-- Fix a memory leak (kmemleak)
-- Respect KUNIT_ALL_TESTS
-- Rebase on v5.9
-- Update the evaluation results
+- Support arbitrary targets; now DAMON incurs only zero space overhead for page
+  granularity idleness monitoring
+- Reorder patches for easier review (Shakeel Butt)
+  - Introduce arbitrary targets with sampling first, then the overhead-accuracy
+    control logic
+  - Introduce data structure manipulation functions when it really used.
+- Call callbacks explicitly, without macro (Shakeel Butt)
+- Rename DAMON_PRIMITIVES to DAMON_VADDR (Shakeel Butt)
+- Remove 'page_idle_lock' patch (Shakeel Butt)
+- Drop pidfd support in debugfs (Shakeel Butt)
 
 Introduction
 ============
@@ -82,31 +85,25 @@ Hence, this section only assumes such user space use of DAMON.
 For what use cases Idle Page Tracking would be better?
 ------------------------------------------------------
 
-1. Page granularity working set size detection.
+1. Flexible usecases other than hotness monitoring.
 
-DAMON maintains additional metadata for each of the monitoring target regions.
-So, in the page granularity working set size detection use case, DAMON would
-incur (number of monitoring target pages * size of metadata) memory overhead.
-Size of the single metadata item is about 54 bytes, so assuming 4KB pages,
-about 1.3% of monitoring target pages will be additionally used.
-
-All essential metadata for Idle Page Tracking are embedded in 'struct page' and
-page table entries.  Therefore, in this use case, only one counter variable for
-working set size accounting is required if Idle Page Tracking is used.
-
-There are more details to consider, but roughly speaking, this is true in most
-cases.
+Because Idle Page Tracking allows users to control the primitive (Page
+idleness) by themselves, Idle Page Tracking users can do anything they want.
+Meanwhile, DAMON is primarily designed to monitor the hotness of each memory
+region.  For this, DAMON asks users to provide sampling interval and
+aggregation interval.  For the reason, there could be some use case that using
+Idle Page Tracking is simpler.
 
 2. Physical memory monitoring.
 
 Idle Page Tracking receives PFN range as input, so natively supports physical
 memory monitoring.
 
-DAMON is instead designed to be extensible for multiple address spaces and use
-cases by implementing and using primitives for the given use case.  Therefore,
-by theory, DAMON has no limitation in the type of target address space as long
-as primitives for the given address space exists.  However, this patchset
-provides only one implementation of primitives for virtual address spaces.
+DAMON is designed to be extensible for multiple address spaces and use cases by
+implementing and using primitives for the given use case.  Therefore, by
+theory, DAMON has no limitation in the type of target address space as long as
+primitives for the given address space exists.  However, the default primitives
+introduced by this patchset supports only virtual address spaces.
 
 Therefore, for physical memory monitoring, you should implement your own
 primitives and use it, or simply use Idle Page Tracking.
@@ -142,7 +139,33 @@ implement the mechanism on thier own, but it would be time consuming and the
 user/kernel context switching will still more frequent than that of DAMON.
 Also, the kernel subsystems cannot use the logic in this case.
 
-3. More future usecases
+3. Page granularity working set size detection.
+
+Until v22 of this patchset, this was categorized as the thing Idle Page
+Tracking could do better, because DAMON basically maintains additional metadata
+for each of the monitoring target regions.  So, in the page granularity working
+set size detection use case, DAMON would incur (number of monitoring target
+pages * size of metadata) memory overhead.  Size of the single metadata item is
+about 54 bytes, so assuming 4KB pages, about 1.3% of monitoring target pages
+will be additionally used.
+
+All essential metadata for Idle Page Tracking are embedded in 'struct page' and
+page table entries.  Therefore, in this use case, only one counter variable for
+working set size accounting is required if Idle Page Tracking is used.
+
+There are more details to consider, but roughly speaking, this is true in most
+cases.
+
+However, the situation changed from v23.  Now DAMON supports arbitrary types of
+monitoring targets, which don't use the metadata.  Using that, DAMON can do the
+working set size detection with no additional space overhead but less
+user-kernel context switch.  A first draft for the implementation of monitoring
+primitives for this usage is available in a DAMON development tree[1].  An RFC
+patchset for it based on this patchset will also be available soon.
+
+[1] https://github.com/sjp38/linux/tree/damon/pgidle_hack
+
+4. More future usecases
 
 While Idle Page Tracking has tight coupling with base primitives (PG_Idle and
 page table Accessed bits), DAMON is designed to be extensible for many use
@@ -154,10 +177,11 @@ a lot in future, using DAMON could be better.
 Can I use both Idle Page Tracking and DAMON?
 --------------------------------------------
 
-Yes, this patchset makes Idle Page Tracking and DAMON to be safely used on
-single system while synchronizing with each other to prevent any interference.
-So, you can choose whatever you want depending on the characteristics of your
-use cases.
+Yes, though using them concurrently for overlapping memory regions could result
+in interference to each other.  Nevertheless, such use case would be rare or
+makes no sense at all.  Even in the case, the noise would bot be really
+significant.  So, you can choose whatever you want depending on the
+characteristics of your use cases.
 
 More Information
 ================
@@ -184,13 +208,13 @@ are
 Baseline and Complete Git Trees
 ===============================
 
-The patches are based on the v5.9.  You can also clone the complete git
+The patches are based on the v5.10.  You can also clone the complete git
 tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v22
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v23
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v22
+https://github.com/sjp38/linux/releases/tag/damon/patches/v23
 
 There are a couple of trees for entire DAMON patchset series.  It includes
 future features.  The first one[1] contains the changes for latest release,
@@ -202,48 +226,54 @@ while the other one[2] contains the changes for next release.
 Sequence Of Patches
 ===================
 
-First four patches implement the core logics of DAMON.  The 1st patch
-introduces DAMON data structures and functions for manipulation of the
-structures.  Following three patches (2nd to 4th) implement the core mechanisms
-of DAMON, namely regions based sampling (patch 2), adaptive regions adjustment
-(patch 3), and dynamic memory mapping change adoption (patch 4).
+First three patches implement the core logics of DAMON.  The 1st patch
+introduces basic sampling based hotness monitoring for arbitrary types of
+targets.  Following two patches implement the core mechanisms for control of
+overhead and accuracy, namely regions based sampling (patch 2) and adaptive
+regions adjustment (patch 3).
 
 Now the essential parts of DAMON is complete, but it cannot work unless someone
-provides primitives for a specific use case.  The following two patches make it
-just work for virtual address spaces monitoring.  The 5th patch makes 'PG_idle'
-can be used by DAMON and the 6th patch implements the virtual memory address
-space specific low primitives using page table Accessed bits and the 'PG_idle'
-page flag.  As use of 'PG_idle' could interfere Idle Page Tracking, the
-primitives are configured to be exclusive with Idle Page Tracking.
-
-As there are some cases Idle Page Tracking could do better, next two patches
-make DAMON coexistable with Idle Page Tracking.  The 7th patch introduces a
-synchronization primitives for concurrent PG_Idle users, and the 8th patch
-makes the primitives for DAMON to synchronize with Idle Page Tracking using
-it.
+provides monitoring primitives for a specific use case.  The following two
+patches make it just work for virtual address spaces monitoring.  The 4th patch
+makes 'PG_idle' can be used by DAMON and the 5th patch implements the virtual
+memory address space specific monitoring primitives using page table Accessed
+bits and the 'PG_idle' page flag.
 
 Now DAMON just works for virtual address space monitoring via the kernel space
 api.  To let the user space users can use DAMON, following six patches add
-interfaces for them.  The 9th patch adds a tracepoint for other tracepoints
-supporting tracers.  The 10th patch implements a DAMON application kernel
-module, namely damon-dbgfs, that simply wraps DAMON and exposes DAMON interface
-to the user space via the debugfs interface.  To let the user space get the
-monitoring results more easily, the 11th patch implements a simple recording
-feature in 'damon-dbgfs'.  The 12nd patch further exports pid of monitoring
-thread (kdamond) to user space for easier cpu usage accounting, and the 13rd
-patch makes the debugfs interface to support multiple contexts.  Then, the 14th
-patch implements an user space tool to provide a minimal reference to the
-debugfs interface and for high level use/tests of the DAMON.
+interfaces for them.  The 6th patch adds a tracepoint for monitoring results.
+The 7th patch implements a DAMON application kernel module, namely damon-dbgfs,
+that simply wraps DAMON and exposes DAMON interface to the user space via the
+debugfs interface.  To let the user space get the monitoring results more
+easily, the 8th patch implements a simple recording feature in 'damon-dbgfs'.
+The 9th patch further exports pid of monitoring thread (kdamond) to user space
+for easier cpu usage accounting, and the 10th patch makes the debugfs interface
+to support multiple contexts.  Then, the 11th patch implements a user space
+tool to provide a minimal reference to the debugfs interface and for high level
+use/tests of the DAMON.
 
-Three patches for maintainability follows.  The 15th patch adds documentations
-for both the user space and the kernel space.  The 16th patch provides unit
-tests (based on the kunit) while the 17th patch adds user space tests (based on
+Three patches for maintainability follows.  The 12th patch adds documentations
+for both the user space and the kernel space.  The 13th patch provides unit
+tests (based on the kunit) while the 14th patch adds user space tests (based on
 the kselftest).
 
-Finally, the last patch (18th) updates the MAINTAINERS file.
+Finally, the last patch (15th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v22
+(https://lore.kernel.org/linux-mm/20201020085940.13875-1-sjpark@amazon.com/)
+- Support arbitrary targets; now DAMON incurs only zero space overhead for page
+  granularity idleness monitoring
+- Reorder patches for easier review (Shakeel Butt)
+  - Introduce arbitrary targets with sampling first, then the overhead-accuracy
+    control logic
+  - Introduce data structure manipulation functions when it really used.
+- Call callbacks explicitly, without macro (Shakeel Butt)
+- Rename DAMON_PRIMITIVES to DAMON_VADDR (Shakeel Butt)
+- Remove 'page_idle_lock' patch (Shakeel Butt)
+- Drop pidfd support in debugfs (Shakeel Butt)
 
 Changes from v21
 (https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/)
