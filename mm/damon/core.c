@@ -17,6 +17,7 @@
 #include <trace/events/damon.h>
 
 #ifdef CONFIG_DAMON_KUNIT_TEST
+#undef DAMON_MIN_REGION
 #define DAMON_MIN_REGION 1
 #endif
 
