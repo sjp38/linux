@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 
 #ifdef CONFIG_DAMON_VADDR_KUNIT_TEST
+#undef DAMON_MIN_REGION
 #define DAMON_MIN_REGION 1
 #endif
 
