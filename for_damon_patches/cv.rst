@@ -40,6 +40,35 @@ have some special workloads will be able to write personalized tools or
 applications for deeper understanding and specialized optimizations of their
 systems.
 
+Long-term Plan
+--------------
+
+DAMON is a part of a project called Data Access-aware Operating System (DAOS).
+As the name implies, I want to improve the performance and efficiency of
+systems using fine-grained data access patterns.  The optimizations are for
+both kernel and user spaces.  I will therefore modify or create kernel
+subsystems, export some of those to user space and implement user space library
+/ tools.  Below shows the layers and components for the project.
+
+    ---------------------------------------------------------------------------
+    Primitives:     PTE Accessed bit, PG_idle, rmap, (Intel CMT), ...
+    Framework:      DAMON
+    Features:       DAMOS, virtual addr, physical addr, ...
+    Applications:   DAMON-debugfs, (DARC), ...
+    ^^^^^^^^^^^^^^^^^^^^^^^    KERNEL SPACE    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    Raw Interface:  debugfs, (sysfs), (damonfs), tracepoints, (sys_damon), ...
+
+    vvvvvvvvvvvvvvvvvvvvvvv    USER SPACE      vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    Library:        (libdamon), ...
+    Tools:          DAMO, (perf), ...
+    ---------------------------------------------------------------------------
+
+The components in parentheses or marked as '...' are not implemented yet but in
+the future plan.  IOW, those are the TODO tasks of DAOS project.  For more
+detail, please refer to the plans:
+https://lore.kernel.org/linux-mm/20201202082731.24828-1-sjpark@amazon.com/
+
 Evaluations
 ===========
 
