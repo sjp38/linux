@@ -45,19 +45,19 @@ Evaluations
 
 We evaluated DAMON's overhead, monitoring quality and usefulness using 24
 realistic workloads on my QEMU/KVM based virtual machine running a kernel that
-v22 DAMON patchset is applied.
+v23 DAMON patchset is applied.
 
-DAMON is lightweight.  It increases system memory usage by 0.25% and slows
-target workloads down by 0.89%.
+DAMON is lightweight.  It increases system memory usage by 0.42% and slows
+target workloads down by 0.39%.
 
 DAMON is accurate and useful for memory management optimizations.  An
-experimental DAMON-based operation scheme for THP, 'ethp', removes 81.73% of
-THP memory overheads while preserving 95.29% of THP speedup.  Another
+experimental DAMON-based operation scheme for THP, 'ethp', removes 81.45% of
+THP memory overheads while preserving 50.09% of THP speedup.  Another
 experimental DAMON-based 'proactive reclamation' implementation, 'prcl',
-reduces 91.30% of residential sets and 23.45% of system memory footprint while
-incurring only 2.08% runtime overhead in the best case (parsec3/freqmine).
+reduces 91.45% of residential sets and 22.91% of system memory footprint while
+incurring only 2.43% runtime overhead in the best case (parsec3/freqmine).
 
-NOTE that the experimentail THP optimization and proactive reclamation are not
+NOTE that the experimental THP optimization and proactive reclamation are not
 for production but only for proof of concepts.
 
 Please refer to the official document[1] or "Documentation/admin-guide/mm: Add
@@ -65,6 +65,73 @@ a document for DAMON" patch in this patchset for detailed evaluation setup and
 results.
 
 [1] https://damonitor.github.io/doc/html/latest-damon/admin-guide/mm/damon/eval.html
+
+Real-world User Story
+=====================
+
+In summary, DAMON has used on production systems and proved its usefulness.
+
+DAMON as a profiler
+-------------------
+
+We analyzed characteristics of a large scale production systems of our
+customers using DAMON.  The systems utilize 70GB DRAM and 36 CPUs.  From this,
+we were able to find interesting things below.
+
+There were obviously different access pattern under idle workload and active
+workload.  Under the idle workload, it accessed large memory regions with low
+frequency, while the active workload accessed small memory regions with high
+freuqnecy.
+
+DAMON found a 7GB memory region that showing obviously high access frequency
+under the active workload.  We believe this is the performance-effective
+working set and need to be protected.
+
+There was a 4KB memory region that showing highest access frequency under not
+only active but also idle workloads.  We think this must be a hottest code
+section like thing that should never be paged out.
+
+For this analysis, DAMON used only 0.3-1% of single CPU time.  Because we used
+recording-based analysis, it consumed about 3-12 MB of disk space per 20
+minutes.  This is only small amount of disk space, but we can further reduce
+the disk usage by using non-recording-based DAMON features.  I'd like to argue
+that only DAMON can do such detailed analysis (finding 4KB highest region in
+70GB memory) with the light overhead.
+
+DAMON as a system optimization tool
+-----------------------------------
+
+We also found below potential performance problems on the systems and made
+DAMON-based solutions.
+
+The system doesn't want to make the workload suffer from the page reclamation
+and thus it utilizes enough DRAM but no swap device.  However, we found the
+system is actively reclaiming file-backed pages, because the system has
+intensive file IO.  The file IO turned out to be not performance critical for
+the workload, but the customer wanted to ensure performance critical
+file-backed pages like code section to not mistakenly be evicted.
+
+Using direct IO should or `mlock()` would be a straightforward solution, but
+modifying the user space code is not easy for the customer.  Alternatively, we
+could use DAMON-based operation scheme[1].  By using it, we can ask DAMON to
+track access frequency of each region and make
+'process_madvise(MADV_WILLNEED)[2]' call for regions having specific size and
+access frequency for a time interval.
+
+We also found the system is having high number of TLB misses.  We tried
+'always' THP enabled policy and it greatly reduced TLB misses, but the page
+reclamation also been more frequent due to the THP internal fragmentation
+caused memory bloat.  We could try another DAMON-based operation scheme that
+applies 'MADV_HUGEPAGE' to memory regions having >=2MB size and high access
+frequency, while applying 'MADV_NOHUGEPAGE' to regions having <2MB size and low
+access frequency.
+
+We do not own the systems so we only reported the analysis results and possible
+optimization solutions to the customers.  The customers satisfied about the
+analysis results and promised to try the optimization guides.
+
+[1] https://lore.kernel.org/linux-mm/20201006123931.5847-1-sjpark@amazon.com/
+[2] https://lore.kernel.org/linux-api/20200622192900.22757-4-minchan@kernel.org/
 
 Comparison with Idle Page Tracking
 ==================================
