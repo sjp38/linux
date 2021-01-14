@@ -9,11 +9,13 @@ TODOs
 - damo/wss: Adjust the nr_accesses for work_time
 - Implement page-gran access check primitive
 - perf: Implement wss feature
+- Rename init() and update() to region-neutral
 
 
 Done
 ====
 
-- Fix typos (Shakeel Butt)
+- Fix typos in commit messages (Shakeel Butt)
+- Update pseudo code in commit messages (Shakeel Butt)
 - Call missed mmu_notifier_test_young() (Shakeel Butt)
 - Add one 'Reviewed-by' tag for one patch (Shakeel Butt)
