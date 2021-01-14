@@ -8,7 +8,12 @@ TODOs
 - Support cgroups
 - damo/wss: Adjust the nr_accesses for work_time
 - Implement page-gran access check primitive
+- perf: Implement wss feature
 
 
 Done
 ====
+
+- Fix typos (Shakeel Butt)
+- Call missed mmu_notifier_test_young() (Shakeel Butt)
+- Add one 'Reviewed-by' tag for one patch (Shakeel Butt)
