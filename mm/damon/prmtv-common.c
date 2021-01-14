@@ -85,9 +85,9 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 
 	*page_sz = PAGE_SIZE;
 	if (pte) {
-		young = pte_young(*pte);
-		if (!young)
-			young = !page_is_idle(pte_page(*pte));
+		if (pte_young(*pte) || !page_is_idle(pte_page(*pte)) ||
+				mmu_notifier_test_young(mm, addr))
+			young = true;
 		pte_unmap_unlock(pte, ptl);
 		return young;
 	}
