@@ -14,7 +14,10 @@ Done
 - Update pseudo code in commit messages (Shakeel Butt)
 - Call missed mmu_notifier_test_young() (Shakeel Butt)
 - Add one 'Reviewed-by' tag for one patch (Shakeel Butt)
-- Rename init() and update() to region-neutral
+- Rename init() and update() to be region-neutral (Shakeel Butt)
 - Move out user space tool patch from DAMON patchset series
+- Add missed null check of 'damon_new_region()' return value (Coverity SAST)
+
+- CDAMON: Fix a memory leak (Coverity SAST)
 
 - Implement page-gran access check primitive
