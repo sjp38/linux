@@ -197,7 +197,7 @@ static void damon_dbgfs_test_aggregate(struct kunit *test)
 
 static void damon_dbgfs_test_set_init_regions(struct kunit *test)
 {
-	struct damon_ctx *ctx = damon_new_ctx();
+	struct damon_ctx *ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	unsigned long ids[] = {1, 2, 3};
 	/* Each line represents one region in ``<target id> <start> <end>`` */
 	char * const valid_inputs[] = {"2 10 20\n 2   20 30\n2 35 45",
