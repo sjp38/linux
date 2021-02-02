@@ -898,7 +898,7 @@ static struct damon_ctx *dbgfs_new_ctx(void)
 {
 	struct damon_ctx *ctx;
 
-	ctx = damon_new_ctx();
+	ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	if (!ctx)
 		return NULL;
 
