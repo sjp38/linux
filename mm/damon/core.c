@@ -150,13 +150,22 @@ struct damon_ctx *damon_new_ctx(void)
 	return ctx;
 }
 
-void damon_destroy_ctx(struct damon_ctx *ctx)
+static void damon_destroy_targets(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next_t;
 
+	if (ctx->primitive.cleanup) {
+		ctx->primitive.cleanup(ctx);
+		return;
+	}
+
 	damon_for_each_target_safe(t, next_t, ctx)
 		damon_destroy_target(t);
+}
 
+void damon_destroy_ctx(struct damon_ctx *ctx)
+{
+	damon_destroy_targets(ctx);
 	kfree(ctx);
 }
 
