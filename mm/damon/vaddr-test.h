@@ -135,7 +135,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 				struct damon_addr_range *three_regions,
 				unsigned long *expected, int nr_expected)
 {
-	struct damon_ctx *ctx = damon_new_ctx();
+	struct damon_ctx *ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	struct damon_target *t;
 	struct damon_region *r;
 	int i;
@@ -254,7 +254,7 @@ static void damon_test_apply_three_regions4(struct kunit *test)
 
 static void damon_test_split_evenly(struct kunit *test)
 {
-	struct damon_ctx *c = damon_new_ctx();
+	struct damon_ctx *c = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	struct damon_target *t;
 	struct damon_region *r;
 	unsigned long i;
