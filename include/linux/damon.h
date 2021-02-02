@@ -142,7 +142,8 @@ struct damon_ctx;
  *
  * @init should initialize primitive-internal data structures.  For example,
  * this could be used to construct proper monitoring target regions and link
- * those to @damon_ctx.adaptive_targets.
+ * those to @damon_ctx.target if @damon_ctx.target_type is
+ * &DAMON_ARBITRARY_TARGET.  Otherwise, &struct damon_region should be used.
  * @update should update the primitive-internal data structures.  For example,
  * this could be used to update monitoring target regions for current status.
  * @prepare_access_checks should manipulate the monitoring regions to be
@@ -157,7 +158,8 @@ struct damon_ctx;
  * DAMON-based operation scheme is found.  It should apply the scheme's action
  * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
  * @target_valid should check whether the target is still valid for the
- * monitoring.
+ * monitoring.  It receives &damon_ctx.arbitrary_target or &struct damon_target
+ * pointer depends on &damon_ctx.target_type.
  * @cleanup is called from @kdamond just before its termination.
  */
 struct damon_primitive {
@@ -204,6 +206,17 @@ struct damon_callback {
 };
 
 /**
+ * enum damon_target_type - Represents the type of the monitoring target.
+ *
+ * @DAMON_ADAPTIVE_TARGET:	Adaptive regions adjustment applied target.
+ * @DAMON_ARBITRARY_TARGET:	User-defined arbitrary type target.
+ */
+enum damon_target_type {
+	DAMON_ADAPTIVE_TARGET,
+	DAMON_ARBITRARY_TARGET,
+};
+
+/**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
@@ -243,10 +256,18 @@ struct damon_callback {
  * @primitive:	Set of monitoring primitives for given use cases.
  * @callback:	Set of callbacks for monitoring events notifications.
  *
+ * @target_type:	Type of the monitoring target.
+ *
  * @min_nr_regions:	The minimum number of adaptive monitoring regions.
  * @max_nr_regions:	The maximum number of adaptive monitoring regions.
  * @adaptive_targets:	Head of monitoring targets (&damon_target) list.
  * @schemes:		Head of schemes (&damos) list.
+ *
+ * @arbitrary_target:	Pointer to arbitrary type target.
+ *
+ * @min_nr_regions, @max_nr_regions, @adaptive_targets and @schemes are valid
+ * only if @target_type is &DAMON_ADAPTIVE_TARGET.  @arbitrary_target is valid
+ * only if @target_type is &DAMON_ARBITRARY_TARGET.
  */
 struct damon_ctx {
 	unsigned long sample_interval;
@@ -265,10 +286,17 @@ struct damon_ctx {
 	struct damon_primitive primitive;
 	struct damon_callback callback;
 
-	unsigned long min_nr_regions;
-	unsigned long max_nr_regions;
-	struct list_head adaptive_targets;
-	struct list_head schemes;
+	enum damon_target_type target_type;
+	union {
+		struct {		/* DAMON_ADAPTIVE_TARGET */
+			unsigned long min_nr_regions;
+			unsigned long max_nr_regions;
+			struct list_head adaptive_targets;
+			struct list_head schemes;
+		};
+
+		void *arbitrary_target;	/* DAMON_ARBITRARY_TARGET */
+	};
 };
 
 #define damon_next_region(r) \
@@ -317,7 +345,7 @@ void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t);
 unsigned int damon_nr_regions(struct damon_target *t);
 
-struct damon_ctx *damon_new_ctx(void);
+struct damon_ctx *damon_new_ctx(enum damon_target_type type);
 void damon_destroy_ctx(struct damon_ctx *ctx);
 int damon_set_targets(struct damon_ctx *ctx,
 		unsigned long *ids, ssize_t nr_ids);
