@@ -182,7 +182,7 @@ unsigned int damon_nr_regions(struct damon_target *t)
 	return nr_regions;
 }
 
-struct damon_ctx *damon_new_ctx(void)
+struct damon_ctx *damon_new_ctx(enum damon_target_type type)
 {
 	struct damon_ctx *ctx;
 
@@ -199,11 +199,14 @@ struct damon_ctx *damon_new_ctx(void)
 
 	mutex_init(&ctx->kdamond_lock);
 
-	ctx->min_nr_regions = 10;
-	ctx->max_nr_regions = 1000;
+	ctx->target_type = type;
+	if (type != DAMON_ARBITRARY_TARGET) {
+		ctx->min_nr_regions = 10;
+		ctx->max_nr_regions = 1000;
 
-	INIT_LIST_HEAD(&ctx->adaptive_targets);
-	INIT_LIST_HEAD(&ctx->schemes);
+		INIT_LIST_HEAD(&ctx->adaptive_targets);
+		INIT_LIST_HEAD(&ctx->schemes);
+	}
 
 	return ctx;
 }
@@ -298,8 +301,10 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 	ctx->sample_interval = sample_int;
 	ctx->aggr_interval = aggr_int;
 	ctx->primitive_update_interval = primitive_upd_int;
-	ctx->min_nr_regions = min_nr_reg;
-	ctx->max_nr_regions = max_nr_reg;
+	if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
+		ctx->min_nr_regions = min_nr_reg;
+		ctx->max_nr_regions = max_nr_reg;
+	}
 
 	return 0;
 }
@@ -752,6 +757,9 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 	if (!ctx->primitive.target_valid)
 		return false;
 
+	if (ctx->target_type == DAMON_ARBITRARY_TARGET)
+		return !ctx->primitive.target_valid(ctx->arbitrary_target);
+
 	damon_for_each_target(t, ctx) {
 		if (ctx->primitive.target_valid(t))
 			return false;
@@ -800,15 +808,18 @@ static int kdamond_fn(void *data)
 			max_nr_accesses = ctx->primitive.check_accesses(ctx);
 
 		if (kdamond_aggregate_interval_passed(ctx)) {
-			kdamond_merge_regions(ctx,
-					max_nr_accesses / 10,
-					sz_limit);
+			if (ctx->target_type != DAMON_ARBITRARY_TARGET)
+				kdamond_merge_regions(ctx,
+						max_nr_accesses / 10,
+						sz_limit);
 			if (ctx->callback.after_aggregation &&
 					ctx->callback.after_aggregation(ctx))
 				set_kdamond_stop(ctx);
-			kdamond_apply_schemes(ctx);
-			kdamond_reset_aggregated(ctx);
-			kdamond_split_regions(ctx);
+			if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
+				kdamond_apply_schemes(ctx);
+				kdamond_reset_aggregated(ctx);
+				kdamond_split_regions(ctx);
+			}
 			if (ctx->primitive.reset_aggregated)
 				ctx->primitive.reset_aggregated(ctx);
 		}
@@ -819,9 +830,11 @@ static int kdamond_fn(void *data)
 			sz_limit = damon_region_sz_limit(ctx);
 		}
 	}
-	damon_for_each_target(t, ctx) {
-		damon_for_each_region_safe(r, next, t)
-			damon_destroy_region(r);
+	if (ctx->target_type != DAMON_ARBITRARY_TARGET) {
+		damon_for_each_target(t, ctx) {
+			damon_for_each_region_safe(r, next, t)
+				damon_destroy_region(r);
+		}
 	}
 
 	if (ctx->callback.before_terminate &&
