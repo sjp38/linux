@@ -49,7 +49,7 @@ static unsigned int nr_damon_targets(struct damon_ctx *ctx)
 
 static void damon_test_target(struct kunit *test)
 {
-	struct damon_ctx *c = damon_new_ctx();
+	struct damon_ctx *c = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	struct damon_target *t;
 
 	t = damon_new_target(42);
@@ -77,7 +77,7 @@ static void damon_test_target(struct kunit *test)
  */
 static void damon_test_aggregate(struct kunit *test)
 {
-	struct damon_ctx *ctx = damon_new_ctx();
+	struct damon_ctx *ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	unsigned long target_ids[] = {1, 2, 3};
 	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };
 	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };
@@ -118,7 +118,7 @@ static void damon_test_aggregate(struct kunit *test)
 
 static void damon_test_split_at(struct kunit *test)
 {
-	struct damon_ctx *c = damon_new_ctx();
+	struct damon_ctx *c = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	struct damon_target *t;
 	struct damon_region *r;
 
@@ -211,7 +211,7 @@ static void damon_test_merge_regions_of(struct kunit *test)
 
 static void damon_test_split_regions_of(struct kunit *test)
 {
-	struct damon_ctx *c = damon_new_ctx();
+	struct damon_ctx *c = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	struct damon_target *t;
 	struct damon_region *r;
 
