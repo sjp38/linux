@@ -335,7 +335,7 @@ static DECLARE_DELAYED_WORK(damon_reclaim_timer, damon_reclaim_timer_fn);
 
 static int __init damon_reclaim_init(void)
 {
-	ctx = damon_new_ctx();
+	ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
 	if (!ctx)
 		return -ENOMEM;
 
