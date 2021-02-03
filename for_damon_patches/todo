@@ -11,16 +11,17 @@ Done
 ====
 
 - Wordsmith commit messages (Shakeel Butt)
-- Update pseudo code in commit messages (Shakeel Butt)
 - Call missed mmu_notifier_test_young() (Shakeel Butt)
 - Add one 'Reviewed-by' tag for PG_Idle reuse patch (Shakeel Butt)
-- Rename init() and update() to be region-neutral (Shakeel Butt)
-- Move user space tool patch out of DAMON patchset series
+- Rename core code to be region-neutral (Shakeel Butt)
 - Add missed null check of 'damon_new_region()' return value (Coverity SAST)
-- Move arbitrary target type support to an RFC patchset (Shakeel Butt)
-- Put pid in dbgfs error cases (Shakeel Butt)
+- Move arbitrary target type support out (Shakeel Butt)
+- Put pids in dbgfs error cases (Shakeel Butt)
+- Move user space tool patch out of DAMON patchset series
 
 - DAMOS: Fixup wrong kernel doc
 
 - CDAMON: Fix a memory leak (Coverity SAST)
 - CDAMON: Implement page-gran access check primitive
+- CDAMON: Move arbitrary target type here (Shakeel Butt)
+- CDAMON: Do put_pid safely
