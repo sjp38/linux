@@ -170,6 +170,14 @@ static unsigned long *str_to_target_ids(const char *str, ssize_t len,
 	return ids;
 }
 
+static void dbgfs_put_pids(unsigned long *ids, int nr_ids)
+{
+	int i;
+
+	for (i = 0; i < nr_ids; i++)
+		put_pid((struct pid *)ids[i]);
+}
+
 static ssize_t dbgfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -178,7 +186,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
-	int i, j;
+	int i;
 	int err;
 
 	kbuf = user_input_str(buf, count, ppos);
@@ -193,36 +201,36 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 		goto out;
 	}
 
-	mutex_lock(&ctx->kdamond_lock);
-	if (ctx->kdamond) {
-		ret = -EINVAL;
-		goto unlock_out;
-	}
-
 	if (targetid_is_pid(ctx)) {
 		for (i = 0; i < nr_targets; i++) {
 			targets[i] = (unsigned long)find_get_pid(
 					(int)targets[i]);
 			if (!targets[i]) {
-				for (j = 0; j < i; j++)
-					put_pid((struct pid *)targets[j]);
+				dbgfs_put_pids(targets, i);
 				ret = -EINVAL;
-				goto unlock_out;
+				goto free_targets_out;
 			}
 		}
 	}
 
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond) {
+		if (targetid_is_pid(ctx))
+			dbgfs_put_pids(targets, nr_targets);
+		ret = -EBUSY;
+		goto unlock_out;
+	}
+
 	err = damon_set_targets(ctx, targets, nr_targets);
 	if (err) {
-		if (targetid_is_pid(ctx)) {
-			for (i = 0; i < nr_targets; i++)
-				put_pid((struct pid *)targets[i]);
-		}
+		if (targetid_is_pid(ctx))
+			dbgfs_put_pids(targets, nr_targets);
 		ret = err;
 	}
 
 unlock_out:
 	mutex_unlock(&ctx->kdamond_lock);
+free_targets_out:
 	kfree(targets);
 out:
 	kfree(kbuf);
