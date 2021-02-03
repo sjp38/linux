@@ -178,7 +178,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	unsigned long *targets;
 	ssize_t nr_targets;
 	ssize_t ret = count;
-	int i;
+	int i, j;
 	int err;
 
 	kbuf = user_input_str(buf, count, ppos);
@@ -200,9 +200,16 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	}
 
 	if (targetid_is_pid(ctx)) {
-		for (i = 0; i < nr_targets; i++)
+		for (i = 0; i < nr_targets; i++) {
 			targets[i] = (unsigned long)find_get_pid(
 					(int)targets[i]);
+			if (!targets[i]) {
+				for (j = 0; j < i; j++)
+					put_pid((struct pid *)targets[j]);
+				ret = -EINVAL;
+				goto unlock_out;
+			}
+		}
 	}
 
 	err = damon_set_targets(ctx, targets, nr_targets);
