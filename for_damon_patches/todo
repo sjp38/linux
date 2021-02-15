@@ -10,6 +10,10 @@ TODOs
 Done
 ====
 
+- Rebase on v5.11
+  - vaddr: Use follow_pte() instead of follow_pte_pmd() (ff5c19ed4b08)
+  - paddr: Drop use of lru_lock (6168d0da2b47, 880fc6ba624c)
+
 - DAMOS: Fixup wrong kernel doc
 
 - CDAMON: Fix a memory leak (Coverity SAST)
