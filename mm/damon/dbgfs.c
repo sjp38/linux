@@ -264,13 +264,8 @@ static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 	const struct file_operations *fops[] = {&attrs_fops, &target_ids_fops};
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
-		if (!debugfs_create_file(file_names[i], 0600, dir,
-					ctx, fops[i])) {
-			pr_err("failed to create %s file\n", file_names[i]);
-			return -ENOMEM;
-		}
-	}
+	for (i = 0; i < ARRAY_SIZE(file_names); i++)
+		debugfs_create_file(file_names[i], 0600, dir, ctx, fops[i]);
 
 	return 0;
 }
@@ -343,18 +338,10 @@ static int __init __damon_dbgfs_init(void)
 	int i;
 
 	dbgfs_root = debugfs_create_dir("damon", NULL);
-	if (IS_ERR(dbgfs_root)) {
-		pr_err("failed to create the dbgfs dir\n");
-		return PTR_ERR(dbgfs_root);
-	}
 
-	for (i = 0; i < ARRAY_SIZE(file_names); i++) {
-		if (!debugfs_create_file(file_names[i], 0600, dbgfs_root,
-					NULL, fops[i])) {
-			pr_err("failed to create %s file\n", file_names[i]);
-			return -ENOMEM;
-		}
-	}
+	for (i = 0; i < ARRAY_SIZE(file_names); i++)
+		debugfs_create_file(file_names[i], 0600, dbgfs_root, NULL,
+				fops[i]);
 	dbgfs_fill_ctx_dir(dbgfs_root, dbgfs_ctxs[0]);
 
 	dbgfs_dirs = kmalloc_array(1, sizeof(dbgfs_root), GFP_KERNEL);
