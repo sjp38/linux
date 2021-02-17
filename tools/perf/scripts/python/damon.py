@@ -58,8 +58,19 @@ class Record:
 def trace_begin():
 	pass
 
+parser = None
 def trace_end():
-	print_record_raw(record, args.sz_bytes)
+	if args.report_type == 'raw':
+		print_record_raw(record, args.sz_bytes)
+	elif args.report_type == 'wss':
+		range_parsed = [int(x) for x in args.wss_range.split(',')]
+		if len(range_parsed) != 3:
+			print('wrong --wss-range value')
+			parser.print_help()
+			exit(1)
+		percentile_range = range(*range_parsed)
+		print_wss_dist(record, args.wss_sort, percentile_range,
+				args.sz_bytes)
 
 args = None
 record = None
@@ -113,12 +124,40 @@ def print_record_raw(record, sz_bytes):
 				region.nr_accesses))
 		pr_safe()
 
+def print_wss_dist(record, sort_key, percentile_range, sz_bytes):
+	wsss = []
+
+	for snapshot in record.snapshots:
+		wss = 0
+		for region in snapshot.regions:
+			if region.nr_accesses > 0:
+				wss += region.end - region.start
+		wsss.append(wss)
+
+	if sort_key == 'size':
+		wsss.sort()
+
+	for i in percentile_range:
+		idx = int(len(wsss) * i / 100)
+		if idx >= len(wsss):
+			idx = -1
+		print('%d %s' % (i, format_sz(wsss[idx], sz_bytes)))
+
 def main():
 	global args
+	global parser
 
 	parser = argparse.ArgumentParser()
+	parser.add_argument('report_type', choices=['raw', 'wss'],
+			help='report type')
 	parser.add_argument('--sz-bytes', action='store_true',
 			help='report size in bytes')
+
+	parser.add_argument('--wss-sort', choices=['size', 'time'],
+			default='size', help='sort working set sizes by')
+	parser.add_argument('--wss-range', metavar='<begin,end,interval>',
+			default='0,101,5',
+			help='percentile range (begin,end,interval)')
 	args = parser.parse_args()
 
 if __name__ == '__main__':
