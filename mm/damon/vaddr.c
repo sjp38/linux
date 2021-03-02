@@ -14,6 +14,7 @@
 #include <linux/page_idle.h>
 #include <linux/random.h>
 #include <linux/sched/mm.h>
+#include <linux/sched/task.h>
 #include <linux/slab.h>
 
 #ifdef CONFIG_DAMON_VADDR_KUNIT_TEST
@@ -189,9 +190,9 @@ static int damon_va_three_regions(struct damon_target *t,
 	if (!mm)
 		return -EINVAL;
 
-	mmap_read_lock(mm);
+	down_read(&mm->mmap_sem);
 	rc = __damon_va_three_regions(mm->mmap, regions);
-	mmap_read_unlock(mm);
+	up_read(&mm->mmap_sem);
 
 	mmput(mm);
 	return rc;
