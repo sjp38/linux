@@ -13,6 +13,7 @@
 #include <linux/page_idle.h>
 #include <linux/random.h>
 #include <linux/sched/mm.h>
+#include <linux/sched/task.h>
 #include <linux/slab.h>
 
 /* Get a random number in [l, r) */
@@ -183,9 +184,9 @@ static int damon_va_three_regions(struct damon_target *t,
 	if (!mm)
 		return -EINVAL;
 
-	mmap_read_lock(mm);
+	down_read(&mm->mmap_sem);
 	rc = __damon_va_three_regions(mm->mmap, regions);
-	mmap_read_unlock(mm);
+	up_read(&mm->mmap_sem);
 
 	mmput(mm);
 	return rc;
@@ -417,7 +418,7 @@ static void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
 
-	if (follow_pte_pmd(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
 		return;
 
 	if (pte) {
@@ -465,7 +466,7 @@ static bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	spinlock_t *ptl;
 	bool young = false;
 
-	if (follow_pte_pmd(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
 		return false;
 
 	*page_sz = PAGE_SIZE;
