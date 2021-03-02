@@ -19,11 +19,10 @@ bool damon_pgi_is_idle(unsigned long pfn, unsigned long *pg_size)
 }
 
 /*
- * This has no implementations for 'init_target_regions()' and
- * 'update_target_regions()'.  Users should set the initial regions and update
- * regions by themselves in the 'before_start' and 'after_aggregation'
- * callbacks, respectively.  Or, they can implement and use their own version
- * of the primitives.
+ * This has no implementations for 'init()' and 'update()'.  Users should set
+ * the initial regions and update regions by themselves in the 'before_start'
+ * and 'after_aggregation' callbacks, respectively.  Or, they can implement and
+ * use their own version of the primitives.
  */
 
 void damon_pgi_prepare_access_checks(struct damon_ctx *ctx)
@@ -58,8 +57,8 @@ bool damon_pgi_target_valid(void *target)
 
 void damon_pgi_set_primitives(struct damon_ctx *ctx)
 {
-	ctx->primitive.init_target_regions = NULL;
-	ctx->primitive.update_target_regions = NULL;
+	ctx->primitive.init = NULL;
+	ctx->primitive.update = NULL;
 	ctx->primitive.prepare_access_checks = damon_pgi_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_pgi_check_accesses;
 	ctx->primitive.reset_aggregated = NULL;
