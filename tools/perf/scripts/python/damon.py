@@ -6,8 +6,10 @@ from __future__ import print_function
 
 import argparse
 import os
+import subprocess
 import sys
 import time
+import tempfile
 
 sys.path.append(os.environ['PERF_EXEC_PATH'] + \
 	'/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
@@ -59,6 +61,8 @@ def trace_begin():
 	pass
 
 parser = None
+wss_plot_data_file = None
+wss_plot_data_path = None
 def trace_end():
 	if args.report_type == 'raw':
 		print_record_raw(record, args.sz_bytes)
@@ -71,6 +75,28 @@ def trace_end():
 		percentile_range = range(*range_parsed)
 		print_wss_dist(record, args.wss_sort, percentile_range,
 				args.sz_bytes)
+
+		if args.wss_plot:
+			sys.stdout = sys.stdout
+			wss_plot_data_file.flush()
+			wss_plot_data_file.close()
+			if args.wss_sort == 'time':
+				xlabel = 'runtime (percent)'
+			else:	# 'size'
+				xlabel = 'percentile'
+			ylabel = 'working set size (bytes)'
+
+			term = args.wss_plot.split('.')[-1]
+			gnuplot_cmd = '''
+			set term %s;
+			set output '%s';
+			set key off;
+			set xlabel '%s';
+			set ylabel '%s';
+			plot '%s' with linespoints;''' % (term, args.wss_plot,
+					xlabel, ylabel, wss_plot_data_path)
+			subprocess.call(['gnuplot', '-e', gnuplot_cmd])
+			os.remove(wss_plot_data_path)
 
 args = None
 record = None
@@ -146,6 +172,8 @@ def print_wss_dist(record, sort_key, percentile_range, sz_bytes):
 def main():
 	global args
 	global parser
+	global wss_plot_data_path
+	global wss_plot_data_file
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('report_type', choices=['raw', 'wss'],
@@ -158,7 +186,20 @@ def main():
 	parser.add_argument('--wss-range', metavar='<begin,end,interval>',
 			default='0,101,5',
 			help='percentile range (begin,end,interval)')
+	parser.add_argument('--wss-plot', metavar='<file>',
+			help='visualize the wss distribution')
 	args = parser.parse_args()
+
+	if args.report_type == 'wss' and args.wss_plot:
+		file_type = args.wss_plot.split('.')[-1]
+		if not file_type in ['pdf', 'jpeg', 'png', 'svg']:
+			print('Unsupported plot output type.')
+			exit(-1)
+
+		args.sz_bytes = True
+		wss_plot_data_path = tempfile.mkstemp()[1]
+		wss_plot_data_file = open(wss_plot_data_path, 'w')
+		sys.stdout = wss_plot_data_file
 
 if __name__ == '__main__':
 	main()
