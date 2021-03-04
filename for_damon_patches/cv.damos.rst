@@ -95,14 +95,26 @@ clone the complete git tree:
 The web is also available:
 https://github.com/sjp38/linux/releases/tag/damos/rfc/v15.1
 
-There are a couple of trees for entire DAMON patchset series that future
-features are included.  The first one[3] contains the changes for latest
-release, while the other one[4] contains the changes for next release.
-
 [1] https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/
-[2] https://lore.kernel.org/linux-mm/20200302193630.68771-2-minchan@kernel.org/
-[3] https://github.com/sjp38/linux/tree/damon/master
-[4] https://github.com/sjp38/linux/tree/damon/next
+
+Development Trees
+-----------------
+
+There are a couple of trees for entire DAMON patchset series and
+features for future release.
+
+- For latest release: https://github.com/sjp38/linux/tree/damon/master
+- For next release: https://github.com/sjp38/linux/tree/damon/next
+
+Long-term Support Trees
+-----------------------
+
+For people who want to test DAMON but using LTS kernels, there are another
+couple of trees based on two latest LTS kernels respectively and containing the
+'damon/master' backports.
+
+- For v5.4.y: https://github.com/sjp38/linux/tree/damon/for-v5.4.y
+- For v5.10.y: https://github.com/sjp38/linux/tree/damon/for-v5.10.y
 
 Sequence Of Patches
 ===================
