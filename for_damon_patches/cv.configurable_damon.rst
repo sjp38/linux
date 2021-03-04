@@ -53,6 +53,25 @@ https://github.com/sjp38/linux/releases/tag/cdamon/rfc/v10
 [1] https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@amazon.com/
 [2] https://lore.kernel.org/linux-mm/20201006123931.5847-1-sjpark@amazon.com/
 
+Development Trees
+-----------------
+
+There are a couple of trees for entire DAMON patchset series and
+features for future release.
+
+- For latest release: https://github.com/sjp38/linux/tree/damon/master
+- For next release: https://github.com/sjp38/linux/tree/damon/next
+
+Long-term Support Trees
+-----------------------
+
+For people who want to test DAMON but using LTS kernels, there are another
+couple of trees based on two latest LTS kernels respectively and containing the
+'damon/master' backports.
+
+- For v5.4.y: https://github.com/sjp38/linux/tree/damon/for-v5.4.y
+- For v5.10.y: https://github.com/sjp38/linux/tree/damon/for-v5.10.y
+
 Sequence of Patches
 ===================
 

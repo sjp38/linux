@@ -316,12 +316,24 @@ tree:
 The web is also available:
 https://github.com/sjp38/linux/releases/tag/damon/patches/v24
 
-There are a couple of trees for entire DAMON patchset series.  It includes
-future features.  The first one[1] contains the changes for latest release,
-while the other one[2] contains the changes for next release.
+Development Trees
+-----------------
 
-[1] https://github.com/sjp38/linux/tree/damon/master
-[2] https://github.com/sjp38/linux/tree/damon/next
+There are a couple of trees for entire DAMON patchset series and
+features for future release.
+
+- For latest release: https://github.com/sjp38/linux/tree/damon/master
+- For next release: https://github.com/sjp38/linux/tree/damon/next
+
+Long-term Support Trees
+-----------------------
+
+For people who want to test DAMON but using LTS kernels, there are another
+couple of trees based on two latest LTS kernels respectively and containing the
+'damon/master' backports.
+
+- For v5.4.y: https://github.com/sjp38/linux/tree/damon/for-v5.4.y
+- For v5.10.y: https://github.com/sjp38/linux/tree/damon/for-v5.10.y
 
 Sequence Of Patches
 ===================
