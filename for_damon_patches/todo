@@ -1,23 +1,37 @@
 TODOs
 =====
 
-- Make debugfs interface simple and clean
- - Atomically pass a copy of constructed context to damon_start()?
 - Support cgroups
-- damo/wss: Adjust the nr_accesses for work_time
-- perf: Implement wss feature
+- Use DAMON's own file system (say, damonfs) for user space interface
 
 Done
 ====
 
+DAMON
+-----
+
 - Rebase on v5.11
   - vaddr: Use follow_pte() instead of follow_pte_pmd() (ff5c19ed4b08)
+- Ignore debugfs_create_{file|dir}() return values (Greg KH)
+
+
+DAMOS
+-----
+
+- Fixup wrong kernel doc
+
+
+More address spaces
+-------------------
+
+- Rebase on v5.11
   - paddr: Drop use of lru_lock (6168d0da2b47, 880fc6ba624c)
-- Ignore debugfs_create_{file|dir}() return value (Greg KH)
+- Fix a memory leak (Coverity SAST)
+- Move arbitrary target type support here (Shakeel Butt)
+- Do put_pid() safely
 
-- DAMOS: Fixup wrong kernel doc
+User space tools
+----------------
 
-- CDAMON: Fix a memory leak (Coverity SAST)
-- CDAMON: Implement page-gran access check primitive
-- CDAMON: Move arbitrary target type here (Shakeel Butt)
-- CDAMON: Do put_pid safely
+- damo/wss: Adjust the nr_accesses for work_time
+- perf: Implement wss feature
