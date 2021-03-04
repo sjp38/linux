@@ -101,6 +101,8 @@ def trace_end():
 			plot '%s' with linespoints;''' % (term, args.plot,
 					xlabel, ylabel, plot_data_path)
 			plot(gnuplot_cmd)
+	elif args.report_type == 'record-profile':
+		print_record_profile(record)
 
 args = None
 record = None
@@ -126,6 +128,89 @@ def damon__damon_aggregated(event_name, context, common_cpu,
 	nr_read_regions += 1
 	if nr_read_regions == nr_regions:
 		nr_read_regions = 0
+
+class RecordProfile:
+	target_id = None
+	time_start = None
+	time_end = None
+	addr_start = None
+	addr_end = None
+	gaps = None
+	nr_snapshots = None
+
+	def __init__(self, target_id, time_start):
+		self.target_id = target_id
+		self.time_start = time_start
+		self.gaps = []
+		self.nr_snapshots = 0
+
+	def __str__(self):
+		lines = ['id: %s, time: (%s-%s), addr: (%s-%s) nr_snaps: %s' %
+				(self.target_id,
+					self.time_start, self.time_end,
+					self.addr_start, self.addr_end,
+					self.nr_snapshots)]
+		for gap in self.gaps:
+			lines.append('gap %s-%s' % (gap[0], gap[1]))
+		return '\n'.join(lines)
+
+	def __repr__(self):
+		return self.__str__()
+
+def is_overlap(region1, region2):
+	# <region1> <region2>
+	if region1[1] < region2[0]:
+		return False
+	# <region2> <region1>
+	if region2[1] < region1[0]:
+		return False
+	return True
+
+def overlap_region_of(region1, region2):
+	return [max(region1[0], region2[0]), min(region1[1], region2[1])]
+
+def overlapping_regions(regions1, regions2):
+	overlap_regions = []
+	for r1 in regions1:
+		for r2 in regions2:
+			if is_overlap(r1, r2):
+				r1 = overlap_region_of(r1, r2)
+		overlap_regions.append(r1)
+	return overlap_regions
+
+def print_record_profile(record):
+	profiles = {}
+	for snapshot in record.snapshots:
+		tid = snapshot.target_id
+		monitored_time = snapshot.monitored_time - record.start_time
+		if not tid in profiles:
+			profiles[tid] = RecordProfile(tid, monitored_time)
+		prof = profiles[tid]
+		prof.nr_snapshots += 1
+		prof.time_end = monitored_time
+
+		last_addr = None
+		gaps = []
+		for region in snapshot.regions:
+			if not prof.addr_start:
+				prof.addr_start = region.start
+			prof.addr_start = min(prof.addr_start, region.start)
+			prof.addr_end = max(prof.addr_end, region.end)
+
+			if last_addr and last_addr != region.start:
+				gaps.append([last_addr, region.start])
+			last_addr = region.end
+		if not prof.gaps:
+			prof.gaps = gaps
+		else:
+			prof.gaps = overlapping_regions(prof.gaps, gaps)
+
+	for prof in profiles.values():
+		if prof.nr_snapshots <= 1:
+			continue
+		prof.time_end += (prof.time_end - prof.time_start) / (
+				prof.nr_snapshots - 1)
+		print(prof)
 
 def format_sz(number, sz_bytes):
 	if sz_bytes:
@@ -181,7 +266,8 @@ def main():
 	global orig_stdout
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('report_type', choices=['raw', 'wss'],
+	parser.add_argument('report_type',
+			choices=['raw', 'wss', 'record-profile'],
 			help='report type')
 	parser.add_argument('--sz-bytes', action='store_true',
 			help='report size in bytes')
