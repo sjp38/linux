@@ -103,6 +103,8 @@ def trace_end():
 			plot(gnuplot_cmd)
 	elif args.report_type == 'record-profile':
 		print_record_profile(record)
+	elif args.report_type == 'heatmap':
+		print_heatmap(record)
 
 args = None
 record = None
@@ -128,6 +130,114 @@ def damon__damon_aggregated(event_name, context, common_cpu,
 	nr_read_regions += 1
 	if nr_read_regions == nr_regions:
 		nr_read_regions = 0
+
+def default_heatmap_attrs(record):
+	profiles = get_record_profile(record)
+
+	biggest_regions = {}
+	biggest_region = None
+	for prof in profiles.values():
+		region = [prof.addr_start]
+		for idx, gap in enumerate(prof.gaps):
+			region.append(gap[0])
+			if not biggest_region or (
+					biggest_region[1] - biggest_region[0] <
+					region[1] - region[0]):
+				biggest_region = region
+			region = [gap[1]]
+		region.append(prof.addr_end)
+		if not biggest_region or (
+				biggest_region[1] - biggest_region[0] <
+				region[1] - region[0]):
+			biggest_region = region
+		biggest_regions[prof.target_id] = biggest_region
+
+	tid = sorted(biggest_regions.keys(),
+			key=lambda x:
+			biggest_regions[x][1] - biggest_regions[x][0])[-1]
+	prof = profiles[tid]
+	time_range = [prof.time_start, prof.time_end]
+	addr_range = biggest_regions[tid]
+	return tid, time_range, addr_range
+
+class HeatPixel:
+	time = None
+	addr = None
+	heat = None
+
+	def __init__(self, time, addr, heat):
+		self.time = time
+		self.addr = addr
+		self.heat = heat
+
+def add_heats(snapshot, addr_range, duration, space_unit, time_unit, pixels):
+	for region in snapshot.regions:
+		start = max(region.start, addr_range[0])
+		end = min(region.end, addr_range[1])
+
+		while start < end:
+			sz_time_space = min(end - start, space_unit) * duration
+			heat = sz_time_space * region.nr_accesses
+
+			aidx = int((start - addr_range[0]) / space_unit)
+			pixel = pixels[aidx]
+			heat += pixel.heat * space_unit * time_unit
+			pixel.heat = heat / space_unit / time_unit
+
+			start += space_unit
+
+def heat_pixels_from_record(record, tid, time_range, addr_range, resols):
+	time_unit = (time_range[1] - time_range[0]) / resols[0]
+	space_unit = (addr_range[1] - addr_range[0]) / resols[1]
+
+	pixels = []
+	for i in range(time_range[0], time_range[1], time_unit):
+		snapshot = []
+		for j in range(addr_range[0], addr_range[1], space_unit):
+			snapshot.append(HeatPixel(i, j, 0))
+		pixels.append(snapshot)
+
+	for idx, snapshot in enumerate(record.snapshots):
+		if snapshot.target_id != tid:
+			continue
+		next_snapshot = None
+		for next_snapshot in record.snapshots[idx + 1:]:
+			if next_snapshot.target_id == tid:
+				break
+		if not next_snapshot:
+			break
+
+		start = snapshot.monitored_time - record.start_time
+		end = next_snapshot.monitored_time - record.start_time
+
+		while start < end:
+			duration = min(end - start, time_unit)
+			tidx = int((start - time_range[0]) / time_unit)
+			add_heats(snapshot, addr_range, duration, space_unit,
+					time_unit, pixels[tidx])
+			start += time_unit
+	return pixels
+
+def print_heatmap(record):
+	tid = args.heatmap_target
+	time_range = args.heatmap_time_range
+	addr_range = args.heatmap_space_range
+	resols = args.heatmap_res
+
+	if not tid or not time_range or not addr_range:
+		dtid, dtime_range, daddr_range = default_heatmap_attrs(record)
+	if not tid:
+		tid = dtid
+	if not time_range:
+		time_range = dtime_range
+	if not addr_range:
+		addr_range = daddr_range
+
+	for snapshot in heat_pixels_from_record(record, tid,
+			time_range, addr_range, resols):
+		for pixel in snapshot:
+			print('%s\t%s\t%s' %
+					(pixel.time, pixel.addr, pixel.heat))
 
 class RecordProfile:
 	target_id = None
@@ -178,7 +288,7 @@ def overlapping_regions(regions1, regions2):
 		overlap_regions.append(r1)
 	return overlap_regions
 
-def print_record_profile(record):
+def get_record_profile(record):
 	profiles = {}
 	for snapshot in record.snapshots:
 		tid = snapshot.target_id
@@ -204,8 +314,10 @@ def print_record_profile(record):
 			prof.gaps = gaps
 		else:
 			prof.gaps = overlapping_regions(prof.gaps, gaps)
+	return profiles
 
-	for prof in profiles.values():
+def print_record_profile(record):
+	for prof in get_record_profile(record).values():
 		if prof.nr_snapshots <= 1:
 			continue
 		prof.time_end += (prof.time_end - prof.time_start) / (
@@ -267,7 +379,7 @@ def main():
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('report_type',
-			choices=['raw', 'wss', 'record-profile'],
+			choices=['raw', 'wss', 'record-profile', 'heatmap'],
 			help='report type')
 	parser.add_argument('--sz-bytes', action='store_true',
 			help='report size in bytes')
@@ -279,6 +391,19 @@ def main():
 	parser.add_argument('--wss-range', metavar='<begin,end,interval>',
 			default='0,101,5',
 			help='percentile range (begin,end,interval)')
+
+	parser.add_argument('--heatmap-target', metavar='<target id>',
+			help='id of monitoring target for heatmap')
+	parser.add_argument('--heatmap-res', metavar='<resolution>',
+			type=int, nargs=2, default=[800, 600],
+			help='resolutions for time and space axises')
+	parser.add_argument('--heatmap-time-range', metavar='<time>',
+			type=int, nargs=2,
+			help='start and end time of the heatmap')
+	parser.add_argument('--heatmap-space-range', metavar='<address>',
+			type=int, nargs=2,
+			help='start and end address of the heatmap')
+
 	args = parser.parse_args()
 
 	if args.report_type == 'wss' and args.plot:
