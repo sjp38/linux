@@ -57,13 +57,20 @@ class Record:
 		self.start_time = start_time
 		self.snapshots = []
 
+plot_data_file = None
+plot_data_path = None
+orig_stdout = None
+def plot(gnuplot_cmd):
+	sys.stdout = orig_stdout
+	plot_data_file.flush()
+	plot_data_file.close()
+	subprocess.call(['gnuplot', '-e', gnuplot_cmd])
+	os.remove(plot_data_path)
+
 def trace_begin():
 	pass
 
 parser = None
-plot_data_file = None
-plot_data_path = None
-orig_stdout = None
 def trace_end():
 	if args.report_type == 'raw':
 		print_record_raw(record, args.sz_bytes)
@@ -78,9 +85,6 @@ def trace_end():
 				args.sz_bytes)
 
 		if args.plot:
-			sys.stdout = orig_stdout
-			plot_data_file.flush()
-			plot_data_file.close()
 			if args.wss_sort == 'time':
 				xlabel = 'runtime (percent)'
 			else:	# 'size'
@@ -96,8 +100,7 @@ def trace_end():
 			set ylabel '%s';
 			plot '%s' with linespoints;''' % (term, args.plot,
 					xlabel, ylabel, plot_data_path)
-			subprocess.call(['gnuplot', '-e', gnuplot_cmd])
-			os.remove(plot_data_path)
+			plot(gnuplot_cmd)
 
 args = None
 record = None
