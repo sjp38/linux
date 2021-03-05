@@ -193,7 +193,7 @@ def main():
 	if args.report_type == 'wss' and args.wss_plot:
 		file_type = args.wss_plot.split('.')[-1]
 		if not file_type in ['pdf', 'jpeg', 'png', 'svg']:
-			print('Unsupported plot output type.')
+			pr_safe('Unsupported plot output type.')
 			exit(-1)
 
 		args.sz_bytes = True
