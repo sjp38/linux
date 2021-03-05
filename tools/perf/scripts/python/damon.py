@@ -231,8 +231,8 @@ def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
 		return
 	heat_unit = (highest_heat + 1 - lowest_heat) / 9
 
-	bgcolors = [1, 1, 1, 2, 3, 3, 20, 21,26, 27, 27]
-	fgcolors = [232, 235, 237, 239, 243, 245, 247, 249, 251, 255]
+	bgcolors = [232, 1, 1, 2, 3, 3, 20, 21,26, 27, 27]
+	fgcolors = [239, 235, 237, 239, 243, 245, 247, 249, 251, 255]
 	for snapshot in pixels:
 		chars = []
 		for pixel in snapshot:
