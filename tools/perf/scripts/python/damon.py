@@ -231,14 +231,20 @@ def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
 		return
 	heat_unit = (highest_heat + 1 - lowest_heat) / 9
 
-	base_color = 235
+	bgcolors = [1, 1, 1, 2, 3, 3, 20, 21,26, 27, 27]
+	fgcolors = [232, 235, 237, 239, 243, 245, 247, 249, 251, 255]
 	for snapshot in pixels:
 		chars = []
 		for pixel in snapshot:
 			heat = (pixel.heat - lowest_heat) / heat_unit
-			code = base_color + heat * 2
-			chars.append(u'\u001b[48;5;%dm\u001b[38;5;233m%d' % (code, heat))
+			bg = bgcolors[heat]
+			fg = fgcolors[heat]
+			chars.append(u'\u001b[48;5;%dm\u001b[38;5;%dm%d' %
+					(bg, fg, heat))
 		pr_safe(''.join(chars) + u'\u001b[0m')
+	color_samples = [u'\u001b[48;5;%dm\u001b[38;5;%dm %d ' % (bgcolors[i],
+		fgcolors[i], i) for i in range(0, 10)]
+	pr_safe('# temparature:', ''.join(color_samples) + u'\u001b[0m')
 	pr_safe('# x-axis: space (%d-%d: %s)' % (addr_range[0], addr_range[1],
 		format_sz(addr_range[1] - addr_range[0], False)))
 	pr_safe('# y-axis: time (%d-%d: %fs)' % (time_range[0], time_range[1],
