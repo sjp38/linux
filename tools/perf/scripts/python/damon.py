@@ -61,8 +61,8 @@ def trace_begin():
 	pass
 
 parser = None
-wss_plot_data_file = None
-wss_plot_data_path = None
+plot_data_file = None
+plot_data_path = None
 def trace_end():
 	if args.report_type == 'raw':
 		print_record_raw(record, args.sz_bytes)
@@ -76,27 +76,27 @@ def trace_end():
 		print_wss_dist(record, args.wss_sort, percentile_range,
 				args.sz_bytes)
 
-		if args.wss_plot:
+		if args.plot:
 			sys.stdout = sys.stdout
-			wss_plot_data_file.flush()
-			wss_plot_data_file.close()
+			plot_data_file.flush()
+			plot_data_file.close()
 			if args.wss_sort == 'time':
 				xlabel = 'runtime (percent)'
 			else:	# 'size'
 				xlabel = 'percentile'
 			ylabel = 'working set size (bytes)'
 
-			term = args.wss_plot.split('.')[-1]
+			term = args.plot.split('.')[-1]
 			gnuplot_cmd = '''
 			set term %s;
 			set output '%s';
 			set key off;
 			set xlabel '%s';
 			set ylabel '%s';
-			plot '%s' with linespoints;''' % (term, args.wss_plot,
-					xlabel, ylabel, wss_plot_data_path)
+			plot '%s' with linespoints;''' % (term, args.plot,
+					xlabel, ylabel, plot_data_path)
 			subprocess.call(['gnuplot', '-e', gnuplot_cmd])
-			os.remove(wss_plot_data_path)
+			os.remove(plot_data_path)
 
 args = None
 record = None
@@ -172,34 +172,36 @@ def print_wss_dist(record, sort_key, percentile_range, sz_bytes):
 def main():
 	global args
 	global parser
-	global wss_plot_data_path
-	global wss_plot_data_file
+	global plot_data_path
+	global plot_data_file
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('report_type', choices=['raw', 'wss'],
 			help='report type')
 	parser.add_argument('--sz-bytes', action='store_true',
 			help='report size in bytes')
+	parser.add_argument('--plot', metavar='<output file>',
+			help='visualize the wss distribution')
 
 	parser.add_argument('--wss-sort', choices=['size', 'time'],
 			default='size', help='sort working set sizes by')
 	parser.add_argument('--wss-range', metavar='<begin,end,interval>',
 			default='0,101,5',
 			help='percentile range (begin,end,interval)')
-	parser.add_argument('--wss-plot', metavar='<file>',
-			help='visualize the wss distribution')
 	args = parser.parse_args()
 
-	if args.report_type == 'wss' and args.wss_plot:
-		file_type = args.wss_plot.split('.')[-1]
-		if not file_type in ['pdf', 'jpeg', 'png', 'svg']:
-			pr_safe('Unsupported plot output type.')
+	if args.report_type == 'wss' and args.plot:
+		file_type = args.plot.split('.')[-1]
+		supported = ['pdf', 'jpeg', 'png', 'svg']
+		if not file_type in supported:
+			pr_safe('not supported plot file type.  Use one in',
+					supported)
 			exit(-1)
 
 		args.sz_bytes = True
-		wss_plot_data_path = tempfile.mkstemp()[1]
-		wss_plot_data_file = open(wss_plot_data_path, 'w')
-		sys.stdout = wss_plot_data_file
+		plot_data_path = tempfile.mkstemp()[1]
+		plot_data_file = open(plot_data_path, 'w')
+		sys.stdout = plot_data_file
 
 if __name__ == '__main__':
 	main()
