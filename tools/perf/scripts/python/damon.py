@@ -65,7 +65,7 @@ def trace_end():
 	elif args.report_type == 'wss':
 		range_parsed = [int(x) for x in args.wss_range.split(',')]
 		if len(range_parsed) != 3:
-			print('wrong --wss-range value')
+			pr_safe('wrong --wss-range value')
 			parser.print_help()
 			exit(1)
 		percentile_range = range(*range_parsed)
@@ -141,7 +141,7 @@ def print_wss_dist(record, sort_key, percentile_range, sz_bytes):
 		idx = int(len(wsss) * i / 100)
 		if idx >= len(wsss):
 			idx = -1
-		print('%d %s' % (i, format_sz(wsss[idx], sz_bytes)))
+		pr_safe('%d %s' % (i, format_sz(wsss[idx], sz_bytes)))
 
 def main():
 	global args
