@@ -106,6 +106,18 @@ def trace_end():
 	elif args.report_type == 'heatmap':
 		print_heatmap(record)
 
+		if args.plot:
+			term = args.plot.split('.')[-1]
+			gnuplot_cmd = '''
+			set term %s;
+			set output '%s';
+			set key off;
+			set xlabel 'Time (ns)';
+			set ylabel 'Address (bytes)';
+			plot '%s' using 1:2:3 with image;''' % (term,
+					args.plot, plot_data_path)
+			plot(gnuplot_cmd)
+
 args = None
 record = None
 nr_read_regions = 0
@@ -406,7 +418,7 @@ def main():
 
 	args = parser.parse_args()
 
-	if args.report_type == 'wss' and args.plot:
+	if args.report_type in ['wss', 'heatmap'] and args.plot:
 		file_type = args.plot.split('.')[-1]
 		supported = ['pdf', 'jpeg', 'png', 'svg']
 		if not file_type in supported:
