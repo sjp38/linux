@@ -236,7 +236,7 @@ def print_heatmap(record):
 	for snapshot in heat_pixels_from_record(record, tid,
 			time_range, addr_range, resols):
 		for pixel in snapshot:
-			print('%s\t%s\t%s' %
+			pr_safe('%s\t%s\t%s' %
 					(pixel.time, pixel.addr, pixel.heat))
 
 class RecordProfile:
