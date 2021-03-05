@@ -237,9 +237,8 @@ def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
 		for pixel in snapshot:
 			heat = (pixel.heat - lowest_heat) / heat_unit
 			code = base_color + heat * 2
-			chars.append(u'\u001b[38;5;%dm%d' % (code, heat))
-		pr_safe(''.join(chars))
-	pr_safe(u'\u001b[0m')
+			chars.append(u'\u001b[48;5;%dm\u001b[38;5;233m%d' % (code, heat))
+		pr_safe(''.join(chars) + u'\u001b[0m')
 	pr_safe('# x-axis: space (%d-%d: %s)' % (addr_range[0], addr_range[1],
 		format_sz(addr_range[1] - addr_range[0], False)))
 	pr_safe('# y-axis: time (%d-%d: %fs)' % (time_range[0], time_range[1],
