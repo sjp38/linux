@@ -231,19 +231,29 @@ def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
 		return
 	heat_unit = (highest_heat + 1 - lowest_heat) / 9
 
-	bgcolors = [232, 1, 1, 2, 3, 3, 20, 21,26, 27, 27]
-	fgcolors = [239, 235, 237, 239, 243, 245, 247, 249, 251, 255]
+	colorsets = {
+		'gray':[
+			[232] * 10,
+			[237, 239, 241, 243, 245, 247, 249, 251, 253, 255]],
+		'flame':[
+			[232, 1, 1, 2, 3, 3, 20, 21,26, 27, 27],
+			[239, 235, 237, 239, 243, 245, 247, 249, 251, 255]],
+		'emotion':[
+			[232, 234, 20, 21, 26, 2, 3, 1, 1, 1],
+			[239, 235, 237, 239, 243, 245, 247, 249, 251, 255]],
+		}
+	colors = colorsets[args.heatmap_ascii_color]
 	for snapshot in pixels:
 		chars = []
 		for pixel in snapshot:
 			heat = (pixel.heat - lowest_heat) / heat_unit
-			bg = bgcolors[heat]
-			fg = fgcolors[heat]
+			bg = colors[0][heat]
+			fg = colors[1][heat]
 			chars.append(u'\u001b[48;5;%dm\u001b[38;5;%dm%d' %
 					(bg, fg, heat))
 		pr_safe(''.join(chars) + u'\u001b[0m')
-	color_samples = [u'\u001b[48;5;%dm\u001b[38;5;%dm %d ' % (bgcolors[i],
-		fgcolors[i], i) for i in range(0, 10)]
+	color_samples = [u'\u001b[48;5;%dm\u001b[38;5;%dm %d ' %
+			(colors[0][i], colors[1][i], i) for i in range(10)]
 	pr_safe('# temparature:', ''.join(color_samples) + u'\u001b[0m')
 	pr_safe('# x-axis: space (%d-%d: %s)' % (addr_range[0], addr_range[1],
 		format_sz(addr_range[1] - addr_range[0], False)))
@@ -463,6 +473,9 @@ def main():
 			help='id of monitoring target for heatmap')
 	parser.add_argument('--heatmap-plot-ascii', action='store_true',
 			help='visualize in ascii art')
+	parser.add_argument('--heatmap-ascii-color',
+			choices=['gray', 'flame', 'emotion'], default = 'gray',
+			help='color theme for temperatures')
 	parser.add_argument('--heatmap-res', metavar='<resolution>',
 			type=int, nargs=2, default=[800, 600],
 			help='resolutions for time and space axises')
