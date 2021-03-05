@@ -63,6 +63,7 @@ def trace_begin():
 parser = None
 plot_data_file = None
 plot_data_path = None
+orig_stdout = None
 def trace_end():
 	if args.report_type == 'raw':
 		print_record_raw(record, args.sz_bytes)
@@ -77,7 +78,7 @@ def trace_end():
 				args.sz_bytes)
 
 		if args.plot:
-			sys.stdout = sys.stdout
+			sys.stdout = orig_stdout
 			plot_data_file.flush()
 			plot_data_file.close()
 			if args.wss_sort == 'time':
@@ -174,6 +175,7 @@ def main():
 	global parser
 	global plot_data_path
 	global plot_data_file
+	global orig_stdout
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('report_type', choices=['raw', 'wss'],
@@ -201,6 +203,7 @@ def main():
 		args.sz_bytes = True
 		plot_data_path = tempfile.mkstemp()[1]
 		plot_data_file = open(plot_data_path, 'w')
+		orig_stdout = sys.stdout
 		sys.stdout = plot_data_file
 
 if __name__ == '__main__':
