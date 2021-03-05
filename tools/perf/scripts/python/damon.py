@@ -17,14 +17,15 @@ from Core import *
 
 # For intensive print() calls, 'IOError: [Errno 11] Resource temporarily
 # unavailable' triggered.  This function handles the error.
+# Note: The output should be oneline.
 def pr_safe(*args):
 	while True:
 		try:
-			print('\r', end='')
 			print(*args)
 			return
 		except IOError:
 			time.sleep(0.1)
+			print('\r', end='')
 
 class Region:
 	start = None
