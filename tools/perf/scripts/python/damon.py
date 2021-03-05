@@ -218,6 +218,34 @@ def heat_pixels_from_record(record, tid, time_range, addr_range, resols):
 			start += time_unit
 	return pixels
 
+def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
+	highest_heat = None
+	lowest_heat = None
+	for snapshot in pixels:
+		for pixel in snapshot:
+			if not highest_heat or highest_heat < pixel.heat:
+				highest_heat = pixel.heat
+			if not lowest_heat or lowest_heat > pixel.heat:
+				lowest_heat = pixel.heat
+	if not highest_heat or lowest_heat:
+		return
+	heat_unit = (highest_heat + 1 - lowest_heat) / 9
+
+	base_color = 235
+	for snapshot in pixels:
+		chars = []
+		for pixel in snapshot:
+			heat = (pixel.heat - lowest_heat) / heat_unit
+			code = base_color + heat * 2
+			chars.append(u'\u001b[38;5;%dm%d' % (code, heat))
+		pr_safe(''.join(chars))
+	pr_safe(u'\u001b[0m')
+	pr_safe('# x-axis: space (%d-%d: %s)' % (addr_range[0], addr_range[1],
+		format_sz(addr_range[1] - addr_range[0], False)))
+	pr_safe('# y-axis: time (%d-%d: %fs)' % (time_range[0], time_range[1],
+		(time_range[1] - time_range[0]) / 1000000000))
+	pr_safe('# resolution: %dx%d' % (len(pixels[1]), len(pixels)))
+
 def print_heatmap(record):
 	tid = args.heatmap_target
 	time_range = args.heatmap_time_range
@@ -233,8 +261,15 @@ def print_heatmap(record):
 	if not addr_range:
 		addr_range = daddr_range
 
-	for snapshot in heat_pixels_from_record(record, tid,
-			time_range, addr_range, resols):
+
+	pixels = heat_pixels_from_record(record, tid, time_range, addr_range,
+			resols)
+
+	if args.heatmap_plot_ascii:
+		heatmap_plot_ascii(pixels, time_range, addr_range, resols)
+		return
+
+	for snapshot in pixels:
 		for pixel in snapshot:
 			addr = pixel.addr
 			if not args.heatmap_abs_addr:
@@ -421,6 +456,8 @@ def main():
 
 	parser.add_argument('--heatmap-target', metavar='<target id>',
 			help='id of monitoring target for heatmap')
+	parser.add_argument('--heatmap-plot-ascii', action='store_true',
+			help='visualize in ascii art')
 	parser.add_argument('--heatmap-res', metavar='<resolution>',
 			type=int, nargs=2, default=[800, 600],
 			help='resolutions for time and space axises')
@@ -450,6 +487,10 @@ def main():
 		plot_data_file = open(plot_data_path, 'w')
 		orig_stdout = sys.stdout
 		sys.stdout = plot_data_file
+
+	if (args.report_type == 'heatmap' and args.heatmap_plot_ascii and
+			args.heatmap_res[1] > 300):
+		args.heatmap_res = [40, 80]
 
 if __name__ == '__main__':
 	main()
