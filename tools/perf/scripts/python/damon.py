@@ -20,6 +20,7 @@ from Core import *
 def pr_safe(*args):
 	while True:
 		try:
+			print('\r', end='')
 			print(*args)
 			return
 		except IOError:
