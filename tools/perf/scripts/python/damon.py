@@ -248,8 +248,13 @@ def print_heatmap(record):
 	for snapshot in heat_pixels_from_record(record, tid,
 			time_range, addr_range, resols):
 		for pixel in snapshot:
-			pr_safe('%s\t%s\t%s' %
-					(pixel.time, pixel.addr, pixel.heat))
+			addr = pixel.addr
+			if not args.heatmap_abs_addr:
+				addr -= addr_range[0]
+			time = pixel.time
+			if not args.heatmap_abs_time:
+				time -= time_range[0]
+			pr_safe('%s\t%s\t%s' % (time, addr, pixel.heat))
 
 class RecordProfile:
 	target_id = None
@@ -415,6 +420,10 @@ def main():
 	parser.add_argument('--heatmap-space-range', metavar='<address>',
 			type=int, nargs=2,
 			help='start and end address of the heatmap')
+	parser.add_argument('--heatmap-abs-addr', action='store_true',
+			help='display in absolute addresses')
+	parser.add_argument('--heatmap-abs-time', action='store_true',
+			help='display in absolute time')
 
 	args = parser.parse_args()
 
