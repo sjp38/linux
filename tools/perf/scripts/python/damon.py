@@ -106,18 +106,6 @@ def trace_end():
 	elif args.report_type == 'heatmap':
 		print_heatmap(record)
 
-		if args.plot:
-			term = args.plot.split('.')[-1]
-			gnuplot_cmd = '''
-			set term %s;
-			set output '%s';
-			set key off;
-			set xlabel 'Time (ns)';
-			set ylabel 'Address (bytes)';
-			plot '%s' using 1:2:3 with image;''' % (term,
-					args.plot, plot_data_path)
-			plot(gnuplot_cmd)
-
 args = None
 record = None
 nr_read_regions = 0
@@ -255,6 +243,28 @@ def print_heatmap(record):
 			if not args.heatmap_abs_time:
 				time -= time_range[0]
 			pr_safe('%s\t%s\t%s' % (time, addr, pixel.heat))
+
+	if args.plot:
+		term = args.plot.split('.')[-1]
+		plot_xrange = [x for x in time_range]
+		if not args.heatmap_abs_time:
+			plot_xrange = [x - time_range[0] for x in plot_xrange]
+		plot_yrange = [y for y in addr_range]
+		if not args.heatmap_abs_addr:
+			plot_yrange = [y - addr_range[0] for y in plot_yrange]
+
+		gnuplot_cmd = '''
+		set term %s;
+		set output '%s';
+		set key off;
+		set xrange [%f:%f];
+		set yrange [%f:%f];
+		set xlabel 'Time (ns)';
+		set ylabel 'Address (bytes)';
+		plot '%s' using 1:2:3 with image;''' % (term, args.plot,
+				plot_xrange[0], plot_xrange[1],
+				plot_yrange[0], plot_yrange[1], plot_data_path)
+		plot(gnuplot_cmd)
 
 class RecordProfile:
 	target_id = None
