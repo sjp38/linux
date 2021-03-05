@@ -210,7 +210,7 @@ def print_record_profile(record):
 			continue
 		prof.time_end += (prof.time_end - prof.time_start) / (
 				prof.nr_snapshots - 1)
-		print(prof)
+		pr_safe(prof)
 
 def format_sz(number, sz_bytes):
 	if sz_bytes:
