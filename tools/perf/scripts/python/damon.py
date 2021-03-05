@@ -7,12 +7,23 @@ from __future__ import print_function
 import argparse
 import os
 import sys
+import time
 
 sys.path.append(os.environ['PERF_EXEC_PATH'] + \
 	'/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
 
 from perf_trace_context import *
 from Core import *
+
+# For intensive print() calls, 'IOError: [Errno 11] Resource temporarily
+# unavailable' triggered.  This function handles the error.
+def pr_safe(*args):
+	while True:
+		try:
+			print(*args)
+			return
+		except IOError:
+			time.sleep(0.1)
 
 class Region:
 	start = None
@@ -88,17 +99,17 @@ def format_sz(number, sz_bytes):
 	return '%d B' % number
 
 def print_record_raw(record, sz_bytes):
-	print('start_time:', record.start_time)
+	pr_safe('start_time:', record.start_time)
 	for snapshot in record.snapshots:
-		print('relative_time:',
+		pr_safe('relative_time:',
 				snapshot.monitored_time - record.start_time)
-		print('target_id:', snapshot.target_id)
-		print('nr_regions:', len(snapshot.regions))
+		pr_safe('target_id:', snapshot.target_id)
+		pr_safe('nr_regions:', len(snapshot.regions))
 		for region in snapshot.regions:
-			print('%x-%x (%s): %d' % (region.start, region.end,
+			pr_safe('%x-%x (%s): %d' % (region.start, region.end,
 				format_sz(region.end - region.start, sz_bytes),
 				region.nr_accesses))
-		print()
+		pr_safe()
 
 def main():
 	global args
