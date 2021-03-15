@@ -5835,7 +5835,7 @@ M:	David Airlie <airlied@linux.ie>
 M:	Daniel Vetter <daniel@ffwll.ch>
 L:	dri-devel@lists.freedesktop.org
 S:	Maintained
-B:	https://bugs.freedesktop.org/
+B:	https://gitlab.freedesktop.org/drm
 C:	irc://chat.freenode.net/dri-devel
 T:	git git://anongit.freedesktop.org/drm/drm
 F:	Documentation/devicetree/bindings/display/
@@ -10716,7 +10716,8 @@ F:	drivers/net/ethernet/marvell/mvpp2/
 
 MARVELL MWIFIEX WIRELESS DRIVER
 M:	Amitkumar Karwar <amitkarwar@gmail.com>
-M:	Ganapathi Bhat <ganapathi.bhat@nxp.com>
+M:	Ganapathi Bhat <ganapathi017@gmail.com>
+M:	Sharvari Harisangam <sharvari.harisangam@nxp.com>
 M:	Xinming Hu <huxinming820@gmail.com>
 L:	linux-wireless@vger.kernel.org
 S:	Maintained
