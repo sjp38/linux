@@ -209,7 +209,6 @@ Code  Seq#    Include File                                           Comments
              linux/fs.h,
 'X'   all    fs/ocfs2/ocfs_fs.h                                      conflict!
 'X'   01     linux/pktcdvd.h                                         conflict!
-'Y'   all    linux/cyclades.h
 'Z'   14-15  drivers/message/fusion/mptctl.h
 '['   00-3F  linux/usb/tmc.h                                         USB Test and Measurement Devices
                                                                      <mailto:gregkh@linuxfoundation.org>
@@ -347,6 +346,7 @@ Code  Seq#    Include File                                           Comments
 0xB5  00-0F  uapi/linux/rpmsg.h                                      <mailto:linux-remoteproc@vger.kernel.org>
 0xB6  all    linux/fpga-dfl.h
 0xB7  all    uapi/linux/remoteproc_cdev.h                            <mailto:linux-remoteproc@vger.kernel.org>
+0xB7  all    uapi/linux/nsfs.h                                       <mailto:Andrei Vagin <avagin@openvz.org>>
 0xC0  00-0F  linux/usb/iowarrior.h
 0xCA  00-0F  uapi/misc/cxl.h
 0xCA  10-2F  uapi/misc/ocxl.h

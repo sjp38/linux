@@ -73,6 +73,15 @@ if arg_contain -S "$@"; then
 		echo "%gs"
 		exit 0
 	fi
+
+	# For arch/powerpc/tools/gcc-check-mprofile-kernel.sh
+	if arg_contain -m64 "$@" && arg_contain -mlittle-endian "$@" &&
+		arg_contain -mprofile-kernel "$@"; then
+		if ! test -t 0 && ! grep -q notrace; then
+			echo "_mcount"
+		fi
+		exit 0
+	fi
 fi
 
 # To set GCC_PLUGINS
@@ -84,4 +93,9 @@ if arg_contain -print-file-name=plugin "$@"; then
 
 	echo $plugin_dir
 	exit 0
+fi
+
+# inverted return value
+if arg_contain -D__SIZEOF_INT128__=0 "$@"; then
+	exit 1
 fi

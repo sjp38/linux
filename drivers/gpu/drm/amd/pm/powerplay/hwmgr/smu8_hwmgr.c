@@ -1791,7 +1791,7 @@ static int smu8_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 		if (0 == result) {
 			activity_percent = activity_percent > 100 ? 100 : activity_percent;
 		} else {
-			activity_percent = 50;
+			return -EIO;
 		}
 		*((uint32_t *)value) = activity_percent;
 		return 0;
@@ -1805,7 +1805,7 @@ static int smu8_read_sensor(struct pp_hwmgr *hwmgr, int idx,
 		*((uint32_t *)value) = smu8_thermal_get_temperature(hwmgr);
 		return 0;
 	default:
-		return -EINVAL;
+		return -EOPNOTSUPP;
 	}
 }
 
