@@ -3339,21 +3339,12 @@ static int amdgpu_dm_backlight_get_brightness(struct backlight_device *bd)
 
 	amdgpu_dm_update_backlight_caps(dm);
 	caps = dm->backlight_caps;
-<<<<<<< HEAD
 
 	if (caps.aux_support) {
 		struct dc_link *link = (struct dc_link *)dm->backlight_link;
 		u32 avg, peak;
 		bool rc;
 
-=======
-
-	if (caps.aux_support) {
-		struct dc_link *link = (struct dc_link *)dm->backlight_link;
-		u32 avg, peak;
-		bool rc;
-
->>>>>>> linux-next/akpm-base
 		rc = dc_link_get_backlight_level_nits(link, &avg, &peak);
 		if (!rc)
 			return bd->props.brightness;
