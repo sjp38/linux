@@ -1894,7 +1894,7 @@ static void discard_slab(struct kmem_cache *s, struct page *page)
 static inline void
 __update_partial_free(struct kmem_cache_node *n, long delta)
 {
-	atomic_long_add(delta, &n->partial_free_objs);
+	this_cpu_add(*n->partial_free_objs, delta);
 }
 
 static inline void
@@ -2548,11 +2548,16 @@ static unsigned long partial_counter(struct kmem_cache_node *n,
 	unsigned long ret = 0;
 
 	if (item == PARTIAL_FREE) {
-		ret = atomic_long_read(&n->partial_free_objs);
+		ret = per_cpu_sum(*n->partial_free_objs);
+		if ((long)ret < 0)
+			ret = 0;
 	} else if (item == PARTIAL_TOTAL) {
 		ret = n->partial_total_objs;
 	} else if (item == PARTIAL_INUSE) {
-		ret = n->partial_total_objs - atomic_long_read(&n->partial_free_objs);
+		ret = per_cpu_sum(*n->partial_free_objs);
+		if ((long)ret < 0)
+			ret = 0;
+		ret = n->partial_total_objs - ret;
 		if ((long)ret < 0)
 			ret = 0;
 	}
@@ -3552,14 +3557,16 @@ static inline int calculate_order(unsigned int size)
 	return -ENOSYS;
 }
 
-static void
+static int
 init_kmem_cache_node(struct kmem_cache_node *n)
 {
 	n->nr_partial = 0;
 	spin_lock_init(&n->list_lock);
 	INIT_LIST_HEAD(&n->partial);
 #if defined(CONFIG_SLUB_DEBUG) || defined(CONFIG_SYSFS)
-	atomic_long_set(&n->partial_free_objs, 0);
+	n->partial_free_objs = alloc_percpu(unsigned long);
+	if (!n->partial_free_objs)
+		return -ENOMEM;
 	n->partial_total_objs = 0;
 #endif
 #ifdef CONFIG_SLUB_DEBUG
@@ -3567,6 +3574,8 @@ init_kmem_cache_node(struct kmem_cache_node *n)
 	atomic_long_set(&n->total_objects, 0);
 	INIT_LIST_HEAD(&n->full);
 #endif
+
+	return 0;
 }
 
 static inline int alloc_kmem_cache_cpus(struct kmem_cache *s)
@@ -3626,7 +3635,7 @@ static void early_kmem_cache_node_alloc(int node)
 	page->inuse = 1;
 	page->frozen = 0;
 	kmem_cache_node->node[node] = n;
-	init_kmem_cache_node(n);
+	BUG_ON(init_kmem_cache_node(n) < 0);
 	inc_slabs_node(kmem_cache_node, node, page->objects);
 
 	/*
@@ -3644,6 +3653,9 @@ static void free_kmem_cache_nodes(struct kmem_cache *s)
 
 	for_each_kmem_cache_node(s, node, n) {
 		s->node[node] = NULL;
+#if defined(CONFIG_SLUB_DEBUG) || defined(CONFIG_SYSFS)
+		free_percpu(n->partial_free_objs);
+#endif
 		kmem_cache_free(kmem_cache_node, n);
 	}
 }
@@ -3674,7 +3686,11 @@ static int init_kmem_cache_nodes(struct kmem_cache *s)
 			return 0;
 		}
 
-		init_kmem_cache_node(n);
+		if (init_kmem_cache_node(n) < 0) {
+			free_kmem_cache_nodes(s);
+			return 0;
+		}
+
 		s->node[node] = n;
 	}
 	return 1;
