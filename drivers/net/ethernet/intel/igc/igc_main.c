@@ -941,7 +941,7 @@ static void igc_tx_ctxtdesc(struct igc_ring *tx_ring,
 		struct igc_adapter *adapter = netdev_priv(tx_ring->netdev);
 		ktime_t txtime = first->skb->tstamp;
 
-		first->skb->tstamp = ktime_set(0, 0);
+		skb_txtime_consumed(first->skb);
 		context_desc->launch_time = igc_tx_launchtime(adapter,
 							      txtime);
 	} else {
@@ -3831,10 +3831,19 @@ static void igc_reset_task(struct work_struct *work)
 
 	adapter = container_of(work, struct igc_adapter, reset_task);
 
+	rtnl_lock();
+	/* If we're already down or resetting, just bail */
+	if (test_bit(__IGC_DOWN, &adapter->state) ||
+	    test_bit(__IGC_RESETTING, &adapter->state)) {
+		rtnl_unlock();
+		return;
+	}
+
 	igc_rings_dump(adapter);
 	igc_regs_dump(adapter);
 	netdev_err(adapter->netdev, "Reset adapter\n");
 	igc_reinit_locked(adapter);
+	rtnl_unlock();
 }
 
 /**

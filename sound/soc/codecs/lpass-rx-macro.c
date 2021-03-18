@@ -2038,7 +2038,7 @@ static int rx_macro_load_compander_coeff(struct snd_soc_component *component,
 {
 	u16 comp_coeff_lsb_reg, comp_coeff_msb_reg;
 	int i;
-	int hph_pwr_mode = HPH_LOHIFI;
+	int hph_pwr_mode;
 
 	if (!rx->comp_enabled[comp])
 		return 0;
@@ -2895,7 +2895,7 @@ static int rx_macro_enable_echo(struct snd_soc_dapm_widget *w,
 {
 	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
 	u16 val, ec_hq_reg;
-	int ec_tx;
+	int ec_tx = -1;
 
 	val = snd_soc_component_read(component,
 			CDC_RX_INP_MUX_RX_MIX_CFG4);
@@ -3585,7 +3585,6 @@ static const struct of_device_id rx_macro_dt_match[] = {
 static struct platform_driver rx_macro_driver = {
 	.driver = {
 		.name = "rx_macro",
-		.owner = THIS_MODULE,
 		.of_match_table = rx_macro_dt_match,
 		.suppress_bind_attrs = true,
 	},

@@ -24,7 +24,6 @@
 #include "ufs_bsg.h"
 #include "ufshcd-crypto.h"
 #include <asm/unaligned.h>
-#include <linux/blkdev.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/ufs.h>
@@ -667,23 +666,12 @@ int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
  */
 static inline u32 ufshcd_get_intr_mask(struct ufs_hba *hba)
 {
-	u32 intr_mask = 0;
+	if (hba->ufs_version == ufshci_version(1, 0))
+		return INTERRUPT_MASK_ALL_VER_10;
+	if (hba->ufs_version <= ufshci_version(2, 0))
+		return INTERRUPT_MASK_ALL_VER_11;
 
-	switch (hba->ufs_version) {
-	case UFSHCI_VERSION_10:
-		intr_mask = INTERRUPT_MASK_ALL_VER_10;
-		break;
-	case UFSHCI_VERSION_11:
-	case UFSHCI_VERSION_20:
-		intr_mask = INTERRUPT_MASK_ALL_VER_11;
-		break;
-	case UFSHCI_VERSION_21:
-	default:
-		intr_mask = INTERRUPT_MASK_ALL_VER_21;
-		break;
-	}
-
-	return intr_mask;
+	return INTERRUPT_MASK_ALL_VER_21;
 }
 
 /**
@@ -694,10 +682,22 @@ static inline u32 ufshcd_get_intr_mask(struct ufs_hba *hba)
  */
 static inline u32 ufshcd_get_ufs_version(struct ufs_hba *hba)
 {
-	if (hba->quirks & UFSHCD_QUIRK_BROKEN_UFS_HCI_VERSION)
-		return ufshcd_vops_get_ufs_hci_version(hba);
+	u32 ufshci_ver;
 
-	return ufshcd_readl(hba, REG_UFS_VERSION);
+	if (hba->quirks & UFSHCD_QUIRK_BROKEN_UFS_HCI_VERSION)
+		ufshci_ver = ufshcd_vops_get_ufs_hci_version(hba);
+	else
+		ufshci_ver = ufshcd_readl(hba, REG_UFS_VERSION);
+
+	/*
+	 * UFSHCI v1.x uses a different version scheme, in order
+	 * to allow the use of comparisons with the ufshci_version
+	 * function, we convert it to the same scheme as ufs 2.0+.
+	 */
+	if (ufshci_ver & 0x00010000)
+		return ufshci_version(1, ufshci_ver & 0x00000100);
+
+	return ufshci_ver;
 }
 
 /**
@@ -929,8 +929,7 @@ static inline bool ufshcd_is_hba_active(struct ufs_hba *hba)
 u32 ufshcd_get_local_unipro_ver(struct ufs_hba *hba)
 {
 	/* HCI version 1.0 and 1.1 supports UniPro 1.41 */
-	if ((hba->ufs_version == UFSHCI_VERSION_10) ||
-	    (hba->ufs_version == UFSHCI_VERSION_11))
+	if (hba->ufs_version <= ufshci_version(1, 1))
 		return UFS_UNIPRO_VER_1_41;
 	else
 		return UFS_UNIPRO_VER_1_6;
@@ -2333,7 +2332,7 @@ static void ufshcd_enable_intr(struct ufs_hba *hba, u32 intrs)
 {
 	u32 set = ufshcd_readl(hba, REG_INTERRUPT_ENABLE);
 
-	if (hba->ufs_version == UFSHCI_VERSION_10) {
+	if (hba->ufs_version == ufshci_version(1, 0)) {
 		u32 rw;
 		rw = set & INTERRUPT_MASK_RW_VER_10;
 		set = rw | ((set ^ intrs) & intrs);
@@ -2353,7 +2352,7 @@ static void ufshcd_disable_intr(struct ufs_hba *hba, u32 intrs)
 {
 	u32 set = ufshcd_readl(hba, REG_INTERRUPT_ENABLE);
 
-	if (hba->ufs_version == UFSHCI_VERSION_10) {
+	if (hba->ufs_version == ufshci_version(1, 0)) {
 		u32 rw;
 		rw = (set & INTERRUPT_MASK_RW_VER_10) &
 			~(intrs & INTERRUPT_MASK_RW_VER_10);
@@ -2516,8 +2515,7 @@ static int ufshcd_compose_devman_upiu(struct ufs_hba *hba,
 	u8 upiu_flags;
 	int ret = 0;
 
-	if ((hba->ufs_version == UFSHCI_VERSION_10) ||
-	    (hba->ufs_version == UFSHCI_VERSION_11))
+	if (hba->ufs_version <= ufshci_version(1, 1))
 		lrbp->command_type = UTP_CMD_TYPE_DEV_MANAGE;
 	else
 		lrbp->command_type = UTP_CMD_TYPE_UFS_STORAGE;
@@ -2544,8 +2542,7 @@ static int ufshcd_comp_scsi_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 	u8 upiu_flags;
 	int ret = 0;
 
-	if ((hba->ufs_version == UFSHCI_VERSION_10) ||
-	    (hba->ufs_version == UFSHCI_VERSION_11))
+	if (hba->ufs_version <= ufshci_version(1, 1))
 		lrbp->command_type = UTP_CMD_TYPE_SCSI;
 	else
 		lrbp->command_type = UTP_CMD_TYPE_UFS_STORAGE;
@@ -5161,6 +5158,46 @@ static irqreturn_t ufshcd_transfer_req_compl(struct ufs_hba *hba)
 	}
 }
 
+int __ufshcd_write_ee_control(struct ufs_hba *hba, u32 ee_ctrl_mask)
+{
+	return ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_WRITE_ATTR,
+				       QUERY_ATTR_IDN_EE_CONTROL, 0, 0,
+				       &ee_ctrl_mask);
+}
+
+int ufshcd_write_ee_control(struct ufs_hba *hba)
+{
+	int err;
+
+	mutex_lock(&hba->ee_ctrl_mutex);
+	err = __ufshcd_write_ee_control(hba, hba->ee_ctrl_mask);
+	mutex_unlock(&hba->ee_ctrl_mutex);
+	if (err)
+		dev_err(hba->dev, "%s: failed to write ee control %d\n",
+			__func__, err);
+	return err;
+}
+
+int ufshcd_update_ee_control(struct ufs_hba *hba, u16 *mask, u16 *other_mask,
+			     u16 set, u16 clr)
+{
+	u16 new_mask, ee_ctrl_mask;
+	int err = 0;
+
+	mutex_lock(&hba->ee_ctrl_mutex);
+	new_mask = (*mask & ~clr) | set;
+	ee_ctrl_mask = new_mask | *other_mask;
+	if (ee_ctrl_mask != hba->ee_ctrl_mask)
+		err = __ufshcd_write_ee_control(hba, ee_ctrl_mask);
+	/* Still need to update 'mask' even if 'ee_ctrl_mask' was unchanged */
+	if (!err) {
+		hba->ee_ctrl_mask = ee_ctrl_mask;
+		*mask = new_mask;
+	}
+	mutex_unlock(&hba->ee_ctrl_mutex);
+	return err;
+}
+
 /**
  * ufshcd_disable_ee - disable exception event
  * @hba: per-adapter instance
@@ -5171,22 +5208,9 @@ static irqreturn_t ufshcd_transfer_req_compl(struct ufs_hba *hba)
  *
  * Returns zero on success, non-zero error value on failure.
  */
-static int ufshcd_disable_ee(struct ufs_hba *hba, u16 mask)
+static inline int ufshcd_disable_ee(struct ufs_hba *hba, u16 mask)
 {
-	int err = 0;
-	u32 val;
-
-	if (!(hba->ee_ctrl_mask & mask))
-		goto out;
-
-	val = hba->ee_ctrl_mask & ~mask;
-	val &= MASK_EE_STATUS;
-	err = ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_WRITE_ATTR,
-			QUERY_ATTR_IDN_EE_CONTROL, 0, 0, &val);
-	if (!err)
-		hba->ee_ctrl_mask &= ~mask;
-out:
-	return err;
+	return ufshcd_update_ee_drv_mask(hba, 0, mask);
 }
 
 /**
@@ -5199,22 +5223,9 @@ out:
  *
  * Returns zero on success, non-zero error value on failure.
  */
-static int ufshcd_enable_ee(struct ufs_hba *hba, u16 mask)
+static inline int ufshcd_enable_ee(struct ufs_hba *hba, u16 mask)
 {
-	int err = 0;
-	u32 val;
-
-	if (hba->ee_ctrl_mask & mask)
-		goto out;
-
-	val = hba->ee_ctrl_mask | mask;
-	val &= MASK_EE_STATUS;
-	err = ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_WRITE_ATTR,
-			QUERY_ATTR_IDN_EE_CONTROL, 0, 0, &val);
-	if (!err)
-		hba->ee_ctrl_mask |= mask;
-out:
-	return err;
+	return ufshcd_update_ee_drv_mask(hba, mask, 0);
 }
 
 /**
@@ -5617,11 +5628,12 @@ static void ufshcd_exception_event_handler(struct work_struct *work)
 		goto out;
 	}
 
-	status &= hba->ee_ctrl_mask;
+	trace_ufshcd_exception_event(dev_name(hba->dev), status);
 
-	if (status & MASK_EE_URGENT_BKOPS)
+	if (status & hba->ee_drv_mask & MASK_EE_URGENT_BKOPS)
 		ufshcd_bkops_exception_event_handler(hba);
 
+	ufs_debugfs_exception_event(hba, status);
 out:
 	ufshcd_scsi_unblock_requests(hba);
 	/*
@@ -6563,15 +6575,10 @@ static int ufshcd_issue_devman_upiu_cmd(struct ufs_hba *hba,
 	ufshcd_prepare_lrbp_crypto(NULL, lrbp);
 	hba->dev_cmd.type = cmd_type;
 
-	switch (hba->ufs_version) {
-	case UFSHCI_VERSION_10:
-	case UFSHCI_VERSION_11:
+	if (hba->ufs_version <= ufshci_version(1, 1))
 		lrbp->command_type = UTP_CMD_TYPE_DEV_MANAGE;
-		break;
-	default:
+	else
 		lrbp->command_type = UTP_CMD_TYPE_UFS_STORAGE;
-		break;
-	}
 
 	/* update the task tag in the request upiu */
 	req_upiu->header.dword_0 |= cpu_to_be32(tag);
@@ -7131,7 +7138,7 @@ static u32 ufshcd_get_max_icc_level(int sup_curr_uA, u32 start_scan, char *buff)
 }
 
 /**
- * ufshcd_calc_icc_level - calculate the max ICC level
+ * ufshcd_find_max_sup_active_icc_level - calculate the max ICC level
  * In case regulators are not initialized we'll return 0
  * @hba: per-adapter instance
  * @desc_buf: power descriptor buffer to extract ICC levels from.
@@ -7925,6 +7932,8 @@ static int ufshcd_probe_hba(struct ufs_hba *hba, bool async)
 	ufshcd_set_active_icc_lvl(hba);
 
 	ufshcd_wb_config(hba);
+	if (hba->ee_usr_mask)
+		ufshcd_write_ee_control(hba);
 	/* Enable Auto-Hibernate if configured */
 	ufshcd_auto_hibern8_enable(hba);
 
@@ -8922,6 +8931,9 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 		 */
 		ufshcd_urgent_bkops(hba);
 
+	if (hba->ee_usr_mask)
+		ufshcd_write_ee_control(hba);
+
 	hba->clk_gating.is_suspended = false;
 
 	if (ufshcd_is_clkscaling_supported(hba))
@@ -9283,13 +9295,6 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	/* Get UFS version supported by the controller */
 	hba->ufs_version = ufshcd_get_ufs_version(hba);
 
-	if ((hba->ufs_version != UFSHCI_VERSION_10) &&
-	    (hba->ufs_version != UFSHCI_VERSION_11) &&
-	    (hba->ufs_version != UFSHCI_VERSION_20) &&
-	    (hba->ufs_version != UFSHCI_VERSION_21))
-		dev_err(hba->dev, "invalid UFS version 0x%x\n",
-			hba->ufs_version);
-
 	/* Get Interrupt bit mask per version */
 	hba->intr_mask = ufshcd_get_intr_mask(hba);
 
@@ -9339,6 +9344,9 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 
 	/* Initialize mutex for device management commands */
 	mutex_init(&hba->dev_cmd.lock);
+
+	/* Initialize mutex for exception event control */
+	mutex_init(&hba->ee_ctrl_mutex);
 
 	init_rwsem(&hba->clk_scaling_lock);
 

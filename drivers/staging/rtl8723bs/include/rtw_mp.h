@@ -15,7 +15,7 @@ struct mp_xmit_frame {
 
 	struct pkt_attrib attrib;
 
-	_pkt *pkt;
+	struct sk_buff *pkt;
 
 	int frame_tag;
 
@@ -30,8 +30,6 @@ struct mp_wiparam {
 	u32 io_offset;
 	u32 io_value;
 };
-
-typedef void(*wi_act_func)(void *padapter);
 
 struct mp_tx {
 	u8 stop;
@@ -51,14 +49,14 @@ struct mp_tx {
 #define MP_MAX_LINES_BYTES	256
 
 typedef void (*MPT_WORK_ITEM_HANDLER)(void *Adapter);
-typedef struct _MPT_CONTEXT {
+struct MPT_CONTEXT {
 	/*  Indicate if we have started Mass Production Test. */
 	bool			bMassProdTest;
 
 	/*  Indicate if the driver is unloading or unloaded. */
 	bool			bMptDrvUnload;
 
-	_timer			MPh2c_timeout_timer;
+	struct timer_list			MPh2c_timeout_timer;
 /*  Event used to sync H2c for BT control */
 
 	bool		MptH2cRspEvent;
@@ -150,7 +148,7 @@ typedef struct _MPT_CONTEXT {
 	u32 		mptOutLen;
     u8          mptOutBuf[100];
 
-} MPT_CONTEXT, *PMPT_CONTEXT;
+};
 /* endif */
 
 /* E-Fuse */
@@ -191,9 +189,6 @@ enum {
 	CTA_TEST,
 	MP_DISABLE_BT_COEXIST,
 	MP_PwrCtlDM,
-#ifdef CONFIG_WOWLAN
-	MP_WOW_ENABLE,
-#endif
 #ifdef CONFIG_AP_WOWLAN
 	MP_AP_WOW_ENABLE,
 #endif
@@ -262,16 +257,16 @@ struct mp_priv {
 	bool bSetRxBssid;
 	bool bTxBufCkFail;
 
-	MPT_CONTEXT MptCtx;
+	struct MPT_CONTEXT MptCtx;
 
 	u8 *TXradomBuffer;
 };
 
-typedef struct _IOCMD_STRUCT_ {
+struct IOCMD_STRUCT {
 	u8 cmdclass;
 	u16 value;
 	u8 index;
-} IOCMD_STRUCT;
+};
 
 struct rf_reg_param {
 	u32 path;

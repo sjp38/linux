@@ -674,6 +674,26 @@ unlock:
 	return cpu;
 }
 
+static void wake_idle_assert_possible(void)
+{
+#ifdef CONFIG_SCHED_DEBUG
+	/* Timers are re-evaluated after idle IRQs */
+	if (in_hardirq())
+		return;
+	/*
+	 * Same as hardirqs, assuming they are executing
+	 * on IRQ tail. Ksoftirqd shouldn't reach here
+	 * as the timer base wouldn't be idle. And inline
+	 * softirq processing after a call to local_bh_enable()
+	 * within idle loop sound too fun to be considered here.
+	 */
+	if (in_serving_softirq())
+		return;
+
+	WARN_ON_ONCE("Late timer enqueue may be ignored\n");
+#endif
+}
+
 /*
  * When add_timer_on() enqueues a timer into the timer wheel of an
  * idle CPU then this timer might expire before the next timer event
@@ -688,8 +708,10 @@ static void wake_up_idle_cpu(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 
-	if (cpu == smp_processor_id())
+	if (cpu == smp_processor_id()) {
+		wake_idle_assert_possible();
 		return;
+	}
 
 	if (set_nr_and_not_polling(rq->idle))
 		smp_send_reschedule(cpu);
@@ -737,7 +759,7 @@ static void nohz_csd_func(void *info)
 	/*
 	 * Release the rq::nohz_csd.
 	 */
-	flags = atomic_fetch_andnot(NOHZ_KICK_MASK, nohz_flags(cpu));
+	flags = atomic_fetch_andnot(NOHZ_KICK_MASK | NOHZ_NEWILB_KICK, nohz_flags(cpu));
 	WARN_ON(!(flags & NOHZ_KICK_MASK));
 
 	rq->idle_balance = idle_cpu(cpu);
@@ -1927,6 +1949,12 @@ static int migration_cpu_stop(void *data)
 	rq_lock(rq, &rf);
 
 	/*
+	 * If we were passed a pending, then ->stop_pending was set, thus
+	 * p->migration_pending must have remained stable.
+	 */
+	WARN_ON_ONCE(pending && pending != p->migration_pending);
+
+	/*
 	 * If task_rq(p) != rq, it cannot be migrated here, because we're
 	 * holding rq->lock, if p->on_rq == 0 it cannot get enqueued because
 	 * we're holding p->pi_lock.
@@ -1936,8 +1964,7 @@ static int migration_cpu_stop(void *data)
 			goto out;
 
 		if (pending) {
-			if (p->migration_pending == pending)
-				p->migration_pending = NULL;
+			p->migration_pending = NULL;
 			complete = true;
 		}
 
@@ -1976,8 +2003,7 @@ static int migration_cpu_stop(void *data)
 		 * somewhere allowed, we're done.
 		 */
 		if (cpumask_test_cpu(task_cpu(p), p->cpus_ptr)) {
-			if (p->migration_pending == pending)
-				p->migration_pending = NULL;
+			p->migration_pending = NULL;
 			complete = true;
 			goto out;
 		}
@@ -2165,16 +2191,21 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
  *
  * (1) In the cases covered above. There is one more where the completion is
  * signaled within affine_move_task() itself: when a subsequent affinity request
- * cancels the need for an active migration. Consider:
+ * occurs after the stopper bailed out due to the targeted task still being
+ * Migrate-Disable. Consider:
  *
  *     Initial conditions: P0->cpus_mask = [0, 1]
  *
- *     P0@CPU0            P1                             P2
- *
- *     migrate_disable();
- *     <preempted>
+ *     CPU0		  P1				P2
+ *     <P0>
+ *       migrate_disable();
+ *       <preempted>
  *                        set_cpus_allowed_ptr(P0, [1]);
  *                          <blocks>
+ *     <migration/0>
+ *       migration_cpu_stop()
+ *         is_migration_disabled()
+ *           <bails>
  *                                                       set_cpus_allowed_ptr(P0, [0, 1]);
  *                                                         <signal completion>
  *                          <awakes>
@@ -4244,8 +4275,6 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 asmlinkage __visible void schedule_tail(struct task_struct *prev)
 	__releases(rq->lock)
 {
-	struct rq *rq;
-
 	/*
 	 * New tasks start with FORK_PREEMPT_COUNT, see there and
 	 * finish_task_switch() for details.
@@ -4255,7 +4284,7 @@ asmlinkage __visible void schedule_tail(struct task_struct *prev)
 	 * PREEMPT_COUNT kernels).
 	 */
 
-	rq = finish_task_switch(prev);
+	finish_task_switch(prev);
 	preempt_enable();
 
 	if (current->set_child_tid)
@@ -4542,7 +4571,6 @@ void scheduler_tick(void)
 	update_thermal_load_avg(rq_clock_thermal(rq), rq, thermal_pressure);
 	curr->sched_class->task_tick(rq, curr, 0);
 	calc_global_load_tick(rq);
-	psi_task_tick(rq);
 
 	rq_unlock(rq, &rf);
 
@@ -6384,6 +6412,7 @@ int sched_setattr_nocheck(struct task_struct *p, const struct sched_attr *attr)
 {
 	return __sched_setscheduler(p, attr, false, true);
 }
+EXPORT_SYMBOL_GPL(sched_setattr_nocheck);
 
 /**
  * sched_setscheduler_nocheck - change the scheduling policy and/or RT priority of a thread from kernelspace.

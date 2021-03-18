@@ -85,7 +85,7 @@ static void update_BCNTIM(struct adapter *padapter)
 
 			premainder_ie = p + tim_ielen;
 
-			tim_ie_offset = (sint)(p - pie);
+			tim_ie_offset = (signed int)(p - pie);
 
 			remainder_ielen = pnetwork_mlmeext->IELength - tim_ie_offset - tim_ielen;
 
@@ -270,10 +270,6 @@ void expire_timeout_chk(struct adapter *padapter)
 	while (phead != plist) {
 		psta = container_of(plist, struct sta_info, asoc_list);
 		plist = get_next(plist);
-#ifdef CONFIG_AUTO_AP_MODE
-		if (psta->isrc)
-			continue;
-#endif
 		if (chk_sta_is_alive(psta) || !psta->expire_to) {
 			psta->expire_to = pstapriv->expire_to;
 			psta->keep_alive_trycnt = 0;
@@ -719,11 +715,11 @@ static void update_hw_ht_param(struct adapter *padapter)
 
 	DBG_871X("%s\n", __func__);
 
-	/* handle A-MPDU parameter field */
-	/*
-		AMPDU_para [1:0]:Max AMPDU Len => 0:8k , 1:16k, 2:32k, 3:64k
-		AMPDU_para [4:2]:Min MPDU Start Spacing
-	*/
+	/* handle A-MPDU parameter field
+	 *
+	 *	AMPDU_para [1:0]:Max AMPDU Len => 0:8k , 1:16k, 2:32k, 3:64k
+	 *	AMPDU_para [4:2]:Min MPDU Start Spacing
+	 */
 	max_AMPDU_len = pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x03;
 
 	min_MPDU_spacing = (
@@ -1815,17 +1811,17 @@ void update_beacon(struct adapter *padapter, u8 ie_id, u8 *oui, u8 tx)
 }
 
 /*
-op_mode
-Set to 0 (HT pure) under the following conditions
-	- all STAs in the BSS are 20/40 MHz HT in 20/40 MHz BSS or
-	- all STAs in the BSS are 20 MHz HT in 20 MHz BSS
-Set to 1 (HT non-member protection) if there may be non-HT STAs
-	in both the primary and the secondary channel
-Set to 2 if only HT STAs are associated in BSS,
-	however and at least one 20 MHz HT STA is associated
-Set to 3 (HT mixed mode) when one or more non-HT STAs are associated
-	(currently non-GF HT station is considered as non-HT STA also)
-*/
+ * op_mode
+ * Set to 0 (HT pure) under the following conditions
+ *	  - all STAs in the BSS are 20/40 MHz HT in 20/40 MHz BSS or
+ *	  - all STAs in the BSS are 20 MHz HT in 20 MHz BSS
+ * Set to 1 (HT non-member protection) if there may be non-HT STAs
+ *	  in both the primary and the secondary channel
+ * Set to 2 if only HT STAs are associated in BSS,
+ *	  however and at least one 20 MHz HT STA is associated
+ * Set to 3 (HT mixed mode) when one or more non-HT STAs are associated
+ *	  (currently non-GF HT station is considered as non-HT STA also)
+ */
 static int rtw_ht_operation_update(struct adapter *padapter)
 {
 	u16 cur_op_mode, new_op_mode;
@@ -2009,8 +2005,8 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 	if (psta->flags & WLAN_STA_HT) {
 		u16 ht_capab = le16_to_cpu(psta->htpriv.ht_cap.cap_info);
 
-		DBG_871X("HT: STA %pM HT Capabilities "
-			   "Info: 0x%04x\n", MAC_ARG(psta->hwaddr), ht_capab);
+		DBG_871X("HT: STA %pM HT Capabilities Info: 0x%04x\n",
+			 MAC_ARG(psta->hwaddr), ht_capab);
 
 		if (psta->no_ht_set) {
 			psta->no_ht_set = 0;
@@ -2022,10 +2018,9 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 				psta->no_ht_gf_set = 1;
 				pmlmepriv->num_sta_ht_no_gf++;
 			}
-			DBG_871X("%s STA %pM - no "
-				   "greenfield, num of non-gf stations %d\n",
-				   __func__, MAC_ARG(psta->hwaddr),
-				   pmlmepriv->num_sta_ht_no_gf);
+			DBG_871X("%s STA %pM - no greenfield, num of non-gf stations %d\n",
+				 __func__, MAC_ARG(psta->hwaddr),
+				 pmlmepriv->num_sta_ht_no_gf);
 		}
 
 		if ((ht_capab & IEEE80211_HT_CAP_SUP_WIDTH) == 0) {
@@ -2033,10 +2028,9 @@ void bss_cap_update_on_sta_join(struct adapter *padapter, struct sta_info *psta)
 				psta->ht_20mhz_set = 1;
 				pmlmepriv->num_sta_ht_20mhz++;
 			}
-			DBG_871X("%s STA %pM - 20 MHz HT, "
-				   "num of 20MHz HT STAs %d\n",
-				   __func__, MAC_ARG(psta->hwaddr),
-				   pmlmepriv->num_sta_ht_20mhz);
+			DBG_871X("%s STA %pM - 20 MHz HT, num of 20MHz HT STAs %d\n",
+				 __func__, MAC_ARG(psta->hwaddr),
+				 pmlmepriv->num_sta_ht_20mhz);
 		}
 
 	} else {

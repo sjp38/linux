@@ -30,16 +30,16 @@
 /*  structure and define */
 /*  */
 
-typedef struct _Phy_Rx_AGC_Info {
+struct PHY_RX_AGC_INFO_T {
 	#if (ODM_ENDIAN_TYPE == ODM_ENDIAN_LITTLE)
 		u8 gain:7, trsw:1;
 	#else
 		u8 trsw:1, gain:7;
 	#endif
-} PHY_RX_AGC_INFO_T, *pPHY_RX_AGC_INFO_T;
+};
 
-typedef struct _Phy_Status_Rpt_8192cd {
-	PHY_RX_AGC_INFO_T path_agc[2];
+struct PHY_STATUS_RPT_8192CD_T {
+	struct PHY_RX_AGC_INFO_T path_agc[2];
 	u8 ch_corr[2];
 	u8 cck_sig_qual_ofdm_pwdb_all;
 	u8 cck_agc_rpt_ofdm_cfosho_a;
@@ -74,10 +74,10 @@ typedef struct _Phy_Status_Rpt_8192cd {
 	u8 sgi_en:1;
 	u8 antsel_rx_keep_2:1;	/* ex_intf_flg:1; */
 #endif
-} PHY_STATUS_RPT_8192CD_T, *PPHY_STATUS_RPT_8192CD_T;
+};
 
 
-typedef struct _Phy_Status_Rpt_8812 {
+struct PHY_STATUS_RPT_8812_T {
 	/* 2012.05.24 LukeLee: This structure should take big/little endian in consideration later..... */
 
 	/* DWORD 0 */
@@ -118,35 +118,35 @@ typedef struct _Phy_Status_Rpt_8812 {
 	u8 antidx_anta:3;
 	u8 antidx_antb:3;
 	u8 resvd_1:2;
-} PHY_STATUS_RPT_8812_T, *PPHY_STATUS_RPT_8812_T;
+};
 
 
 void ODM_PhyStatusQuery(
-	PDM_ODM_T pDM_Odm,
+	struct DM_ODM_T *pDM_Odm,
 	struct odm_phy_info *pPhyInfo,
 	u8 *pPhyStatus,
 	struct odm_packet_info *pPktinfo
 );
 
-HAL_STATUS ODM_ConfigRFWithTxPwrTrackHeaderFile(PDM_ODM_T pDM_Odm);
+enum HAL_STATUS ODM_ConfigRFWithTxPwrTrackHeaderFile(struct DM_ODM_T *pDM_Odm);
 
-HAL_STATUS ODM_ConfigRFWithHeaderFile(
-	PDM_ODM_T pDM_Odm,
-	ODM_RF_Config_Type ConfigType,
-	ODM_RF_RADIO_PATH_E eRFPath
+enum HAL_STATUS ODM_ConfigRFWithHeaderFile(
+	struct DM_ODM_T *pDM_Odm,
+	enum ODM_RF_Config_Type ConfigType,
+	enum ODM_RF_RADIO_PATH_E eRFPath
 );
 
-HAL_STATUS ODM_ConfigBBWithHeaderFile(
-	PDM_ODM_T pDM_Odm, ODM_BB_Config_Type ConfigType
+enum HAL_STATUS ODM_ConfigBBWithHeaderFile(
+	struct DM_ODM_T *pDM_Odm, enum ODM_BB_Config_Type ConfigType
 );
 
-HAL_STATUS ODM_ConfigFWWithHeaderFile(
-	PDM_ODM_T pDM_Odm,
-	ODM_FW_Config_Type ConfigType,
+enum HAL_STATUS ODM_ConfigFWWithHeaderFile(
+	struct DM_ODM_T *pDM_Odm,
+	enum ODM_FW_Config_Type ConfigType,
 	u8 *pFirmware,
 	u32 *pSize
 );
 
-s32 odm_SignalScaleMapping(PDM_ODM_T pDM_Odm, s32 CurrSig);
+s32 odm_SignalScaleMapping(struct DM_ODM_T *pDM_Odm, s32 CurrSig);
 
 #endif

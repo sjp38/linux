@@ -172,15 +172,16 @@ int asoc_simple_parse_clk(struct device *dev,
 	 *  or device's module clock.
 	 */
 	clk = devm_get_clk_from_child(dev, node, NULL);
-	if (IS_ERR(clk))
-		clk = devm_get_clk_from_child(dev, dlc->of_node, NULL);
-
 	if (!IS_ERR(clk)) {
-		simple_dai->clk = clk;
 		simple_dai->sysclk = clk_get_rate(clk);
-	} else if (!of_property_read_u32(node, "system-clock-frequency",
-					 &val)) {
+
+		simple_dai->clk = clk;
+	} else if (!of_property_read_u32(node, "system-clock-frequency", &val)) {
 		simple_dai->sysclk = val;
+	} else {
+		clk = devm_get_clk_from_child(dev, dlc->of_node, NULL);
+		if (!IS_ERR(clk))
+			simple_dai->sysclk = clk_get_rate(clk);
 	}
 
 	if (of_property_read_bool(node, "system-clock-direction-out"))
@@ -254,7 +255,7 @@ int asoc_simple_hw_params(struct snd_pcm_substream *substream,
 	struct simple_dai_props *dai_props =
 		simple_priv_to_props(priv, rtd->num);
 	unsigned int mclk, mclk_fs = 0;
-	int ret = 0;
+	int ret;
 
 	if (dai_props->mclk_fs)
 		mclk_fs = dai_props->mclk_fs;

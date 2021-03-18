@@ -260,34 +260,16 @@ static struct dst_ops ip6_dst_ops_template = {
 	.confirm_neigh		=	ip6_confirm_neigh,
 };
 
-static unsigned int ip6_blackhole_mtu(const struct dst_entry *dst)
-{
-	unsigned int mtu = dst_metric_raw(dst, RTAX_MTU);
-
-	return mtu ? : dst->dev->mtu;
-}
-
-static void ip6_rt_blackhole_update_pmtu(struct dst_entry *dst, struct sock *sk,
-					 struct sk_buff *skb, u32 mtu,
-					 bool confirm_neigh)
-{
-}
-
-static void ip6_rt_blackhole_redirect(struct dst_entry *dst, struct sock *sk,
-				      struct sk_buff *skb)
-{
-}
-
 static struct dst_ops ip6_dst_blackhole_ops = {
-	.family			=	AF_INET6,
-	.destroy		=	ip6_dst_destroy,
-	.check			=	ip6_dst_check,
-	.mtu			=	ip6_blackhole_mtu,
-	.default_advmss		=	ip6_default_advmss,
-	.update_pmtu		=	ip6_rt_blackhole_update_pmtu,
-	.redirect		=	ip6_rt_blackhole_redirect,
-	.cow_metrics		=	dst_cow_metrics_generic,
-	.neigh_lookup		=	ip6_dst_neigh_lookup,
+	.family			= AF_INET6,
+	.default_advmss		= ip6_default_advmss,
+	.neigh_lookup		= ip6_dst_neigh_lookup,
+	.check			= ip6_dst_check,
+	.destroy		= ip6_dst_destroy,
+	.cow_metrics		= dst_cow_metrics_generic,
+	.update_pmtu		= dst_blackhole_update_pmtu,
+	.redirect		= dst_blackhole_redirect,
+	.mtu			= dst_blackhole_mtu,
 };
 
 static const u32 ip6_template_metrics[RTAX_MAX] = {
@@ -2378,7 +2360,7 @@ u32 rt6_multipath_hash(const struct net *net, const struct flowi6 *fl6,
 
 			memset(&hash_keys, 0, sizeof(hash_keys));
 
-                        if (!flkeys) {
+			if (!flkeys) {
 				skb_flow_dissect_flow_keys(skb, &keys, flag);
 				flkeys = &keys;
 			}
@@ -2518,20 +2500,20 @@ struct dst_entry *ip6_route_output_flags(struct net *net,
 					 struct flowi6 *fl6,
 					 int flags)
 {
-        struct dst_entry *dst;
-        struct rt6_info *rt6;
+	struct dst_entry *dst;
+	struct rt6_info *rt6;
 
-        rcu_read_lock();
-        dst = ip6_route_output_flags_noref(net, sk, fl6, flags);
-        rt6 = (struct rt6_info *)dst;
-        /* For dst cached in uncached_list, refcnt is already taken. */
-        if (list_empty(&rt6->rt6i_uncached) && !dst_hold_safe(dst)) {
-                dst = &net->ipv6.ip6_null_entry->dst;
-                dst_hold(dst);
-        }
-        rcu_read_unlock();
+	rcu_read_lock();
+	dst = ip6_route_output_flags_noref(net, sk, fl6, flags);
+	rt6 = (struct rt6_info *)dst;
+	/* For dst cached in uncached_list, refcnt is already taken. */
+	if (list_empty(&rt6->rt6i_uncached) && !dst_hold_safe(dst)) {
+		dst = &net->ipv6.ip6_null_entry->dst;
+		dst_hold(dst);
+	}
+	rcu_read_unlock();
 
-        return dst;
+	return dst;
 }
 EXPORT_SYMBOL_GPL(ip6_route_output_flags);
 

@@ -372,26 +372,31 @@ static struct tipc_node *tipc_node_find_by_id(struct net *net, u8 *id)
 }
 
 static void tipc_node_read_lock(struct tipc_node *n)
+	__acquires(n->lock)
 {
 	read_lock_bh(&n->lock);
 }
 
 static void tipc_node_read_unlock(struct tipc_node *n)
+	__releases(n->lock)
 {
 	read_unlock_bh(&n->lock);
 }
 
 static void tipc_node_write_lock(struct tipc_node *n)
+	__acquires(n->lock)
 {
 	write_lock_bh(&n->lock);
 }
 
 static void tipc_node_write_unlock_fast(struct tipc_node *n)
+	__releases(n->lock)
 {
 	write_unlock_bh(&n->lock);
 }
 
 static void tipc_node_write_unlock(struct tipc_node *n)
+	__releases(n->lock)
 {
 	struct net *net = n->net;
 	u32 addr = 0;
@@ -2895,17 +2900,22 @@ int tipc_nl_node_dump_monitor_peer(struct sk_buff *skb,
 
 #ifdef CONFIG_TIPC_CRYPTO
 static int tipc_nl_retrieve_key(struct nlattr **attrs,
-				struct tipc_aead_key **key)
+				struct tipc_aead_key **pkey)
 {
 	struct nlattr *attr = attrs[TIPC_NLA_NODE_KEY];
+	struct tipc_aead_key *key;
 
 	if (!attr)
 		return -ENODATA;
 
-	*key = (struct tipc_aead_key *)nla_data(attr);
-	if (nla_len(attr) < tipc_aead_key_size(*key))
+	if (nla_len(attr) < sizeof(*key))
+		return -EINVAL;
+	key = (struct tipc_aead_key *)nla_data(attr);
+	if (key->keylen > TIPC_AEAD_KEYLEN_MAX ||
+	    nla_len(attr) < tipc_aead_key_size(key))
 		return -EINVAL;
 
+	*pkey = key;
 	return 0;
 }
 

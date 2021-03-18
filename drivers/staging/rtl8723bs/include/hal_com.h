@@ -165,10 +165,10 @@ enum{
 	UP_LINK,
 	DOWN_LINK,
 };
-typedef enum _RT_MEDIA_STATUS {
+enum RT_MEDIA_STATUS {
 	RT_MEDIA_DISCONNECT = 0,
 	RT_MEDIA_CONNECT       = 1
-} RT_MEDIA_STATUS;
+};
 
 #define MAX_DLFW_PAGE_SIZE			4096	/*  @ page : 4k bytes */
 enum FIRMWARE_SOURCE {
@@ -193,7 +193,7 @@ enum FIRMWARE_SOURCE {
 u8 rtw_hal_data_init(struct adapter *padapter);
 void rtw_hal_data_deinit(struct adapter *padapter);
 
-void dump_chip_info(HAL_VERSION	ChipVersion);
+void dump_chip_info(struct HAL_VERSION	ChipVersion);
 
 u8 /* return the final channel plan decision */
 hal_com_config_channel_plan(
@@ -215,9 +215,9 @@ u8 MRateToHwRate(u8 rate);
 u8 HwRateToMRate(u8 rate);
 
 void HalSetBrateCfg(
-	struct adapter *	Adapter,
-	u8 	*mBratesOS,
-	u16 		*pBrateCfg);
+	struct adapter *Adapter,
+	u8 *mBratesOS,
+	u16	*pBrateCfg);
 
 bool
 Hal_MappingOutPipe(
@@ -227,7 +227,7 @@ u8 NumOutPipe
 
 void hal_init_macaddr(struct adapter *adapter);
 
-void rtw_init_hal_com_default_value(struct adapter * Adapter);
+void rtw_init_hal_com_default_value(struct adapter *Adapter);
 
 void c2h_evt_clear(struct adapter *adapter);
 s32 c2h_evt_read_88xx(struct adapter *adapter, u8 *buf);
@@ -279,21 +279,11 @@ void rtw_bb_rf_gain_offset(struct adapter *padapter);
 
 void GetHalODMVar(struct adapter *Adapter,
 	enum HAL_ODM_VARIABLE		eVariable,
-	void *				pValue1,
-	void *				pValue2);
+	void *pValue1,
+	void *pValue2);
 void SetHalODMVar(
-	struct adapter *			Adapter,
+	struct adapter *Adapter,
 	enum HAL_ODM_VARIABLE		eVariable,
-	void *				pValue1,
+	void *pValue1,
 	bool					bSet);
-
-#ifdef CONFIG_BACKGROUND_NOISE_MONITOR
-struct noise_info {
-	u8 bPauseDIG;
-	u8 IGIValue;
-	u32 max_time;/* ms */
-	u8 chan;
-};
-#endif
-
 #endif /* __HAL_COMMON_H__ */

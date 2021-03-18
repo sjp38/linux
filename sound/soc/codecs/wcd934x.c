@@ -1565,8 +1565,6 @@ static int wcd934x_set_interpolator_rate(struct snd_soc_dai *dai,
 		return ret;
 	ret = wcd934x_set_mix_interpolator_rate(dai, (u8)rate_val,
 						sample_rate);
-	if (ret)
-		return ret;
 
 	return ret;
 }
@@ -1872,6 +1870,12 @@ static int wcd934x_set_channel_map(struct snd_soc_dai *dai,
 	int i;
 
 	wcd = snd_soc_component_get_drvdata(dai->component);
+
+	if (tx_num > WCD934X_TX_MAX || rx_num > WCD934X_RX_MAX) {
+		dev_err(wcd->dev, "Invalid tx %d or rx %d channel count\n",
+			tx_num, rx_num);
+		return -EINVAL;
+	}
 
 	if (!tx_slot || !rx_slot) {
 		dev_err(wcd->dev, "Invalid tx_slot=%p, rx_slot=%p\n",

@@ -5637,7 +5637,7 @@ static inline void mlxsw_reg_pspa_pack(char *payload, u8 swid, u8 local_port)
 
 MLXSW_REG_DEFINE(pmaos, MLXSW_REG_PMAOS_ID, MLXSW_REG_PMAOS_LEN);
 
-/* reg_slot_index
+/* reg_pmaos_slot_index
  * Slot index.
  * Access: Index
  */
@@ -9925,15 +9925,28 @@ MLXSW_ITEM32(reg, mpar, enable, 0x04, 31, 1);
  */
 MLXSW_ITEM32(reg, mpar, pa_id, 0x04, 0, 4);
 
+#define MLXSW_REG_MPAR_RATE_MAX 3500000000UL
+
+/* reg_mpar_probability_rate
+ * Sampling rate.
+ * Valid values are: 1 to 3.5*10^9
+ * Value of 1 means "sample all". Default is 1.
+ * Reserved when Spectrum-1.
+ * Access: RW
+ */
+MLXSW_ITEM32(reg, mpar, probability_rate, 0x08, 0, 32);
+
 static inline void mlxsw_reg_mpar_pack(char *payload, u8 local_port,
 				       enum mlxsw_reg_mpar_i_e i_e,
-				       bool enable, u8 pa_id)
+				       bool enable, u8 pa_id,
+				       u32 probability_rate)
 {
 	MLXSW_REG_ZERO(mpar, payload);
 	mlxsw_reg_mpar_local_port_set(payload, local_port);
 	mlxsw_reg_mpar_enable_set(payload, enable);
 	mlxsw_reg_mpar_i_e_set(payload, i_e);
 	mlxsw_reg_mpar_pa_id_set(payload, pa_id);
+	mlxsw_reg_mpar_probability_rate_set(payload, probability_rate);
 }
 
 /* MGIR - Management General Information Register
@@ -10577,6 +10590,8 @@ MLXSW_ITEM32(reg, mpagr, trigger, 0x00, 0, 4);
  */
 MLXSW_ITEM32(reg, mpagr, pa_id, 0x04, 0, 4);
 
+#define MLXSW_REG_MPAGR_RATE_MAX 3500000000UL
+
 /* reg_mpagr_probability_rate
  * Sampling rate.
  * Valid values are: 1 to 3.5*10^9
@@ -10919,7 +10934,7 @@ MLXSW_REG_DEFINE(mfde, MLXSW_REG_MFDE_ID, MLXSW_REG_MFDE_LEN);
  * Which irisc triggered the event
  * Access: RO
  */
-MLXSW_ITEM32(reg, mfde, irisc_id, 0x00, 8, 4);
+MLXSW_ITEM32(reg, mfde, irisc_id, 0x00, 24, 8);
 
 enum mlxsw_reg_mfde_event_id {
 	MLXSW_REG_MFDE_EVENT_ID_CRSPACE_TO = 1,
@@ -10930,7 +10945,7 @@ enum mlxsw_reg_mfde_event_id {
 /* reg_mfde_event_id
  * Access: RO
  */
-MLXSW_ITEM32(reg, mfde, event_id, 0x00, 0, 8);
+MLXSW_ITEM32(reg, mfde, event_id, 0x00, 0, 16);
 
 enum mlxsw_reg_mfde_method {
 	MLXSW_REG_MFDE_METHOD_QUERY,
@@ -10978,6 +10993,13 @@ MLXSW_ITEM32(reg, mfde, log_address, 0x10, 0, 32);
  * Access: RO
  */
 MLXSW_ITEM32(reg, mfde, log_id, 0x14, 0, 4);
+
+/* reg_mfde_log_ip
+ * IP (instruction pointer) that triggered the timeout.
+ * Valid in case event_id == MLXSW_REG_MFDE_EVENT_ID_CRSPACE_TO
+ * Access: RO
+ */
+MLXSW_ITEM64(reg, mfde, log_ip, 0x18, 0, 64);
 
 /* reg_mfde_pipes_mask
  * Bit per kvh pipe.

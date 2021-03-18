@@ -2,6 +2,7 @@
 /* Copyright (c) 2021 Mellanox Technologies. */
 
 #include <net/fib_notifier.h>
+#include <net/nexthop.h>
 #include "tc_tun_encap.h"
 #include "en_tc.h"
 #include "tc_tun.h"
@@ -89,6 +90,7 @@ int mlx5e_tc_set_attr_rx_tun(struct mlx5e_tc_flow *flow,
 	 * required to establish routing.
 	 */
 	flow_flag_set(flow, TUN_RX);
+	flow->attr->tun_ip_version = ip_version;
 	return 0;
 }
 
@@ -1091,7 +1093,7 @@ int mlx5e_attach_decap_route(struct mlx5e_priv *priv,
 	if (err || !esw_attr->rx_tun_attr->decap_vport)
 		goto out;
 
-	key.ip_version = attr->ip_version;
+	key.ip_version = attr->tun_ip_version;
 	if (key.ip_version == 4)
 		key.endpoint_ip.v4 = esw_attr->rx_tun_attr->dst_ip.v4;
 	else

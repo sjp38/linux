@@ -11,6 +11,7 @@ ksft_skip=4
 timeout=30
 mptcp_connect=""
 capture=0
+do_all_tests=1
 
 TEST_COUNT=0
 
@@ -120,12 +121,6 @@ reset_with_add_addr_timeout()
 		"$CBPF_MPTCP_SUBOPTION_ADD_ADDR" \
 		-j DROP
 }
-
-for arg in "$@"; do
-	if [ "$arg" = "-c" ]; then
-		capture=1
-	fi
-done
 
 ip -Version > /dev/null 2>&1
 if [ $? -ne 0 ];then
@@ -284,14 +279,19 @@ do_transfer()
 		let rm_nr_ns1=-addr_nr_ns1
 		if [ $rm_nr_ns1 -lt 8 ]; then
 			counter=1
-			sleep 1
-
-			while [ $counter -le $rm_nr_ns1 ]
-			do
-				ip netns exec ${listener_ns} ./pm_nl_ctl del $counter
+			dump=(`ip netns exec ${listener_ns} ./pm_nl_ctl dump`)
+			if [ ${#dump[@]} -gt 0 ]; then
+				id=${dump[1]}
 				sleep 1
-				let counter+=1
-			done
+
+				while [ $counter -le $rm_nr_ns1 ]
+				do
+					ip netns exec ${listener_ns} ./pm_nl_ctl del $id
+					sleep 1
+					let counter+=1
+					let id+=1
+				done
+			fi
 		else
 			sleep 1
 			ip netns exec ${listener_ns} ./pm_nl_ctl flush
@@ -318,14 +318,19 @@ do_transfer()
 		let rm_nr_ns2=-addr_nr_ns2
 		if [ $rm_nr_ns2 -lt 8 ]; then
 			counter=1
-			sleep 1
-
-			while [ $counter -le $rm_nr_ns2 ]
-			do
-				ip netns exec ${connector_ns} ./pm_nl_ctl del $counter
+			dump=(`ip netns exec ${connector_ns} ./pm_nl_ctl dump`)
+			if [ ${#dump[@]} -gt 0 ]; then
+				id=${dump[1]}
 				sleep 1
-				let counter+=1
-			done
+
+				while [ $counter -le $rm_nr_ns2 ]
+				do
+					ip netns exec ${connector_ns} ./pm_nl_ctl del $id
+					sleep 1
+					let counter+=1
+					let id+=1
+				done
+			fi
 		else
 			sleep 1
 			ip netns exec ${connector_ns} ./pm_nl_ctl flush
@@ -610,11 +615,22 @@ chk_rm_nr()
 {
 	local rm_addr_nr=$1
 	local rm_subflow_nr=$2
+	local invert=${3:-""}
 	local count
 	local dump_stats
+	local addr_ns
+	local subflow_ns
+
+	if [ -z $invert ]; then
+		addr_ns=$ns1
+		subflow_ns=$ns2
+	elif [ $invert = "invert" ]; then
+		addr_ns=$ns2
+		subflow_ns=$ns1
+	fi
 
 	printf "%-39s %s" " " "rm "
-	count=`ip netns exec $ns1 nstat -as | grep MPTcpExtRmAddr | awk '{print $2}'`
+	count=`ip netns exec $addr_ns nstat -as | grep MPTcpExtRmAddr | awk '{print $2}'`
 	[ -z "$count" ] && count=0
 	if [ "$count" != "$rm_addr_nr" ]; then
 		echo "[fail] got $count RM_ADDR[s] expected $rm_addr_nr"
@@ -625,7 +641,7 @@ chk_rm_nr()
 	fi
 
 	echo -n " - sf    "
-	count=`ip netns exec $ns2 nstat -as | grep MPTcpExtRmSubflow | awk '{print $2}'`
+	count=`ip netns exec $subflow_ns nstat -as | grep MPTcpExtRmSubflow | awk '{print $2}'`
 	[ -z "$count" ] && count=0
 	if [ "$count" != "$rm_subflow_nr" ]; then
 		echo "[fail] got $count RM_SUBFLOW[s] expected $rm_subflow_nr"
@@ -833,7 +849,7 @@ remove_tests()
 	run_tests $ns1 $ns2 10.0.1.1 0 -1 0 slow
 	chk_join_nr "remove single address" 1 1 1
 	chk_add_nr 1 1
-	chk_rm_nr 0 0
+	chk_rm_nr 1 1 invert
 
 	# subflow and signal, remove
 	reset
@@ -869,6 +885,29 @@ remove_tests()
 	chk_join_nr "flush subflows and signal" 3 3 3
 	chk_add_nr 1 1
 	chk_rm_nr 2 2
+
+	# subflows flush
+	reset
+	ip netns exec $ns1 ./pm_nl_ctl limits 3 3
+	ip netns exec $ns2 ./pm_nl_ctl limits 3 3
+	ip netns exec $ns2 ./pm_nl_ctl add 10.0.2.2 flags subflow id 150
+	ip netns exec $ns2 ./pm_nl_ctl add 10.0.3.2 flags subflow
+	ip netns exec $ns2 ./pm_nl_ctl add 10.0.4.2 flags subflow
+	run_tests $ns1 $ns2 10.0.1.1 0 -8 -8 slow
+	chk_join_nr "flush subflows" 3 3 3
+	chk_rm_nr 3 3
+
+	# addresses flush
+	reset
+	ip netns exec $ns1 ./pm_nl_ctl limits 3 3
+	ip netns exec $ns1 ./pm_nl_ctl add 10.0.2.1 flags signal id 250
+	ip netns exec $ns1 ./pm_nl_ctl add 10.0.3.1 flags signal
+	ip netns exec $ns1 ./pm_nl_ctl add 10.0.4.1 flags signal
+	ip netns exec $ns2 ./pm_nl_ctl limits 3 3
+	run_tests $ns1 $ns2 10.0.1.1 0 -8 -8 slow
+	chk_join_nr "flush addresses" 3 3 3
+	chk_add_nr 3 3
+	chk_rm_nr 3 3 invert
 }
 
 add_tests()
@@ -945,7 +984,7 @@ ipv6_tests()
 	run_tests $ns1 $ns2 dead:beef:1::1 0 -1 0 slow
 	chk_join_nr "remove single address IPv6" 1 1 1
 	chk_add_nr 1 1
-	chk_rm_nr 0 0
+	chk_rm_nr 1 1 invert
 
 	# subflow and signal IPv6, remove
 	reset
@@ -1088,7 +1127,7 @@ add_addr_ports_tests()
 	run_tests $ns1 $ns2 10.0.1.1 0 -1 0 slow
 	chk_join_nr "remove single address with port" 1 1 1
 	chk_add_nr 1 1 1
-	chk_rm_nr 0 0
+	chk_rm_nr 1 1 invert
 
 	# subflow and signal with port, remove
 	reset
@@ -1221,7 +1260,8 @@ usage()
 	echo "  -4 v4mapped_tests"
 	echo "  -b backup_tests"
 	echo "  -p add_addr_ports_tests"
-	echo "  -c syncookies_tests"
+	echo "  -k syncookies_tests"
+	echo "  -c capture pcap files"
 	echo "  -h help"
 }
 
@@ -1235,12 +1275,24 @@ make_file "$cin" "client" 1
 make_file "$sin" "server" 1
 trap cleanup EXIT
 
-if [ -z $1 ]; then
+for arg in "$@"; do
+	# check for "capture" arg before launching tests
+	if [[ "${arg}" =~ ^"-"[0-9a-zA-Z]*"c"[0-9a-zA-Z]*$ ]]; then
+		capture=1
+	fi
+
+	# exception for the capture option, the rest means: a part of the tests
+	if [ "${arg}" != "-c" ]; then
+		do_all_tests=0
+	fi
+done
+
+if [ $do_all_tests -eq 1 ]; then
 	all_tests
 	exit $ret
 fi
 
-while getopts 'fsltra64bpch' opt; do
+while getopts 'fsltra64bpkch' opt; do
 	case $opt in
 		f)
 			subflows_tests
@@ -1272,8 +1324,10 @@ while getopts 'fsltra64bpch' opt; do
 		p)
 			add_addr_ports_tests
 			;;
-		c)
+		k)
 			syncookies_tests
+			;;
+		c)
 			;;
 		h | *)
 			usage

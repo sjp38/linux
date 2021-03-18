@@ -873,6 +873,7 @@ static const struct dc_debug_options debug_defaults_drv = {
 	.underflow_assert_delay_us = 0xFFFFFFFF,
 	.dwb_fi_phase = -1, // -1 = disable
 	.dmub_command_table = true,
+	.use_max_lb = false,
 };
 
 static const struct dc_debug_options debug_defaults_diags = {
@@ -889,6 +890,7 @@ static const struct dc_debug_options debug_defaults_diags = {
 	.scl_reset_length10 = true,
 	.dwb_fi_phase = -1, // -1 = disable
 	.dmub_command_table = true,
+	.use_max_lb = false,
 };
 
 void dcn301_dpp_destroy(struct dpp **dpp)

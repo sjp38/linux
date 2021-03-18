@@ -298,9 +298,9 @@ void rtw_free_network_queue(struct adapter *padapter, u8 isfreeall)
 	spin_unlock_bh(&scanned_queue->lock);
 }
 
-sint rtw_if_up(struct adapter *padapter)
+signed int rtw_if_up(struct adapter *padapter)
 {
-	sint res;
+	signed int res;
 
 	if (padapter->bDriverStopped || padapter->bSurpriseRemoved ||
 		(check_fwstate(&padapter->mlmepriv, _FW_LINKED) == false)) {
@@ -1478,8 +1478,6 @@ void rtw_stassoc_event_callback(struct adapter *adapter, u8 *pbuf)
 
 			rtw_sta_media_status_rpt(adapter, psta, 1);
 
-#ifndef CONFIG_AUTO_AP_MODE
-
 			ap_sta_info_defer_update(adapter, psta);
 
 			/* report to upper layer */
@@ -1503,7 +1501,6 @@ void rtw_stassoc_event_callback(struct adapter *adapter, u8 *pbuf)
 
 				kfree(passoc_req);
 			}
-#endif /* CONFIG_AUTO_AP_MODE */
 		}
 		return;
 	}
@@ -2098,9 +2095,6 @@ int rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv)
 
 	if (!candidate) {
 		DBG_871X("%s: return _FAIL(candidate == NULL)\n", __func__);
-#ifdef CONFIG_WOWLAN
-		_clr_fwstate_(pmlmepriv, _FW_LINKED|_FW_UNDER_LINKING);
-#endif
 		ret = _FAIL;
 		goto exit;
 	} else {
@@ -2129,12 +2123,12 @@ exit:
 	return ret;
 }
 
-sint rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv)
+signed int rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv)
 {
 	struct	cmd_obj *pcmd;
 	struct	setauth_parm *psetauthparm;
 	struct	cmd_priv *pcmdpriv = &(adapter->cmdpriv);
-	sint		res = _SUCCESS;
+	signed int		res = _SUCCESS;
 
 	pcmd = rtw_zmalloc(sizeof(struct cmd_obj));
 	if (!pcmd) {
@@ -2167,13 +2161,13 @@ exit:
 	return res;
 }
 
-sint rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, sint keyid, u8 set_tx, bool enqueue)
+signed int rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, signed int keyid, u8 set_tx, bool enqueue)
 {
 	u8 keylen;
 	struct cmd_obj		*pcmd;
 	struct setkey_parm	*psetkeyparm;
 	struct cmd_priv 	*pcmdpriv = &(adapter->cmdpriv);
-	sint	res = _SUCCESS;
+	signed int	res = _SUCCESS;
 
 	psetkeyparm = rtw_zmalloc(sizeof(struct setkey_parm));
 	if (!psetkeyparm) {
@@ -2342,7 +2336,7 @@ static int rtw_append_pmkid(struct adapter *Adapter, int iEntry, u8 *ie, uint ie
 	return ie_len;
 }
 
-sint rtw_restruct_sec_ie(struct adapter *adapter, u8 *in_ie, u8 *out_ie, uint in_len)
+signed int rtw_restruct_sec_ie(struct adapter *adapter, u8 *in_ie, u8 *out_ie, uint in_len)
 {
 	u8 authmode = 0x0;
 	uint	ielength;
@@ -2976,7 +2970,7 @@ void _rtw_roaming(struct adapter *padapter, struct wlan_network *tgt_network)
 
 }
 
-sint rtw_linked_check(struct adapter *padapter)
+signed int rtw_linked_check(struct adapter *padapter)
 {
 	if ((check_fwstate(&padapter->mlmepriv, WIFI_AP_STATE) == true) ||
 			(check_fwstate(&padapter->mlmepriv, WIFI_ADHOC_STATE|WIFI_ADHOC_MASTER_STATE) == true)) {

@@ -53,11 +53,11 @@
 		/* u8 cmdthd_running; */
 		u8 stop_req;
 		struct adapter *padapter;
-		_mutex sctx_mutex;
+		struct mutex sctx_mutex;
 	};
 
 	struct	evt_priv {
-		_workitem c2h_wk;
+		struct work_struct c2h_wk;
 		bool c2h_wk_alive;
 		struct rtw_cbuf *c2h_queue;
 		#define C2H_QUEUE_MAX_LEN 10
@@ -265,7 +265,7 @@ Command-Event Mode
 #define RTW_SSID_SCAN_AMOUNT 9 /*  for WEXT_CSCAN_AMOUNT 9 */
 #define RTW_CHANNEL_SCAN_AMOUNT (14+37)
 struct sitesurvey_parm {
-	sint scan_mode;	/* active: 1, passive: 0 */
+	signed int scan_mode;	/* active: 1, passive: 0 */
 	u8 ssid_num;
 	u8 ch_num;
 	struct ndis_802_11_ssid ssid[RTW_SSID_SCAN_AMOUNT];
@@ -786,7 +786,7 @@ struct TDLSoption_param {
 
 /*H2C Handler index: 64 */
 struct RunInThread_param {
-	void (*func)(void*);
+	void (*func)(void *);
 	void *context;
 };
 
@@ -824,7 +824,7 @@ struct sta_info;
 extern u8 rtw_setstakey_cmd(struct adapter  *padapter, struct sta_info *sta, u8 unicast_key, bool enqueue);
 extern u8 rtw_clearstakey_cmd(struct adapter *padapter, struct sta_info *sta, u8 enqueue);
 
-extern u8 rtw_joinbss_cmd(struct adapter  *padapter, struct wlan_network* pnetwork);
+extern u8 rtw_joinbss_cmd(struct adapter *padapter, struct wlan_network *pnetwork);
 u8 rtw_disassoc_cmd(struct adapter *padapter, u32 deauth_timeout_ms, bool enqueue);
 extern u8 rtw_setopmode_cmd(struct adapter  *padapter, enum NDIS_802_11_NETWORK_INFRASTRUCTURE networktype, bool enqueue);
 extern u8 rtw_setdatarate_cmd(struct adapter  *padapter, u8 *rateset);

@@ -209,6 +209,7 @@ static bool rt1015_volatile_register(struct device *dev, unsigned int reg)
 	case RT1015_VENDOR_ID:
 	case RT1015_DEVICE_ID:
 	case RT1015_PRO_ALT:
+	case RT1015_MAN_I2C:
 	case RT1015_DAC3:
 	case RT1015_VBAT_TEST_OUT1:
 	case RT1015_VBAT_TEST_OUT2:
@@ -513,6 +514,7 @@ static void rt1015_calibrate(struct rt1015_priv *rt1015)
 	msleep(300);
 	regmap_write(regmap, RT1015_PWR_STATE_CTRL, 0x0008);
 	regmap_write(regmap, RT1015_SYS_RST1, 0x05F5);
+	regmap_write(regmap, RT1015_CLK_DET, 0x8000);
 
 	regcache_cache_bypass(regmap, false);
 	regcache_mark_dirty(regmap);
@@ -891,8 +893,9 @@ static int rt1015_set_component_pll(struct snd_soc_component *component,
 		pll_code.n_code, pll_code.k_code);
 
 	snd_soc_component_write(component, RT1015_PLL1,
-		(pll_code.m_bp ? 0 : pll_code.m_code) << RT1015_PLL_M_SFT |
-		pll_code.m_bp << RT1015_PLL_M_BP_SFT | pll_code.n_code);
+		((pll_code.m_bp ? 0 : pll_code.m_code) << RT1015_PLL_M_SFT) |
+		(pll_code.m_bp << RT1015_PLL_M_BP_SFT) |
+		pll_code.n_code);
 	snd_soc_component_write(component, RT1015_PLL2,
 		pll_code.k_code);
 
@@ -1026,7 +1029,7 @@ static void rt1015_remove(struct snd_soc_component *component)
 #define RT1015_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \
 			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S8)
 
-static struct snd_soc_dai_ops rt1015_aif_dai_ops = {
+static const struct snd_soc_dai_ops rt1015_aif_dai_ops = {
 	.hw_params = rt1015_hw_params,
 	.set_fmt = rt1015_set_dai_fmt,
 	.set_tdm_slot = rt1015_set_tdm_slot,
@@ -1119,7 +1122,7 @@ MODULE_DEVICE_TABLE(of, rt1015_of_match);
 #endif
 
 #ifdef CONFIG_ACPI
-static struct acpi_device_id rt1015_acpi_match[] = {
+static const struct acpi_device_id rt1015_acpi_match[] = {
 	{"10EC1015", 0,},
 	{},
 };

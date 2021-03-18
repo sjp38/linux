@@ -16,6 +16,7 @@
 #include <linux/in6.h>
 #include <linux/notifier.h>
 #include <linux/net_namespace.h>
+#include <linux/spinlock.h>
 #include <net/psample.h>
 #include <net/pkt_cls.h>
 #include <net/red.h>
@@ -133,6 +134,7 @@ struct mlxsw_sp_ptp_state;
 struct mlxsw_sp_ptp_ops;
 struct mlxsw_sp_span_ops;
 struct mlxsw_sp_qdisc_state;
+struct mlxsw_sp_mall_entry;
 
 struct mlxsw_sp_port_mapping {
 	u8 module;
@@ -148,6 +150,7 @@ struct mlxsw_sp {
 	const unsigned char *mac_mask;
 	struct mlxsw_sp_upper *lags;
 	struct mlxsw_sp_port_mapping **port_mapping;
+	struct rhashtable sample_trigger_ht;
 	struct mlxsw_sp_sb *sb;
 	struct mlxsw_sp_bridge *bridge;
 	struct mlxsw_sp_router *router;
@@ -179,6 +182,7 @@ struct mlxsw_sp {
 	const struct mlxsw_sp_span_ops *span_ops;
 	const struct mlxsw_sp_policer_core_ops *policer_core_ops;
 	const struct mlxsw_sp_trap_ops *trap_ops;
+	const struct mlxsw_sp_mall_ops *mall_ops;
 	const struct mlxsw_listener *listeners;
 	size_t listeners_count;
 	u32 lowest_shaper_bs;
@@ -232,7 +236,18 @@ struct mlxsw_sp_port_pcpu_stats {
 	u32			tx_dropped;
 };
 
-struct mlxsw_sp_port_sample {
+enum mlxsw_sp_sample_trigger_type {
+	MLXSW_SP_SAMPLE_TRIGGER_TYPE_INGRESS,
+	MLXSW_SP_SAMPLE_TRIGGER_TYPE_EGRESS,
+	MLXSW_SP_SAMPLE_TRIGGER_TYPE_POLICY_ENGINE,
+};
+
+struct mlxsw_sp_sample_trigger {
+	enum mlxsw_sp_sample_trigger_type type;
+	u8 local_port; /* Reserved when trigger type is not ingress / egress. */
+};
+
+struct mlxsw_sp_sample_params {
 	struct psample_group *psample_group;
 	u32 trunc_size;
 	u32 rate;
@@ -302,7 +317,6 @@ struct mlxsw_sp_port {
 		struct mlxsw_sp_port_xstats xstats;
 		struct delayed_work update_dw;
 	} periodic_hw_stats;
-	struct mlxsw_sp_port_sample __rcu *sample;
 	struct list_head vlans_list;
 	struct mlxsw_sp_port_vlan *default_vlan;
 	struct mlxsw_sp_qdisc_state *qdisc;
@@ -531,6 +545,17 @@ void mlxsw_sp_hdroom_bufs_reset_sizes(struct mlxsw_sp_port *mlxsw_sp_port,
 				      struct mlxsw_sp_hdroom *hdroom);
 int mlxsw_sp_hdroom_configure(struct mlxsw_sp_port *mlxsw_sp_port,
 			      const struct mlxsw_sp_hdroom *hdroom);
+struct mlxsw_sp_sample_params *
+mlxsw_sp_sample_trigger_params_lookup(struct mlxsw_sp *mlxsw_sp,
+				      const struct mlxsw_sp_sample_trigger *trigger);
+int
+mlxsw_sp_sample_trigger_params_set(struct mlxsw_sp *mlxsw_sp,
+				   const struct mlxsw_sp_sample_trigger *trigger,
+				   const struct mlxsw_sp_sample_params *params,
+				   struct netlink_ext_ack *extack);
+void
+mlxsw_sp_sample_trigger_params_unset(struct mlxsw_sp *mlxsw_sp,
+				     const struct mlxsw_sp_sample_trigger *trigger);
 
 extern const struct mlxsw_sp_sb_vals mlxsw_sp1_sb_vals;
 extern const struct mlxsw_sp_sb_vals mlxsw_sp2_sb_vals;
@@ -568,8 +593,6 @@ void mlxsw_sp_rx_listener_no_mark_func(struct sk_buff *skb,
 				       u8 local_port, void *priv);
 void mlxsw_sp_ptp_receive(struct mlxsw_sp *mlxsw_sp, struct sk_buff *skb,
 			  u8 local_port);
-void mlxsw_sp_sample_receive(struct mlxsw_sp *mlxsw_sp, struct sk_buff *skb,
-			     u8 local_port);
 int mlxsw_sp_port_speed_get(struct mlxsw_sp_port *mlxsw_sp_port, u32 *speed);
 int mlxsw_sp_port_ets_set(struct mlxsw_sp_port *mlxsw_sp_port,
 			  enum mlxsw_reg_qeec_hr hr, u8 index, u8 next_index,
@@ -924,6 +947,12 @@ int mlxsw_sp_acl_rulei_act_count(struct mlxsw_sp *mlxsw_sp,
 int mlxsw_sp_acl_rulei_act_fid_set(struct mlxsw_sp *mlxsw_sp,
 				   struct mlxsw_sp_acl_rule_info *rulei,
 				   u16 fid, struct netlink_ext_ack *extack);
+int mlxsw_sp_acl_rulei_act_sample(struct mlxsw_sp *mlxsw_sp,
+				  struct mlxsw_sp_acl_rule_info *rulei,
+				  struct mlxsw_sp_flow_block *block,
+				  struct psample_group *psample_group, u32 rate,
+				  u32 trunc_size, bool truncate,
+				  struct netlink_ext_ack *extack);
 
 struct mlxsw_sp_acl_rule;
 
@@ -1033,6 +1062,19 @@ extern const struct mlxsw_afk_ops mlxsw_sp1_afk_ops;
 extern const struct mlxsw_afk_ops mlxsw_sp2_afk_ops;
 
 /* spectrum_matchall.c */
+struct mlxsw_sp_mall_ops {
+	int (*sample_add)(struct mlxsw_sp *mlxsw_sp,
+			  struct mlxsw_sp_port *mlxsw_sp_port,
+			  struct mlxsw_sp_mall_entry *mall_entry,
+			  struct netlink_ext_ack *extack);
+	void (*sample_del)(struct mlxsw_sp *mlxsw_sp,
+			   struct mlxsw_sp_port *mlxsw_sp_port,
+			   struct mlxsw_sp_mall_entry *mall_entry);
+};
+
+extern const struct mlxsw_sp_mall_ops mlxsw_sp1_mall_ops;
+extern const struct mlxsw_sp_mall_ops mlxsw_sp2_mall_ops;
+
 enum mlxsw_sp_mall_action_type {
 	MLXSW_SP_MALL_ACTION_TYPE_MIRROR,
 	MLXSW_SP_MALL_ACTION_TYPE_SAMPLE,
@@ -1048,6 +1090,11 @@ struct mlxsw_sp_mall_trap_entry {
 	int span_id;
 };
 
+struct mlxsw_sp_mall_sample_entry {
+	struct mlxsw_sp_sample_params params;
+	int span_id;	/* Relevant for Spectrum-2 onwards. */
+};
+
 struct mlxsw_sp_mall_entry {
 	struct list_head list;
 	unsigned long cookie;
@@ -1057,7 +1104,7 @@ struct mlxsw_sp_mall_entry {
 	union {
 		struct mlxsw_sp_mall_mirror_entry mirror;
 		struct mlxsw_sp_mall_trap_entry trap;
-		struct mlxsw_sp_port_sample sample;
+		struct mlxsw_sp_mall_sample_entry sample;
 	};
 	struct rcu_head rcu;
 };
@@ -1068,7 +1115,8 @@ int mlxsw_sp_mall_replace(struct mlxsw_sp *mlxsw_sp,
 void mlxsw_sp_mall_destroy(struct mlxsw_sp_flow_block *block,
 			   struct tc_cls_matchall_offload *f);
 int mlxsw_sp_mall_port_bind(struct mlxsw_sp_flow_block *block,
-			    struct mlxsw_sp_port *mlxsw_sp_port);
+			    struct mlxsw_sp_port *mlxsw_sp_port,
+			    struct netlink_ext_ack *extack);
 void mlxsw_sp_mall_port_unbind(struct mlxsw_sp_flow_block *block,
 			       struct mlxsw_sp_port *mlxsw_sp_port);
 int mlxsw_sp_mall_prio_get(struct mlxsw_sp_flow_block *block, u32 chain_index,

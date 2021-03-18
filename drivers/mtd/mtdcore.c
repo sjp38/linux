@@ -773,6 +773,7 @@ static void mtd_set_dev_defaults(struct mtd_info *mtd)
 
 	INIT_LIST_HEAD(&mtd->partitions);
 	mutex_init(&mtd->master.partitions_lock);
+	mutex_init(&mtd->master.chrdev_lock);
 }
 
 /**
@@ -820,6 +821,9 @@ int mtd_device_parse_register(struct mtd_info *mtd, const char * const *types,
 
 	/* Prefer parsed partitions over driver-provided fallback */
 	ret = parse_mtd_partitions(mtd, types, parser_data);
+	if (ret == -EPROBE_DEFER)
+		goto out;
+
 	if (ret > 0)
 		ret = 0;
 	else if (nr_parts)
@@ -2172,7 +2176,7 @@ static int mtd_proc_show(struct seq_file *m, void *v)
 /*====================================================================*/
 /* Init code */
 
-static struct backing_dev_info * __init mtd_bdi_init(char *name)
+static struct backing_dev_info * __init mtd_bdi_init(const char *name)
 {
 	struct backing_dev_info *bdi;
 	int ret;

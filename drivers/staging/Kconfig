@@ -78,8 +78,6 @@ source "drivers/staging/clocking-wizard/Kconfig"
 
 source "drivers/staging/fbtft/Kconfig"
 
-source "drivers/staging/fsl-dpaa2/Kconfig"
-
 source "drivers/staging/most/Kconfig"
 
 source "drivers/staging/ks7010/Kconfig"
@@ -97,8 +95,6 @@ source "drivers/staging/mt7621-dma/Kconfig"
 source "drivers/staging/ralink-gdma/Kconfig"
 
 source "drivers/staging/mt7621-dts/Kconfig"
-
-source "drivers/staging/gasket/Kconfig"
 
 source "drivers/staging/axis-fifo/Kconfig"
 

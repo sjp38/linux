@@ -81,11 +81,11 @@ enum dot11AuthAlgrthmNum {
 };
 
 /*  Scan type including active and passive scan. */
-typedef enum _RT_SCAN_TYPE {
+enum RT_SCAN_TYPE {
 	SCAN_PASSIVE,
 	SCAN_ACTIVE,
 	SCAN_MIX,
-} RT_SCAN_TYPE, *PRT_SCAN_TYPE;
+};
 
 enum  _BAND {
 	GHZ24_50 = 0,
@@ -130,11 +130,11 @@ SHALL not lock up more than one locks at a time!
 struct sitesurvey_ctrl {
 	u64	last_tx_pkts;
 	uint	last_rx_pkts;
-	sint	traffic_busy;
-	_timer	sitesurvey_ctrl_timer;
+	signed int	traffic_busy;
+	struct timer_list	sitesurvey_ctrl_timer;
 };
 
-typedef struct _RT_LINK_DETECT_T {
+struct RT_LINK_DETECT_T {
 	u32 			NumTxOkInPeriod;
 	u32 			NumRxOkInPeriod;
 	u32 			NumRxUnicastOkInPeriod;
@@ -147,7 +147,7 @@ typedef struct _RT_LINK_DETECT_T {
 	/* u8 TrafficBusyState; */
 	u8 TrafficTransitionCount;
 	u32 LowPowerTransitionCount;
-} RT_LINK_DETECT_T, *PRT_LINK_DETECT_T;
+};
 
 struct profile_info {
 	u8 ssidlen;
@@ -203,7 +203,7 @@ struct scan_limit_info {
 };
 
 struct cfg80211_wifidirect_info {
-	_timer					remain_on_ch_timer;
+	struct timer_list					remain_on_ch_timer;
 	u8 				restore_channel;
 	struct ieee80211_channel	remain_on_ch_channel;
 	enum nl80211_channel_type	remain_on_ch_type;
@@ -214,13 +214,13 @@ struct cfg80211_wifidirect_info {
 
 struct wifidirect_info {
 	struct adapter				*padapter;
-	_timer					find_phase_timer;
-	_timer					restore_p2p_state_timer;
+	struct timer_list					find_phase_timer;
+	struct timer_list					restore_p2p_state_timer;
 
 	/* 	Used to do the scanning. After confirming the peer is availalble, the driver transmits the P2P frame to peer. */
-	_timer					pre_tx_scan_timer;
-	_timer					reset_ch_sitesurvey;
-	_timer					reset_ch_sitesurvey2;	/* 	Just for resetting the scan limit function by using p2p nego */
+	struct timer_list					pre_tx_scan_timer;
+	struct timer_list					reset_ch_sitesurvey;
+	struct timer_list					reset_ch_sitesurvey2;	/* 	Just for resetting the scan limit function by using p2p nego */
 	struct tx_provdisc_req_info tx_prov_disc_info;
 	struct rx_provdisc_req_info rx_prov_disc_info;
 	struct tx_invite_req_info invitereq_info;
@@ -302,8 +302,8 @@ struct tdls_info {
 	u8 			cur_channel;
 	u8 			candidate_ch;
 	u8 			collect_pkt_num[MAX_CHANNEL_NUM];
-	_lock				cmd_lock;
-	_lock				hdl_lock;
+	spinlock_t				cmd_lock;
+	spinlock_t				hdl_lock;
 	u8 			watchdog_count;
 	u8 			dev_discovered;		/* WFD_TDLS: for sigma test */
 	u8 			tdls_enable;
@@ -329,8 +329,8 @@ enum {
 
 struct mlme_priv {
 
-	_lock	lock;
-	sint	fw_state;	/* shall we protect this variable? maybe not necessarily... */
+	spinlock_t	lock;
+	signed int	fw_state;	/* shall we protect this variable? maybe not necessarily... */
 	u8 bScanInProcess;
 	u8 to_join; /* flag */
 
@@ -361,15 +361,15 @@ struct mlme_priv {
 
 	u32 auto_scan_int_ms;
 
-	_timer assoc_timer;
+	struct timer_list assoc_timer;
 
 	uint assoc_by_bssid;
 	uint assoc_by_rssi;
 
-	_timer scan_to_timer; /*  driver itself handles scan_timeout status. */
+	struct timer_list scan_to_timer; /*  driver itself handles scan_timeout status. */
 	unsigned long scan_start_time; /*  used to evaluate the time spent in scanning */
 
-	_timer set_scan_deny_timer;
+	struct timer_list set_scan_deny_timer;
 	atomic_t set_scan_deny; /* 0: allowed, 1: deny */
 
 	struct qos_priv qospriv;
@@ -385,12 +385,12 @@ struct mlme_priv {
 
 	struct ht_priv htpriv;
 
-	RT_LINK_DETECT_T	LinkDetectInfo;
-	_timer	dynamic_chk_timer; /* dynamic/periodic check timer */
+	struct RT_LINK_DETECT_T	LinkDetectInfo;
+	struct timer_list	dynamic_chk_timer; /* dynamic/periodic check timer */
 
 	u8 acm_mask; /*  for wmm acm mask */
 	u8 ChannelPlan;
-	RT_SCAN_TYPE	scan_mode; /*  active: 1, passive: 0 */
+	enum RT_SCAN_TYPE	scan_mode; /*  active: 1, passive: 0 */
 
 	u8 *wps_probe_req_ie;
 	u32 wps_probe_req_ie_len;
@@ -448,7 +448,7 @@ struct mlme_priv {
 	u32 p2p_go_probe_resp_ie_len; /* for GO */
 	u32 p2p_assoc_req_ie_len;
 
-	_lock	bcn_update_lock;
+	spinlock_t	bcn_update_lock;
 	u8 update_bcn;
 
 	u8 NumOfBcnInfoChkFail;
@@ -490,9 +490,9 @@ extern int rtw_init_mlme_priv(struct adapter *adapter);/*  (struct mlme_priv *pm
 extern void rtw_free_mlme_priv(struct mlme_priv *pmlmepriv);
 
 
-extern sint rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv);
-extern sint rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, sint keyid, u8 set_tx, bool enqueue);
-extern sint rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv);
+extern signed int rtw_select_and_join_from_scanned_queue(struct mlme_priv *pmlmepriv);
+extern signed int rtw_set_key(struct adapter *adapter, struct security_priv *psecuritypriv, signed int keyid, u8 set_tx, bool enqueue);
+extern signed int rtw_set_auth(struct adapter *adapter, struct security_priv *psecuritypriv);
 
 static inline u8 *get_bssid(struct mlme_priv *pmlmepriv)
 {	/* if sta_mode:pmlmepriv->cur_network.network.MacAddress => bssid */
@@ -500,7 +500,7 @@ static inline u8 *get_bssid(struct mlme_priv *pmlmepriv)
 	return pmlmepriv->cur_network.network.MacAddress;
 }
 
-static inline sint check_fwstate(struct mlme_priv *pmlmepriv, sint state)
+static inline signed int check_fwstate(struct mlme_priv *pmlmepriv, signed int state)
 {
 	if (pmlmepriv->fw_state & state)
 		return true;
@@ -508,7 +508,7 @@ static inline sint check_fwstate(struct mlme_priv *pmlmepriv, sint state)
 	return false;
 }
 
-static inline sint get_fwstate(struct mlme_priv *pmlmepriv)
+static inline signed int get_fwstate(struct mlme_priv *pmlmepriv)
 {
 	return pmlmepriv->fw_state;
 }
@@ -520,7 +520,7 @@ static inline sint get_fwstate(struct mlme_priv *pmlmepriv)
  * ### NOTE:#### (!!!!)
  * MUST TAKE CARE THAT BEFORE CALLING THIS FUNC, YOU SHOULD HAVE LOCKED pmlmepriv->lock
  */
-static inline void set_fwstate(struct mlme_priv *pmlmepriv, sint state)
+static inline void set_fwstate(struct mlme_priv *pmlmepriv, signed int state)
 {
 	pmlmepriv->fw_state |= state;
 	/* FOR HW integration */
@@ -528,7 +528,7 @@ static inline void set_fwstate(struct mlme_priv *pmlmepriv, sint state)
 		pmlmepriv->bScanInProcess = true;
 }
 
-static inline void _clr_fwstate_(struct mlme_priv *pmlmepriv, sint state)
+static inline void _clr_fwstate_(struct mlme_priv *pmlmepriv, signed int state)
 {
 	pmlmepriv->fw_state &= ~state;
 	/* FOR HW integration */
@@ -540,7 +540,7 @@ static inline void _clr_fwstate_(struct mlme_priv *pmlmepriv, sint state)
  * No Limit on the calling context,
  * therefore set it to be the critical section...
  */
-static inline void clr_fwstate(struct mlme_priv *pmlmepriv, sint state)
+static inline void clr_fwstate(struct mlme_priv *pmlmepriv, signed int state)
 {
 	spin_lock_bh(&pmlmepriv->lock);
 	if (check_fwstate(pmlmepriv, state) == true)
@@ -548,7 +548,7 @@ static inline void clr_fwstate(struct mlme_priv *pmlmepriv, sint state)
 	spin_unlock_bh(&pmlmepriv->lock);
 }
 
-static inline void set_scanned_network_val(struct mlme_priv *pmlmepriv, sint val)
+static inline void set_scanned_network_val(struct mlme_priv *pmlmepriv, signed int val)
 {
 	spin_lock_bh(&pmlmepriv->lock);
 	pmlmepriv->num_of_scanned = val;
@@ -600,9 +600,9 @@ extern void _rtw_free_network_nolock(struct mlme_priv *pmlmepriv, struct wlan_ne
 
 extern struct wlan_network *_rtw_find_network(struct __queue *scanned_queue, u8 *addr);
 
-extern sint rtw_if_up(struct adapter *padapter);
+extern signed int rtw_if_up(struct adapter *padapter);
 
-sint rtw_linked_check(struct adapter *padapter);
+signed int rtw_linked_check(struct adapter *padapter);
 
 u8 *rtw_get_capability_from_ie(u8 *ie);
 u8 *rtw_get_beacon_interval_from_ie(u8 *ie);

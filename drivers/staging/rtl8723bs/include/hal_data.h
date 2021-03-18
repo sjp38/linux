@@ -176,7 +176,7 @@ struct dm_priv {
 
 
 struct hal_com_data {
-	HAL_VERSION VersionID;
+	struct HAL_VERSION VersionID;
 	enum RT_MULTI_FUNC MultiFunc; /*  For multi-function consideration. */
 	enum RT_POLARITY_CTL PolarityCtl; /*  For Wifi PDn Polarity control. */
 	enum RT_REGULATOR_MODE	RegulatorMode; /*  switching regulator or LDO */
@@ -233,7 +233,7 @@ struct hal_com_data {
 	bool		EepromOrEfuse;
 	u8 		EfuseUsedPercentage;
 	u16 			EfuseUsedBytes;
-	EFUSE_HAL		EfuseHal;
+	struct EFUSE_HAL		EfuseHal;
 
 	/* 3 [2.4G] */
 	u8 Index24G_CCK_Base[MAX_RF_PATH][CHANNEL_MAX_NUMBER];
@@ -419,7 +419,7 @@ struct hal_com_data {
 	/*  SDIO Tx FIFO related. */
 	/*  HIQ, MID, LOW, PUB free pages; padapter->xmitpriv.free_txpg */
 	u8 	SdioTxFIFOFreePage[SDIO_TX_FREE_PG_QUEUE];
-	_lock		SdioTxFIFOFreePageLock;
+	spinlock_t		SdioTxFIFOFreePageLock;
 	u8 	SdioTxOQTMaxFreeSpace;
 	u8 	SdioTxOQTFreeSpace;
 
@@ -431,19 +431,14 @@ struct hal_com_data {
 	u32 		sdio_tx_max_len[SDIO_MAX_TX_QUEUE];/*  H, N, L, used for sdio tx aggregation max length per queue */
 
 	struct dm_priv dmpriv;
-	DM_ODM_T		odmpriv;
+	struct DM_ODM_T		odmpriv;
 
 	/*  For bluetooth co-existance */
-	BT_COEXIST		bt_coexist;
+	struct BT_COEXIST		bt_coexist;
 
 	/*  Interrupt related register information. */
 	u32 		SysIntrStatus;
 	u32 		SysIntrMask;
-
-#ifdef CONFIG_BACKGROUND_NOISE_MONITOR
-	s16 noise[ODM_MAX_CHANNEL_NUM];
-#endif
-
 };
 
 #define GET_HAL_DATA(__padapter)	((struct hal_com_data *)((__padapter)->HalData))

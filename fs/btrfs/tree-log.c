@@ -3169,10 +3169,6 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 
 	mutex_lock(&log_root_tree->log_mutex);
 
-	index2 = log_root_tree->log_transid % 2;
-	list_add_tail(&root_log_ctx.list, &log_root_tree->log_ctxs[index2]);
-	root_log_ctx.log_transid = log_root_tree->log_transid;
-
 	if (btrfs_is_zoned(fs_info)) {
 		if (!log_root_tree->node) {
 			ret = btrfs_alloc_log_tree_node(trans, log_root_tree);
@@ -3182,6 +3178,10 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 			}
 		}
 	}
+
+	index2 = log_root_tree->log_transid % 2;
+	list_add_tail(&root_log_ctx.list, &log_root_tree->log_ctxs[index2]);
+	root_log_ctx.log_transid = log_root_tree->log_transid;
 
 	/*
 	 * Now we are safe to update the log_root_tree because we're under the
@@ -6278,8 +6278,12 @@ again:
 		}
 
 		wc.replay_dest->log_root = log;
-		btrfs_record_root_in_trans(trans, wc.replay_dest);
-		ret = walk_log_tree(trans, log, &wc);
+		ret = btrfs_record_root_in_trans(trans, wc.replay_dest);
+		if (ret)
+			btrfs_handle_fs_error(fs_info, ret,
+				"Couldn't record the root in the transaction.");
+		else
+			ret = walk_log_tree(trans, log, &wc);
 
 		if (!ret && wc.stage == LOG_WALK_REPLAY_ALL) {
 			ret = fixup_inode_link_counts(trans, wc.replay_dest,

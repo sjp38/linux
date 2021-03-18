@@ -369,9 +369,6 @@ s32 rtl8723b_FirmwareDownload(struct adapter *padapter, bool  bUsedWoWLANFw)
 	u8 tmp_ps;
 
 	RT_TRACE(_module_hal_init_c_, _drv_info_, ("+%s\n", __func__));
-#ifdef CONFIG_WOWLAN
-	RT_TRACE(_module_hal_init_c_, _drv_notice_, ("+%s, bUsedWoWLANFw:%d\n", __func__, bUsedWoWLANFw));
-#endif
 	pFirmware = kzalloc(sizeof(struct rt_firmware), GFP_KERNEL);
 	if (!pFirmware)
 		return _FAIL;
@@ -393,12 +390,7 @@ s32 rtl8723b_FirmwareDownload(struct adapter *padapter, bool  bUsedWoWLANFw)
 		pdbgpriv->dbg_downloadfw_pwr_state_cnt++;
 	}
 
-#ifdef CONFIG_WOWLAN
-	if (bUsedWoWLANFw)
-		fwfilepath = "rtlwifi/rtl8723bs_wowlan.bin";
-	else
-#endif /*  CONFIG_WOWLAN */
-		fwfilepath = "rtlwifi/rtl8723bs_nic.bin";
+	fwfilepath = "rtlwifi/rtl8723bs_nic.bin";
 
 	pr_info("rtl8723bs: acquire FW from file:%s\n", fwfilepath);
 
@@ -535,7 +527,7 @@ void rtl8723b_InitializeFirmwareVars(struct adapter *padapter)
 /* pHalData->H2CStopInsertQueue = false; */
 }
 
-#if defined(CONFIG_WOWLAN) || defined(CONFIG_AP_WOWLAN)
+#ifdef CONFIG_AP_WOWLAN
 /*  */
 
 /*  */
@@ -566,7 +558,7 @@ void SetFwRelatedForWoWLAN8723b(
 	/*  */
 	rtl8723b_InitializeFirmwareVars(padapter);
 }
-#endif /* CONFIG_WOWLAN */
+#endif /* CONFIG_AP_WOWLAN */
 
 static void rtl8723b_free_hal_data(struct adapter *padapter)
 {
@@ -583,7 +575,7 @@ static u8 hal_EfuseSwitchToBank(
 	u32 value32 = 0;
 #ifdef HAL_EFUSE_MEMORY
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 #endif
 
 
@@ -864,7 +856,7 @@ static void hal_ReadEFuse_WiFi(
 {
 #ifdef HAL_EFUSE_MEMORY
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 #endif
 	u8 *efuseTbl = NULL;
 	u16 eFuse_Addr = 0;
@@ -1003,7 +995,7 @@ static void hal_ReadEFuse_BT(
 {
 #ifdef HAL_EFUSE_MEMORY
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 #endif
 	u8 *efuseTbl;
 	u8 bank;
@@ -1146,7 +1138,7 @@ static u16 hal_EfuseGetCurrentSize_WiFi(
 {
 #ifdef HAL_EFUSE_MEMORY
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL		pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 #endif
 	u16 efuse_addr = 0;
 	u16 start_addr = 0; /*  for debug */
@@ -1244,7 +1236,7 @@ static u16 hal_EfuseGetCurrentSize_BT(struct adapter *padapter, u8 bPseudoTest)
 {
 #ifdef HAL_EFUSE_MEMORY
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 #endif
 	u16 btusedbytes;
 	u16 efuse_addr;
@@ -1549,7 +1541,7 @@ static void hal_EfuseConstructPGPkt(
 	u8 offset,
 	u8 word_en,
 	u8 *pData,
-	PPGPKT_STRUCT pTargetPkt
+	struct PGPKT_STRUCT *pTargetPkt
 )
 {
 	memset(pTargetPkt->data, 0xFF, PGPKT_DATA_SIZE);
@@ -1563,12 +1555,12 @@ static u8 hal_EfusePartialWriteCheck(
 	struct adapter *padapter,
 	u8 efuseType,
 	u16 *pAddr,
-	PPGPKT_STRUCT pTargetPkt,
+	struct PGPKT_STRUCT *pTargetPkt,
 	u8 bPseudoTest
 )
 {
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
-	PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
+	struct EFUSE_HAL *pEfuseHal = &pHalData->EfuseHal;
 	u8 bRet = false;
 	u16 startAddr = 0, efuse_max_available_len = 0, efuse_max = 0;
 	u8 efuse_data = 0;
@@ -1681,7 +1673,7 @@ static u8 hal_EfusePgPacketWrite1ByteHeader(
 	struct adapter *padapter,
 	u8 efuseType,
 	u16 *pAddr,
-	PPGPKT_STRUCT pTargetPkt,
+	struct PGPKT_STRUCT *pTargetPkt,
 	u8 bPseudoTest
 )
 {
@@ -1718,7 +1710,7 @@ static u8 hal_EfusePgPacketWrite2ByteHeader(
 	struct adapter *padapter,
 	u8 efuseType,
 	u16 *pAddr,
-	PPGPKT_STRUCT pTargetPkt,
+	struct PGPKT_STRUCT *pTargetPkt,
 	u8 bPseudoTest
 )
 {
@@ -1785,7 +1777,7 @@ static u8 hal_EfusePgPacketWriteHeader(
 	struct adapter *padapter,
 	u8 efuseType,
 	u16 *pAddr,
-	PPGPKT_STRUCT pTargetPkt,
+	struct PGPKT_STRUCT *pTargetPkt,
 	u8 bPseudoTest
 )
 {
@@ -1803,7 +1795,7 @@ static u8 hal_EfusePgPacketWriteData(
 	struct adapter *padapter,
 	u8 efuseType,
 	u16 *pAddr,
-	PPGPKT_STRUCT pTargetPkt,
+	struct PGPKT_STRUCT *pTargetPkt,
 	u8 bPseudoTest
 )
 {
@@ -1830,7 +1822,7 @@ static s32 Hal_EfusePgPacketWrite(
 	bool bPseudoTest
 )
 {
-	PGPKT_STRUCT targetPkt;
+	struct PGPKT_STRUCT targetPkt;
 	u16 startAddr = 0;
 	u8 efuseType = EFUSE_WIFI;
 
@@ -1859,7 +1851,7 @@ static bool Hal_EfusePgPacketWrite_BT(
 	bool bPseudoTest
 )
 {
-	PGPKT_STRUCT targetPkt;
+	struct PGPKT_STRUCT targetPkt;
 	u16 startAddr = 0;
 	u8 efuseType = EFUSE_BT;
 
@@ -1880,10 +1872,10 @@ static bool Hal_EfusePgPacketWrite_BT(
 	return true;
 }
 
-static HAL_VERSION ReadChipVersion8723B(struct adapter *padapter)
+static struct HAL_VERSION ReadChipVersion8723B(struct adapter *padapter)
 {
 	u32 value32;
-	HAL_VERSION ChipVersion;
+	struct HAL_VERSION ChipVersion;
 	struct hal_com_data *pHalData;
 
 /* YJ, TODO, move read chip type here */
@@ -2999,7 +2991,7 @@ static u8 fill_txdesc_sectype(struct pkt_attrib *pattrib)
 	return sectype;
 }
 
-static void fill_txdesc_vcs_8723b(struct adapter *padapter, struct pkt_attrib *pattrib, PTXDESC_8723B ptxdesc)
+static void fill_txdesc_vcs_8723b(struct adapter *padapter, struct pkt_attrib *pattrib, struct TXDESC_8723B *ptxdesc)
 {
 	/* DBG_8192C("cvs_mode =%d\n", pattrib->vcs_mode); */
 
@@ -3032,7 +3024,7 @@ static void fill_txdesc_vcs_8723b(struct adapter *padapter, struct pkt_attrib *p
 	}
 }
 
-static void fill_txdesc_phy_8723b(struct adapter *padapter, struct pkt_attrib *pattrib, PTXDESC_8723B ptxdesc)
+static void fill_txdesc_phy_8723b(struct adapter *padapter, struct pkt_attrib *pattrib, struct TXDESC_8723B *ptxdesc)
 {
 	/* DBG_8192C("bwmode =%d, ch_off =%d\n", pattrib->bwmode, pattrib->ch_offset); */
 
@@ -3052,7 +3044,7 @@ static void rtl8723b_fill_default_txdesc(
 	struct mlme_ext_priv *pmlmeext;
 	struct mlme_ext_info *pmlmeinfo;
 	struct pkt_attrib *pattrib;
-	PTXDESC_8723B ptxdesc;
+	struct TXDESC_8723B *ptxdesc;
 	s32 bmcst;
 
 	memset(pbuf, 0, TXDESC_SIZE);
@@ -3065,7 +3057,7 @@ static void rtl8723b_fill_default_txdesc(
 	pattrib = &pxmitframe->attrib;
 	bmcst = IS_MCAST(pattrib->ra);
 
-	ptxdesc = (PTXDESC_8723B)pbuf;
+	ptxdesc = (struct TXDESC_8723B *)pbuf;
 
 	if (pxmitframe->frame_tag == DATA_FRAMETAG) {
 		u8 drv_userate = 0;
@@ -3087,9 +3079,6 @@ static void rtl8723b_fill_default_txdesc(
 			(pattrib->ether_type != 0x88B4) &&
 			(pattrib->dhcp_pkt != 1) &&
 			(drv_userate != 1)
-#ifdef CONFIG_AUTO_AP_MODE
-			&& (!pattrib->pctrl)
-#endif
 		) {
 			/*  Non EAP & ARP & DHCP type data packet */
 
@@ -3706,7 +3695,7 @@ exit:
 	return ret;
 }
 
-static void process_c2h_event(struct adapter *padapter, PC2H_EVT_HDR pC2hEvent, u8 *c2hBuf)
+static void process_c2h_event(struct adapter *padapter, struct C2H_EVT_HDR *pC2hEvent, u8 *c2hBuf)
 {
 	u8 index = 0;
 
@@ -3750,16 +3739,8 @@ static void process_c2h_event(struct adapter *padapter, PC2H_EVT_HDR pC2hEvent, 
 
 void C2HPacketHandler_8723B(struct adapter *padapter, u8 *pbuffer, u16 length)
 {
-	C2H_EVT_HDR	C2hEvent;
+	struct C2H_EVT_HDR	C2hEvent;
 	u8 *tmpBuf = NULL;
-#ifdef CONFIG_WOWLAN
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-
-	if (pwrpriv->wowlan_mode) {
-		DBG_871X("%s(): return because wowolan_mode ==true! CMDID =%d\n", __func__, pbuffer[0]);
-		return;
-	}
-#endif
 	C2hEvent.CmdID = pbuffer[0];
 	C2hEvent.CmdSeq = pbuffer[1];
 	C2hEvent.CmdLen = length-2;
@@ -4066,7 +4047,7 @@ void SetHwReg8723B(struct adapter *padapter, u8 variable, u8 *val)
 
 	case HW_VAR_INITIAL_GAIN:
 		{
-			DIG_T *pDigTable = &pHalData->odmpriv.DM_DigTable;
+			struct DIG_T *pDigTable = &pHalData->odmpriv.DM_DigTable;
 			u32 rx_gain = *(u32 *)val;
 
 			if (rx_gain == 0xff) {/* restore rx gain */
@@ -4314,19 +4295,6 @@ void GetHwReg8723B(struct adapter *padapter, u8 variable, u8 *val)
 		val16 = rtw_read16(padapter, REG_TXPKT_EMPTY);
 		*val = (val16 & BIT(10)) ? true:false;
 		break;
-#ifdef CONFIG_WOWLAN
-	case HW_VAR_RPWM_TOG:
-		*val = rtw_read8(padapter, SDIO_LOCAL_BASE|SDIO_REG_HRPWM1) & BIT7;
-		break;
-	case HW_VAR_WAKEUP_REASON:
-		*val = rtw_read8(padapter, REG_WOWLAN_WAKE_REASON);
-		if (*val == 0xEA)
-			*val = 0;
-		break;
-	case HW_VAR_SYS_CLKR:
-		*val = rtw_read8(padapter, REG_SYS_CLKR);
-		break;
-#endif
 	default:
 		GetHwReg(padapter, variable, val);
 		break;
@@ -4461,29 +4429,18 @@ u8 GetHalDefVar8723B(struct adapter *padapter, enum HAL_DEF_VARIABLE variable, v
 	return bResult;
 }
 
-#ifdef CONFIG_WOWLAN
-void Hal_DetectWoWMode(struct adapter *padapter)
-{
-	adapter_to_pwrctl(padapter)->bSupportRemoteWakeup = true;
-	DBG_871X("%s\n", __func__);
-}
-#endif /* CONFIG_WOWLAN */
-
 void rtl8723b_start_thread(struct adapter *padapter)
 {
-#ifndef CONFIG_SDIO_TX_TASKLET
 	struct xmit_priv *xmitpriv = &padapter->xmitpriv;
 
 	xmitpriv->SdioXmitThread = kthread_run(rtl8723bs_xmit_thread, padapter, "RTWHALXT");
 	if (IS_ERR(xmitpriv->SdioXmitThread)) {
 		RT_TRACE(_module_hal_xmit_c_, _drv_err_, ("%s: start rtl8723bs_xmit_thread FAIL!!\n", __func__));
 	}
-#endif
 }
 
 void rtl8723b_stop_thread(struct adapter *padapter)
 {
-#ifndef CONFIG_SDIO_TX_TASKLET
 	struct xmit_priv *xmitpriv = &padapter->xmitpriv;
 
 	/*  stop xmit_buf_thread */
@@ -4492,36 +4449,4 @@ void rtl8723b_stop_thread(struct adapter *padapter)
 		wait_for_completion(&xmitpriv->SdioXmitTerminate);
 		xmitpriv->SdioXmitThread = NULL;
 	}
-#endif
 }
-
-#if defined(CONFIG_CHECK_BT_HANG)
-extern void check_bt_status_work(void *data);
-void rtl8723bs_init_checkbthang_workqueue(struct adapter *adapter)
-{
-	adapter->priv_checkbt_wq = alloc_workqueue("sdio_wq", 0, 0);
-	INIT_DELAYED_WORK(&adapter->checkbt_work, (void *)check_bt_status_work);
-}
-
-void rtl8723bs_free_checkbthang_workqueue(struct adapter *adapter)
-{
-	if (adapter->priv_checkbt_wq) {
-		cancel_delayed_work_sync(&adapter->checkbt_work);
-		flush_workqueue(adapter->priv_checkbt_wq);
-		destroy_workqueue(adapter->priv_checkbt_wq);
-		adapter->priv_checkbt_wq = NULL;
-	}
-}
-
-void rtl8723bs_cancle_checkbthang_workqueue(struct adapter *adapter)
-{
-	if (adapter->priv_checkbt_wq)
-		cancel_delayed_work_sync(&adapter->checkbt_work);
-}
-
-void rtl8723bs_hal_check_bt_hang(struct adapter *adapter)
-{
-	if (adapter->priv_checkbt_wq)
-		queue_delayed_work(adapter->priv_checkbt_wq, &(adapter->checkbt_work), 0);
-}
-#endif

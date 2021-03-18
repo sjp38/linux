@@ -125,7 +125,7 @@ extern u8 RSN_CIPHER_SUITE_CCMP[];
 extern u8 RSN_CIPHER_SUITE_WEP104[];
 
 
-typedef enum _RATEID_IDX_ {
+enum RATEID_IDX {
 	RATEID_IDX_BGN_40M_2SS = 0,
 	RATEID_IDX_BGN_40M_1SS = 1,
 	RATEID_IDX_BGN_20M_2SS_BN = 2,
@@ -137,9 +137,9 @@ typedef enum _RATEID_IDX_ {
 	RATEID_IDX_B = 8,
 	RATEID_IDX_VHT_2SS = 9,
 	RATEID_IDX_VHT_1SS = 10,
-} RATEID_IDX, *PRATEID_IDX;
+};
 
-typedef enum _RATR_TABLE_MODE {
+enum RATR_TABLE_MODE {
 	RATR_INX_WIRELESS_NGB = 0,	/*  BGN 40 Mhz 2SS 1SS */
 	RATR_INX_WIRELESS_NG = 1,		/*  GN or N */
 	RATR_INX_WIRELESS_NB = 2,		/*  BGN 20 Mhz 2SS 1SS  or BN */
@@ -149,7 +149,7 @@ typedef enum _RATR_TABLE_MODE {
 	RATR_INX_WIRELESS_B = 6,
 	RATR_INX_WIRELESS_MC = 7,
 	RATR_INX_WIRELESS_AC_N = 8,
-} RATR_TABLE_MODE, *PRATR_TABLE_MODE;
+};
 
 
 enum NETWORK_TYPE {
@@ -983,14 +983,14 @@ struct rtw_ieee802_11_elems {
 	u8 vht_op_mode_notify_len;
 };
 
-typedef enum { ParseOK = 0, ParseUnknown = 1, ParseFailed = -1 } ParseRes;
+enum ParseRes { ParseOK = 0, ParseUnknown = 1, ParseFailed = -1 };
 
-ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
+enum ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
 				struct rtw_ieee802_11_elems *elems,
 				int show_errors);
 
 u8 *rtw_set_fixed_ie(unsigned char *pbuf, unsigned int len, unsigned char *source, unsigned int *frlen);
-u8 *rtw_set_ie(u8 *pbuf, sint index, uint len, u8 *source, uint *frlen);
+u8 *rtw_set_ie(u8 *pbuf, signed int index, uint len, u8 *source, uint *frlen);
 
 enum secondary_ch_offset {
 	SCN = 0, /* no secondary channel */
@@ -998,7 +998,7 @@ enum secondary_ch_offset {
 	SCB = 3,  /* secondary channel below */
 };
 
-u8 *rtw_get_ie(u8*pbuf, sint index, sint *len, sint limit);
+u8 *rtw_get_ie(u8 *pbuf, signed int index, signed int *len, signed int limit);
 u8 *rtw_get_ie_ex(u8 *in_ie, uint in_len, u8 eid, u8 *oui, u8 oui_len, u8 *ie, uint *ielen);
 int rtw_ies_remove_ie(u8 *ies, uint *ies_len, uint offset, u8 eid, u8 *oui, u8 oui_len);
 
@@ -1026,7 +1026,8 @@ u8 *rtw_get_wps_attr_content(u8 *wps_ie, uint wps_ielen, u16 target_attr_id, u8 
  * @buf_len:
  */
 #define for_each_ie(ie, buf, buf_len) \
-	for (ie = (void*)buf; (((u8 *)ie) - ((u8 *)buf) + 1) < buf_len; ie = (void*)(((u8 *)ie) + *(((u8 *)ie)+1) + 2))
+	for (ie = (void *)buf; (((u8 *)ie) - ((u8 *)buf) + 1) < buf_len; \
+		ie = (void *)(((u8 *)ie) + *(((u8 *)ie) + 1) + 2))
 
 uint	rtw_get_rateset_len(u8 *rateset);
 
@@ -1046,7 +1047,7 @@ void rtw_get_bcn_info(struct wlan_network *pnetwork);
 
 void rtw_macaddr_cfg(struct device *dev, u8 *mac_addr);
 
-u16 rtw_mcs_rate(u8 rf_type, u8 bw_40MHz, u8 short_GI, unsigned char * MCS_rate);
+u16 rtw_mcs_rate(u8 rf_type, u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate);
 
 int rtw_action_frame_parse(const u8 *frame, u32 frame_len, u8 *category, u8 *action);
 const char *action_public_str(u8 action);
