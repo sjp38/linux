@@ -865,9 +865,13 @@ __SC_COMP(__NR_epoll_pwait2, sys_epoll_pwait2, compat_sys_epoll_pwait2)
 __SYSCALL(__NR_mount_setattr, sys_mount_setattr)
 #define __NR_quotactl_path 443
 __SYSCALL(__NR_quotactl_path, sys_quotactl_path)
+#ifdef __ARCH_WANT_MEMFD_SECRET
+#define __NR_memfd_secret 444
+__SYSCALL(__NR_memfd_secret, sys_memfd_secret)
+#endif
 
 #undef __NR_syscalls
-#define __NR_syscalls 444
+#define __NR_syscalls 445
 
 /*
  * 32 bit systems traditionally used different
