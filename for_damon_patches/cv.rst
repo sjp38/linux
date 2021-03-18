@@ -1,17 +1,12 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v23)
+Changes from Previous Version (v24)
 ===================================
 
-- Wordsmith commit messages (Shakeel Butt)
-- Call missed mmu_notifier_test_young() (Shakeel Butt)
-- Add one 'Reviewed-by' tag for PG_Idle reuse patch (Shakeel Butt)
-- Rename core code to be region-neutral (Shakeel Butt)
-- Add missed null check of 'damon_new_region()' return value (Coverity SAST)
-- Put pids in dbgfs error cases (Shakeel Butt)
-- Move arbitrary target type support out of DAMON patchset series (Shakeel Butt)
-- Move user space tool patch out of DAMON patchset series
-- Update evaluation result with DAMOOS-tuned prcl schemes
+- Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)
+- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)
+- Remove 'recording' feature
+- Remove user space tool and recording description in the documentation
 
 Introduction
 ============
@@ -308,13 +303,14 @@ are
 Baseline and Complete Git Trees
 ===============================
 
-The patches are based on the v5.10.  You can also clone the complete git
-tree:
+The patches are based on the -mm tree.  More specifically,
+v5.12-rc3-mmots-2021-03-17-22-26 of https://github.com/hnaz/linux-mm.  You can
+also clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v24
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v25
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v24
+https://github.com/sjp38/linux/releases/tag/damon/patches/v25
 
 Development Trees
 -----------------
@@ -352,25 +348,30 @@ memory address space specific monitoring primitives using page table Accessed
 bits and the 'PG_idle' page flag.
 
 Now DAMON just works for virtual address space monitoring via the kernel space
-api.  To let the user space users can use DAMON, following five patches add
+api.  To let the user space users can use DAMON, following four patches add
 interfaces for them.  The 6th patch adds a tracepoint for monitoring results.
 The 7th patch implements a DAMON application kernel module, namely damon-dbgfs,
 that simply wraps DAMON and exposes DAMON interface to the user space via the
-debugfs interface.  To let the user space get the monitoring results more
-easily, the 8th patch implements a simple recording feature in 'damon-dbgfs'.
-The 9th patch further exports pid of monitoring thread (kdamond) to user space
-for easier cpu usage accounting, and the 10th patch makes the debugfs interface
-to support multiple contexts.
+debugfs interface.  The 8th patch further exports pid of monitoring thread
+(kdamond) to user space for easier cpu usage accounting, and the 9th patch
+makes the debugfs interface to support multiple contexts.
 
-Three patches for maintainability follows.  The 11th patch adds documentations
-for both the user space and the kernel space.  The 12th patch provides unit
-tests (based on the kunit) while the 13th patch adds user space tests (based on
+Three patches for maintainability follows.  The 10th patch adds documentations
+for both the user space and the kernel space.  The 11th patch provides unit
+tests (based on the kunit) while the 12th patch adds user space tests (based on
 the kselftest).
 
-Finally, the last patch (14th) updates the MAINTAINERS file.
+Finally, the last patch (13th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v24
+(https://lore.kernel.org/linux-mm/20210204153150.15948-1-sjpark@amazon.com/)
+- Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)
+- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)
+- Remove 'recording' feature (Shakeel Butt)
+- Remove user space tool and recording description in the documentation
 
 Changes from v23
 (https://lore.kernel.org/linux-mm/20201215115448.25633-1-sjpark@amazon.com/)
