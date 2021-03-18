@@ -403,8 +403,7 @@ void hugetlb_cgroup_uncharge_file_region(struct resv_map *resv,
 				      nr_pages * resv->pages_per_hpage);
 		/*
 		 * Only do css_put(rg->css) when we delete the entire region
-		 * because one file_region must hold and only hold one rg->css
-		 * reference.
+		 * because one file_region must hold exactly one css reference.
 		 */
 		if (region_del)
 			css_put(rg->css);

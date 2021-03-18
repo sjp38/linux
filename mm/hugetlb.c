@@ -281,13 +281,12 @@ static void record_hugetlb_cgroup_uncharge_info(struct hugetlb_cgroup *h_cg,
 			&h_cg->rsvd_hugepage[hstate_index(h)];
 		nrg->css = &h_cg->css;
 		/*
-		 * The caller (hugetlb_reserve_pages now) will only hold one
-		 * h_cg->css reference for the whole contiguous reservation
-		 * region. But this area might be scattered when there are
-		 * already some file_regions reside in it. As a result, many
-		 * file_regions may share only one h_cg->css reference. In
-		 * order to ensure that one file_region must hold and only
-		 * hold one h_cg->css reference, we should do css_get for
+		 * The caller will hold exactly one h_cg->css reference for the
+		 * whole contiguous reservation region. But this area might be
+		 * scattered when there are already some file_regions reside in
+		 * it. As a result, many file_regions may share only one css
+		 * reference. In order to ensure that one file_region must hold
+		 * exactly one h_cg->css reference, we should do css_get for
 		 * each file_region and leave the reference held by caller
 		 * untouched.
 		 */
