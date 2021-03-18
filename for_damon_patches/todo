@@ -11,7 +11,7 @@ DAMON
 -----
 
 - Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)
-- Ignore debugfs_create_{file|dir}() return values (Greg KH)
+- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)
 - Remove 'recording' feature
 - Remove user space tool and recording description in the documentation
 
