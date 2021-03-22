@@ -23,6 +23,9 @@ static void damon_ptep_mkold(pte_t *pte, struct mm_struct *mm,
 		referenced = true;
 #endif /* CONFIG_MMU_NOTIFIER */
 
+	if (pte_pfn(*pte) >= max_pfn)
+		return;
+
 	if (referenced)
 		set_page_young(page);
 
@@ -46,6 +49,9 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 				addr + ((1UL) << HPAGE_PMD_SHIFT)))
 		referenced = true;
 #endif /* CONFIG_MMU_NOTIFIER */
+
+	if (pmd_pfn(*pmd) >= max_pfn)
+		return;
 
 	if (referenced)
 		set_page_young(page);
@@ -85,7 +91,8 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 
 	*page_sz = PAGE_SIZE;
 	if (pte) {
-		if (pte_young(*pte) || !page_is_idle(pte_page(*pte)) ||
+		if (pte_young(*pte) || (pte_pfn(*pte) < max_pfn &&
+				!page_is_idle(pte_page(*pte))) ||
 				mmu_notifier_test_young(mm, addr))
 			young = true;
 		pte_unmap_unlock(pte, ptl);
@@ -93,7 +100,8 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	}
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd_young(*pmd) || !page_is_idle(pmd_page(*pmd)) ||
+	if (pmd_young(*pmd) || (pmd_pfn(*pmd) < max_pfn &&
+			!page_is_idle(pmd_page(*pmd))) ||
 			mmu_notifier_test_young(mm, addr))
 		young = true;
 	spin_unlock(ptl);
