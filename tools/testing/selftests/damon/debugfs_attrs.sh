@@ -57,6 +57,69 @@ test_write_fail "$file" "1 2 3 5 4" "$orig_content" \
 test_content "$file" "$orig_content" "1 2 3 4 5" "successfully written"
 echo "$orig_content" > "$file"
 
+# Test record file
+file="$DBGFS/record"
+
+ORIG_CONTENT=$(cat $file)
+
+echo "4242 foo.bar" > $file
+if [ $? -ne 0 ]
+then
+	echo "$file writing sane input failed"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo abc 2 3 > $file
+if [ $? -eq 0 ]
+then
+	echo "$file writing insane input 1 success (should failed)"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo 123 > $file
+if [ $? -eq 0 ]
+then
+	echo "$file writing insane input 2 success (should failed)"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+CONTENT=$(cat $file)
+if [ "$CONTENT" != "4242 foo.bar" ]
+then
+	echo "$file not written"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo "0 null" > $file
+if [ $? -ne 0 ]
+then
+	echo "$file disabling write fail"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+CONTENT=$(cat $file)
+if [ "$CONTENT" != "0 null" ]
+then
+	echo "$file not disabled"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo "4242 foo.bar" > $file
+if [ $? -ne 0 ]
+then
+	echo "$file writing sane data again fail"
+	echo $ORIG_CONTENT > $file
+	exit 1
+fi
+
+echo $ORIG_CONTENT > $file
+
 # Test target_ids file
 # ====================
 
