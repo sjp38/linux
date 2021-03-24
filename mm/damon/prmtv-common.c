@@ -7,11 +7,34 @@
 
 #include "prmtv-common.h"
 
+/*
+ * Get a page by pfn if it is in the LRU list.  Otherwise, returns NULL.
+ *
+ * The body of this function is stollen from the 'page_idle_get_page()'.  We
+ * steal rather than reuse it because the code is quite simple.
+ */
+static struct page *damon_get_page(unsigned long pfn)
+{
+	struct page *page = pfn_to_online_page(pfn);
+
+	if (!page || !PageLRU(page) || !get_page_unless_zero(page))
+		return NULL;
+
+	if (unlikely(!PageLRU(page))) {
+		put_page(page);
+		page = NULL;
+	}
+	return page;
+}
+
 static void damon_ptep_mkold(pte_t *pte, struct mm_struct *mm,
 			     unsigned long addr)
 {
 	bool referenced = false;
-	struct page *page = pte_page(*pte);
+	struct page *page = damon_get_page(pte_pfn(*pte));
+
+	if (!page)
+		return;
 
 	if (pte_young(*pte)) {
 		referenced = true;
@@ -27,6 +50,7 @@ static void damon_ptep_mkold(pte_t *pte, struct mm_struct *mm,
 		set_page_young(page);
 
 	set_page_idle(page);
+	put_page(page);
 }
 
 static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
@@ -34,7 +58,10 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	bool referenced = false;
-	struct page *page = pmd_page(*pmd);
+	struct page *page = damon_get_page(pmd_pfn(*pmd));
+
+	if (!page)
+		return;
 
 	if (pmd_young(*pmd)) {
 		referenced = true;
@@ -51,6 +78,7 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 		set_page_young(page);
 
 	set_page_idle(page);
+	put_page(page);
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
@@ -79,49 +107,35 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
 	bool young = false;
+	struct page *page;
 
 	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
 		return false;
 
 	*page_sz = PAGE_SIZE;
 	if (pte) {
-		if (pte_young(*pte) || !page_is_idle(pte_page(*pte)) ||
-				mmu_notifier_test_young(mm, addr))
+		page = damon_get_page(pte_pfn(*pte));
+		if (page && (pte_young(*pte) || !page_is_idle(page) ||
+					mmu_notifier_test_young(mm, addr)))
 			young = true;
+		if (page)
+			put_page(page);
 		pte_unmap_unlock(pte, ptl);
 		return young;
 	}
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	if (pmd_young(*pmd) || !page_is_idle(pmd_page(*pmd)) ||
-			mmu_notifier_test_young(mm, addr))
+	page = damon_get_page(pmd_pfn(*pmd));
+	if (page && (pmd_young(*pmd) || !page_is_idle(page) ||
+			mmu_notifier_test_young(mm, addr)))
 		young = true;
+	if (page)
+		put_page(page);
 	spin_unlock(ptl);
 	*page_sz = ((1UL) << HPAGE_PMD_SHIFT);
 #endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
 
 	return young;
-}
-
-/*
- * Get a page by pfn if it is in the LRU list.  Otherwise, returns NULL.
- *
- * The body of this function is stollen from the 'page_idle_get_page()'.  We
- * steal rather than reuse it because the code is quite simple.
- */
-static struct page *damon_pa_get_page(unsigned long pfn)
-{
-	struct page *page = pfn_to_online_page(pfn);
-
-	if (!page || !PageLRU(page) ||
-	    !get_page_unless_zero(page))
-		return NULL;
-
-	if (unlikely(!PageLRU(page))) {
-		put_page(page);
-		page = NULL;
-	}
-	return page;
 }
 
 static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
@@ -133,7 +147,7 @@ static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 
 void damon_pa_mkold(unsigned long paddr)
 {
-	struct page *page = damon_pa_get_page(PHYS_PFN(paddr));
+	struct page *page = damon_get_page(PHYS_PFN(paddr));
 	struct rmap_walk_control rwc = {
 		.rmap_one = __damon_pa_mkold,
 		.anon_lock = page_lock_anon_vma_read,
@@ -180,7 +194,7 @@ static bool damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
 
 bool damon_pa_young(unsigned long paddr, unsigned long *page_sz)
 {
-	struct page *page = damon_pa_get_page(PHYS_PFN(paddr));
+	struct page *page = damon_get_page(PHYS_PFN(paddr));
 	struct damon_pa_access_chk_result result = {
 		.page_sz = PAGE_SIZE,
 		.accessed = false,
