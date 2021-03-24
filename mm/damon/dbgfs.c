@@ -582,13 +582,17 @@ static int add_init_region(struct damon_ctx *c,
 {
 	struct damon_target *t;
 	struct damon_region *r, *prev;
+	unsigned long id;
 	int rc = -EINVAL;
 
 	if (ar->start >= ar->end)
 		return -EINVAL;
 
 	damon_for_each_target(t, c) {
-		if (t->id == target_id) {
+		id = t->id;
+		if (targetid_is_pid(c))
+			id = (unsigned long)pid_vnr((struct pid *)id);
+		if (id == target_id) {
 			r = damon_new_region(ar->start, ar->end);
 			if (!r)
 				return -ENOMEM;
