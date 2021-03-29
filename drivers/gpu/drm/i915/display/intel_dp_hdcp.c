@@ -478,6 +478,23 @@ int intel_dp_hdcp2_write_msg(struct intel_digital_port *dig_port,
 	return size;
 }
 
+static int
+get_rxinfo_hdcp_1_dev_downstream(struct intel_digital_port *dig_port, bool *hdcp_1_x)
+{
+	u8 rx_info[HDCP_2_2_RXINFO_LEN];
+	int ret;
+
+	ret = drm_dp_dpcd_read(&dig_port->dp.aux,
+			       DP_HDCP_2_2_REG_RXINFO_OFFSET,
+			       (void *)rx_info, HDCP_2_2_RXINFO_LEN);
+
+	if (ret != HDCP_2_2_RXINFO_LEN)
+		return ret >= 0 ? -EIO : ret;
+
+	*hdcp_1_x = HDCP_2_2_HDCP1_DEVICE_CONNECTED(rx_info[1]) ? true : false;
+	return 0;
+}
+
 static
 ssize_t get_receiver_id_list_size(struct intel_digital_port *dig_port)
 {
@@ -626,6 +643,27 @@ int intel_dp_hdcp2_capable(struct intel_digital_port *dig_port,
 	return 0;
 }
 
+static
+int intel_dp_mst_streams_type1_capable(struct intel_connector *connector,
+				       bool *capable)
+{
+	struct intel_digital_port *dig_port = intel_attached_dig_port(connector);
+	struct drm_i915_private *i915 = to_i915(dig_port->base.base.dev);
+	int ret;
+	bool hdcp_1_x;
+
+	ret = get_rxinfo_hdcp_1_dev_downstream(dig_port, &hdcp_1_x);
+	if (ret) {
+		drm_dbg_kms(&i915->drm,
+			    "[%s:%d] failed to read RxInfo ret=%d\n",
+			    connector->base.name, connector->base.base.id, ret);
+		return ret;
+	}
+
+	*capable = !hdcp_1_x;
+	return 0;
+}
+
 static const struct intel_hdcp_shim intel_dp_hdcp_shim = {
 	.write_an_aksv = intel_dp_hdcp_write_an_aksv,
 	.read_bksv = intel_dp_hdcp_read_bksv,
@@ -698,30 +736,6 @@ intel_dp_mst_hdcp_stream_encryption(struct intel_connector *connector,
 	return 0;
 }
 
-static bool intel_dp_mst_get_qses_status(struct intel_digital_port *dig_port,
-					 struct intel_connector *connector)
-{
-	struct drm_i915_private *i915 = to_i915(dig_port->base.base.dev);
-	struct drm_dp_query_stream_enc_status_ack_reply reply;
-	struct intel_dp *intel_dp = &dig_port->dp;
-	int ret;
-
-	ret = drm_dp_send_query_stream_enc_status(&intel_dp->mst_mgr,
-						  connector->port, &reply);
-	if (ret) {
-		drm_dbg_kms(&i915->drm,
-			    "[%s:%d] failed QSES ret=%d\n",
-			    connector->base.name, connector->base.base.id, ret);
-		return false;
-	}
-
-	drm_dbg_kms(&i915->drm, "[%s:%d] QSES stream auth: %d stream enc: %d\n",
-		    connector->base.name, connector->base.base.id,
-		    reply.auth_completed, reply.encryption_enabled);
-
-	return reply.auth_completed && reply.encryption_enabled;
-}
-
 static int
 intel_dp_mst_hdcp2_stream_encryption(struct intel_connector *connector,
 				     bool enable)
@@ -757,11 +771,6 @@ intel_dp_mst_hdcp2_stream_encryption(struct intel_connector *connector,
 	return 0;
 }
 
-/*
- * DP v2.0 I.3.3 ignore the stream signature L' in QSES reply msg reply.
- * I.3.5 MST source device may use a QSES msg to query downstream status
- * for a particular stream.
- */
 static
 int intel_dp_mst_hdcp2_check_link(struct intel_digital_port *dig_port,
 				  struct intel_connector *connector)
@@ -781,7 +790,7 @@ int intel_dp_mst_hdcp2_check_link(struct intel_digital_port *dig_port,
 			return ret;
 	}
 
-	return intel_dp_mst_get_qses_status(dig_port, connector) ? 0 : -EINVAL;
+	return 0;
 }
 
 static const struct intel_hdcp_shim intel_dp_mst_hdcp_shim = {
@@ -803,6 +812,7 @@ static const struct intel_hdcp_shim intel_dp_mst_hdcp_shim = {
 	.stream_2_2_encryption = intel_dp_mst_hdcp2_stream_encryption,
 	.check_2_2_link = intel_dp_mst_hdcp2_check_link,
 	.hdcp_2_2_capable = intel_dp_hdcp2_capable,
+	.streams_type1_capable = intel_dp_mst_streams_type1_capable,
 	.protocol = HDCP_PROTOCOL_DP,
 };
 

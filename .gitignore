@@ -37,6 +37,7 @@
 *.o
 *.o.*
 *.patch
+*.rmeta
 *.s
 *.so
 *.so.dbg
@@ -59,6 +60,7 @@ modules.order
 /linux
 /vmlinux
 /vmlinux.32
+/vmlinux.map
 /vmlinux.symvers
 /vmlinux-gdb.py
 /vmlinuz
@@ -96,6 +98,7 @@ modules.order
 !.gitattributes
 !.gitignore
 !.mailmap
+!.rustfmt.toml
 
 #
 # Generated include files

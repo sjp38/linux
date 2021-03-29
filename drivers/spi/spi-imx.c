@@ -1548,13 +1548,12 @@ static int spi_imx_slave_abort(struct spi_master *master)
 static int spi_imx_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
-	const struct of_device_id *of_id =
-			of_match_device(spi_imx_dt_ids, &pdev->dev);
 	struct spi_master *master;
 	struct spi_imx_data *spi_imx;
 	struct resource *res;
 	int ret, irq, spi_drctl;
-	const struct spi_imx_devtype_data *devtype_data = of_id->data;
+	const struct spi_imx_devtype_data *devtype_data =
+			of_device_get_match_data(&pdev->dev);
 	bool slave_mode;
 	u32 val;
 
@@ -1801,7 +1800,7 @@ static struct platform_driver spi_imx_driver = {
 };
 module_platform_driver(spi_imx_driver);
 
-MODULE_DESCRIPTION("SPI Controller driver");
+MODULE_DESCRIPTION("i.MX SPI Controller driver");
 MODULE_AUTHOR("Sascha Hauer, Pengutronix");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:" DRIVER_NAME);

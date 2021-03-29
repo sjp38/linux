@@ -165,7 +165,8 @@ int cifs_posix_open(char *full_path, struct inode **pinode,
 			goto posix_open_ret;
 		}
 	} else {
-		cifs_fattr_to_inode(*pinode, &fattr);
+		cifs_revalidate_mapping(*pinode);
+		rc = cifs_fattr_to_inode(*pinode, &fattr);
 	}
 
 posix_open_ret:
