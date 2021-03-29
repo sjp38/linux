@@ -1426,7 +1426,6 @@ static int amdgpu_pmops_suspend(struct device *dev)
 	struct drm_device *drm_dev = dev_get_drvdata(dev);
 	struct amdgpu_device *adev = drm_to_adev(drm_dev);
 	int r;
-<<<<<<< HEAD
 
 	if (amdgpu_acpi_is_s0ix_supported(adev))
 		adev->in_s0ix = true;
@@ -1434,15 +1433,6 @@ static int amdgpu_pmops_suspend(struct device *dev)
 	r = amdgpu_device_suspend(drm_dev, true);
 	adev->in_s3 = false;
 
-=======
-
-	if (amdgpu_acpi_is_s0ix_supported(adev))
-		adev->in_s0ix = true;
-	adev->in_s3 = true;
-	r = amdgpu_device_suspend(drm_dev, true);
-	adev->in_s3 = false;
-
->>>>>>> linux-next/akpm-base
 	return r;
 }
 

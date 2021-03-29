@@ -40,11 +40,6 @@ static void intel_dp_reset_lttpr_common_caps(struct intel_dp *intel_dp)
 	memset(&intel_dp->lttpr_common_caps, 0, sizeof(intel_dp->lttpr_common_caps));
 }
 
-static void intel_dp_reset_lttpr_common_caps(struct intel_dp *intel_dp)
-{
-	memset(&intel_dp->lttpr_common_caps, 0, sizeof(intel_dp->lttpr_common_caps));
-}
-
 static void intel_dp_reset_lttpr_count(struct intel_dp *intel_dp)
 {
 	intel_dp->lttpr_common_caps[DP_PHY_REPEATER_CNT -
@@ -101,11 +96,7 @@ static bool intel_dp_read_lttpr_common_caps(struct intel_dp *intel_dp)
 	 * Detecting LTTPRs must be avoided on platforms with an AUX timeout
 	 * period < 3.2ms. (see DP Standard v2.0, 2.11.2, 3.6.6.1).
 	 */
-<<<<<<< HEAD
-	if (INTEL_GEN(i915) < 10)
-=======
 	if (DISPLAY_VER(i915) < 10)
->>>>>>> linux-next/akpm-base
 		return false;
 
 	if (drm_dp_read_lttpr_common_caps(&intel_dp->aux,

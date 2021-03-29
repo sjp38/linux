@@ -1300,11 +1300,7 @@ static int smu7_start_dpm(struct pp_hwmgr *hwmgr)
 				(0 == smum_send_msg_to_smc(hwmgr,
 						PPSMC_MSG_PCIeDPM_Disable,
 						NULL)),
-<<<<<<< HEAD
-				"Failed to disble pcie DPM during DPM Start Function!",
-=======
 				"Failed to disable pcie DPM during DPM Start Function!",
->>>>>>> linux-next/akpm-base
 				return -EINVAL);
 	}
 

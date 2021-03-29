@@ -2750,8 +2750,6 @@ static int amdgpu_device_ip_suspend_phase2(struct amdgpu_device *adev)
 			continue;
 		}
 
-<<<<<<< HEAD
-=======
 		/* skip unnecessary suspend if we do not initialize them yet */
 		if (adev->gmc.xgmi.pending_reset &&
 		    !(adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_GMC ||
@@ -2762,7 +2760,6 @@ static int amdgpu_device_ip_suspend_phase2(struct amdgpu_device *adev)
 			continue;
 		}
 
->>>>>>> linux-next/akpm-base
 		/* skip suspend of gfx and psp for S0ix
 		 * gfx is in gfxoff state, so on resume it will exit gfxoff just
 		 * like at runtime. PSP is also part of the always on hardware
