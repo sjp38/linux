@@ -20,27 +20,6 @@
  * of the primitives.
  */
 
-/*
- * Get a page by pfn if it is in the LRU list.  Otherwise, returns NULL.
- *
- * The body of this function is stollen from the 'page_idle_get_page()'.  We
- * steal rather than reuse it because the code is quite simple.
- */
-static struct page *damon_pa_get_page(unsigned long pfn)
-{
-	struct page *page = pfn_to_online_page(pfn);
-
-	if (!page || !PageLRU(page) ||
-	    !get_page_unless_zero(page))
-		return NULL;
-
-	if (unlikely(!PageLRU(page))) {
-		put_page(page);
-		page = NULL;
-	}
-	return page;
-}
-
 static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
@@ -50,7 +29,7 @@ static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 
 static void damon_pa_mkold(unsigned long paddr)
 {
-	struct page *page = damon_pa_get_page(PHYS_PFN(paddr));
+	struct page *page = damon_get_page(PHYS_PFN(paddr));
 	struct rmap_walk_control rwc = {
 		.rmap_one = __damon_pa_mkold,
 		.anon_lock = page_lock_anon_vma_read,
@@ -116,7 +95,7 @@ static bool damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
 
 static bool damon_pa_young(unsigned long paddr, unsigned long *page_sz)
 {
-	struct page *page = damon_pa_get_page(PHYS_PFN(paddr));
+	struct page *page = damon_get_page(PHYS_PFN(paddr));
 	struct damon_pa_access_chk_result result = {
 		.page_sz = PAGE_SIZE,
 		.accessed = false,
