@@ -37,6 +37,25 @@ TRACE_EVENT(damon_aggregated,
 			__entry->start, __entry->end, __entry->nr_accesses)
 );
 
+TRACE_EVENT(damon_pgi,
+
+	TP_PROTO(unsigned long pfn, bool accessed),
+
+	TP_ARGS(pfn, accessed),
+
+	TP_STRUCT__entry(
+		__field(unsigned long, pfn)
+		__field(bool, accessed)
+	),
+
+	TP_fast_assign(
+		__entry->pfn = pfn;
+		__entry->accessed = accessed;
+	),
+
+	TP_printk("pfn=%lu accessed=%u", __entry->pfn, __entry->accessed)
+);
+
 #endif /* _TRACE_DAMON_H */
 
 /* This part must be outside protection */
