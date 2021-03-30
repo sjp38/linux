@@ -101,7 +101,7 @@ void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 	}
 }
 
-static bool damon_va_young(struct mm_struct *mm, unsigned long addr,
+bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 			unsigned long *page_sz)
 {
 	pte_t *pte = NULL;
