@@ -19,3 +19,4 @@
 void damon_va_mkold(struct mm_struct *mm, unsigned long addr);
 bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 			unsigned long *page_sz);
+struct page *damon_get_page(unsigned long pfn);
