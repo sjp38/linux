@@ -9,7 +9,9 @@
 #include <linux/mm.h>
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
+#include <linux/pagemap.h>
 #include <linux/random.h>
+#include <linux/rmap.h>
 #include <linux/sched/mm.h>
 #include <linux/slab.h>
 
@@ -19,4 +21,6 @@
 void damon_va_mkold(struct mm_struct *mm, unsigned long addr);
 bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 			unsigned long *page_sz);
-struct page *damon_get_page(unsigned long pfn);
+
+void damon_pa_mkold(unsigned long paddr);
+bool damon_pa_young(unsigned long paddr, unsigned long *page_sz);
