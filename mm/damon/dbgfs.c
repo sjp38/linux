@@ -345,6 +345,8 @@ static int __init __damon_dbgfs_init(void)
 	dbgfs_fill_ctx_dir(dbgfs_root, dbgfs_ctxs[0]);
 
 	dbgfs_dirs = kmalloc_array(1, sizeof(dbgfs_root), GFP_KERNEL);
+	if (!dbgfs_dirs)
+		return -ENOMEM;
 	dbgfs_dirs[0] = dbgfs_root;
 
 	return 0;
@@ -359,9 +361,15 @@ static int __init damon_dbgfs_init(void)
 	int rc;
 
 	dbgfs_ctxs = kmalloc(sizeof(*dbgfs_ctxs), GFP_KERNEL);
-	dbgfs_ctxs[0] = dbgfs_new_ctx();
-	if (!dbgfs_ctxs[0])
+	if (!dbgfs_ctxs) {
+		pr_err("%s: dbgfs ctxs alloc failed\n", __func__);
 		return -ENOMEM;
+	}
+	dbgfs_ctxs[0] = dbgfs_new_ctx();
+	if (!dbgfs_ctxs[0]) {
+		pr_err("%s: dbgfs ctx alloc failed\n", __func__);
+		return -ENOMEM;
+	}
 	dbgfs_nr_ctxs = 1;
 
 	rc = __damon_dbgfs_init();
