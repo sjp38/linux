@@ -41,6 +41,15 @@ config DAMON_PADDR
 	  This builds the default data access monitoring primitives for DAMON
 	  that works for physical address spaces.
 
+config DAMON_PGIDLE
+	bool "Data access monitoring primitives for page granularity idleness"
+	depends on DAMON && MMU
+	select PAGE_EXTENSION if !64BIT
+	select PAGE_IDLE_FLAG
+	help
+	  This builds the default data access monitoring primitives for DAMON
+	  that works for page granularity idleness monitoring.
+
 config DAMON_VADDR_KUNIT_TEST
 	bool "Test for DAMON primitives" if !KUNIT_ALL_TESTS
 	depends on DAMON_VADDR && KUNIT=y
