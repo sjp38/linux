@@ -386,4 +386,31 @@ void damon_pa_set_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_PADDR */
 
+#ifdef CONFIG_DAMON_PGIDLE
+
+/*
+ * struct damon_pfns_range - Represents a pfn range of [@start, @end).
+ * @start:	Start pfn of the range (inclusive).
+ * @end:	End pfn of the range (exclusive).
+ *
+ * In case of the page granularity idleness monitoring, an instance of this
+ * struct is pointed by &damon_ctx.arbitrary_target.
+ */
+struct damon_pfns_range {
+	unsigned long start;
+	unsigned long end;
+};
+
+bool damon_pgi_is_idle(unsigned long pfn, unsigned long *pg_size);
+
+/* Monitoring primitives for page granularity idleness monitoring */
+
+void damon_pgi_prepare_access_checks(struct damon_ctx *ctx);
+unsigned int damon_pgi_check_accesses(struct damon_ctx *ctx);
+bool damon_pgi_target_valid(void *t);
+void damon_pgi_set_primitives(struct damon_ctx *ctx);
+
+#endif	/* CONFIG_DAMON_PGIDLE */
+
+
 #endif	/* _DAMON_H */
