@@ -13,6 +13,8 @@
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
 #include <linux/pagewalk.h>
+#include <linux/sched/task.h>
+#include <linux/sched/mm.h>
 
 #include "prmtv-common.h"
 
