@@ -368,7 +368,7 @@ void damon_va_update(struct damon_ctx *ctx)
  * Get an online page for a pfn if it's in the LRU list.  Otherwise, returns
  * NULL.
  *
- * The body of this function is stollen from the 'page_idle_get_page()'.  We
+ * The body of this function is stolen from the 'page_idle_get_page()'.  We
  * steal rather than reuse it because the code is quite simple.
  */
 static struct page *damon_get_page(unsigned long pfn)
