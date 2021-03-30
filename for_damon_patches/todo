@@ -10,10 +10,6 @@ Done
 DAMON
 -----
 
-- Rebase on latest -mm (https://github.com/hnaz/linux-mm)
-- Remove unnecessary test code that dependent on record feature
-- Handle special mappings having no corresponding 'struct page' (Guoju Fang)
-
 
 DAMOS
 -----
