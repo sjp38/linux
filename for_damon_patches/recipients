@@ -11,7 +11,9 @@
 --cc=elver@google.com \
 --cc=fan.du@intel.com \
 --cc=foersleo@amazon.de \
+--cc=greg@kroah.com \
 --cc=gthelen@google.com \
+--cc=guoju.fgj@alibaba-inc.com \
 --cc=mgorman@suse.de \
 --cc=minchan@kernel.org \
 --cc=mingo@redhat.com \
