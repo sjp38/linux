@@ -1,12 +1,11 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v24)
+Changes from Previous Version (v25)
 ===================================
 
-- Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)
-- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)
-- Remove 'recording' feature
-- Remove user space tool and recording description in the documentation
+- Rebase on latest -mm tree (v5.12-rc4-mmots-2021-03-28-16-40)
+- Remove unnecessary test code that dependent on record feature
+- Handle special mappings having no corresponding 'struct page' (Guoju Fang)
 
 Introduction
 ============
@@ -304,13 +303,13 @@ Baseline and Complete Git Trees
 ===============================
 
 The patches are based on the -mm tree.  More specifically,
-v5.12-rc3-mmots-2021-03-17-22-26 of https://github.com/hnaz/linux-mm.  You can
+v5.12-rc4-mmots-2021-03-28-16-40 of https://github.com/hnaz/linux-mm.  You can
 also clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v25
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v26
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v25
+https://github.com/sjp38/linux/releases/tag/damon/patches/v26
 
 Development Trees
 -----------------
@@ -365,6 +364,12 @@ Finally, the last patch (13th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v25
+(https://lore.kernel.org/linux-mm/20210318100856.34715-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.12-rc4-mmots-2021-03-28-16-40)
+- Remove unnecessary test code that dependent on record feature
+- Handle special mappings having no corresponding 'struct page' (Guoju Fang)
 
 Changes from v24
 (https://lore.kernel.org/linux-mm/20210204153150.15948-1-sjpark@amazon.com/)
@@ -434,25 +439,4 @@ Changes from v18
 - Properly isolate DAMON from other pmd/pte Accessed bit users (Greg Thelen)
 - Rebase on v5.8
 
-Changes from v17
-(https://lore.kernel.org/linux-mm/20200706115322.29598-1-sjpark@amazon.com/)
-- Reorganize the doc and remove png blobs (Mike Rapoport)
-- Wordsmith mechnisms doc and commit messages
-- tools/wss: Set default working set access frequency threshold
-- Avoid race in damon deamon start
-
-Changes from v16
-(https://lore.kernel.org/linux-mm/20200615161927.12637-1-sjpark@amazon.com/)
- - Wordsmith/cleanup the documentations and the code
- - user space tool: Simplify the code and add wss option for reuse histogram
- - recording: Check disablement condition properly
- - recording: Force minimal recording buffer size (1KB)
-
-Changes from v15
-(https://lore.kernel.org/linux-mm/20200608114047.26589-1-sjpark@amazon.com/)
- - Refine commit messages (David Hildenbrand)
- - Optimizes three vma regions search (Varad Gautam)
- - Support static granularity monitoring (Shakeel Butt)
- - Cleanup code and re-organize the sequence of patches
-
-Please refer to the v15 patchset to get older history.
+Please refer to the v18 patchset to get older history.
