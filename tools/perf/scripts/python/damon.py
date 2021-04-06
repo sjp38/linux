@@ -232,7 +232,7 @@ def heatmap_plot_ascii(pixels, time_range, addr_range, resols):
                 highest_heat = pixel.heat
             if not lowest_heat or lowest_heat > pixel.heat:
                 lowest_heat = pixel.heat
-    if not highest_heat or lowest_heat:
+    if not highest_heat or not lowest_heat:
         return
     heat_unit = (highest_heat + 1 - lowest_heat) / 9
 
