@@ -11,7 +11,6 @@
 #include <linux/netdevice.h>
 #include <linux/sched/signal.h>
 #include <linux/atomic.h>
-#include <linux/igmp.h>
 #include <net/sock.h>
 #include <net/inet_common.h>
 #include <net/inet_hashtables.h>
@@ -20,7 +19,6 @@
 #include <net/tcp_states.h>
 #if IS_ENABLED(CONFIG_MPTCP_IPV6)
 #include <net/transp_v6.h>
-#include <net/addrconf.h>
 #endif
 #include <net/mptcp.h>
 #include <net/xfrm.h>
@@ -493,7 +491,7 @@ static bool mptcp_check_data_fin(struct sock *sk)
 	u64 rcv_data_fin_seq;
 	bool ret = false;
 
-	if (__mptcp_check_fallback(msk) || !msk->first)
+	if (__mptcp_check_fallback(msk))
 		return ret;
 
 	/* Need to ack a DATA_FIN received from a peer while this side
@@ -2047,28 +2045,21 @@ out_err:
 	return copied;
 }
 
-static void mptcp_retransmit_handler(struct sock *sk)
-{
-	struct mptcp_sock *msk = mptcp_sk(sk);
-
-	set_bit(MPTCP_WORK_RTX, &msk->flags);
-	mptcp_schedule_work(sk);
-}
-
 static void mptcp_retransmit_timer(struct timer_list *t)
 {
 	struct inet_connection_sock *icsk = from_timer(icsk, t,
 						       icsk_retransmit_timer);
 	struct sock *sk = &icsk->icsk_inet.sk;
+	struct mptcp_sock *msk = mptcp_sk(sk);
 
 	bh_lock_sock(sk);
 	if (!sock_owned_by_user(sk)) {
-		mptcp_retransmit_handler(sk);
+		/* we need a process context to retransmit */
+		if (!test_and_set_bit(MPTCP_WORK_RTX, &msk->flags))
+			mptcp_schedule_work(sk);
 	} else {
 		/* delegate our work to tcp_release_cb() */
-		if (!test_and_set_bit(TCP_WRITE_TIMER_DEFERRED,
-				      &sk->sk_tsq_flags))
-			sock_hold(sk);
+		set_bit(MPTCP_RETRANSMIT, &msk->flags);
 	}
 	bh_unlock_sock(sk);
 	sock_put(sk);
@@ -2878,6 +2869,48 @@ static int mptcp_setsockopt_v6(struct mptcp_sock *msk, int optname,
 	return ret;
 }
 
+static bool mptcp_unsupported(int level, int optname)
+{
+	if (level == SOL_IP) {
+		switch (optname) {
+		case IP_ADD_MEMBERSHIP:
+		case IP_ADD_SOURCE_MEMBERSHIP:
+		case IP_DROP_MEMBERSHIP:
+		case IP_DROP_SOURCE_MEMBERSHIP:
+		case IP_BLOCK_SOURCE:
+		case IP_UNBLOCK_SOURCE:
+		case MCAST_JOIN_GROUP:
+		case MCAST_LEAVE_GROUP:
+		case MCAST_JOIN_SOURCE_GROUP:
+		case MCAST_LEAVE_SOURCE_GROUP:
+		case MCAST_BLOCK_SOURCE:
+		case MCAST_UNBLOCK_SOURCE:
+		case MCAST_MSFILTER:
+			return true;
+		}
+		return false;
+	}
+	if (level == SOL_IPV6) {
+		switch (optname) {
+		case IPV6_ADDRFORM:
+		case IPV6_ADD_MEMBERSHIP:
+		case IPV6_DROP_MEMBERSHIP:
+		case IPV6_JOIN_ANYCAST:
+		case IPV6_LEAVE_ANYCAST:
+		case MCAST_JOIN_GROUP:
+		case MCAST_LEAVE_GROUP:
+		case MCAST_JOIN_SOURCE_GROUP:
+		case MCAST_LEAVE_SOURCE_GROUP:
+		case MCAST_BLOCK_SOURCE:
+		case MCAST_UNBLOCK_SOURCE:
+		case MCAST_MSFILTER:
+			return true;
+		}
+		return false;
+	}
+	return false;
+}
+
 static int mptcp_setsockopt(struct sock *sk, int level, int optname,
 			    sockptr_t optval, unsigned int optlen)
 {
@@ -2885,6 +2918,9 @@ static int mptcp_setsockopt(struct sock *sk, int level, int optname,
 	struct sock *ssk;
 
 	pr_debug("msk=%p", msk);
+
+	if (mptcp_unsupported(level, optname))
+		return -ENOPROTOOPT;
 
 	if (level == SOL_SOCKET)
 		return mptcp_setsockopt_sol_socket(msk, optname, optval, optlen);
@@ -2958,17 +2994,16 @@ void __mptcp_check_push(struct sock *sk, struct sock *ssk)
 	}
 }
 
-#define MPTCP_DEFERRED_ALL (TCPF_WRITE_TIMER_DEFERRED)
-
 /* processes deferred events and flush wmem */
 static void mptcp_release_cb(struct sock *sk)
 {
-	unsigned long flags, nflags;
-
 	for (;;) {
-		flags = 0;
+		unsigned long flags = 0;
+
 		if (test_and_clear_bit(MPTCP_PUSH_PENDING, &mptcp_sk(sk)->flags))
 			flags |= BIT(MPTCP_PUSH_PENDING);
+		if (test_and_clear_bit(MPTCP_RETRANSMIT, &mptcp_sk(sk)->flags))
+			flags |= BIT(MPTCP_RETRANSMIT);
 		if (!flags)
 			break;
 
@@ -2983,6 +3018,8 @@ static void mptcp_release_cb(struct sock *sk)
 		spin_unlock_bh(&sk->sk_lock.slock);
 		if (flags & BIT(MPTCP_PUSH_PENDING))
 			__mptcp_push_pending(sk, 0);
+		if (flags & BIT(MPTCP_RETRANSMIT))
+			__mptcp_retrans(sk);
 
 		cond_resched();
 		spin_lock_bh(&sk->sk_lock.slock);
@@ -2998,20 +3035,6 @@ static void mptcp_release_cb(struct sock *sk)
 	 */
 	__mptcp_update_wmem(sk);
 	__mptcp_update_rmem(sk);
-
-	do {
-		flags = sk->sk_tsq_flags;
-		if (!(flags & MPTCP_DEFERRED_ALL))
-			return;
-		nflags = flags & ~MPTCP_DEFERRED_ALL;
-	} while (cmpxchg(&sk->sk_tsq_flags, flags, nflags) != flags);
-
-	sock_release_ownership(sk);
-
-	if (flags & TCPF_WRITE_TIMER_DEFERRED) {
-		mptcp_retransmit_handler(sk);
-		__sock_put(sk);
-	}
 }
 
 void mptcp_subflow_process_delegated(struct sock *ssk)
@@ -3110,14 +3133,18 @@ bool mptcp_finish_join(struct sock *ssk)
 	pr_debug("msk=%p, subflow=%p", msk, subflow);
 
 	/* mptcp socket already closing? */
-	if (!mptcp_is_fully_established(parent))
+	if (!mptcp_is_fully_established(parent)) {
+		subflow->reset_reason = MPTCP_RST_EMPTCP;
 		return false;
+	}
 
 	if (!msk->pm.server_side)
 		goto out;
 
-	if (!mptcp_pm_allow_new_subflow(msk))
+	if (!mptcp_pm_allow_new_subflow(msk)) {
+		subflow->reset_reason = MPTCP_RST_EPROHIBIT;
 		return false;
+	}
 
 	/* active connections are already on conn_list, and we can't acquire
 	 * msk lock here.
@@ -3131,8 +3158,10 @@ bool mptcp_finish_join(struct sock *ssk)
 		sock_hold(ssk);
 	}
 	spin_unlock_bh(&msk->join_list_lock);
-	if (!ret)
+	if (!ret) {
+		subflow->reset_reason = MPTCP_RST_EPROHIBIT;
 		return false;
+	}
 
 	/* attach to msk socket only after we are sure he will deal with us
 	 * at close time
@@ -3244,8 +3273,12 @@ static int mptcp_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 	if (rcu_access_pointer(tcp_sk(ssock->sk)->md5sig_info))
 		mptcp_subflow_early_fallback(msk, subflow);
 #endif
-	if (subflow->request_mptcp && mptcp_token_new_connect(ssock->sk))
+	if (subflow->request_mptcp && mptcp_token_new_connect(ssock->sk)) {
+		MPTCP_INC_STATS(sock_net(ssock->sk), MPTCP_MIB_TOKENFALLBACKINIT);
 		mptcp_subflow_early_fallback(msk, subflow);
+	}
+	if (likely(!__mptcp_check_fallback(msk)))
+		MPTCP_INC_STATS(sock_net(sock->sk), MPTCP_MIB_MPCAPABLEACTIVE);
 
 do_connect:
 	err = ssock->ops->connect(ssock, uaddr, addr_len, flags);
@@ -3419,34 +3452,10 @@ static __poll_t mptcp_poll(struct file *file, struct socket *sock,
 	return mask;
 }
 
-static int mptcp_release(struct socket *sock)
-{
-	struct mptcp_subflow_context *subflow;
-	struct sock *sk = sock->sk;
-	struct mptcp_sock *msk;
-
-	if (!sk)
-		return 0;
-
-	lock_sock(sk);
-
-	msk = mptcp_sk(sk);
-
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-
-		ip_mc_drop_socket(ssk);
-	}
-
-	release_sock(sk);
-
-	return inet_release(sock);
-}
-
 static const struct proto_ops mptcp_stream_ops = {
 	.family		   = PF_INET,
 	.owner		   = THIS_MODULE,
-	.release	   = mptcp_release,
+	.release	   = inet_release,
 	.bind		   = mptcp_bind,
 	.connect	   = mptcp_stream_connect,
 	.socketpair	   = sock_no_socketpair,
@@ -3538,35 +3547,10 @@ void __init mptcp_proto_init(void)
 }
 
 #if IS_ENABLED(CONFIG_MPTCP_IPV6)
-static int mptcp6_release(struct socket *sock)
-{
-	struct mptcp_subflow_context *subflow;
-	struct mptcp_sock *msk;
-	struct sock *sk = sock->sk;
-
-	if (!sk)
-		return 0;
-
-	lock_sock(sk);
-
-	msk = mptcp_sk(sk);
-
-	mptcp_for_each_subflow(msk, subflow) {
-		struct sock *ssk = mptcp_subflow_tcp_sock(subflow);
-
-		ip_mc_drop_socket(ssk);
-		ipv6_sock_mc_close(ssk);
-		ipv6_sock_ac_close(ssk);
-	}
-
-	release_sock(sk);
-	return inet6_release(sock);
-}
-
 static const struct proto_ops mptcp_v6_stream_ops = {
 	.family		   = PF_INET6,
 	.owner		   = THIS_MODULE,
-	.release	   = mptcp6_release,
+	.release	   = inet6_release,
 	.bind		   = mptcp_bind,
 	.connect	   = mptcp_stream_connect,
 	.socketpair	   = sock_no_socketpair,

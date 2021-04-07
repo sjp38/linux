@@ -694,6 +694,22 @@ static void macb_mac_config(struct phylink_config *config, unsigned int mode,
 	if (old_ncr ^ ncr)
 		macb_or_gem_writel(bp, NCR, ncr);
 
+	/* Disable AN for SGMII fixed link configuration, enable otherwise.
+	 * Must be written after PCSSEL is set in NCFGR,
+	 * otherwise writes will not take effect.
+	 */
+	if (macb_is_gem(bp) && state->interface == PHY_INTERFACE_MODE_SGMII) {
+		u32 pcsctrl, old_pcsctrl;
+
+		old_pcsctrl = gem_readl(bp, PCSCNTRL);
+		if (mode == MLO_AN_FIXED)
+			pcsctrl = old_pcsctrl & ~GEM_BIT(PCSAUTONEG);
+		else
+			pcsctrl = old_pcsctrl | GEM_BIT(PCSAUTONEG);
+		if (old_pcsctrl != pcsctrl)
+			gem_writel(bp, PCSCNTRL, pcsctrl);
+	}
+
 	spin_unlock_irqrestore(&bp->lock, flags);
 }
 
@@ -847,6 +863,15 @@ static int macb_phylink_connect(struct macb *bp)
 	return 0;
 }
 
+static void macb_get_pcs_fixed_state(struct phylink_config *config,
+				     struct phylink_link_state *state)
+{
+	struct net_device *ndev = to_net_dev(config->dev);
+	struct macb *bp = netdev_priv(ndev);
+
+	state->link = (macb_readl(bp, NSR) & MACB_BIT(NSR_LINK)) != 0;
+}
+
 /* based on au1000_eth. c*/
 static int macb_mii_probe(struct net_device *dev)
 {
@@ -854,6 +879,11 @@ static int macb_mii_probe(struct net_device *dev)
 
 	bp->phylink_config.dev = &dev->dev;
 	bp->phylink_config.type = PHYLINK_NETDEV;
+
+	if (bp->phy_interface == PHY_INTERFACE_MODE_SGMII) {
+		bp->phylink_config.poll_fixed_state = true;
+		bp->phylink_config.get_fixed_state = macb_get_pcs_fixed_state;
+	}
 
 	bp->phylink = phylink_create(&bp->phylink_config, bp->pdev->dev.fwnode,
 				     bp->phy_interface, &macb_phylink_ops);
@@ -3239,6 +3269,9 @@ static void gem_prog_cmp_regs(struct macb *bp, struct ethtool_rx_flow_spec *fs)
 	bool cmp_b = false;
 	bool cmp_c = false;
 
+	if (!macb_is_gem(bp))
+		return;
+
 	tp4sp_v = &(fs->h_u.tcp_ip4_spec);
 	tp4sp_m = &(fs->m_u.tcp_ip4_spec);
 
@@ -3607,6 +3640,7 @@ static void macb_restore_features(struct macb *bp)
 {
 	struct net_device *netdev = bp->dev;
 	netdev_features_t features = netdev->features;
+	struct ethtool_rx_fs_item *item;
 
 	/* TX checksum offload */
 	macb_set_txcsum_feature(bp, features);
@@ -3615,6 +3649,9 @@ static void macb_restore_features(struct macb *bp)
 	macb_set_rxcsum_feature(bp, features);
 
 	/* RX Flow Filters */
+	list_for_each_entry(item, &bp->rx_fs_list.list, list)
+		gem_prog_cmp_regs(bp, &item->fs);
+
 	macb_set_rxflow_feature(bp, features);
 }
 
@@ -3728,17 +3765,15 @@ static int macb_clk_init(struct platform_device *pdev, struct clk **pclk,
 		*hclk = devm_clk_get(&pdev->dev, "hclk");
 	}
 
-	if (IS_ERR_OR_NULL(*pclk)) {
-		err = IS_ERR(*pclk) ? PTR_ERR(*pclk) : -ENODEV;
-		dev_err(&pdev->dev, "failed to get macb_clk (%d)\n", err);
-		return err;
-	}
+	if (IS_ERR_OR_NULL(*pclk))
+		return dev_err_probe(&pdev->dev,
+				     IS_ERR(*pclk) ? PTR_ERR(*pclk) : -ENODEV,
+				     "failed to get pclk\n");
 
-	if (IS_ERR_OR_NULL(*hclk)) {
-		err = IS_ERR(*hclk) ? PTR_ERR(*hclk) : -ENODEV;
-		dev_err(&pdev->dev, "failed to get hclk (%d)\n", err);
-		return err;
-	}
+	if (IS_ERR_OR_NULL(*hclk))
+		return dev_err_probe(&pdev->dev,
+				     IS_ERR(*hclk) ? PTR_ERR(*hclk) : -ENODEV,
+				     "failed to get hclk\n");
 
 	*tx_clk = devm_clk_get_optional(&pdev->dev, "tx_clk");
 	if (IS_ERR(*tx_clk))
