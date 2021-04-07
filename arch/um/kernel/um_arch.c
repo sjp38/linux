@@ -15,6 +15,8 @@
 #include <linux/kmsg_dump.h>
 #include <linux/suspend.h>
 
+#include <linux/panic_notifier.h>
+
 #include <asm/processor.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
