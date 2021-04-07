@@ -25,6 +25,8 @@
 
 #include <linux/bitops.h>
 
+#define INT_MAX         ((int)(~0U >> 1))
+
 /*
  * For per-arch arch_within_stack_frames() implementations, defined in
  * asm/thread_info.h.

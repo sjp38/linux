@@ -27,6 +27,7 @@
 #include <linux/file.h>
 #include <linux/uaccess.h>
 #include <asm/switch_to.h>
+#include <linux/panic_notifier.h>
 
 #include <init.h>
 #include <irq_kern.h>
