@@ -5375,6 +5375,7 @@ long hugetlb_unreserve_pages(struct inode *inode, long start, long end,
 	long chg = 0;
 	struct hugepage_subpool *spool = subpool_inode(inode);
 	long gbl_reserve;
+	long delta;
 
 	/*
 	 * Since this routine can be called in the evict inode path for all
@@ -5399,7 +5400,8 @@ long hugetlb_unreserve_pages(struct inode *inode, long start, long end,
 	 * If the subpool has a minimum size, the number of global
 	 * reservations to be released may be adjusted.
 	 */
-	gbl_reserve = hugepage_subpool_put_pages(spool, (chg - freed));
+	delta = chg > 0 ? chg - freed : freed;
+	gbl_reserve = hugepage_subpool_put_pages(spool, delta);
 	hugetlb_acct_memory(h, -gbl_reserve);
 
 	return 0;
