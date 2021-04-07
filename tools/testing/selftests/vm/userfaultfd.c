@@ -368,11 +368,24 @@ static void wp_range(int ufd, __u64 start, __u64 len, bool wp)
 			(uint64_t)start);
 		exit(1);
 	}
+
+	/*
+	 * Error handling within the kernel for continue is subtly different
+	 * from copy or zeropage, so it may be a source of bugs. Trigger an
+	 * error (-EEXIST) on purpose, to verify doing so doesn't cause a BUG.
+	 */
+	req.mapped = 0;
+	ret = ioctl(ufd, UFFDIO_CONTINUE, &req);
+	if (ret >= 0 || req.mapped != -EEXIST) {
+		fprintf(stderr, "failed to exercise UFFDIO_CONTINUE error handling, ret=%d, mapped=%" PRId64, ret, req.mapped);
+		exit(1);
+	}
 }
 
 static void continue_range(int ufd, __u64 start, __u64 len)
 {
 	struct uffdio_continue req;
+	int ret;
 
 	req.range.start = start;
 	req.range.len = len;
