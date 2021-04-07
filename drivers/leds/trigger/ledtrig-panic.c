@@ -9,6 +9,7 @@
 #include <linux/init.h>
 #include <linux/notifier.h>
 #include <linux/leds.h>
+#include <linux/panic_notifier.h>
 #include "../leds.h"
 
 static struct led_trigger *trigger;
