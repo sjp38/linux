@@ -31,6 +31,8 @@
 #include <linux/sched/task.h>
 #include <linux/mm.h>
 
+#include <linux/panic_notifier.h>
+
 #include <asm/acpi.h>
 #include <asm/fixmap.h>
 #include <asm/cpu.h>
