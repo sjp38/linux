@@ -26,11 +26,11 @@ DAMON provides below three interfaces for different users.
   DAMON application programs for you.  You can even extend DAMON for various
   address spaces.
 
-This document describes only the debugfs interface because the user space tool
-is only in the development tree (``damon/master`` branch of
-https://github.com/sjp38/linux) and you could refer to :doc:`/vm/damon/api` for
-the kernel space programming interface.
-
+Nevertheless, you could write your own user space tool using the debugfs
+interface.  A reference implementation is available at
+https://github.com/awslabs/damo.  If you are a kernel programmer, you could
+refer to :doc:`/vm/damon/api` for the kernel space programming interface.  For
+the reason, this document describes only the debugfs interface
 
 debugfs Interface
 =================

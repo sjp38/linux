@@ -43,8 +43,7 @@ If you found some positive signals, you could start by profiling your workloads
 using DAMON.  Find major workloads on your systems and analyze their data
 access pattern to find something wrong or can be improved.  The DAMON user
 space tool (``damo``) will be useful for this.  You can get ``damo`` from
-``tools/damon/`` directory in the DAMON development tree (``damon/master``
-branch of https://github.com/sjp38/linux.git).
+https://github.com/awslabs/damo.
 
 We recommend you to start from working set size distribution check using ``damo
 report wss``.  If the distribution is ununiform or quite different from what
