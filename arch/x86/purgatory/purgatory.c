@@ -14,6 +14,8 @@
 
 #include "../boot/string.h"
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(*(x)))
+
 u8 purgatory_sha256_digest[SHA256_DIGEST_SIZE] __section(".kexec-purgatory");
 
 struct kexec_sha_region purgatory_sha_regions[KEXEC_SEGMENT_MAX] __section(".kexec-purgatory");

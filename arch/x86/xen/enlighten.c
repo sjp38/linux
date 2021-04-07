@@ -5,6 +5,7 @@
 #endif
 #include <linux/cpu.h>
 #include <linux/kexec.h>
+#include <linux/panic_notifier.h>
 #include <linux/slab.h>
 
 #include <xen/xen.h>
