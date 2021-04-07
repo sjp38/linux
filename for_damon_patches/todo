@@ -12,6 +12,7 @@ DAMON
 
 - Check kmalloc() failures in dbgfs init (Greg KH)
 - Fix a typo: s/stollen/stolen/ (Stefan Nuernberger)
+- Update document for updated user space tool path
 
 
 DAMOS
