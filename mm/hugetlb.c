@@ -2278,7 +2278,7 @@ static int alloc_and_dissolve_huge_page(struct hstate *h, struct page *old_page,
 	 */
 	page_ref_dec(new_page);
 retry:
-	spin_lock(&hugetlb_lock);
+	spin_lock_irq(&hugetlb_lock);
 	if (!PageHuge(old_page)) {
 		/*
 		 * Freed from under us. Drop new_page too.
@@ -2291,7 +2291,7 @@ retry:
 		 * Fail with -EBUSY if not possible.
 		 */
 		update_and_free_page(h, new_page);
-		spin_unlock(&hugetlb_lock);
+		spin_unlock_irq(&hugetlb_lock);
 		if (!isolate_huge_page(old_page, list))
 			ret = -EBUSY;
 		return ret;
@@ -2301,7 +2301,7 @@ retry:
 		 * freelist yet. Race window is small, so we can succed here if
 		 * we retry.
 		 */
-		spin_unlock(&hugetlb_lock);
+		spin_unlock_irq(&hugetlb_lock);
 		cond_resched();
 		goto retry;
 	} else {
@@ -2317,7 +2317,7 @@ retry:
 		__enqueue_huge_page(&h->hugepage_freelists[nid], new_page);
 	}
 unlock:
-	spin_unlock(&hugetlb_lock);
+	spin_unlock_irq(&hugetlb_lock);
 
 	return ret;
 }
@@ -2333,15 +2333,15 @@ int isolate_or_dissolve_huge_page(struct page *page, struct list_head *list)
 	 * to carefully check the state under the lock.
 	 * Return success when racing as if we dissolved the page ourselves.
 	 */
-	spin_lock(&hugetlb_lock);
+	spin_lock_irq(&hugetlb_lock);
 	if (PageHuge(page)) {
 		head = compound_head(page);
 		h = page_hstate(head);
 	} else {
-		spin_unlock(&hugetlb_lock);
+		spin_unlock_irq(&hugetlb_lock);
 		return 0;
 	}
-	spin_unlock(&hugetlb_lock);
+	spin_unlock_irq(&hugetlb_lock);
 
 	/*
 	 * Fence off gigantic pages as there is a cyclic dependency between
@@ -2729,7 +2729,7 @@ static int set_max_huge_pages(struct hstate *h, unsigned long count, int nid,
 	 * pages in hstate via the proc/sysfs interfaces.
 	 */
 	mutex_lock(&h->resize_lock);
-	spin_lock(&hugetlb_lock);
+	spin_lock_irq(&hugetlb_lock);
 
 	/*
 	 * Check for a node specific request.
