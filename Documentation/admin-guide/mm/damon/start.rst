@@ -12,15 +12,33 @@ of its features for brevity.  Please refer to :doc:`usage` for more details.
 TL; DR
 ======
 
-Follow below 5 commands to monitor and visualize the access pattern of your
+Follow below commands to monitor and visualize the access pattern of your
 workload. ::
 
-    $ git clone https://github.com/sjp38/linux -b damon/master
-    /* build the kernel with CONFIG_DAMON=y, install, reboot */
-    $ mount -t debugfs none /sys/kernel/debug/
-    $ cd linux/tools/damon
-    $ ./damo record $(pidof <your workload>)
-    $ ./damo report heats --heatmap access_pattern.png
+    # # build the kernel with CONFIG_DAMON_*=y, install it, and reboot
+    # mount -t debugfs none /sys/kernel/debug/
+    # git clone https://github.com/awslabs/damo
+    # ./damo/damo record $(pidof <your workload>)
+    # ./damo/damo report heat --plot_ascii
+
+The final command draws the access heatmap of ``<your workload>``, heatmap,
+which shows when (y-axis) what memory region (x-axis) is how frequently
+accessed (number).
+
+    111111111111111111111111111111111111111111111111111111110000
+    111121111111111111111111111111211111111111111111111111110000
+    000000000000000000000000000000000000000000000000001555552000
+    000000000000000000000000000000000000000000000222223555552000
+    000000000000000000000000000000000000000011111677775000000000
+    000000000000000000000000000000000000000488888000000000000000
+    000000000000000000000000000000000177888400000000000000000000
+    000000000000000000000000000046666522222100000000000000000000
+    000000000000000000000014444344444300000000000000000000000000
+    000000000000000002222245555510000000000000000000000000000000
+    # access_frequency:  0  1  2  3  4  5  6  7  8  9
+    # x-axis: space (140286319947776-140286426374096: 101.496 MiB)
+    # y-axis: time (605442256436361-605479951866441: 37.695430s)
+    # resolution: 60x10 (1.692 MiB and 3.770s for each character)
 
 
 Prerequisites
@@ -30,16 +48,15 @@ Kernel
 ------
 
 You should first ensure your system is running on a kernel built with
-``CONFIG_DAMON=y``.
+``CONFIG_DAMON_*=y``.
 
 
 User Space Tool
 ---------------
 
 For the demonstration, we will use the default user space tool for DAMON,
-called DAMON Operator (DAMO).  It is located at ``tools/damon/damo`` of the
-DAMON development kernel source tree (``damon/master`` branch of
-https://github.com/sjp38/linux).  For brevity, below examples assume you set
+called DAMON Operator (DAMO).  It is available at
+https://github.com/awslabs/damo.  For brevity, below examples assume you set
 ``$PATH`` to point it.  It's not mandatory, though.
 
 Because DAMO is using the debugfs interface (refer to :doc:`usage` for the
