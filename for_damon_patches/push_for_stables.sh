@@ -16,5 +16,5 @@ version=$2
 git push gh.public --force damon/for-v$series \
 	damon/for-v$series:damon/for-v$version
 
-git push gh.damon --force damon/for-v$series:for-v%series \
+git push gh.damon --force damon/for-v$series:for-v$series \
 	damon/for-v$series:for-v$version
