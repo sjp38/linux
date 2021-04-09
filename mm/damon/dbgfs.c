@@ -342,15 +342,12 @@ static int dbgfs_mk_context(char *name)
 			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
 	if (!new_ctxs)
 		return -ENOMEM;
+	dbgfs_ctxs = new_ctxs;
 
 	new_dirs = krealloc(dbgfs_dirs, sizeof(*dbgfs_dirs) *
 			(dbgfs_nr_ctxs + 1), GFP_KERNEL);
-	if (!new_dirs) {
-		kfree(new_ctxs);
+	if (!new_dirs)
 		return -ENOMEM;
-	}
-
-	dbgfs_ctxs = new_ctxs;
 	dbgfs_dirs = new_dirs;
 
 	root = dbgfs_dirs[0];
@@ -370,8 +367,11 @@ static int dbgfs_mk_context(char *name)
 
 	err = dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
 			dbgfs_ctxs[dbgfs_nr_ctxs]);
-	if (err)
+	if (err) {
+		dbgfs_destroy_ctx(new_ctx);
+		debugfs_remove(new_dir);
 		return err;
+	}
 
 	dbgfs_nr_ctxs++;
 	return 0;
