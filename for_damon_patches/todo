@@ -4,6 +4,11 @@ TODOs
 - Support cgroups
 - Use DAMON's own file system (say, damonfs) for user space interface
 
+DAMON
+-----
+
+- dbgfs: Free allocated memory when failure occurs (Stefan Nuernberger)
+
 Done
 ====
 
