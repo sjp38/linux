@@ -7,7 +7,8 @@ TODOs
 DAMON
 -----
 
-- dbgfs: Free allocated memory when failure occurs (Stefan Nuernberger)
+- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
+- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
 
 Done
 ====
