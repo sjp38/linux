@@ -63,4 +63,5 @@ do
 	echo "${results[$i]}"
 done
 
-echo "PASS/FAIL: $nr_pass/$nr_fails"
+echo
+echo "$nr_fails / $((nr_fails + nr_pass) FAIL"
