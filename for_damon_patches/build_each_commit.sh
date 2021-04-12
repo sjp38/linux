@@ -6,6 +6,16 @@ then
 	exit 1
 fi
 
+if [ ! -d .git ]
+then
+	echo "Run on linux git tree"
+	exit 1
+fi
+
+current_branch=$(git branch | grep -e '^* ' | cut -c 3-)
+current_hashid=$(git log --oneline HEAD^.. | awk '{print $1}')
+git stash
+
 range=$1
 commits=()
 while IFS= read -r line
@@ -56,7 +66,18 @@ do
 	results+=("[$result] $commit")
 done
 
+echo "return to previous state: $current_hashid ($current_branch)"
+if [[ "$current_branch" == "(HEAD detached at "* ]]
+then
+	git checkout "$current_hashid"
+else
+	git checkout "$current_branch"
+fi
+git stash pop
 
+echo
+echo "Results"
+echo "======="
 echo
 for ((i = 0; i < ${#results[@]}; i++))
 do
@@ -64,4 +85,4 @@ do
 done
 
 echo
-echo "$nr_fails / $((nr_fails + nr_pass)) FAIL"
+echo "$nr_pass PASS, $nr_fails FAIL"
