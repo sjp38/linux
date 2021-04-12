@@ -17,7 +17,7 @@ nr_pass=0
 nr_fails=0
 results=()
 max_reply=5
-ODIR=$HOME/damon_build_per_commit_outdir
+ODIR=$HOME/build_each_commit_outdir
 for ((i = 0; i < ${#commits[@]}; i++))
 do
 	commit=${commits[$i]}
@@ -64,4 +64,4 @@ do
 done
 
 echo
-echo "$nr_fails / $((nr_fails + nr_pass) FAIL"
+echo "$nr_fails / $((nr_fails + nr_pass)) FAIL"
