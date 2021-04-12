@@ -258,7 +258,7 @@ static const struct file_operations target_ids_fops = {
 	.write = dbgfs_target_ids_write,
 };
 
-static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
+static void dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 {
 	const char * const file_names[] = {"attrs", "target_ids"};
 	const struct file_operations *fops[] = {&attrs_fops, &target_ids_fops};
@@ -266,8 +266,6 @@ static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++)
 		debugfs_create_file(file_names[i], 0600, dir, ctx, fops[i]);
-
-	return 0;
 }
 
 static struct damon_ctx *dbgfs_new_ctx(void)
