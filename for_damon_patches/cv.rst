@@ -1,12 +1,11 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v26)
+Changes from Previous Version (v27)
 ===================================
 
-- Rebase on latest -mm tree (v5.12-rc6-mmots-2021-04-06-22-33)
-- Check kmalloc() failures in dbgfs init (Greg KH)
-- Fix a typo: s/stollen/stolen/ (Stefan Nuernberger)
-- Update document for updated user space tool path
+- Rebase on latest -mm tree (v5.12-rc7-mmots-2021-04-11-20-49)
+- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
+- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
 
 Introduction
 ============
@@ -304,13 +303,13 @@ Baseline and Complete Git Trees
 ===============================
 
 The patches are based on the -mm tree.  More specifically,
-v5.12-rc6-mmots-2021-04-06-22-33 of https://github.com/hnaz/linux-mm.  You can
+v5.12-rc7-mmots-2021-04-11-20-49 of https://github.com/hnaz/linux-mm.  You can
 also clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v27
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v28
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v27
+https://github.com/sjp38/linux/releases/tag/damon/patches/v28
 
 Development Trees
 -----------------
@@ -365,6 +364,12 @@ Finally, the last patch (13th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v27
+(https://lore.kernel.org/linux-mm/20210408134854.31625-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree (v5.12-rc7-mmots-2021-04-11-20-49)
+- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
+- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
 
 Changes from v26
 (https://lore.kernel.org/linux-mm/20210330090537.12143-1-sj38.park@gmail.com/)

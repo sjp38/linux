@@ -14,11 +14,6 @@ Done
 DAMON
 -----
 
-- Rebase on latest -mm tree (v5.12-rc7-mmots-2021-04-11-20-49)
-- dbgfs: Fix wrong failure handlings (Stefan Nuernberger)
-- dbgfs: Change return type of 'dbgfs_fill_ctx_dir()' to void (Greg KH)
-
-
 
 DAMOS
 -----
