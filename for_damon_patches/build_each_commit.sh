@@ -22,7 +22,11 @@ for ((i = 0; i < ${#commits[@]}; i++))
 do
 	commit=${commits[$i]}
 	hashid=$(echo $commit | awk '{print $1}')
-	git checkout "$hashid"
+	if ! git checkout "$hashid"
+	then
+		echo "Couldn't checkout $commit"
+		exit 1
+	fi
 
 	result="FAIL"
 	for ((j = 0; j < $max_reply; j++))
