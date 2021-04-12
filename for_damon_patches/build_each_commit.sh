@@ -25,7 +25,7 @@ do
 	git checkout "$hashid"
 
 	result="FAIL"
-	for ((i = 0; i < $max_reply; i++))
+	for ((j = 0; j < $max_reply; j++))
 	do
 		make O=$ODIR olddefconfig
 		echo 'CONFIG_DAMON=y' >> $ODIR/.config
