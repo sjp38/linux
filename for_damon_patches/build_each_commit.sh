@@ -7,20 +7,24 @@ then
 fi
 
 range=$1
-
-max_reply=5
-
-fails=()
-
-ODIR=$HOME/damon_build_per_commit_outdir
-
+commits=()
 while IFS= read -r line
 do
-	echo "test for $line"
-	commit=$(echo $line | awk '{print $1}')
-	git checkout "$commit"
+	commits+=( "$line" )
+done < <(git log --oneline --reverse "$range")
 
-	success="false"
+nr_pass=0
+nr_fails=0
+results=()
+max_reply=5
+ODIR=$HOME/damon_build_per_commit_outdir
+for ((i = 0; i < ${#commits[@]}; i++))
+do
+	commit=${commits[$i]}
+	hashid=$(echo $commit | awk '{print $1}')
+	git checkout "$hashid"
+
+	result="FAIL"
 	for ((i = 0; i < $max_reply; i++))
 	do
 		make O=$ODIR olddefconfig
@@ -34,28 +38,25 @@ do
 		echo 'CONFIG_DAMON_DBGFS_KUNIT_TEST=y' >> $ODIR/.config
 		if make O=$ODIR -j$(nproc)
 		then
-			success="true"
+			result="PASS"
 			break
 		fi
 	done
 
-	if [ "$success" == "false" ]
+	if [ "$result" == "PASS" ]
 	then
-		fails+=( "$line" )
+		nr_pass=$((nr_pass + 1))
+	else
+		nr_fails=$((nr_fails + 1))
 	fi
-done < <(git log --oneline --reverse "$range")
+	results+=("[$result] $commit")
+done
+
 
 echo
-if [ ${#fails[@]} -eq 0 ]
-then
-	echo "PASS"
-	exit 0
-fi
-
-echo "FAIL"
-echo "failed commits:"
-for ((i = 0; i < ${#fails[@]}; i++))
+for ((i = 0; i < ${#results[@]}; i++))
 do
-	echo "${fails[$i]}"
+	echo "${results[$i]}"
 done
-exit 1
+
+echo "PASS/FAIL: $nr_pass/$nr_fails"
