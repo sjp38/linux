@@ -1141,29 +1141,6 @@ static void vc4_plane_atomic_async_update(struct drm_plane *plane,
 										 plane);
 	struct vc4_plane_state *vc4_state, *new_vc4_state;
 
-<<<<<<< HEAD
-	swap(plane->state->fb, state->fb);
-	plane->state->crtc_x = state->crtc_x;
-	plane->state->crtc_y = state->crtc_y;
-	plane->state->crtc_w = state->crtc_w;
-	plane->state->crtc_h = state->crtc_h;
-	plane->state->src_x = state->src_x;
-	plane->state->src_y = state->src_y;
-	plane->state->src_w = state->src_w;
-	plane->state->src_h = state->src_h;
-	plane->state->alpha = state->alpha;
-	plane->state->pixel_blend_mode = state->pixel_blend_mode;
-	plane->state->rotation = state->rotation;
-	plane->state->zpos = state->zpos;
-	plane->state->normalized_zpos = state->normalized_zpos;
-	plane->state->color_encoding = state->color_encoding;
-	plane->state->color_range = state->color_range;
-	plane->state->src = state->src;
-	plane->state->dst = state->dst;
-	plane->state->visible = state->visible;
-
-	new_vc4_state = to_vc4_plane_state(state);
-=======
 	swap(plane->state->fb, new_plane_state->fb);
 	plane->state->crtc_x = new_plane_state->crtc_x;
 	plane->state->crtc_y = new_plane_state->crtc_y;
@@ -1185,7 +1162,6 @@ static void vc4_plane_atomic_async_update(struct drm_plane *plane,
 	plane->state->visible = new_plane_state->visible;
 
 	new_vc4_state = to_vc4_plane_state(new_plane_state);
->>>>>>> linux-next/akpm-base
 	vc4_state = to_vc4_plane_state(plane->state);
 
 	vc4_state->crtc_x = new_vc4_state->crtc_x;

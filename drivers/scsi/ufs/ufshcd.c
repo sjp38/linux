@@ -6399,11 +6399,7 @@ static int __ufshcd_issue_tm_cmd(struct ufs_hba *hba,
 	blk_mq_start_request(req);
 
 	task_tag = req->tag;
-<<<<<<< HEAD
-	treq->req_header.dword_0 |= cpu_to_be32(task_tag);
-=======
 	treq->upiu_req.req_header.dword_0 |= cpu_to_be32(task_tag);
->>>>>>> linux-next/akpm-base
 
 	memcpy(hba->utmrdl_base_addr + task_tag, treq, sizeof(*treq));
 	ufshcd_vops_setup_task_mgmt(hba, task_tag, tm_function);

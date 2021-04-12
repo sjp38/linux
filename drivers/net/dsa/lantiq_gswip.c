@@ -827,17 +827,9 @@ static int gswip_setup(struct dsa_switch *ds)
 	/* Configure the MDIO Clock 2.5 MHz */
 	gswip_mdio_mask(priv, 0xff, 0x09, GSWIP_MDIO_MDC_CFG1);
 
-<<<<<<< HEAD
-	/* Disable the xMII interface and clear it's isolation bit */
-	for (i = 0; i < priv->hw_info->max_ports; i++)
-		gswip_mii_mask_cfg(priv,
-				   GSWIP_MII_CFG_EN | GSWIP_MII_CFG_ISOLATE,
-				   0, i);
-=======
 	for (i = 0; i < priv->hw_info->max_ports; i++) {
 		/* Disable the xMII link */
 		gswip_mii_mask_cfg(priv, GSWIP_MII_CFG_EN, 0, i);
->>>>>>> linux-next/akpm-base
 
 		/* Automatically select the xMII interface clock */
 		gswip_mii_mask_cfg(priv, GSWIP_MII_CFG_RATE_MASK,

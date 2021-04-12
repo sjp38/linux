@@ -41,10 +41,7 @@ struct bpf_local_storage_map;
 struct kobject;
 struct mem_cgroup;
 struct module;
-<<<<<<< HEAD
-=======
 struct bpf_func_state;
->>>>>>> linux-next/akpm-base
 
 extern struct idr btf_idr;
 extern spinlock_t btf_idr_lock;

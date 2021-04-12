@@ -583,8 +583,6 @@ void ethtool_set_ethtool_phy_ops(const struct ethtool_phy_ops *ops);
 void
 ethtool_params_from_link_mode(struct ethtool_link_ksettings *link_ksettings,
 			      enum ethtool_link_mode_bit_indices link_mode);
-<<<<<<< HEAD
-=======
 
 /**
  * ethtool_sprintf - Write formatted string to ethtool string data
@@ -595,5 +593,4 @@ ethtool_params_from_link_mode(struct ethtool_link_ksettings *link_ksettings,
  * next string.
  */
 extern __printf(2, 3) void ethtool_sprintf(u8 **data, const char *fmt, ...);
->>>>>>> linux-next/akpm-base
 #endif /* _LINUX_ETHTOOL_H */

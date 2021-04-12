@@ -991,14 +991,6 @@ static void sk_psock_strp_read(struct strparser *strp, struct sk_buff *skb)
 		kfree_skb(skb);
 		goto out;
 	}
-<<<<<<< HEAD
-	prog = READ_ONCE(psock->progs.skb_verdict);
-	if (likely(prog)) {
-		skb->sk = sk;
-		tcp_skb_bpf_redirect_clear(skb);
-		ret = sk_psock_bpf_run(psock, prog, skb);
-		ret = sk_psock_map_verd(ret, tcp_skb_bpf_redirect_fetch(skb));
-=======
 	prog = READ_ONCE(psock->progs.stream_verdict);
 	if (likely(prog)) {
 		skb->sk = sk;
@@ -1006,7 +998,6 @@ static void sk_psock_strp_read(struct strparser *strp, struct sk_buff *skb)
 		skb_bpf_redirect_clear(skb);
 		ret = bpf_prog_run_pin_on_cpu(prog, skb);
 		ret = sk_psock_map_verd(ret, skb_bpf_redirect_fetch(skb));
->>>>>>> linux-next/akpm-base
 		skb->sk = NULL;
 	}
 	sk_psock_verdict_apply(psock, skb, ret);
@@ -1121,14 +1112,6 @@ static int sk_psock_verdict_recv(read_descriptor_t *desc, struct sk_buff *skb,
 		kfree_skb(skb);
 		goto out;
 	}
-<<<<<<< HEAD
-	prog = READ_ONCE(psock->progs.skb_verdict);
-	if (likely(prog)) {
-		skb->sk = sk;
-		tcp_skb_bpf_redirect_clear(skb);
-		ret = sk_psock_bpf_run(psock, prog, skb);
-		ret = sk_psock_map_verd(ret, tcp_skb_bpf_redirect_fetch(skb));
-=======
 	prog = READ_ONCE(psock->progs.stream_verdict);
 	if (!prog)
 		prog = READ_ONCE(psock->progs.skb_verdict);
@@ -1138,7 +1121,6 @@ static int sk_psock_verdict_recv(read_descriptor_t *desc, struct sk_buff *skb,
 		skb_bpf_redirect_clear(skb);
 		ret = bpf_prog_run_pin_on_cpu(prog, skb);
 		ret = sk_psock_map_verd(ret, skb_bpf_redirect_fetch(skb));
->>>>>>> linux-next/akpm-base
 		skb->sk = NULL;
 	}
 	sk_psock_verdict_apply(psock, skb, ret);

@@ -300,11 +300,8 @@ int driver_deferred_probe_check_state(struct device *dev)
 static void deferred_probe_timeout_work_func(struct work_struct *work)
 {
 	struct device_private *p;
-<<<<<<< HEAD
-=======
 
 	fw_devlink_drivers_done();
->>>>>>> linux-next/akpm-base
 
 	driver_deferred_probe_timeout = 0;
 	driver_deferred_probe_trigger();

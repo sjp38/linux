@@ -5687,7 +5687,6 @@ static int inet6_set_iftoken(struct inet6_dev *idev, struct in6_addr *token,
 
 	if (dev->flags & IFF_LOOPBACK) {
 		NL_SET_ERR_MSG_MOD(extack, "Device is loopback");
-<<<<<<< HEAD
 		return -EINVAL;
 	}
 
@@ -5697,17 +5696,6 @@ static int inet6_set_iftoken(struct inet6_dev *idev, struct in6_addr *token,
 		return -EINVAL;
 	}
 
-=======
-		return -EINVAL;
-	}
-
-	if (dev->flags & IFF_NOARP) {
-		NL_SET_ERR_MSG_MOD(extack,
-				   "Device does not do neighbour discovery");
-		return -EINVAL;
-	}
-
->>>>>>> linux-next/akpm-base
 	if (!ipv6_accept_ra(idev)) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Router advertisement is disabled on device");
