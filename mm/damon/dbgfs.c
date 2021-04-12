@@ -331,7 +331,6 @@ static int dbgfs_mk_context(char *name)
 {
 	struct dentry *root, **new_dirs, *new_dir;
 	struct damon_ctx **new_ctxs, *new_ctx;
-	int err;
 
 	if (damon_nr_running_ctxs())
 		return -EBUSY;
@@ -364,14 +363,12 @@ static int dbgfs_mk_context(char *name)
 		dbgfs_dirs[dbgfs_nr_ctxs] = NULL;
 		return -ENOMEM;
 	}
+
 	dbgfs_ctxs[dbgfs_nr_ctxs] = new_ctx;
-
-	err = dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
+	dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],
 			dbgfs_ctxs[dbgfs_nr_ctxs]);
-	if (err)
-		return err;
-
 	dbgfs_nr_ctxs++;
+
 	return 0;
 }
 
