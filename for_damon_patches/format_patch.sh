@@ -24,3 +24,29 @@ fi
 
 git format-patch $recipients --cover-letter \
 	--subject-prefix "$subject_prefix" -o "$outdir" $commit_range
+
+echo
+echo "# Patch files are ready at $outdir"
+echo
+echo "# Do checkpatch"
+
+failed=()
+for patch in "$outdir"/*.patch
+do
+	echo "$(basename "$patch")"
+	result=$(./scripts/checkpatch.pl "$patch" | grep total)
+	echo "    $result"
+	errors=$(echo $result | awk '{print $2}')
+	warnings=$(echo $result | awk '{print $4}')
+	if [ "$errors" -gt 0 ] || [ "$warnings" -gt 0 ]
+	then
+		failed+=($patch)
+	fi
+done
+
+echo
+echo "Below patches contain warnings and/or errors"
+for ((i = 0; i < ${#failed[@]}; i++))
+do
+	echo "$(basename ${failed[$i]})"
+done
