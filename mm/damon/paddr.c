@@ -94,13 +94,9 @@ int damon_pa_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 	unsigned long addr;
 	LIST_HEAD(page_list);
 
-	if (scheme->action != DAMOS_PAGEOUT) {
-		pr_warn("%s: unsupported action %d\n",
-				__func__, scheme->action);
+	if (scheme->action != DAMOS_PAGEOUT)
 		return -EINVAL;
-	}
 
-	/* Get pages for the region */
 	for (addr = r->ar.start; addr < r->ar.end; addr += PAGE_SIZE) {
 		struct page *page = damon_get_page(PHYS_PFN(addr));
 
