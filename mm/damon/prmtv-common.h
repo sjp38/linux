@@ -19,6 +19,8 @@
 /* Get a random number in [l, r) */
 #define damon_rand(l, r) (l + prandom_u32_max(r - l))
 
+struct page *damon_get_page(unsigned long pfn);
+
 void damon_va_mkold(struct mm_struct *mm, unsigned long addr);
 bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 			unsigned long *page_sz);
