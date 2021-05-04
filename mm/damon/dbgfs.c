@@ -421,6 +421,14 @@ static ssize_t dbgfs_direct_scheme_write(struct file *file,
 		goto unlock_out;
 	}
 
+	if (targetid_is_pid(ctx)) {
+		target_id = (unsigned long)find_get_pid((int)target_id);
+		if (!target_id) {
+			ret = -EINVAL;
+			goto unlock_out;
+		}
+	}
+
 	damon_for_each_target(target, ctx) {
 		if (target->id == target_id)
 			break;
