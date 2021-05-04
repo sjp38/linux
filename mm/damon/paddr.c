@@ -109,10 +109,12 @@ int damon_pa_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 			put_page(page);
 			continue;
 		}
-		if (PageUnevictable(page))
+		if (PageUnevictable(page)) {
 			putback_lru_page(page);
-		else
+		} else {
 			list_add(&page->lru, &page_list);
+			put_page(page);
+		}
 	}
 	reclaim_pages(&page_list);
 	cond_resched();
