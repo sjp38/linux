@@ -390,9 +390,94 @@ out:
 	return ret;
 }
 
+static ssize_t dbgfs_direct_scheme_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char *usage = "<target id> <start> <end> <action>\n";
+
+	return simple_read_from_buffer(buf, count, ppos, usage, strlen(usage));
+}
+
 static inline bool targetid_is_pid(const struct damon_ctx *ctx)
 {
 	return ctx->primitive.target_valid == damon_va_target_valid;
+}
+
+static int apply_direct_scheme(struct damon_ctx *ctx, unsigned long target_id,
+		unsigned long start, unsigned long end, int action)
+{
+	struct damon_target *target = NULL;
+	struct damon_region region;
+	struct damos scheme;
+	int err = 0;
+
+	if (end <= start || action != DAMOS_PAGEOUT)
+		return -EINVAL;
+
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond) {
+		err = -EBUSY;
+		goto unlock_out;
+	}
+
+	if (targetid_is_pid(ctx)) {
+		target_id = (unsigned long)find_get_pid((int)target_id);
+		if (!target_id) {
+			err = -EINVAL;
+			goto unlock_out;
+		}
+	}
+
+	damon_for_each_target(target, ctx) {
+		if (target->id == target_id)
+			break;
+	}
+
+	if (!target || target->id != target_id) {
+		err = -EINVAL;
+		goto unlock_out;
+	}
+
+	region.ar.start = start;
+	region.ar.end = end;
+	scheme.action = DAMOS_PAGEOUT;
+
+	err = ctx->primitive.apply_scheme(ctx, target, &region, &scheme);
+unlock_out:
+	mutex_unlock(&ctx->kdamond_lock);
+	return err;
+}
+
+/*
+ * input: <start address> <end address> <action>
+ */
+static ssize_t dbgfs_direct_scheme_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	struct damon_ctx *ctx = file->private_data;
+	char *kbuf;
+	unsigned long target_id, start, end;
+	int action;
+	ssize_t ret = count;
+	int err;
+
+	kbuf = user_input_str(buf, count, ppos);
+	if (IS_ERR(kbuf))
+		return PTR_ERR(kbuf);
+
+	if (sscanf(kbuf, "%lu %lu %lu %d", &target_id, &start, &end, &action)
+			!= 4) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	err = apply_direct_scheme(ctx, target_id, start, end, action);
+	if (err)
+		ret = err;
+
+out:
+	kfree(kbuf);
+	return ret;
 }
 
 static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
@@ -744,6 +829,12 @@ static const struct file_operations schemes_fops = {
 	.write = dbgfs_schemes_write,
 };
 
+static const struct file_operations direct_scheme_fops = {
+	.open = damon_dbgfs_open,
+	.read = dbgfs_direct_scheme_read,
+	.write = dbgfs_direct_scheme_write,
+};
+
 static const struct file_operations target_ids_fops = {
 	.open = damon_dbgfs_open,
 	.read = dbgfs_target_ids_read,
@@ -764,10 +855,11 @@ static const struct file_operations kdamond_pid_fops = {
 static void dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 {
 	const char * const file_names[] = {"attrs", "record", "schemes",
+		"direct_scheme",
 		"target_ids", "init_regions", "kdamond_pid"};
 	const struct file_operations *fops[] = {&attrs_fops, &record_fops,
-		&schemes_fops, &target_ids_fops, &init_regions_fops,
-		&kdamond_pid_fops};
+		&schemes_fops, &direct_scheme_fops, &target_ids_fops,
+		&init_regions_fops, &kdamond_pid_fops};
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(file_names); i++)
