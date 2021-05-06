@@ -552,12 +552,14 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			continue;
 		if (r->age < s->min_age_region || s->max_age_region < r->age)
 			continue;
-		s->stat_count++;
-		s->stat_sz += sz;
+
 		if (c->primitive.apply_scheme)
 			c->primitive.apply_scheme(c, t, r, s);
 		if (s->action != DAMOS_STAT)
 			r->age = 0;
+
+		s->stat_count++;
+		s->stat_sz += sz;
 	}
 }
 
