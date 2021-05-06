@@ -107,8 +107,8 @@ enum damos_action {
  * @weight_age_region:	Weight of the region's age.
  *
  * @action:		&damo_action to be applied to the target regions.
- * @action_limit_kb:	Size of @action speed limit.
- * @action_limit_ms:	Unit time of @action speed limit.
+ * @limit_sz:		&action amount limit.
+ * @limit_ms:		&action amount charge duration.
  *
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
@@ -123,14 +123,14 @@ enum damos_action {
  * If a scheme is activated, DAMON finds memory regions having three attributes
  * (size, nr_accesses, and age) that fit in the condition of the scheme.  The
  * regions are sorted using the priority of each region as a key.  The
- * priorities are calculated by a &action specific priority model, which
+ * priority is calculated by a &action specific priority model, which
  * receives the three attributes of each region and the three weights of the
  * scheme as inputs.
  *
  * Then, &action is applied to the regions, high priority first.  If total size
- * of the memory regions that the &action applied within &action_limit_ms
- * becomes exceed &action_limit_kb, the action is not applied more, until
- * current time window completes.
+ * of the memory regions that the &action applied within &limit_ms becomes
+ * exceed &limit_sz, the action is not applied more, until current time window
+ * completes.
  *
  * Whenever &action is applied to a region, &stat_count is increased and the
  * size of the region is added to &stat_sz.
@@ -142,10 +142,18 @@ struct damos {
 	unsigned int max_nr_accesses;
 	unsigned int min_age_region;
 	unsigned int max_age_region;
+
 	enum damos_action action;
+	unsigned long limit_sz;
+	unsigned long limit_ms;
+
 	unsigned long stat_count;
 	unsigned long stat_sz;
 	struct list_head list;
+
+/* private: for limit accounting */
+	unsigned long charged_sz;
+	unsigned long charged_from;
 };
 
 struct damon_ctx;
@@ -366,7 +374,8 @@ struct damos *damon_new_scheme(
 		unsigned long min_sz_region, unsigned long max_sz_region,
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
-		enum damos_action action);
+		enum damos_action action, unsigned long limit_sz,
+		unsigned long limit_ms);
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
 void damon_destroy_scheme(struct damos *s);
 
