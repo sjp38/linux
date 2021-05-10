@@ -108,6 +108,8 @@ struct damos *damon_new_scheme(
 
 	scheme->charged_sz = 0;
 	scheme->charged_from = 0;
+	scheme->charge_target_from = NULL;
+	scheme->charge_addr_from = 0;
 
 	return scheme;
 }
@@ -557,6 +559,21 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 		if (s->limit_sz && s->charged_sz >= s->limit_sz)
 			continue;
 
+		if (s->charge_target_from) {
+			if (t != s->charge_target_from)
+				continue;
+			if (r == damon_last_region(t)) {
+				s->charge_target_from = NULL;
+				s->charge_addr_from = 0;
+				continue;
+			}
+			if (s->charge_addr_from &&
+					r->ar.start < s->charge_addr_from)
+				continue;
+			s->charge_target_from = NULL;
+			s->charge_addr_from = 0;
+		}
+
 		sz = r->ar.end - r->ar.start;
 		/* Check the target regions condition */
 		if (sz < s->min_sz_region || s->max_sz_region < sz)
@@ -575,6 +592,10 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			}
 			c->primitive.apply_scheme(c, t, r, s);
 			s->charged_sz += sz;
+			if (s->limit_sz && s->charged_sz >= s->limit_sz) {
+				s->charge_target_from = t;
+				s->charge_addr_from = r->ar.end + 1;
+			}
 		}
 		if (s->action != DAMOS_STAT)
 			r->age = 0;
@@ -593,7 +614,7 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 
 	damon_for_each_scheme(s, c) {
 		/* Reset charge window if the duration passed */
-		if (s->charged_from + s->limit_ms <= jiffies) {
+		if (s->limit_sz && s->charged_from + s->limit_ms <= jiffies) {
 			s->charged_from = jiffies;
 			s->charged_sz = 0;
 		}
