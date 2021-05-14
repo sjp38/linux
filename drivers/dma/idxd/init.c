@@ -242,6 +242,7 @@ static int idxd_setup_engines(struct idxd_device *idxd)
 		engine->idxd = idxd;
 		device_initialize(&engine->conf_dev);
 		engine->conf_dev.parent = &idxd->conf_dev;
+		engine->conf_dev.bus = &dsa_bus_type;
 		engine->conf_dev.type = &idxd_engine_device_type;
 		rc = dev_set_name(&engine->conf_dev, "engine%d.%d", idxd->id, engine->id);
 		if (rc < 0) {
@@ -311,7 +312,8 @@ static int idxd_setup_internals(struct idxd_device *idxd)
 	init_waitqueue_head(&idxd->cmd_waitq);
 
 	if (idxd->hw.cmd_cap & BIT(IDXD_CMD_REQUEST_INT_HANDLE)) {
-		idxd->int_handles = devm_kcalloc(dev, idxd->max_wqs, sizeof(int), GFP_KERNEL);
+		idxd->int_handles = kcalloc_node(idxd->max_wqs, sizeof(int), GFP_KERNEL,
+						 dev_to_node(dev));
 		if (!idxd->int_handles)
 			return -ENOMEM;
 	}
@@ -787,6 +789,7 @@ module_init(idxd_init_module);
 
 static void __exit idxd_exit_module(void)
 {
+	idxd_unregister_driver();
 	pci_unregister_driver(&idxd_pci_driver);
 	idxd_cdev_remove();
 	idxd_unregister_bus_type();

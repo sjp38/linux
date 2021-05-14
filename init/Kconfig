@@ -60,6 +60,15 @@ config LLD_VERSION
 	default $(ld-version) if LD_IS_LLD
 	default 0
 
+config HAS_RUST
+	depends on ARM64 || CPU_32v6 || CPU_32v6K || (PPC64 && CPU_LITTLE_ENDIAN) || X86_64
+	def_bool $(success,$(RUSTC) --version)
+
+config RUSTC_VERSION
+	depends on HAS_RUST
+	int
+	default $(shell,$(srctree)/scripts/rust-version.sh $(RUSTC))
+
 config CC_CAN_LINK
 	bool
 	default $(success,$(srctree)/scripts/cc-can-link.sh $(CC) $(CLANG_FLAGS) $(m64-flag)) if 64BIT
@@ -442,6 +451,7 @@ config AUDITSYSCALL
 
 source "kernel/irq/Kconfig"
 source "kernel/time/Kconfig"
+source "kernel/bpf/Kconfig"
 source "kernel/Kconfig.preempt"
 
 menu "CPU/Task time and stats accounting"
@@ -1713,46 +1723,6 @@ config KALLSYMS_BASE_RELATIVE
 
 # syscall, maps, verifier
 
-config BPF_LSM
-	bool "LSM Instrumentation with BPF"
-	depends on BPF_EVENTS
-	depends on BPF_SYSCALL
-	depends on SECURITY
-	depends on BPF_JIT
-	help
-	  Enables instrumentation of the security hooks with eBPF programs for
-	  implementing dynamic MAC and Audit Policies.
-
-	  If you are unsure how to answer this question, answer N.
-
-config BPF_SYSCALL
-	bool "Enable bpf() system call"
-	select BPF
-	select IRQ_WORK
-	select TASKS_TRACE_RCU
-	select BINARY_PRINTF
-	select NET_SOCK_MSG if INET
-	default n
-	help
-	  Enable the bpf() system call that allows to manipulate eBPF
-	  programs and maps via file descriptors.
-
-config ARCH_WANT_DEFAULT_BPF_JIT
-	bool
-
-config BPF_JIT_ALWAYS_ON
-	bool "Permanently enable BPF JIT and remove BPF interpreter"
-	depends on BPF_SYSCALL && HAVE_EBPF_JIT && BPF_JIT
-	help
-	  Enables BPF JIT and removes BPF interpreter to avoid
-	  speculative execution of BPF instructions by the interpreter
-
-config BPF_JIT_DEFAULT_ON
-	def_bool ARCH_WANT_DEFAULT_BPF_JIT || BPF_JIT_ALWAYS_ON
-	depends on HAVE_EBPF_JIT && BPF_JIT
-
-source "kernel/bpf/preload/Kconfig"
-
 config USERFAULTFD
 	bool "Enable userfaultfd() system call"
 	depends on MMU
@@ -2049,6 +2019,24 @@ config PROFILING
 	help
 	  Say Y here to enable the extended profiling support mechanisms used
 	  by profilers.
+
+config RUST
+	bool "Rust support"
+	depends on HAS_RUST
+	depends on !COMPILE_TEST
+	default n
+	help
+	  Enables Rust support in the kernel.
+
+	  This allows other Rust-related options, like drivers written in Rust,
+	  to be selected.
+
+	  It is also required to be able to load external kernel modules
+	  written in Rust.
+
+	  See Documentation/rust/ for more information.
+
+	  If unsure, say N.
 
 #
 # Place an empty function call at each tracepoint site. Can be

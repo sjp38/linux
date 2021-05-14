@@ -47,10 +47,6 @@ static void spidev_release(struct device *dev)
 {
 	struct spi_device	*spi = to_spi_device(dev);
 
-	/* spi controllers may cleanup for released devices */
-	if (spi->controller->cleanup)
-		spi->controller->cleanup(spi);
-
 	spi_controller_put(spi->controller);
 	kfree(spi->driver_override);
 	kfree(spi);
@@ -558,6 +554,12 @@ static int spi_dev_check(struct device *dev, void *data)
 	return 0;
 }
 
+static void spi_cleanup(struct spi_device *spi)
+{
+	if (spi->controller->cleanup)
+		spi->controller->cleanup(spi);
+}
+
 /**
  * spi_add_device - Add spi_device allocated with spi_alloc_device
  * @spi: spi_device to register
@@ -622,11 +624,13 @@ int spi_add_device(struct spi_device *spi)
 
 	/* Device may be bound to an active driver when this returns */
 	status = device_add(&spi->dev);
-	if (status < 0)
+	if (status < 0) {
 		dev_err(dev, "can't add %s, status %d\n",
 				dev_name(&spi->dev), status);
-	else
+		spi_cleanup(spi);
+	} else {
 		dev_dbg(dev, "registered child %s\n", dev_name(&spi->dev));
+	}
 
 done:
 	mutex_unlock(&spi_add_lock);
@@ -709,6 +713,8 @@ void spi_unregister_device(struct spi_device *spi)
 {
 	if (!spi)
 		return;
+
+	spi_cleanup(spi);
 
 	if (spi->dev.of_node) {
 		of_node_clear_flag(spi->dev.of_node, OF_POPULATED);
@@ -814,15 +820,29 @@ static void spi_set_cs(struct spi_device *spi, bool enable, bool force)
 
 	if (spi->cs_gpiod || gpio_is_valid(spi->cs_gpio)) {
 		if (!(spi->mode & SPI_NO_CS)) {
-			if (spi->cs_gpiod)
-				/* polarity handled by gpiolib */
-				gpiod_set_value_cansleep(spi->cs_gpiod, activate);
-			else
+			if (spi->cs_gpiod) {
+				/*
+				 * Historically ACPI has no means of the GPIO polarity and
+				 * thus the SPISerialBus() resource defines it on the per-chip
+				 * basis. In order to avoid a chain of negations, the GPIO
+				 * polarity is considered being Active High. Even for the cases
+				 * when _DSD() is involved (in the updated versions of ACPI)
+				 * the GPIO CS polarity must be defined Active High to avoid
+				 * ambiguity. That's why we use enable, that takes SPI_CS_HIGH
+				 * into account.
+				 */
+				if (has_acpi_companion(&spi->dev))
+					gpiod_set_value_cansleep(spi->cs_gpiod, !enable);
+				else
+					/* Polarity handled by GPIO library */
+					gpiod_set_value_cansleep(spi->cs_gpiod, activate);
+			} else {
 				/*
 				 * invert the enable line, as active low is
 				 * default for SPI.
 				 */
 				gpio_set_value_cansleep(spi->cs_gpio, !enable);
+			}
 		}
 		/* Some SPI masters need both GPIO CS & slave_select */
 		if ((spi->controller->flags & SPI_MASTER_GPIO_SS) &&
@@ -1112,10 +1132,20 @@ static int spi_transfer_wait(struct spi_controller *ctlr,
 		if (!speed_hz)
 			speed_hz = 100000;
 
-		ms = 8LL * 1000LL * xfer->len;
+		/*
+		 * For each byte we wait for 8 cycles of the SPI clock.
+		 * Since speed is defined in Hz and we want milliseconds,
+		 * use respective multiplier, but before the division,
+		 * otherwise we may get 0 for short transfers.
+		 */
+		ms = 8LL * MSEC_PER_SEC * xfer->len;
 		do_div(ms, speed_hz);
-		ms += ms + 200; /* some tolerance */
 
+		/*
+		 * Increase it twice and add 200 ms tolerance, use
+		 * predefined maximum in case of overflow.
+		 */
+		ms += ms + 200;
 		if (ms > UINT_MAX)
 			ms = UINT_MAX;
 
@@ -1138,10 +1168,10 @@ static void _spi_transfer_delay_ns(u32 ns)
 {
 	if (!ns)
 		return;
-	if (ns <= 1000) {
+	if (ns <= NSEC_PER_USEC) {
 		ndelay(ns);
 	} else {
-		u32 us = DIV_ROUND_UP(ns, 1000);
+		u32 us = DIV_ROUND_UP(ns, NSEC_PER_USEC);
 
 		if (us <= 10)
 			udelay(us);
@@ -1161,21 +1191,25 @@ int spi_delay_to_ns(struct spi_delay *_delay, struct spi_transfer *xfer)
 
 	switch (unit) {
 	case SPI_DELAY_UNIT_USECS:
-		delay *= 1000;
+		delay *= NSEC_PER_USEC;
 		break;
-	case SPI_DELAY_UNIT_NSECS: /* nothing to do here */
+	case SPI_DELAY_UNIT_NSECS:
+		/* Nothing to do here */
 		break;
 	case SPI_DELAY_UNIT_SCK:
 		/* clock cycles need to be obtained from spi_transfer */
 		if (!xfer)
 			return -EINVAL;
-		/* if there is no effective speed know, then approximate
-		 * by underestimating with half the requested hz
+		/*
+		 * If there is unknown effective speed, approximate it
+		 * by underestimating with half of the requested hz.
 		 */
 		hz = xfer->effective_speed_hz ?: xfer->speed_hz / 2;
 		if (!hz)
 			return -EINVAL;
-		delay *= DIV_ROUND_UP(1000000000, hz);
+
+		/* Convert delay to nanoseconds */
+		delay *= DIV_ROUND_UP(NSEC_PER_SEC, hz);
 		break;
 	default:
 		return -EINVAL;
@@ -1207,6 +1241,7 @@ EXPORT_SYMBOL_GPL(spi_delay_exec);
 static void _spi_transfer_cs_change_delay(struct spi_message *msg,
 					  struct spi_transfer *xfer)
 {
+	u32 default_delay_ns = 10 * NSEC_PER_USEC;
 	u32 delay = xfer->cs_change_delay.value;
 	u32 unit = xfer->cs_change_delay.unit;
 	int ret;
@@ -1214,16 +1249,16 @@ static void _spi_transfer_cs_change_delay(struct spi_message *msg,
 	/* return early on "fast" mode - for everything but USECS */
 	if (!delay) {
 		if (unit == SPI_DELAY_UNIT_USECS)
-			_spi_transfer_delay_ns(10000);
+			_spi_transfer_delay_ns(default_delay_ns);
 		return;
 	}
 
 	ret = spi_delay_exec(&xfer->cs_change_delay, xfer);
 	if (ret) {
 		dev_err_once(&msg->spi->dev,
-			     "Use of unsupported delay unit %i, using default of 10us\n",
-			     unit);
-		_spi_transfer_delay_ns(10000);
+			     "Use of unsupported delay unit %i, using default of %luus\n",
+			     unit, default_delay_ns / NSEC_PER_USEC);
+		_spi_transfer_delay_ns(default_delay_ns);
 	}
 }
 
@@ -2037,6 +2072,7 @@ of_register_spi_device(struct spi_controller *ctlr, struct device_node *nc)
 	/* Store a pointer to the node in the device structure */
 	of_node_get(nc);
 	spi->dev.of_node = nc;
+	spi->dev.fwnode = of_fwnode_handle(nc);
 
 	/* Register the new device */
 	rc = spi_add_device(spi);
@@ -2601,9 +2637,10 @@ static int spi_get_gpio_descs(struct spi_controller *ctlr)
 		native_cs_mask |= BIT(i);
 	}
 
-	ctlr->unused_native_cs = ffz(native_cs_mask);
-	if (num_cs_gpios && ctlr->max_native_cs &&
-	    ctlr->unused_native_cs >= ctlr->max_native_cs) {
+	ctlr->unused_native_cs = ffs(~native_cs_mask) - 1;
+
+	if ((ctlr->flags & SPI_MASTER_GPIO_SS) && num_cs_gpios &&
+	    ctlr->max_native_cs && ctlr->unused_native_cs >= ctlr->max_native_cs) {
 		dev_err(dev, "No unused native chip select available\n");
 		return -EINVAL;
 	}
@@ -3420,8 +3457,8 @@ int spi_setup(struct spi_device *spi)
 		spi_set_thread_rt(spi->controller);
 	}
 
-	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%u bits/w, %u Hz max --> %d\n",
-			(int) (spi->mode & (SPI_CPOL | SPI_CPHA)),
+	dev_dbg(&spi->dev, "setup mode %lu, %s%s%s%s%u bits/w, %u Hz max --> %d\n",
+			spi->mode & SPI_MODE_X_MASK,
 			(spi->mode & SPI_CS_HIGH) ? "cs_high, " : "",
 			(spi->mode & SPI_LSB_FIRST) ? "lsb, " : "",
 			(spi->mode & SPI_3WIRE) ? "3wire, " : "",
@@ -3451,9 +3488,12 @@ int spi_set_cs_timing(struct spi_device *spi, struct spi_delay *setup,
 
 	if (spi->controller->set_cs_timing &&
 	    !(spi->cs_gpiod || gpio_is_valid(spi->cs_gpio))) {
+		mutex_lock(&spi->controller->io_mutex);
+
 		if (spi->controller->auto_runtime_pm) {
 			status = pm_runtime_get_sync(parent);
 			if (status < 0) {
+				mutex_unlock(&spi->controller->io_mutex);
 				pm_runtime_put_noidle(parent);
 				dev_err(&spi->controller->dev, "Failed to power device: %d\n",
 					status);
@@ -3464,11 +3504,13 @@ int spi_set_cs_timing(struct spi_device *spi, struct spi_delay *setup,
 								hold, inactive);
 			pm_runtime_mark_last_busy(parent);
 			pm_runtime_put_autosuspend(parent);
-			return status;
 		} else {
-			return spi->controller->set_cs_timing(spi, setup, hold,
+			status = spi->controller->set_cs_timing(spi, setup, hold,
 							      inactive);
 		}
+
+		mutex_unlock(&spi->controller->io_mutex);
+		return status;
 	}
 
 	if ((setup && setup->unit == SPI_DELAY_UNIT_SCK) ||

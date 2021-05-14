@@ -484,7 +484,7 @@ static void __cdns3_descmiss_copy_data(struct usb_request *request,
 }
 
 /**
- * cdns3_wa2_descmiss_copy_data copy data from internal requests to
+ * cdns3_wa2_descmiss_copy_data - copy data from internal requests to
  * request queued by class driver.
  * @priv_ep: extended endpoint object
  * @request: request object
@@ -3268,8 +3268,10 @@ static int __cdns3_gadget_init(struct cdns *cdns)
 	pm_runtime_get_sync(cdns->dev);
 
 	ret = cdns3_gadget_start(cdns);
-	if (ret)
+	if (ret) {
+		pm_runtime_put_sync(cdns->dev);
 		return ret;
+	}
 
 	/*
 	 * Because interrupt line can be shared with other components in
