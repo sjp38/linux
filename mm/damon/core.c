@@ -87,7 +87,8 @@ struct damos *damon_new_scheme(
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
 		enum damos_action action, unsigned long limit_sz,
-		unsigned long limit_ms)
+		unsigned long limit_ms, unsigned int weight_sz,
+		unsigned int weight_nr_accesses, unsigned int weight_age)
 {
 	struct damos *scheme;
 
@@ -103,6 +104,9 @@ struct damos *damon_new_scheme(
 	scheme->action = action;
 	scheme->limit_sz = limit_sz;
 	scheme->limit_ms = limit_ms;
+	scheme->weight_sz = weight_sz;
+	scheme->weight_nr_accesses = weight_nr_accesses;
+	scheme->weight_age = weight_age;
 	scheme->stat_count = 0;
 	scheme->stat_sz = 0;
 	INIT_LIST_HEAD(&scheme->list);

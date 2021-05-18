@@ -101,6 +101,10 @@ enum damos_action {
  * @limit_sz:		&action amount limit.
  * @limit_ms:		&action amount charge duration.
  *
+ * @weight_sz:		Weight of the region's size for prioritizations.
+ * @weight_nr_accesses:	Weight of the region's nr_accesses for prioritizations.
+ * @weight_age:		Weight of the region's age for prioritizations.
+ *
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
  * @list:		List head for siblings.
@@ -108,7 +112,11 @@ enum damos_action {
  * For each aggregation interval, DAMON finds regions which fit in the
  * condition (&min_sz_region, &max_sz_region, &min_nr_accesses,
  * &max_nr_accesses, &min_age_region, &max_age_region).  Then, it prioritizes
- * the regions using the given &struct damon_primitive->get_scheme_score, and
+ * the regions using the given &struct damon_primitive->get_scheme_score.  You
+ * could customize the prioritization for your environment by setting
+ * &weight_sz, weight_nr_accesses, and &weight_age, because &struct
+ * damon_primitive->get_scheme_score could use it in its logic, though it
+ * depends on the specific implementation.  After this prioritization, DAMON
  * applies &action to prioritized regions, up to &limit_sz per &limit_ms.  If
  * &limit_sz is 0, the prioritization and limit is disabled.
  *
@@ -127,6 +135,10 @@ struct damos {
 	enum damos_action action;
 	unsigned long limit_sz;
 	unsigned long limit_ms;
+
+	unsigned int weight_sz;
+	unsigned int weight_nr_accesses;
+	unsigned int weight_age;
 
 	unsigned long stat_count;
 	unsigned long stat_sz;
@@ -370,7 +382,8 @@ struct damos *damon_new_scheme(
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
 		enum damos_action action, unsigned long limit_sz,
-		unsigned long limit_ms);
+		unsigned long limit_ms, unsigned int weight_sz,
+		unsigned int weight_nr_accesses, unsigned int weight_age);
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
 void damon_destroy_scheme(struct damos *s);
 
