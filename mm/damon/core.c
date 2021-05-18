@@ -653,6 +653,7 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 					continue;
 				score = c->primitive.get_scheme_score(
 						c, t, r, s);
+				BUG_ON(score < 0 || score > DAMOS_MAX_SCORE);
 				s->histogram[score] += r->ar.end - r->ar.start;
 				if (score > max_score)
 					max_score = score;
