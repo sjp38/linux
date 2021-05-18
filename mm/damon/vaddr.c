@@ -528,13 +528,16 @@ int damon_va_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 #define DAMON_MAX_SUBSCORE	(100)
 #define DAMON_MAX_AGE_IN_LOG	(32)
 
-static int damon_va_pageout_score(struct damon_ctx *c, struct damon_region *r)
+static int damon_va_pageout_score(struct damon_ctx *c, struct damon_region *r,
+		struct damos *s)
 {
 	unsigned int max_nr_accesses;
 	int freq_subscore;
 	unsigned int age_in_sec;
 	int age_in_log, age_subscore;
-	int freq_weight = 3, age_weight = 7, hotness;
+	unsigned int freq_weight = s->weight_nr_accesses;
+	unsigned int age_weight = s->weight_age;
+	int hotness;
 
 	max_nr_accesses = c->aggr_interval / c->sample_interval;
 	freq_subscore = r->nr_accesses * DAMON_MAX_SUBSCORE / max_nr_accesses;
@@ -550,14 +553,15 @@ static int damon_va_pageout_score(struct damon_ctx *c, struct damon_region *r)
 
 	/*
 	 * Now age_in_log is in [-DAMON_MAX_AGE_IN_LOG, DAMON_MAX_AGE_IN_LOG].
-	 * Make age score in [0, 100]
+	 * Scale it to be in [0, 100] and set it as age subscore.
 	 */
 	age_in_log += DAMON_MAX_AGE_IN_LOG;
 	age_subscore = age_in_log * DAMON_MAX_SUBSCORE /
 		DAMON_MAX_AGE_IN_LOG / 2;
 
-	hotness = (freq_weight * freq_subscore + age_weight * age_subscore) /
-		(freq_weight + age_weight);
+	hotness = (freq_weight * freq_subscore + age_weight * age_subscore);
+	if (freq_weight + age_weight)
+		hotness /= freq_weight + age_weight;
 	/*
 	 * Transform it to fit in [0, DAMOS_MAX_SCORE]
 	 */
@@ -573,7 +577,7 @@ int damon_va_scheme_score(struct damon_ctx *context, struct damon_target *t,
 
 	switch (scheme->action) {
 	case DAMOS_PAGEOUT:
-		return damon_va_pageout_score(context, r);
+		return damon_va_pageout_score(context, r, scheme);
 		break;
 	default:
 		break;
