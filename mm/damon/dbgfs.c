@@ -384,6 +384,51 @@ static ssize_t dbgfs_direct_scheme_read(struct file *file, char __user *buf,
 #define targetid_is_pid(ctx)	\
 	(ctx->primitive.target_valid == damon_va_target_valid)
 
+static int apply_direct_scheme(struct damon_ctx *ctx, unsigned long target_id,
+		unsigned long start, unsigned long end, int action)
+{
+	struct damon_target *target = NULL;
+	struct damon_region region;
+	struct damos scheme;
+	int err = 0;
+
+	if (end <= start || action != DAMOS_PAGEOUT)
+		return -EINVAL;
+
+	mutex_lock(&ctx->kdamond_lock);
+	if (ctx->kdamond) {
+		err = -EBUSY;
+		goto unlock_out;
+	}
+
+	if (targetid_is_pid(ctx)) {
+		target_id = (unsigned long)find_get_pid((int)target_id);
+		if (!target_id) {
+			err = -EINVAL;
+			goto unlock_out;
+		}
+	}
+
+	damon_for_each_target(target, ctx) {
+		if (target->id == target_id)
+			break;
+	}
+
+	if (!target || target->id != target_id) {
+		err = -EINVAL;
+		goto unlock_out;
+	}
+
+	region.ar.start = start;
+	region.ar.end = end;
+	scheme.action = DAMOS_PAGEOUT;
+
+	err = ctx->primitive.apply_scheme(ctx, target, &region, &scheme);
+unlock_out:
+	mutex_unlock(&ctx->kdamond_lock);
+	return err;
+}
+
 /*
  * input: <start address> <end address> <action>
  */
@@ -394,9 +439,6 @@ static ssize_t dbgfs_direct_scheme_write(struct file *file,
 	char *kbuf;
 	unsigned long target_id, start, end;
 	int action;
-	struct damon_target *target = NULL;
-	struct damon_region region;
-	struct damos scheme;
 	ssize_t ret = count;
 	int err;
 
@@ -410,44 +452,10 @@ static ssize_t dbgfs_direct_scheme_write(struct file *file,
 		goto out;
 	}
 
-	if (end <= start || action != DAMOS_PAGEOUT) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	mutex_lock(&ctx->kdamond_lock);
-	if (ctx->kdamond) {
-		ret = -EBUSY;
-		goto unlock_out;
-	}
-
-	if (targetid_is_pid(ctx)) {
-		target_id = (unsigned long)find_get_pid((int)target_id);
-		if (!target_id) {
-			ret = -EINVAL;
-			goto unlock_out;
-		}
-	}
-
-	damon_for_each_target(target, ctx) {
-		if (target->id == target_id)
-			break;
-	}
-
-	if (!target || target->id != target_id) {
-		ret = -EBUSY;
-		goto unlock_out;
-	}
-
-	region.ar.start = start;
-	region.ar.end = end;
-	scheme.action = DAMOS_PAGEOUT;
-
-	err = ctx->primitive.apply_scheme(ctx, target, &region, &scheme);
+	err = apply_direct_scheme(ctx, target_id, start, end, action);
 	if (err)
 		ret = err;
-unlock_out:
-	mutex_unlock(&ctx->kdamond_lock);
+
 out:
 	kfree(kbuf);
 	return ret;
