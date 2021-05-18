@@ -101,7 +101,7 @@ echo $ORIG_CONTENT > $file
 file="$DBGFS/schemes"
 
 ORIG_CONTENT=$(cat $file)
-echo "1 2 3 4 5 6 3 0 0" > $file
+echo "1 2 3 4 5 6 3 0 0 1 2 3" > $file
 if [ $? -ne 0 ]
 then
 	echo "$file write fail"
@@ -110,7 +110,7 @@ then
 fi
 
 echo "1 2
-3 4 5 6 3 0 0" > $file
+3 4 5 6 3 0 0 1 2 3" > $file
 if [ $? -eq 0 ]
 then
 	echo "$file multi line write success (expected fail)"
