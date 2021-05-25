@@ -84,4 +84,132 @@ config DAMON_DBGFS_KUNIT_TEST
 
 	  If unsure, say N.
 
+config DAMON_RECLAIM
+	bool "Build DAMON-based reclaim (DAMON_RECLAIM)"
+	depends on DAMON_PADDR
+	help
+	  This builds the DAMON-based reclamation subsystem.  It finds pages
+	  that not accessed for a long time (cold) using DAMON and reclaim
+	  those if enabled.
+
+	  This is suggested to be used as a proactive and lightweight
+	  reclamation under light memory pressure, while the traditional page
+	  scanning-based reclamation is used for heavy pressure.
+
+config DAMON_RECLAIM_ENABLE
+	bool "Enable DAMON-based reclaim"
+	depends on DAMON_RECLAIM
+	help
+	  Make DAMON_RECLAIM starts work after booting.  If this is not set,
+	  user could enable it using its runtime interface.
+
+config DAMON_RECLAIM_MIN_AGE
+	int "Minimal microseconds of region to not accessed to be cold"
+	depends on DAMON_RECLAIM
+	default 5000000
+	help
+	  If a memory region has not accessed for this or longer time,
+	  DAMON_RECLAIM identifies the region as cold and reclaim.
+	  5 seconds by default.
+
+config DAMON_RECLAIM_LIMIT_SZ
+	int "Maximum bytes of memory to be reclaimed in each charging window"
+	depends on DAMON_RECLAIM
+	default 1073741824
+	help
+	  DAMON_RECLAIM charges amount of memory reclaimed within each charging
+	  time window and limits no more than this limit is charged.  This
+	  could be useful for limiting CPU usage of DAMON_RECLAIM.
+	  1 GiB by default.
+
+config DAMON_RECLAIM_LIMIT_MS
+	int "The reclaimed memory charging window in milliseconds"
+	depends on DAMON_RECLAIM
+	default 1000
+	help
+	  The charge window for DAMON_RECLAIM_LIMIT_SZ.
+	  1 second by default.
+
+config DAMON_RECLAIM_WATERMARK_CHECK_INTERVAL
+	int "DAMON_RECLAIM watermarks check time interval in microseconds"
+	depends on DAMON_RECLAIM
+	default 5000000
+	help
+	  Minimal time to wait before checking the watermarks, when
+	  DAMON_RECLAIM is enabled but inactive due to its watermarks rule.
+	  5 seconds by default.
+
+config DAMON_RECLAIM_WATERMARK_HIGH
+	int "Free memory rate (per thousand) for the high watermark"
+	range 0 1000
+	depends on DAMON_RECLAIM
+	default 500
+	help
+	  If free memory of the system in bytes per thousand bytes is higher
+	  than this, DAMON_RECLAIM becomes inactive, so it does nothing but
+	  periodically checks the watermarks.  500 by default.
+
+config DAMON_RECLAIM_WATERMARK_MID
+	int "Free memory rate (per thousand) for the middle watermark"
+	range 0 1000
+	depends on DAMON_RECLAIM
+	default 400
+	help
+	  If free memory of the system in bytes per thousand bytes is between
+	  this and the low watermark, DAMON_RECLAIM becomes active, so starts
+	  the work.
+	  400 by default.
+
+config DAMON_RECLAIM_WATERMARK_LOW
+	int "Free memory rate (per thousand) for the low watermark"
+	range 0 1000
+	depends on DAMON_RECLAIM
+	default 200
+	help
+	  If free memory of the system in bytes per thousand bytes is lower
+	  than this, DAMON_RECLAIM becomes inactive, so does nothing but
+	  periodically checks the watermarks.  So, in this case, we fall back
+	  to the traditional page scanning-based reclamation logic.
+	  200 by default.
+
+config DAMON_RECLAIM_SAMPLING_INTERVAL
+	int "Sampling interval for the monitoring in microseconds"
+	depends on DAMON_RECLAIM
+	default 5000
+	help
+	  The sampling interval of DAMON for the DAMON_RECLAIM.  Please refer
+	  to the DAMON documentation for more detail.
+	  5 ms by default.
+
+config DAMON_RECLAIM_AGGREGATION_INTERVAL
+	int "Aggregation interval for the monitoring in microseconds"
+	depends on DAMON_RECLAIM
+	default 100000
+	help
+	  The aggregation interval of DAMON for the DAMON_RECLAIM.  Please
+	  refer to the DAMON documentation for more detail.
+	  reclaim.  100 ms by default.
+
+config DAMON_RECLAIM_MIN_NR_REGIONS
+	int "Minimum number of monitoring regions"
+	depends on DAMON_RECLAIM
+	default 10
+	help
+	  The minimal number of monitoring regions for DAMON_RECLAIM.  Can be
+	  used to set lower-bound of the monitoring's quality.  But setting
+	  this too high could result in increased monitoring overhead.  Please
+	  refer to the DAMON documentation for more detail.
+	  10 by default.
+
+config DAMON_RECLAIM_MAX_NR_REGIONS
+	int "Maximum number of monitoring regions"
+	depends on DAMON_RECLAIM
+	default 1000
+	help
+	  The maximum number of monitoring regions for DAMON-based reclaim.
+	  Can be used to set upper-bound of the monitoring overhead.  However,
+	  setting this too low could result in bad monitoring quality.  Please
+	  refer to the DAMON documentation for more detail.
+	  1000 by default.
+
 endmenu
