@@ -107,6 +107,8 @@ struct damos *damon_new_scheme(
 	scheme->limit.ms = limit->ms;
 	scheme->limit.charged_sz = 0;
 	scheme->limit.charged_from = 0;
+	scheme->limit.charge_target_from = NULL;
+	scheme->limit.charge_addr_from = 0;
 
 	return scheme;
 }
@@ -558,6 +560,21 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 		if (limit->sz && limit->charged_sz >= limit->sz)
 			continue;
 
+		if (limit->charge_target_from) {
+			if (t != limit->charge_target_from)
+				continue;
+			if (r == damon_last_region(t)) {
+				limit->charge_target_from = NULL;
+				limit->charge_addr_from = 0;
+				continue;
+			}
+			if (limit->charge_addr_from &&
+					r->ar.start < limit->charge_addr_from)
+				continue;
+			limit->charge_target_from = NULL;
+			limit->charge_addr_from = 0;
+		}
+
 		sz = r->ar.end - r->ar.start;
 		/* Check the target regions condition */
 		if (sz < s->min_sz_region || s->max_sz_region < sz)
@@ -576,6 +593,10 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			}
 			c->primitive.apply_scheme(c, t, r, s);
 			limit->charged_sz += sz;
+			if (limit->sz && limit->charged_sz >= limit->sz) {
+				limit->charge_target_from = t;
+				limit->charge_addr_from = r->ar.end + 1;
+			}
 		}
 		if (s->action != DAMOS_STAT)
 			r->age = 0;
