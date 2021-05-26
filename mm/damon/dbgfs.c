@@ -227,11 +227,14 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 
 	damon_for_each_scheme(s, c) {
 		rc = scnprintf(&buf[written], len - written,
-				"%lu %lu %u %u %u %u %d %lu %lu\n",
+				"%lu %lu %u %u %u %u %d %lu %lu %lu %lu %lu\n",
 				s->min_sz_region, s->max_sz_region,
 				s->min_nr_accesses, s->max_nr_accesses,
 				s->min_age_region, s->max_age_region,
-				s->action, s->stat_count, s->stat_sz);
+				s->action,
+				s->quota.ms, s->quota.sz,
+				s->quota.reset_interval,
+				s->stat_count, s->stat_sz);
 		if (!rc)
 			return -ENOMEM;
 
@@ -312,10 +315,11 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 	while (pos < len && *nr_schemes < max_nr_schemes) {
 		struct damos_quota quota = {};
 
-		ret = sscanf(&str[pos], "%lu %lu %u %u %u %u %u%n",
+		ret = sscanf(&str[pos], "%lu %lu %u %u %u %u %u %lu %lu %lu%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
-				&min_age, &max_age, &action, &parsed);
-		if (ret != 7)
+				&min_age, &max_age, &action, &quota.ms,
+				&quota.sz, &quota.reset_interval, &parsed);
+		if (ret != 10)
 			break;
 		if (!damos_action_valid(action)) {
 			pr_err("wrong action %d\n", action);
@@ -1139,6 +1143,15 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 	return ret;
 }
 
+/*
+ * v1: Add the scheme speed limit
+ */
+static ssize_t dbgfs_version_read(struct file *file,
+		char __user *buf, size_t count, loff_t *ppos)
+{
+	return simple_read_from_buffer(buf, count, ppos, "1\n", 2);
+}
+
 static const struct file_operations mk_contexts_fops = {
 	.write = dbgfs_mk_context_write,
 };
@@ -1152,13 +1165,18 @@ static const struct file_operations monitor_on_fops = {
 	.write = dbgfs_monitor_on_write,
 };
 
+static const struct file_operations version_fops = {
+	.owner = THIS_MODULE,
+	.read = dbgfs_version_read,
+};
+
 static int __init __damon_dbgfs_init(void)
 {
 	struct dentry *dbgfs_root;
 	const char * const file_names[] = {"mk_contexts", "rm_contexts",
-		"monitor_on"};
+		"monitor_on", "version"};
 	const struct file_operations *fops[] = {&mk_contexts_fops,
-		&rm_contexts_fops, &monitor_on_fops};
+		&rm_contexts_fops, &monitor_on_fops, &version_fops};
 	int i;
 
 	dbgfs_root = debugfs_create_dir("damon", NULL);
