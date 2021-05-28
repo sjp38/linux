@@ -17,7 +17,11 @@
 #endif
 #define MODULE_PARAM_PREFIX "damon_reclaim."
 
+#ifndef CONFIG_DAMON_RECLAIM_ENABLE
+static bool enabled __read_mostly = false;
+#else
 static bool enabled __read_mostly = CONFIG_DAMON_RECLAIM_ENABLE;
+#endif
 module_param(enabled, bool, 0600);
 
 static unsigned long min_age __read_mostly = CONFIG_DAMON_RECLAIM_MIN_AGE;
