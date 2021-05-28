@@ -11,8 +11,6 @@ DAMON
 DARC
 ----
 
-Fix build error when DAMON_RECLAIM_ENABLE=n
-
 
 Done
 ====
@@ -41,3 +39,8 @@ User space tools
 
 - damo/wss: Adjust the nr_accesses for work_time
 - perf: Implement wss feature
+
+DARC
+----
+
+Fix build error when DAMON_RECLAIM_ENABLE=n
