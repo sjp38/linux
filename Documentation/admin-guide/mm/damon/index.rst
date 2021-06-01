@@ -13,3 +13,4 @@ Using this, users can analyze and optimize their systems.
    start
    guide
    usage
+   reclaim
