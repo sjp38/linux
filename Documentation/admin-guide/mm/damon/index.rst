@@ -12,3 +12,4 @@ Using this, users can analyze and optimize their systems.
 
    start
    usage
+   reclaim
