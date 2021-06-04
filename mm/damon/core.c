@@ -640,9 +640,6 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 		if (!limit->sz)
 			continue;
 
-		if (!limit->sz)
-			continue;
-
 		/* Reset charge window if the duration passed */
 		if (time_after_eq(jiffies, s->limit.charged_from +
 					msecs_to_jiffies(s->limit.ms))) {
