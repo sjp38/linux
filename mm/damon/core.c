@@ -593,11 +593,16 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 	struct damos *s;
 
 	damon_for_each_scheme(s, c) {
+		struct damos_speed_limit *limit = &s->limit;
+
+		if (!limit->sz)
+			continue;
+
 		/* Reset charge window if the duration passed */
-		if (time_after_eq(jiffies, s->limit.charged_from +
-					msecs_to_jiffies(s->limit.ms))) {
-			s->limit.charged_from = jiffies;
-			s->limit.charged_sz = 0;
+		if (time_after_eq(jiffies, limit->charged_from +
+					msecs_to_jiffies(limit->ms))) {
+			limit->charged_from = jiffies;
+			limit->charged_sz = 0;
 		}
 	}
 
