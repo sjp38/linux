@@ -940,18 +940,33 @@ static unsigned long damos_wmark_wait_us(struct damos *scheme)
 	return 0;
 }
 
-static unsigned long kdamond_wmark_wait_us(struct damon_ctx *ctx)
+static void kdamond_usleep(unsigned long usecs)
+{
+	if (usecs > 100 * 1000)
+		schedule_timeout_interruptible(usecs_to_jiffies(usecs));
+	else
+		usleep_range(usecs, usecs + 1);
+}
+
+/* Returns negative error code if it's not activated but should return */
+static int kdamond_wait_activation(struct damon_ctx *ctx)
 {
 	struct damos *s;
 	unsigned long wait_time;
 	unsigned long min_wait_time = 0;
 
-	damon_for_each_scheme(s, ctx) {
-		wait_time = damos_wmark_wait_us(s);
-		if (!min_wait_time || wait_time < min_wait_time)
-			min_wait_time = wait_time;
+	while (!kdamond_need_stop(ctx)) {
+		damon_for_each_scheme(s, ctx) {
+			wait_time = damos_wmark_wait_us(s);
+			if (!min_wait_time || wait_time < min_wait_time)
+				min_wait_time = wait_time;
+		}
+		if (!min_wait_time)
+			return 0;
+
+		kdamond_usleep(min_wait_time);
 	}
-	return min_wait_time;
+	return -EBUSY;
 }
 
 static void set_kdamond_stop(struct damon_ctx *ctx)
@@ -982,12 +997,8 @@ static int kdamond_fn(void *data)
 	sz_limit = damon_region_sz_limit(ctx);
 
 	while (!kdamond_need_stop(ctx)) {
-		unsigned long wmark_wait_us = kdamond_wmark_wait_us(ctx);
-
-		if (wmark_wait_us) {
-			usleep_range(wmark_wait_us, wmark_wait_us + 1);
+		if (kdamond_wait_activation(ctx))
 			continue;
-		}
 
 		if (ctx->primitive.prepare_access_checks)
 			ctx->primitive.prepare_access_checks(ctx);
