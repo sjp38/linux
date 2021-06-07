@@ -44,6 +44,7 @@ DARC
 ----
 
 - Avoid fake I/O load reporting (James Gowans)
+- Export kdamond pid via a readonly parameter file
 - Remove kernel configs for the build time enabling and the parameters setting
 - Elaborate coverletter, especially for evaluation and DAMON_RECLAIM interface
 - Add documentation
