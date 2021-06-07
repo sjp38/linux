@@ -176,6 +176,14 @@ The end physical address of memory region that DAMON_RECLAIM will do work
 against.  That is, DAMON_RECLAIM will find cold memory regions in this region
 and reclaims.  By default, biggest System RAM is used as the region.
 
+kdamond_pid
+-----------
+
+PID of the DAMON thread.
+
+If DAMON_RECLAIM is enabled, this becomes the PID of the worker thread.  Else,
+-1.
+
 Example
 =======
 
