@@ -10,6 +10,7 @@
 #include <linux/damon.h>
 #include <linux/ioport.h>
 #include <linux/module.h>
+#include <linux/sched.h>
 #include <linux/workqueue.h>
 
 #ifdef MODULE_PARAM_PREFIX
@@ -155,6 +156,15 @@ module_param(monitor_region_start, ulong, 0600);
 static unsigned long monitor_region_end __read_mostly;
 module_param(monitor_region_end, ulong, 0600);
 
+/*
+ * PID of the DAMON thread
+ *
+ * If DAMON_RECLAIM is enabled, this becomes the PID of the worker thread.
+ * Else, -1.
+ */
+static int kdamond_pid __read_mostly = -1;
+module_param(kdamond_pid, int, 0400);
+
 static struct damon_ctx *ctx;
 static struct damon_target *target;
 
@@ -232,8 +242,12 @@ static int damon_reclaim_turn(bool on)
 	struct damos *scheme;
 	int err;
 
-	if (!on)
-		return damon_stop(&ctx, 1);
+	if (!on) {
+		err = damon_stop(&ctx, 1);
+		if (!err)
+			kdamond_pid = -1;
+		return err;
+	}
 
 	err = damon_set_attrs(ctx, sample_interval, aggr_interval, 0,
 			min_nr_regions, max_nr_regions);
@@ -261,8 +275,10 @@ static int damon_reclaim_turn(bool on)
 		goto free_scheme_out;
 
 	err = damon_start(&ctx, 1);
-	if (!err)
+	if (!err) {
+		kdamond_pid = ctx->kdamond->pid;
 		return 0;
+	}
 
 free_scheme_out:
 	damon_destroy_scheme(scheme);
