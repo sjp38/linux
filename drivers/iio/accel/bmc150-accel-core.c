@@ -389,7 +389,7 @@ static int bmc150_accel_set_power_state(struct bmc150_accel_data *data, bool on)
 	int ret;
 
 	if (on) {
-		ret = pm_runtime_get_sync(dev);
+		ret = pm_runtime_resume_and_get(dev);
 	} else {
 		pm_runtime_mark_last_busy(dev);
 		ret = pm_runtime_put_autosuspend(dev);
@@ -398,9 +398,6 @@ static int bmc150_accel_set_power_state(struct bmc150_accel_data *data, bool on)
 	if (ret < 0) {
 		dev_err(dev,
 			"Failed: %s for %d\n", __func__, on);
-		if (on)
-			pm_runtime_put_noidle(dev);
-
 		return ret;
 	}
 
@@ -1470,9 +1467,9 @@ static int bmc150_accel_triggers_setup(struct iio_dev *indio_dev,
 		struct bmc150_accel_trigger *t = &data->triggers[i];
 
 		t->indio_trig = devm_iio_trigger_alloc(dev,
-					bmc150_accel_triggers[i].name,
+						       bmc150_accel_triggers[i].name,
 						       indio_dev->name,
-						       indio_dev->id);
+						       iio_device_id(indio_dev));
 		if (!t->indio_trig) {
 			ret = -ENOMEM;
 			break;
@@ -1688,8 +1685,7 @@ int bmc150_accel_core_probe(struct device *dev, struct regmap *regmap, int irq,
 	data->regmap = regmap;
 
 	if (!bmc150_apply_acpi_orientation(dev, &data->orientation)) {
-		ret = iio_read_mount_matrix(dev, "mount-matrix",
-					     &data->orientation);
+		ret = iio_read_mount_matrix(dev, &data->orientation);
 		if (ret)
 			return ret;
 	}
@@ -1809,21 +1805,17 @@ EXPORT_SYMBOL_GPL(bmc150_accel_core_probe);
 
 struct i2c_client *bmc150_get_second_device(struct i2c_client *client)
 {
-	struct bmc150_accel_data *data = i2c_get_clientdata(client);
-
-	if (!data)
-		return NULL;
+	struct bmc150_accel_data *data = iio_priv(i2c_get_clientdata(client));
 
 	return data->second_device;
 }
 EXPORT_SYMBOL_GPL(bmc150_get_second_device);
 
-void bmc150_set_second_device(struct i2c_client *client)
+void bmc150_set_second_device(struct i2c_client *client, struct i2c_client *second_dev)
 {
-	struct bmc150_accel_data *data = i2c_get_clientdata(client);
+	struct bmc150_accel_data *data = iio_priv(i2c_get_clientdata(client));
 
-	if (data)
-		data->second_device = client;
+	data->second_device = second_dev;
 }
 EXPORT_SYMBOL_GPL(bmc150_set_second_device);
 
@@ -1836,7 +1828,6 @@ int bmc150_accel_core_remove(struct device *dev)
 
 	pm_runtime_disable(dev);
 	pm_runtime_set_suspended(dev);
-	pm_runtime_put_noidle(dev);
 
 	bmc150_accel_unregister_triggers(data, BMC150_ACCEL_TRIGGERS - 1);
 

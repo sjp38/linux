@@ -441,7 +441,8 @@ out_unlock:
 	return ret;
 }
 
-int __irq_set_affinity(unsigned int irq, const struct cpumask *mask, bool force)
+static int __irq_set_affinity(unsigned int irq, const struct cpumask *mask,
+			      bool force)
 {
 	struct irq_desc *desc = irq_to_desc(irq);
 	unsigned long flags;
@@ -455,6 +456,36 @@ int __irq_set_affinity(unsigned int irq, const struct cpumask *mask, bool force)
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
 	return ret;
 }
+
+/**
+ * irq_set_affinity - Set the irq affinity of a given irq
+ * @irq:	Interrupt to set affinity
+ * @cpumask:	cpumask
+ *
+ * Fails if cpumask does not contain an online CPU
+ */
+int irq_set_affinity(unsigned int irq, const struct cpumask *cpumask)
+{
+	return __irq_set_affinity(irq, cpumask, false);
+}
+EXPORT_SYMBOL_GPL(irq_set_affinity);
+
+/**
+ * irq_force_affinity - Force the irq affinity of a given irq
+ * @irq:	Interrupt to set affinity
+ * @cpumask:	cpumask
+ *
+ * Same as irq_set_affinity, but without checking the mask against
+ * online cpus.
+ *
+ * Solely for low level cpu hotplug code, where we need to make per
+ * cpu interrupts affine before the cpu becomes online.
+ */
+int irq_force_affinity(unsigned int irq, const struct cpumask *cpumask)
+{
+	return __irq_set_affinity(irq, cpumask, true);
+}
+EXPORT_SYMBOL_GPL(irq_force_affinity);
 
 int irq_set_affinity_hint(unsigned int irq, const struct cpumask *m)
 {
@@ -1144,7 +1175,7 @@ irq_forced_thread_fn(struct irq_desc *desc, struct irqaction *action)
 	local_bh_disable();
 	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
 		local_irq_disable();
-	ret = action->thread_fn(action->irq, action->dev_id);
+	ret = action->thread_fn(irq_desc_get_irq(desc), action->dev_id);
 	if (ret == IRQ_HANDLED)
 		atomic_inc(&desc->threads_handled);
 
@@ -1165,7 +1196,7 @@ static irqreturn_t irq_thread_fn(struct irq_desc *desc,
 {
 	irqreturn_t ret;
 
-	ret = action->thread_fn(action->irq, action->dev_id);
+	ret = action->thread_fn(irq_desc_get_irq(desc), action->dev_id);
 	if (ret == IRQ_HANDLED)
 		atomic_inc(&desc->threads_handled);
 
@@ -1189,12 +1220,11 @@ static void irq_thread_dtor(struct callback_head *unused)
 		return;
 
 	action = kthread_data(tsk);
+	desc = action->desc;
 
 	pr_err("exiting task \"%s\" (%d) is an active IRQ thread (irq %d)\n",
-	       tsk->comm, tsk->pid, action->irq);
+	       tsk->comm, tsk->pid, irq_desc_get_irq(desc));
 
-
-	desc = irq_to_desc(action->irq);
 	/*
 	 * If IRQTF_RUNTHREAD is set, we need to decrement
 	 * desc->threads_active and wake possible waiters.
@@ -1225,7 +1255,7 @@ static int irq_thread(void *data)
 {
 	struct callback_head on_exit_work;
 	struct irqaction *action = data;
-	struct irq_desc *desc = irq_to_desc(action->irq);
+	struct irq_desc *desc = action->desc;
 	irqreturn_t (*handler_fn)(struct irq_desc *desc,
 			struct irqaction *action);
 
@@ -1318,7 +1348,7 @@ static int irq_setup_forced_threading(struct irqaction *new)
 		new->secondary->handler = irq_forced_secondary_handler;
 		new->secondary->thread_fn = new->thread_fn;
 		new->secondary->dev_id = new->dev_id;
-		new->secondary->irq = new->irq;
+		new->secondary->desc = new->desc;
 		new->secondary->name = new->name;
 	}
 	/* Deal with the primary handler */
@@ -1444,7 +1474,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	if (!try_module_get(desc->owner))
 		return -ENODEV;
 
-	new->irq = irq;
+	new->desc = desc;
 
 	/*
 	 * If the trigger type is not specified by the caller,
@@ -1686,7 +1716,12 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		if (new->flags & IRQF_PERCPU) {
 			irqd_set(&desc->irq_data, IRQD_PER_CPU);
 			irq_settings_set_per_cpu(desc);
+			if (new->flags & IRQF_NO_DEBUG)
+				irq_settings_set_no_debug(desc);
 		}
+
+		if (noirqdebug)
+			irq_settings_set_no_debug(desc);
 
 		if (new->flags & IRQF_ONESHOT)
 			desc->istate |= IRQS_ONESHOT;

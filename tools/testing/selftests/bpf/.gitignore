@@ -30,6 +30,7 @@ test_sysctl
 xdping
 test_cpp
 *.skel.h
+*.lskel.h
 /no_alu32
 /bpf_gcc
 /tools
@@ -37,3 +38,4 @@ test_cpp
 /bench
 *.ko
 xdpxceiver
+xdp_redirect_multi
