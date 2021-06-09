@@ -11,5 +11,4 @@ Using this, users can analyze and optimize their systems.
    :maxdepth: 2
 
    start
-   guide
    usage
