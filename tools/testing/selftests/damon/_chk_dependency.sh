@@ -12,7 +12,7 @@ then
 	exit $ksft_skip
 fi
 
-if [ ! -d $DBGFS ]
+if [ ! -d "$DBGFS" ]
 then
 	echo "$DBGFS not found"
 	exit $ksft_skip
