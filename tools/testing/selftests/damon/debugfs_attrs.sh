@@ -58,67 +58,19 @@ test_content "$file" "$orig_content" "1 2 3 4 5" "successfully written"
 echo "$orig_content" > "$file"
 
 # Test record file
+# ================
+
 file="$DBGFS/record"
+orig_content=$(cat "$file")
 
-ORIG_CONTENT=$(cat $file)
-
-echo "4242 foo.bar" > $file
-if [ $? -ne 0 ]
-then
-	echo "$file writing sane input failed"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo abc 2 3 > $file
-if [ $? -eq 0 ]
-then
-	echo "$file writing insane input 1 success (should failed)"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo 123 > $file
-if [ $? -eq 0 ]
-then
-	echo "$file writing insane input 2 success (should failed)"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-CONTENT=$(cat $file)
-if [ "$CONTENT" != "4242 foo.bar" ]
-then
-	echo "$file not written"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo "0 null" > $file
-if [ $? -ne 0 ]
-then
-	echo "$file disabling write fail"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-CONTENT=$(cat $file)
-if [ "$CONTENT" != "0 null" ]
-then
-	echo "$file not disabled"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo "4242 foo.bar" > $file
-if [ $? -ne 0 ]
-then
-	echo "$file writing sane data again fail"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo $ORIG_CONTENT > $file
+test_write_succ "$file" "4242 foo.bar" "$orig_content" "valid input"
+test_write_fail "$file" "abc 2 3" "$orig_content" "too many fields"
+test_write_fail "$file" "123" "$orig_content" "not enough fields"
+test_content "$file" "$orig_content" "4242 foo.bar" "successfully written"
+test_write_succ "$file" "0 null" "$orig_content" "disabling"
+test_content "$file" "$orig_content" "0 null" "should disabled"
+test_write_succ "$file" "4242 foo.bar2" "$orig_content" "reenabling"
+echo "$orig_content" > "$file"
 
 # Test target_ids file
 # ====================
