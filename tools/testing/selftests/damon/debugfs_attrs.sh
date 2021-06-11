@@ -73,33 +73,17 @@ test_write_succ "$file" "4242 foo.bar2" "$orig_content" "reenabling"
 echo "$orig_content" > "$file"
 
 # Test schemes file
+# =================
+
 file="$DBGFS/schemes"
+orig_content=$(cat "$file")
 
-ORIG_CONTENT=$(cat $file)
-echo "1 2 3 4 5 6 3" > $file
-if [ $? -ne 0 ]
-then
-	echo "$file write fail"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo "1 2
-3 4 5 6 3" > $file
-if [ $? -eq 0 ]
-then
-	echo "$file multi line write success (expected fail)"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
-
-echo > $file
-if [ $? -ne 0 ]
-then
-	echo "$file empty string writing fail"
-	echo $ORIG_CONTENT > $file
-	exit 1
-fi
+test_write_succ "$file" "1 2 3 4 5 6 4" \
+	"$orig_content" "valid input"
+test_write_fail "$file" "1 2
+3 4 5 6 3" "$orig_content" "multi lines"
+test_write_succ "$file" "" "$orig_content" "disabling"
+echo "$orig_content" > "$file"
 
 # Test target_ids file
 # ====================
