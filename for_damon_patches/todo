@@ -7,6 +7,9 @@ TODOs
 DAMON
 -----
 
+- Wordsmith commit message for PAGE_IDLE (Amit Shah)
+- selftests: Modularize, run shellcheck, and modularize code (Maximilian Heyne)
+
 
 DARC
 ----
