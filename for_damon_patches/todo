@@ -7,10 +7,11 @@ TODOs
 DAMON
 -----
 
-- Wordsmith commit message for PAGE_IDLE (Amit Shah)
+- Wordsmith commit message for PAGE_IDLE separation (Amit Shah)
 - selftests: Modularize, run shellcheck, and modularize code (Maximilian Heyne)
 - Wordsmith the document (Markus Boehme)
 - Fix a typo (Fernand Sieber)
+- Add 'Reviewed-by:' tags from "Fernand Sieber <sieberf@amazon.com>"
 
 
 DARC
