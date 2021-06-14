@@ -20,7 +20,7 @@ static int dbgfs_nr_ctxs;
 static struct dentry **dbgfs_dirs;
 
 /*
- * Returns non-empty string on success, negarive error code otherwise.
+ * Returns non-empty string on success, negative error code otherwise.
  */
 static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)
 {
