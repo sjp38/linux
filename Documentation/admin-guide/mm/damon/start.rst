@@ -12,8 +12,8 @@ of its features for brevity.  Please refer to :doc:`usage` for more details.
 TL; DR
 ======
 
-Follow below commands to monitor and visualize the access pattern of your
-workload. ::
+Follow the commands below to monitor and visualize the memory access pattern of
+your workload. ::
 
     # # build the kernel with CONFIG_DAMON_*=y, install it, and reboot
     # mount -t debugfs none /sys/kernel/debug/
@@ -21,9 +21,9 @@ workload. ::
     # ./damo/damo record $(pidof <your workload>)
     # ./damo/damo report heat --plot_ascii
 
-The final command draws the access heatmap of ``<your workload>``, heatmap,
-which shows when (y-axis) what memory region (x-axis) is how frequently
-accessed (number). ::
+The final command draws the access heatmap of ``<your workload>``.  The heatmap
+shows which memory region (x-axis) is accessed when (y-axis) and how frequently
+(number; the higher the more accesses have been observed). ::
 
     111111111111111111111111111111111111111111111111111111110000
     111121111111111111111111111111211111111111111111111111110000
@@ -56,8 +56,8 @@ User Space Tool
 
 For the demonstration, we will use the default user space tool for DAMON,
 called DAMON Operator (DAMO).  It is available at
-https://github.com/awslabs/damo.  For brevity, below examples assume you set
-``$PATH`` to point it.  It's not mandatory, though.
+https://github.com/awslabs/damo.  The examples below assume that ``damo`` is on
+your ``$PATH``.  It's not mandatory, though.
 
 Because DAMO is using the debugfs interface (refer to :doc:`usage` for the
 detail) of DAMON, you should ensure debugfs is mounted.  Mount it manually as
@@ -65,8 +65,8 @@ below::
 
     # mount -t debugfs none /sys/kernel/debug/
 
-or append below line to your ``/etc/fstab`` file so that your system can
-automatically mount debugfs from next booting::
+or append the following line to your ``/etc/fstab`` file so that your system
+can automatically mount debugfs upon booting::
 
     debugfs /sys/kernel/debug debugfs defaults 0 0
 
@@ -74,39 +74,39 @@ automatically mount debugfs from next booting::
 Recording Data Access Patterns
 ==============================
 
-Below commands record memory access pattern of a program and save the
-monitoring results in a file. ::
+The commands below record the memory access patterns of a program and save the
+monitoring results to a file. ::
 
     $ git clone https://github.com/sjp38/masim
     $ cd masim; make; ./masim ./configs/zigzag.cfg &
     $ sudo damo record -o damon.data $(pidof masim)
 
-The first two lines of the commands get an artificial memory access generator
-program and runs it in the background.  It will repeatedly access two 100 MiB
-sized memory regions one by one.  You can substitute this with your real
-workload.  The last line asks ``damo`` to record the access pattern in
-``damon.data`` file.
+The first two lines of the commands download an artificial memory access
+generator program and run it in the background.  The generator will repeatedly
+access two 100 MiB sized memory regions one by one.  You can substitute this
+with your real workload.  The last line asks ``damo`` to record the access
+pattern in the ``damon.data`` file.
 
 
 Visualizing Recorded Patterns
 =============================
 
-Below three commands visualize the recorded access patterns into three
-image files. ::
+The following three commands visualize the recorded access patterns and save
+the results as separate image files. ::
 
     $ damo report heats --heatmap access_pattern_heatmap.png
     $ damo report wss --range 0 101 1 --plot wss_dist.png
     $ damo report wss --range 0 101 1 --sortby time --plot wss_chron_change.png
 
-- ``access_pattern_heatmap.png`` will show the data access pattern in a
-  heatmap, which shows when (x-axis) what memory region (y-axis) is how
-  frequently accessed (color).
+- ``access_pattern_heatmap.png`` will visualize the data access pattern in a
+  heatmap, showing which memory region (y-axis) got accessed when (x-axis)
+  and how frequently (color).
 - ``wss_dist.png`` will show the distribution of the working set size.
 - ``wss_chron_change.png`` will show how the working set size has
   chronologically changed.
 
-You can show the images in a web page [1]_ .  Those made with other realistic
-workloads are also available [2]_ [3]_ [4]_.
+You can view the visualizations of this example workload at [1]_.
+Visualizations of other realistic workloads are available at [2]_ [3]_ [4]_.
 
 .. [1] https://damonitor.github.io/doc/html/v17/admin-guide/mm/damon/start.html#visualizing-recorded-patterns
 .. [2] https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html

@@ -105,7 +105,7 @@ record the tracepoint events and show results using tracepoint supporting tools
 like ``perf``.  For example::
 
     # echo on > monitor_on
-    # perf record damon:damon_aggregated &
+    # perf record -e damon:damon_aggregated &
     # sleep 5
     # kill 9 $(pidof perf)
     # echo off > monitor_on

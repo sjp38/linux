@@ -5,7 +5,8 @@ Monitoring Data Accesses
 ========================
 
 :doc:`DAMON </vm/damon/index>` allows light-weight data access monitoring.
-Using this, users can analyze and optimize their systems.
+Using DAMON, users can analyze the memory access patterns of their systems and
+optimize those.
 
 .. toctree::
    :maxdepth: 2
