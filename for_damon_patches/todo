@@ -9,6 +9,8 @@ DAMON
 
 - Wordsmith commit message for PAGE_IDLE (Amit Shah)
 - selftests: Modularize, run shellcheck, and modularize code (Maximilian Heyne)
+- Wordsmith the document (Markus Boehme)
+- Fix a typo (Fernand Sieber)
 
 
 DARC
