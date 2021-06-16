@@ -362,7 +362,6 @@ mptcp_subflow_rsk(const struct request_sock *rsk)
 enum mptcp_data_avail {
 	MPTCP_SUBFLOW_NODATA,
 	MPTCP_SUBFLOW_DATA_AVAIL,
-	MPTCP_SUBFLOW_OOO_DATA
 };
 
 struct mptcp_delegated_action {
@@ -626,6 +625,8 @@ static inline void mptcp_write_space(struct sock *sk)
 }
 
 void mptcp_destroy_common(struct mptcp_sock *msk);
+
+#define MPTCP_TOKEN_MAX_RETRIES	4
 
 void __init mptcp_token_init(void);
 static inline void mptcp_token_init_request(struct request_sock *req)

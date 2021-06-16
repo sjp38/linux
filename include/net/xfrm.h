@@ -154,6 +154,7 @@ struct xfrm_state {
 	};
 	struct hlist_node	bysrc;
 	struct hlist_node	byspi;
+	struct hlist_node	byseq;
 
 	refcount_t		refcnt;
 	spinlock_t		lock;
@@ -387,7 +388,6 @@ void xfrm_flush_gc(void);
 void xfrm_state_delete_tunnel(struct xfrm_state *x);
 
 struct xfrm_type {
-	char			*description;
 	struct module		*owner;
 	u8			proto;
 	u8			flags;
@@ -402,14 +402,12 @@ struct xfrm_type {
 	int			(*output)(struct xfrm_state *, struct sk_buff *pskb);
 	int			(*reject)(struct xfrm_state *, struct sk_buff *,
 					  const struct flowi *);
-	int			(*hdr_offset)(struct xfrm_state *, struct sk_buff *, u8 **);
 };
 
 int xfrm_register_type(const struct xfrm_type *type, unsigned short family);
 void xfrm_unregister_type(const struct xfrm_type *type, unsigned short family);
 
 struct xfrm_type_offload {
-	char		*description;
 	struct module	*owner;
 	u8		proto;
 	void		(*encap)(struct xfrm_state *, struct sk_buff *pskb);
@@ -1546,6 +1544,7 @@ void xfrm_sad_getinfo(struct net *net, struct xfrmk_sadinfo *si);
 void xfrm_spd_getinfo(struct net *net, struct xfrmk_spdinfo *si);
 u32 xfrm_replay_seqhi(struct xfrm_state *x, __be32 net_seq);
 int xfrm_init_replay(struct xfrm_state *x);
+u32 __xfrm_state_mtu(struct xfrm_state *x, int mtu);
 u32 xfrm_state_mtu(struct xfrm_state *x, int mtu);
 int __xfrm_init_state(struct xfrm_state *x, bool init_replay, bool offload);
 int xfrm_init_state(struct xfrm_state *x);
@@ -1570,7 +1569,6 @@ int xfrm4_rcv_encap(struct sk_buff *skb, int nexthdr, __be32 spi,
 		    int encap_type);
 int xfrm4_transport_finish(struct sk_buff *skb, int async);
 int xfrm4_rcv(struct sk_buff *skb);
-int xfrm_parse_spi(struct sk_buff *skb, u8 nexthdr, __be32 *spi, __be32 *seq);
 
 static inline int xfrm4_rcv_spi(struct sk_buff *skb, int nexthdr, __be32 spi)
 {
@@ -1606,8 +1604,6 @@ __be32 xfrm6_tunnel_alloc_spi(struct net *net, xfrm_address_t *saddr);
 __be32 xfrm6_tunnel_spi_lookup(struct net *net, const xfrm_address_t *saddr);
 int xfrm6_output(struct net *net, struct sock *sk, struct sk_buff *skb);
 int xfrm6_output_finish(struct sock *sk, struct sk_buff *skb);
-int xfrm6_find_1stfragopt(struct xfrm_state *x, struct sk_buff *skb,
-			  u8 **prevhdr);
 
 #ifdef CONFIG_XFRM
 void xfrm6_local_rxpmtu(struct sk_buff *skb, u32 mtu);
