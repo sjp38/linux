@@ -582,8 +582,15 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				continue;
 			}
 			if (limit->charge_addr_from &&
-					r->ar.start < limit->charge_addr_from)
+					r->ar.end <= limit->charge_addr_from)
 				continue;
+
+			if (limit->charge_addr_from && r->ar.start <
+					limit->charge_addr_from) {
+				sz = limit->charge_addr_from - r->ar.start;
+				damon_split_region_at(c, r, sz);
+				r = damon_next_region(r);
+			}
 			limit->charge_target_from = NULL;
 			limit->charge_addr_from = 0;
 		}
