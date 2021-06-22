@@ -468,14 +468,14 @@ void damon_va_cleanup(struct damon_ctx *ctx)
 }
 
 #ifndef CONFIG_ADVISE_SYSCALLS
-static int damos_madvise(struct damon_target *target, struct damon_region *r,
-			int behavior)
+static unsigned long damos_madvise(struct damon_target *target,
+		struct damon_region *r, int behavior)
 {
 	return -EINVAL;
 }
 #else
-static int damos_madvise(struct damon_target *target, struct damon_region *r,
-			int behavior)
+static unsigned long damos_madvise(struct damon_target *target,
+		struct damon_region *r, int behavior)
 {
 	struct mm_struct *mm;
 	int ret = -ENOMEM;
@@ -488,12 +488,17 @@ static int damos_madvise(struct damon_target *target, struct damon_region *r,
 			PAGE_ALIGN(r->ar.end - r->ar.start), behavior);
 	mmput(mm);
 out:
+	if (!ret)
+		ret = r->ar.end - r->ar.start;
+	else
+		ret = 0;
 	return ret;
 }
 #endif	/* CONFIG_ADVISE_SYSCALLS */
 
-int damon_va_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
-		struct damon_region *r, struct damos *scheme)
+unsigned long damon_va_apply_scheme(struct damon_ctx *ctx,
+		struct damon_target *t, struct damon_region *r,
+		struct damos *scheme)
 {
 	int madv_action;
 
