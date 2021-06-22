@@ -551,10 +551,10 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				   struct damon_region *r)
 {
 	struct damos *s;
-	unsigned long sz;
 
 	damon_for_each_scheme(s, c) {
 		struct damos_speed_limit *limit = &s->limit;
+		unsigned long sz, sz_tried = 0;
 
 		/* Check the limit */
 		if (limit->sz && limit->charged_sz >= limit->sz)
@@ -593,20 +593,31 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			continue;
 
 		/* Apply the scheme */
-		if (c->primitive.apply_scheme) {
-			if (limit->sz && limit->charged_sz + sz > limit->sz) {
-				sz = limit->sz - limit->charged_sz;
-				damon_split_region_at(c, t, r, sz);
+		sz = r->ar.end - r->ar.start;
+		while (c->primitive.apply_scheme && sz_tried < sz) {
+			unsigned long sz_split;
+
+			sz_split = r->ar.end - r->ar.start;
+			if (limit->sz && limit->charged_sz + sz_split >
+					limit->sz) {
+				sz_split = limit->sz - limit->charged_sz;
+				damon_split_region_at(c, t, r, sz_split);
 			}
-			c->primitive.apply_scheme(c, t, r, s);
-			limit->charged_sz += sz;
+
+			limit->charged_sz += c->primitive.apply_scheme(
+					c, t, r, s);
+			if (s->action != DAMOS_STAT)
+				r->age = 0;
+
 			if (limit->sz && limit->charged_sz >= limit->sz) {
 				limit->charge_target_from = t;
 				limit->charge_addr_from = r->ar.end + 1;
+				break;
 			}
+
+			r = damon_next_region(r);
+			sz_tried += sz_split;
 		}
-		if (s->action != DAMOS_STAT)
-			r->age = 0;
 
 		/* Update stat */
 		s->stat_count++;
