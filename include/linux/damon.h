@@ -184,7 +184,8 @@ struct damon_ctx;
  * by @check_accesses.
  * @apply_scheme is called from @kdamond when a region for user provided
  * DAMON-based operation scheme is found.  It should apply the scheme's action
- * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
+ * to the region and return the size of regions that the scheme is successfully
+ * applied.  This is not used for &DAMON_ARBITRARY_TARGET case.
  * @target_valid should check whether the target is still valid for the
  * monitoring.  It receives &damon_ctx.arbitrary_target or &struct damon_target
  * pointer depends on &damon_ctx.target_type.
@@ -196,8 +197,9 @@ struct damon_primitive {
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
 	void (*reset_aggregated)(struct damon_ctx *context);
-	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
-			struct damon_region *r, struct damos *scheme);
+	unsigned long (*apply_scheme)(struct damon_ctx *context,
+			struct damon_target *t, struct damon_region *r,
+			struct damos *scheme);
 	bool (*target_valid)(void *target);
 	void (*cleanup)(struct damon_ctx *context);
 };
@@ -401,8 +403,9 @@ void damon_va_prepare_access_checks(struct damon_ctx *ctx);
 unsigned int damon_va_check_accesses(struct damon_ctx *ctx);
 bool damon_va_target_valid(void *t);
 void damon_va_cleanup(struct damon_ctx *ctx);
-int damon_va_apply_scheme(struct damon_ctx *context, struct damon_target *t,
-		struct damon_region *r, struct damos *scheme);
+unsigned long damon_va_apply_scheme(struct damon_ctx *context,
+		struct damon_target *t, struct damon_region *r,
+		struct damos *scheme);
 void damon_va_set_primitives(struct damon_ctx *ctx);
 
 #endif	/* CONFIG_DAMON_VADDR */
