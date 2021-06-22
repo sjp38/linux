@@ -11,6 +11,9 @@ DAMON
 DARC
 ----
 
+- Make reclamation restarts from exactly the point it stopped due to the limit
+- Charge only action applying successed regions
+
 
 Done
 ====
