@@ -88,11 +88,13 @@ bool damon_pa_target_valid(void *t)
 	return true;
 }
 
-int damon_pa_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
-		struct damon_region *r, struct damos *scheme)
+unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
+		struct damon_target *t, struct damon_region *r,
+		struct damos *scheme)
 {
 	unsigned long addr;
 	LIST_HEAD(page_list);
+	unsigned long applied;
 
 	if (scheme->action != DAMOS_PAGEOUT)
 		return -EINVAL;
@@ -116,9 +118,9 @@ int damon_pa_apply_scheme(struct damon_ctx *ctx, struct damon_target *t,
 			put_page(page);
 		}
 	}
-	reclaim_pages(&page_list);
+	applied = reclaim_pages(&page_list);
 	cond_resched();
-	return 0;
+	return applied * PAGE_SIZE;
 }
 
 void damon_pa_set_primitives(struct damon_ctx *ctx)
