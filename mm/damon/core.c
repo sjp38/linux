@@ -559,6 +559,9 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 static void damon_split_region_at(struct damon_ctx *ctx,
 				  struct damon_region *r, unsigned long sz_r);
 
+static void damon_merge_two_regions(struct damon_target *t,
+		struct damon_region *l, struct damon_region *r);
+
 static void damon_do_apply_schemes(struct damon_ctx *c,
 				   struct damon_target *t,
 				   struct damon_region *r)
@@ -568,6 +571,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 	damon_for_each_scheme(s, c) {
 		struct damos_speed_limit *limit = &s->limit;
 		unsigned long sz, sz_tried = 0;
+		struct damon_region *prev = NULL;
 
 		/* Check the limit */
 		if (limit->sz && limit->charged_sz >= limit->sz)
@@ -628,7 +632,11 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				break;
 			}
 
-			r = damon_next_region(r);
+			if (prev && prev->ar.end == r->ar.start)
+				damon_merge_two_regions(t, prev, r);
+			else
+				prev = r;
+			r = damon_next_region(prev);
 			sz_tried += sz_split;
 		}
 
