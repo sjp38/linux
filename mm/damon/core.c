@@ -95,12 +95,12 @@ static int __damon_start(struct damon_ctx *ctx)
 	if (!ctx->kdamond) {
 		err = 0;
 		ctx->kdamond_stop = false;
-		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond.%d",
+		ctx->kdamond = kthread_run(kdamond_fn, ctx, "kdamond.%d",
 				nr_running_ctxs);
-		if (IS_ERR(ctx->kdamond))
+		if (IS_ERR(ctx->kdamond)) {
 			err = PTR_ERR(ctx->kdamond);
-		else
-			wake_up_process(ctx->kdamond);
+			ctx->kdamond = 0;
+		}
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
@@ -266,7 +266,9 @@ static int kdamond_fn(void *data)
 {
 	struct damon_ctx *ctx = (struct damon_ctx *)data;
 
+	mutex_lock(&ctx->kdamond_lock);
 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);
+	mutex_unlock(&ctx->kdamond_lock);
 
 	if (ctx->primitive.init)
 		ctx->primitive.init(ctx);
