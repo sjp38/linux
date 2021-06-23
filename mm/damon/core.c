@@ -646,8 +646,8 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				damon_split_region_at(c, t, r, sz_split);
 			}
 
-			limit->charged_sz += c->primitive.apply_scheme(
-					c, t, r, s);
+			c->primitive.apply_scheme(c, t, r, s);
+			limit->charged_sz += sz_split;
 			if (s->action != DAMOS_STAT)
 				r->age = 0;
 
