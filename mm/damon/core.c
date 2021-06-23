@@ -629,7 +629,10 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 
 			if (limit->charge_addr_from && r->ar.start <
 					limit->charge_addr_from) {
-				sz = limit->charge_addr_from - r->ar.start;
+				sz = ALIGN_DOWN(limit->charge_addr_from -
+						r->ar.start, DAMON_MIN_REGION);
+				if (!sz)
+					continue;
 				damon_split_region_at(c, r, sz);
 				r = damon_next_region(r);
 			}
@@ -648,7 +651,11 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			sz_split = r->ar.end - r->ar.start;
 			if (limit->sz && limit->charged_sz + sz_split >
 					limit->sz) {
-				sz_split = limit->sz - limit->charged_sz;
+				sz_split = ALIGN_DOWN(limit->sz -
+						limit->charged_sz,
+						DAMON_MIN_REGION);
+				if (!sz_split)
+					break;
 				damon_split_region_at(c, r, sz_split);
 			}
 
