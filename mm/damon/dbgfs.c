@@ -245,14 +245,12 @@ static int damon_dbgfs_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations attrs_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_attrs_read,
 	.write = dbgfs_attrs_write,
 };
 
 static const struct file_operations target_ids_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_target_ids_read,
 	.write = dbgfs_target_ids_write,
@@ -336,7 +334,6 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 }
 
 static const struct file_operations monitor_on_fops = {
-	.owner = THIS_MODULE,
 	.read = dbgfs_monitor_on_read,
 	.write = dbgfs_monitor_on_write,
 };
