@@ -548,12 +548,10 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 }
 
 static const struct file_operations mk_contexts_fops = {
-	.owner = THIS_MODULE,
 	.write = dbgfs_mk_context_write,
 };
 
 static const struct file_operations rm_contexts_fops = {
-	.owner = THIS_MODULE,
 	.write = dbgfs_rm_context_write,
 };
 
