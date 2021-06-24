@@ -283,7 +283,6 @@ static const struct file_operations target_ids_fops = {
 };
 
 static const struct file_operations kdamond_pid_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_kdamond_pid_read,
 };
