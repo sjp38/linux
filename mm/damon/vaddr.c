@@ -55,9 +55,8 @@ static struct mm_struct *damon_get_mm(struct damon_target *t)
  *
  * Returns 0 on success, or negative error code otherwise.
  */
-static int damon_va_evenly_split_region(struct damon_ctx *ctx,
-		struct damon_target *t, struct damon_region *r,
-		unsigned int nr_pieces)
+static int damon_va_evenly_split_region(struct damon_target *t,
+		struct damon_region *r, unsigned int nr_pieces)
 {
 	unsigned long sz_orig, sz_piece, orig_end;
 	struct damon_region *n = NULL, *next;
@@ -234,7 +233,7 @@ static int damon_va_three_regions(struct damon_target *t,
  *   <BIG UNMAPPED REGION 2>
  *   <stack>
  */
-static void __damon_va_init_regions(struct damon_ctx *c,
+static void __damon_va_init_regions(struct damon_ctx *ctx,
 				     struct damon_target *t)
 {
 	struct damon_region *r;
@@ -249,8 +248,8 @@ static void __damon_va_init_regions(struct damon_ctx *c,
 
 	for (i = 0; i < 3; i++)
 		sz += regions[i].end - regions[i].start;
-	if (c->min_nr_regions)
-		sz /= c->min_nr_regions;
+	if (ctx->min_nr_regions)
+		sz /= ctx->min_nr_regions;
 	if (sz < DAMON_MIN_REGION)
 		sz = DAMON_MIN_REGION;
 
@@ -264,7 +263,7 @@ static void __damon_va_init_regions(struct damon_ctx *c,
 		damon_add_region(r, t);
 
 		nr_pieces = (regions[i].end - regions[i].start) / sz;
-		damon_va_evenly_split_region(c, t, r, nr_pieces);
+		damon_va_evenly_split_region(t, r, nr_pieces);
 	}
 }
 
@@ -300,8 +299,8 @@ static bool damon_intersect(struct damon_region *r, struct damon_addr_range *re)
  * t		the given target
  * bregions	the three big regions of the target
  */
-static void damon_va_apply_three_regions(struct damon_ctx *ctx,
-		struct damon_target *t, struct damon_addr_range bregions[3])
+static void damon_va_apply_three_regions(struct damon_target *t,
+		struct damon_addr_range bregions[3])
 {
 	struct damon_region *r, *next;
 	unsigned int i = 0;
@@ -361,7 +360,7 @@ void damon_va_update(struct damon_ctx *ctx)
 	damon_for_each_target(t, ctx) {
 		if (damon_va_three_regions(t, three_regions))
 			continue;
-		damon_va_apply_three_regions(ctx, t, three_regions);
+		damon_va_apply_three_regions(t, three_regions);
 	}
 }
 
