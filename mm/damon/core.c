@@ -52,11 +52,13 @@ inline void damon_insert_region(struct damon_region *r,
 void damon_add_region(struct damon_region *r, struct damon_target *t)
 {
 	list_add_tail(&r->list, &t->regions_list);
+	t->nr_regions++;
 }
 
-static void damon_del_region(struct damon_region *r)
+static void damon_del_region(struct damon_region *r, struct damon_target *t)
 {
 	list_del(&r->list);
+	t->nr_regions--;
 }
 
 static void damon_free_region(struct damon_region *r)
@@ -64,9 +66,9 @@ static void damon_free_region(struct damon_region *r)
 	kfree(r);
 }
 
-void damon_destroy_region(struct damon_region *r)
+void damon_destroy_region(struct damon_region *r, struct damon_target *t)
 {
-	damon_del_region(r);
+	damon_del_region(r, t);
 	damon_free_region(r);
 }
 
@@ -84,6 +86,7 @@ struct damon_target *damon_new_target(unsigned long id)
 		return NULL;
 
 	t->id = id;
+	t->nr_regions = 0;
 	INIT_LIST_HEAD(&t->regions_list);
 
 	return t;
@@ -116,13 +119,7 @@ void damon_destroy_target(struct damon_target *t)
 
 unsigned int damon_nr_regions(struct damon_target *t)
 {
-	struct damon_region *r;
-	unsigned int nr_regions = 0;
-
-	damon_for_each_region(r, t)
-		nr_regions++;
-
-	return nr_regions;
+	return t->nr_regions;
 }
 
 struct damon_ctx *damon_new_ctx(void)
@@ -398,15 +395,15 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 /*
  * Merge two adjacent regions into one region
  */
-static void damon_merge_two_regions(struct damon_region *l,
-				struct damon_region *r)
+static void damon_merge_two_regions(struct damon_target *t,
+		struct damon_region *l, struct damon_region *r)
 {
 	unsigned long sz_l = sz_damon_region(l), sz_r = sz_damon_region(r);
 
 	l->nr_accesses = (l->nr_accesses * sz_l + r->nr_accesses * sz_r) /
 			(sz_l + sz_r);
 	l->ar.end = r->ar.end;
-	damon_destroy_region(r);
+	damon_destroy_region(r, t);
 }
 
 #define diff_of(a, b) (a > b ? a - b : b - a)
@@ -427,7 +424,7 @@ static void damon_merge_regions_of(struct damon_target *t, unsigned int thres,
 		if (prev && prev->ar.end == r->ar.start &&
 		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres &&
 		    sz_damon_region(prev) + sz_damon_region(r) <= sz_limit)
-			damon_merge_two_regions(prev, r);
+			damon_merge_two_regions(t, prev, r);
 		else
 			prev = r;
 	}
@@ -639,7 +636,7 @@ static int kdamond_fn(void *data)
 	}
 	damon_for_each_target(t, ctx) {
 		damon_for_each_region_safe(r, next, t)
-			damon_destroy_region(r);
+			damon_destroy_region(r, t);
 	}
 
 	if (ctx->callback.before_terminate &&

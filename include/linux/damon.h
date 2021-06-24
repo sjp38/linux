@@ -42,6 +42,7 @@ struct damon_region {
 /**
  * struct damon_target - Represents a monitoring target.
  * @id:			Unique identifier for this target.
+ * @nr_regions:		Number of monitoring target regions of this target.
  * @regions_list:	Head of the monitoring target regions of this target.
  * @list:		List head for siblings.
  *
@@ -53,6 +54,7 @@ struct damon_region {
  */
 struct damon_target {
 	unsigned long id;
+	unsigned int nr_regions;
 	struct list_head regions_list;
 	struct list_head list;
 };
@@ -227,7 +229,7 @@ struct damon_region *damon_new_region(unsigned long start, unsigned long end);
 inline void damon_insert_region(struct damon_region *r,
 		struct damon_region *prev, struct damon_region *next);
 void damon_add_region(struct damon_region *r, struct damon_target *t);
-void damon_destroy_region(struct damon_region *r);
+void damon_destroy_region(struct damon_region *r, struct damon_target *t);
 
 struct damon_target *damon_new_target(unsigned long id);
 void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);
