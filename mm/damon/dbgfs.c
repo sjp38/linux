@@ -401,7 +401,6 @@ static const struct file_operations attrs_fops = {
 };
 
 static const struct file_operations record_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_record_read,
 	.write = dbgfs_record_write,
