@@ -21,6 +21,14 @@ Done
 DAMON
 -----
 
+- Add 'Acked-by:' tags from Shakeel Butt
+- Use 'kthread_run()' (Shakeel Butt)
+- Utilize 'nr_regions' field in each 'damon_target' object (Shakeel Butt)
+- Remove unused parameters in some functions (Shakeel Butt)
+- Use variable name 'ctx' for 'damon_ctx' (Shakeel Butt)
+- Make 'dbgfs' to completely manage pid reference counting (Shakeel Butt)
+- Remove '.owner' of debugfs files (Shakeel Butt)
+
 
 DAMOS
 -----
