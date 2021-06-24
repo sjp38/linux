@@ -268,6 +268,18 @@ static void dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 		debugfs_create_file(file_names[i], 0600, dir, ctx, fops[i]);
 }
 
+static int dbgfs_before_terminate(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+
+	if (!targetid_is_pid(ctx))
+		return 0;
+
+	damon_for_each_target(t, ctx)
+		put_pid((struct pid *)t->id);
+	return 0;
+}
+
 static struct damon_ctx *dbgfs_new_ctx(void)
 {
 	struct damon_ctx *ctx;
@@ -277,6 +289,7 @@ static struct damon_ctx *dbgfs_new_ctx(void)
 		return NULL;
 
 	damon_va_set_primitives(ctx);
+	ctx->callback.before_terminate = dbgfs_before_terminate;
 	return ctx;
 }
 
