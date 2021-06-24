@@ -599,10 +599,8 @@ void damon_va_cleanup(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next;
 
-	damon_for_each_target_safe(t, next, ctx) {
-		put_pid((struct pid *)t->id);
+	damon_for_each_target_safe(t, next, ctx)
 		damon_destroy_target(t);
-	}
 }
 
 void damon_va_set_primitives(struct damon_ctx *ctx)
