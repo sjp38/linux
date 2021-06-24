@@ -560,7 +560,6 @@ static const struct file_operations record_fops = {
 };
 
 static const struct file_operations schemes_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_schemes_read,
 	.write = dbgfs_schemes_write,
