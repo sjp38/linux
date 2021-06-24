@@ -719,7 +719,6 @@ static const struct file_operations target_ids_fops = {
 };
 
 static const struct file_operations init_regions_fops = {
-	.owner = THIS_MODULE,
 	.open = damon_dbgfs_open,
 	.read = dbgfs_init_regions_read,
 	.write = dbgfs_init_regions_write,
