@@ -72,6 +72,10 @@ void damon_add_region(struct damon_region *r, struct damon_target *t)
 
 static void damon_del_region(struct damon_region *r, struct damon_target *t)
 {
+	if (t->nr_regions == 0) {
+		pr_err("nr_regions 0 but damon_del_region called\n");
+		BUG();
+	}
 	list_del(&r->list);
 	t->nr_regions--;
 }
@@ -196,8 +200,23 @@ void damon_destroy_target(struct damon_target *t)
 	damon_free_target(t);
 }
 
+static void damon_nr_regions_verify(struct damon_target *t)
+{
+	struct damon_region *r;
+	unsigned int count = 0;
+
+	damon_for_each_region(r, t)
+		count++;
+
+	if (count != t->nr_regions)
+		pr_err("%s expected %u but %u\n", __func__, count, t->nr_regions);
+	BUG_ON(count != t->nr_regions);
+}
+
 unsigned int damon_nr_regions(struct damon_target *t)
 {
+	damon_nr_regions_verify(t);
+
 	return t->nr_regions;
 }
 
