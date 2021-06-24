@@ -117,8 +117,24 @@ void damon_destroy_target(struct damon_target *t)
 	damon_free_target(t);
 }
 
+static void damon_nr_regions_verify(struct damon_target *t)
+{
+	struct damon_region *r;
+	unsigned int count = 0;
+
+	damon_for_each_region(r, t)
+		count++;
+
+	BUG_ON(count != t->nr_regions);
+}
+
 unsigned int damon_nr_regions(struct damon_target *t)
 {
+	static unsigned int called;
+
+	if (called++ % 100 == 0)
+		damon_nr_regions_verify(t);
+
 	return t->nr_regions;
 }
 
