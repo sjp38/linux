@@ -600,7 +600,6 @@ static void cgroup_get_live(struct cgroup *cgrp)
 	WARN_ON_ONCE(cgroup_is_dead(cgrp));
 	css_get(&cgrp->self);
 }
-EXPORT_SYMBOL_GPL(cgroup_get_e_css);
 
 /**
  * __cgroup_task_count - count the number of tasks in a cgroup. The caller
