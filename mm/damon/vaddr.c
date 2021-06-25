@@ -594,14 +594,6 @@ bool damon_va_target_valid(void *target)
 	return false;
 }
 
-void damon_va_cleanup(struct damon_ctx *ctx)
-{
-	struct damon_target *t, *next;
-
-	damon_for_each_target_safe(t, next, ctx)
-		damon_destroy_target(t);
-}
-
 void damon_va_set_primitives(struct damon_ctx *ctx)
 {
 	ctx->primitive.init = damon_va_init;
@@ -610,5 +602,5 @@ void damon_va_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.check_accesses = damon_va_check_accesses;
 	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_va_target_valid;
-	ctx->primitive.cleanup = damon_va_cleanup;
+	ctx->primitive.cleanup = NULL;
 }
