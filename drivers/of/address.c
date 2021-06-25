@@ -8,6 +8,7 @@
 #include <linux/logic_pio.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/pci.h>
 #include <linux/pci_regs.h>
 #include <linux/sizes.h>
@@ -23,9 +24,8 @@
 #define OF_CHECK_COUNTS(na, ns)	(OF_CHECK_ADDR_COUNT(na) && (ns) > 0)
 
 static struct of_bus *of_match_bus(struct device_node *np);
-static int __of_address_to_resource(struct device_node *dev,
-		const __be32 *addrp, u64 size, unsigned int flags,
-		const char *name, struct resource *r);
+static int __of_address_to_resource(struct device_node *dev, int index,
+		int bar_no, struct resource *r);
 static bool of_mmio_is_nonposted(struct device_node *np);
 
 /* Debug utility */
@@ -77,9 +77,7 @@ static u64 of_bus_default_map(__be32 *addr, const __be32 *range,
 	s  = of_read_number(range + na + pna, ns);
 	da = of_read_number(addr, na);
 
-	pr_debug("default map, cp=%llx, s=%llx, da=%llx\n",
-		 (unsigned long long)cp, (unsigned long long)s,
-		 (unsigned long long)da);
+	pr_debug("default map, cp=%llx, s=%llx, da=%llx\n", cp, s, da);
 
 	if (da < cp || da >= (cp + s))
 		return OF_BAD_ADDR;
@@ -185,9 +183,7 @@ static u64 of_bus_pci_map(__be32 *addr, const __be32 *range, int na, int ns,
 	s  = of_read_number(range + na + pna, ns);
 	da = of_read_number(addr + 1, na - 1);
 
-	pr_debug("PCI map, cp=%llx, s=%llx, da=%llx\n",
-		 (unsigned long long)cp, (unsigned long long)s,
-		 (unsigned long long)da);
+	pr_debug("PCI map, cp=%llx, s=%llx, da=%llx\n", cp, s, da);
 
 	if (da < cp || da >= (cp + s))
 		return OF_BAD_ADDR;
@@ -198,62 +194,16 @@ static int of_bus_pci_translate(__be32 *addr, u64 offset, int na)
 {
 	return of_bus_default_translate(addr + 1, offset, na - 1);
 }
-
-const __be32 *of_get_pci_address(struct device_node *dev, int bar_no, u64 *size,
-			unsigned int *flags)
-{
-	const __be32 *prop;
-	unsigned int psize;
-	struct device_node *parent;
-	struct of_bus *bus;
-	int onesize, i, na, ns;
-
-	/* Get parent & match bus type */
-	parent = of_get_parent(dev);
-	if (parent == NULL)
-		return NULL;
-	bus = of_match_bus(parent);
-	if (strcmp(bus->name, "pci")) {
-		of_node_put(parent);
-		return NULL;
-	}
-	bus->count_cells(dev, &na, &ns);
-	of_node_put(parent);
-	if (!OF_CHECK_ADDR_COUNT(na))
-		return NULL;
-
-	/* Get "reg" or "assigned-addresses" property */
-	prop = of_get_property(dev, bus->addresses, &psize);
-	if (prop == NULL)
-		return NULL;
-	psize /= 4;
-
-	onesize = na + ns;
-	for (i = 0; psize >= onesize; psize -= onesize, prop += onesize, i++) {
-		u32 val = be32_to_cpu(prop[0]);
-		if ((val & 0xff) == ((bar_no * 4) + PCI_BASE_ADDRESS_0)) {
-			if (size)
-				*size = of_read_number(prop + na, ns);
-			if (flags)
-				*flags = bus->get_flags(prop);
-			return prop;
-		}
-	}
-	return NULL;
-}
-EXPORT_SYMBOL(of_get_pci_address);
+#endif /* CONFIG_PCI */
 
 int of_pci_address_to_resource(struct device_node *dev, int bar,
 			       struct resource *r)
 {
-	const __be32	*addrp;
-	u64		size;
-	unsigned int	flags;
 
-	addrp = of_get_pci_address(dev, bar, &size, &flags);
-	if (addrp == NULL)
-		return -EINVAL;
-	return __of_address_to_resource(dev, addrp, size, flags, NULL, r);
+	if (!IS_ENABLED(CONFIG_PCI))
+		return -ENOSYS;
+
+	return __of_address_to_resource(dev, -1, bar, r);
 }
 EXPORT_SYMBOL_GPL(of_pci_address_to_resource);
 
@@ -279,6 +229,9 @@ int of_pci_range_to_resource(struct of_pci_range *range,
 	res->flags = range->flags;
 	res->parent = res->child = res->sibling = NULL;
 	res->name = np->full_name;
+
+	if (!IS_ENABLED(CONFIG_PCI))
+		return -ENOSYS;
 
 	if (res->flags & IORESOURCE_IO) {
 		unsigned long port;
@@ -310,7 +263,6 @@ invalid_range:
 	return err;
 }
 EXPORT_SYMBOL(of_pci_range_to_resource);
-#endif /* CONFIG_PCI */
 
 /*
  * ISA bus specific translator
@@ -344,9 +296,7 @@ static u64 of_bus_isa_map(__be32 *addr, const __be32 *range, int na, int ns,
 	s  = of_read_number(range + na + pna, ns);
 	da = of_read_number(addr + 1, na - 1);
 
-	pr_debug("ISA map, cp=%llx, s=%llx, da=%llx\n",
-		 (unsigned long long)cp, (unsigned long long)s,
-		 (unsigned long long)da);
+	pr_debug("ISA map, cp=%llx, s=%llx, da=%llx\n", cp, s, da);
 
 	if (da < cp || da >= (cp + s))
 		return OF_BAD_ADDR;
@@ -501,7 +451,7 @@ static int of_translate_one(struct device_node *parent, struct of_bus *bus,
 
  finish:
 	of_dump_addr("parent translation for:", addr, pna);
-	pr_debug("with offset: %llx\n", (unsigned long long)offset);
+	pr_debug("with offset: %llx\n", offset);
 
 	/* Translate it into parent bus space */
 	return pbus->translate(addr, offset, pna);
@@ -675,8 +625,8 @@ u64 of_translate_dma_address(struct device_node *dev, const __be32 *in_addr)
 }
 EXPORT_SYMBOL(of_translate_dma_address);
 
-const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
-		    unsigned int *flags)
+const __be32 *__of_get_address(struct device_node *dev, int index, int bar_no,
+			       u64 *size, unsigned int *flags)
 {
 	const __be32 *prop;
 	unsigned int psize;
@@ -689,6 +639,10 @@ const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
 	if (parent == NULL)
 		return NULL;
 	bus = of_match_bus(parent);
+	if (strcmp(bus->name, "pci") && (bar_no >= 0)) {
+		of_node_put(parent);
+		return NULL;
+	}
 	bus->count_cells(dev, &na, &ns);
 	of_node_put(parent);
 	if (!OF_CHECK_ADDR_COUNT(na))
@@ -701,17 +655,21 @@ const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
 	psize /= 4;
 
 	onesize = na + ns;
-	for (i = 0; psize >= onesize; psize -= onesize, prop += onesize, i++)
-		if (i == index) {
+	for (i = 0; psize >= onesize; psize -= onesize, prop += onesize, i++) {
+		u32 val = be32_to_cpu(prop[0]);
+		/* PCI bus matches on BAR number instead of index */
+		if (((bar_no >= 0) && ((val & 0xff) == ((bar_no * 4) + PCI_BASE_ADDRESS_0))) ||
+		    ((index >= 0) && (i == index))) {
 			if (size)
 				*size = of_read_number(prop + na, ns);
 			if (flags)
 				*flags = bus->get_flags(prop);
 			return prop;
 		}
+	}
 	return NULL;
 }
-EXPORT_SYMBOL(of_get_address);
+EXPORT_SYMBOL(__of_get_address);
 
 static int parser_init(struct of_pci_range_parser *parser,
 			struct device_node *node, const char *name)
@@ -834,11 +792,22 @@ static u64 of_translate_ioport(struct device_node *dev, const __be32 *in_addr,
 	return port;
 }
 
-static int __of_address_to_resource(struct device_node *dev,
-		const __be32 *addrp, u64 size, unsigned int flags,
-		const char *name, struct resource *r)
+static int __of_address_to_resource(struct device_node *dev, int index, int bar_no,
+		struct resource *r)
 {
 	u64 taddr;
+	const __be32	*addrp;
+	u64		size;
+	unsigned int	flags;
+	const char	*name = NULL;
+
+	addrp = __of_get_address(dev, index, bar_no, &size, &flags);
+	if (addrp == NULL)
+		return -EINVAL;
+
+	/* Get optional "reg-names" property to add a name to a resource */
+	if (index >= 0)
+		of_property_read_string_index(dev, "reg-names",	index, &name);
 
 	if (flags & IORESOURCE_MEM)
 		taddr = of_translate_address(dev, addrp);
@@ -876,19 +845,7 @@ static int __of_address_to_resource(struct device_node *dev,
 int of_address_to_resource(struct device_node *dev, int index,
 			   struct resource *r)
 {
-	const __be32	*addrp;
-	u64		size;
-	unsigned int	flags;
-	const char	*name = NULL;
-
-	addrp = of_get_address(dev, index, &size, &flags);
-	if (addrp == NULL)
-		return -EINVAL;
-
-	/* Get optional "reg-names" property to add a name to a resource */
-	of_property_read_string_index(dev, "reg-names",	index, &name);
-
-	return __of_address_to_resource(dev, addrp, size, flags, name, r);
+	return __of_address_to_resource(dev, index, -1, r);
 }
 EXPORT_SYMBOL_GPL(of_address_to_resource);
 
@@ -1038,6 +995,38 @@ int of_dma_get_range(struct device_node *np, const struct bus_dma_region **map)
 out:
 	of_node_put(node);
 	return ret;
+}
+
+int of_dma_set_restricted_buffer(struct device *dev, struct device_node *np)
+{
+	struct device_node *node, *of_node = dev->of_node;
+	int count, i;
+
+	count = of_property_count_elems_of_size(of_node, "memory-region",
+						sizeof(u32));
+	/*
+	 * If dev->of_node doesn't exist or doesn't contain memory-region, try
+	 * the OF node having DMA configuration.
+	 */
+	if (count <= 0) {
+		of_node = np;
+		count = of_property_count_elems_of_size(
+			of_node, "memory-region", sizeof(u32));
+	}
+
+	for (i = 0; i < count; i++) {
+		node = of_parse_phandle(of_node, "memory-region", i);
+		/*
+		 * There might be multiple memory regions, but only one
+		 * restricted-dma-pool region is allowed.
+		 */
+		if (of_device_is_compatible(node, "restricted-dma-pool") &&
+		    of_device_is_available(node))
+			return of_reserved_mem_device_init_by_idx(dev, of_node,
+								  i);
+	}
+
+	return 0;
 }
 #endif /* CONFIG_HAS_DMA */
 
