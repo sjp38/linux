@@ -18,3 +18,6 @@ void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm, unsigned long addr);
 
 void damon_pa_mkold(unsigned long paddr);
 bool damon_pa_young(unsigned long paddr, unsigned long *page_sz);
+
+int damon_pageout_score(struct damon_ctx *c, struct damon_region *r,
+			struct damos *s);
