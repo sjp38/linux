@@ -28,6 +28,7 @@ DAMON
 - Use variable name 'ctx' for 'damon_ctx' (Shakeel Butt)
 - Make 'dbgfs' to completely manage pid reference counting (Shakeel Butt)
 - Remove '.owner' of debugfs files (Shakeel Butt)
+- Change default 'update_interval' to 60 seconds (Shakeel Butt)
 
 
 DAMOS
