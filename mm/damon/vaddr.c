@@ -54,7 +54,7 @@ static struct mm_struct *damon_get_mm(struct damon_target *t)
  * Returns 0 on success, or negative error code otherwise.
  */
 static int damon_va_evenly_split_region(struct damon_region *r,
-		unsigned int nr_pieces)
+		unsigned int nr_pieces, struct damon_target *t)
 {
 	unsigned long sz_orig, sz_piece, orig_end;
 	struct damon_region *n = NULL, *next;
@@ -77,7 +77,7 @@ static int damon_va_evenly_split_region(struct damon_region *r,
 		n = damon_new_region(start, start + sz_piece);
 		if (!n)
 			return -ENOMEM;
-		damon_insert_region(n, r, next);
+		damon_insert_region(n, r, next, t);
 		r = n;
 	}
 	/* complement last region for possible rounding error */
@@ -261,7 +261,7 @@ static void __damon_va_init_regions(struct damon_ctx *ctx,
 		damon_add_region(r, t);
 
 		nr_pieces = (regions[i].end - regions[i].start) / sz;
-		damon_va_evenly_split_region(r, nr_pieces);
+		damon_va_evenly_split_region(r, nr_pieces, t);
 	}
 }
 
@@ -338,7 +338,7 @@ static void damon_va_apply_three_regions(struct damon_target *t,
 					ALIGN(br->end, DAMON_MIN_REGION));
 			if (!newr)
 				continue;
-			damon_insert_region(newr, damon_prev_region(r), r);
+			damon_insert_region(newr, damon_prev_region(r), r, t);
 		} else {
 			first->ar.start = ALIGN_DOWN(br->start,
 					DAMON_MIN_REGION);

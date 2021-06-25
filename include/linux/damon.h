@@ -436,7 +436,8 @@ struct damon_ctx {
 
 struct damon_region *damon_new_region(unsigned long start, unsigned long end);
 inline void damon_insert_region(struct damon_region *r,
-		struct damon_region *prev, struct damon_region *next);
+		struct damon_region *prev, struct damon_region *next,
+		struct damon_target *t);
 void damon_add_region(struct damon_region *r, struct damon_target *t);
 void damon_destroy_region(struct damon_region *r, struct damon_target *t);
 

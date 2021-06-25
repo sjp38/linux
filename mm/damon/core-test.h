@@ -30,7 +30,7 @@ static void damon_test_regions(struct kunit *test)
 	damon_add_region(r, t);
 	KUNIT_EXPECT_EQ(test, 1u, damon_nr_regions(t));
 
-	damon_del_region(r);
+	damon_del_region(r, t);
 	KUNIT_EXPECT_EQ(test, 0u, damon_nr_regions(t));
 
 	damon_free_target(t);
@@ -125,7 +125,7 @@ static void damon_test_split_at(struct kunit *test)
 	t = damon_new_target(42);
 	r = damon_new_region(0, 100);
 	damon_add_region(r, t);
-	damon_split_region_at(c, r, 25);
+	damon_split_region_at(c, t, r, 25);
 	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
 	KUNIT_EXPECT_EQ(test, r->ar.end, 25ul);
 
@@ -151,7 +151,7 @@ static void damon_test_merge_two(struct kunit *test)
 	r2->nr_accesses = 20;
 	damon_add_region(r2, t);
 
-	damon_merge_two_regions(r, r2);
+	damon_merge_two_regions(t, r, r2);
 	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);
 	KUNIT_EXPECT_EQ(test, r->ar.end, 300ul);
 	KUNIT_EXPECT_EQ(test, r->nr_accesses, 16u);

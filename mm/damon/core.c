@@ -57,9 +57,11 @@ struct damon_region *damon_new_region(unsigned long start, unsigned long end)
  * Add a region between two other regions
  */
 inline void damon_insert_region(struct damon_region *r,
-		struct damon_region *prev, struct damon_region *next)
+		struct damon_region *prev, struct damon_region *next,
+		struct damon_target *t)
 {
 	__list_add(&r->list, &prev->list, &next->list);
+	t->nr_regions++;
 }
 
 void damon_add_region(struct damon_region *r, struct damon_target *t)
@@ -70,6 +72,10 @@ void damon_add_region(struct damon_region *r, struct damon_target *t)
 
 static void damon_del_region(struct damon_region *r, struct damon_target *t)
 {
+	if (t->nr_regions == 0) {
+		pr_err("nr_regions 0 but damon_del_region called\n");
+		BUG();
+	}
 	list_del(&r->list);
 	t->nr_regions--;
 }
@@ -202,6 +208,8 @@ static void damon_nr_regions_verify(struct damon_target *t)
 	damon_for_each_region(r, t)
 		count++;
 
+	if (count != t->nr_regions)
+		pr_err("%s expected %u but %u\n", __func__, count, t->nr_regions);
 	BUG_ON(count != t->nr_regions);
 }
 
@@ -570,7 +578,8 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 }
 
 static void damon_split_region_at(struct damon_ctx *ctx,
-				  struct damon_region *r, unsigned long sz_r);
+		struct damon_target *t, struct damon_region *r,
+		unsigned long sz_r);
 
 static void damon_merge_two_regions(struct damon_target *t,
 		struct damon_region *l, struct damon_region *r);
@@ -633,7 +642,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 						r->ar.start, DAMON_MIN_REGION);
 				if (!sz)
 					continue;
-				damon_split_region_at(c, r, sz);
+				damon_split_region_at(c, t, r, sz);
 				r = damon_next_region(r);
 			}
 			limit->charge_target_from = NULL;
@@ -656,7 +665,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 						DAMON_MIN_REGION);
 				if (!sz_split)
 					break;
-				damon_split_region_at(c, r, sz_split);
+				damon_split_region_at(c, t, r, sz_split);
 			}
 
 			c->primitive.apply_scheme(c, t, r, s);
@@ -814,7 +823,8 @@ static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,
  * sz_r		size of the first sub-region that will be made
  */
 static void damon_split_region_at(struct damon_ctx *ctx,
-				  struct damon_region *r, unsigned long sz_r)
+		struct damon_target *t, struct damon_region *r,
+		unsigned long sz_r)
 {
 	struct damon_region *new;
 
@@ -827,7 +837,7 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 	new->age = r->age;
 	new->last_nr_accesses = r->last_nr_accesses;
 
-	damon_insert_region(new, r, damon_next_region(r));
+	damon_insert_region(new, r, damon_next_region(r), t);
 }
 
 /* Split every region in the given target into 'nr_subs' regions */
@@ -853,7 +863,7 @@ static void damon_split_regions_of(struct damon_ctx *ctx,
 			if (sz_sub == 0 || sz_sub >= sz_region)
 				continue;
 
-			damon_split_region_at(ctx, r, sz_sub);
+			damon_split_region_at(ctx, t, r, sz_sub);
 			sz_region = sz_sub;
 		}
 	}

@@ -147,7 +147,7 @@ static void damon_do_test_apply_three_regions(struct kunit *test,
 	}
 	damon_add_target(ctx, t);
 
-	damon_va_apply_three_regions(ctx, t, three_regions);
+	damon_va_apply_three_regions(t, three_regions);
 
 	for (i = 0; i < nr_expected / 2; i++) {
 		r = __nth_region_of(t, i);
@@ -259,14 +259,15 @@ static void damon_test_split_evenly(struct kunit *test)
 	struct damon_region *r;
 	unsigned long i;
 
-	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, NULL, 5), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(NULL, 5, NULL),
+			-EINVAL);
 
 	t = damon_new_target(42);
 	r = damon_new_region(0, 100);
-	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 0), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(r, 0, t), -EINVAL);
 
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 10), 0);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(r, 10, t), 0);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 10u);
 
 	i = 0;
@@ -279,7 +280,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	t = damon_new_target(42);
 	r = damon_new_region(5, 59);
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 5), 0);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(r, 5, t), 0);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 5u);
 
 	i = 0;
@@ -296,7 +297,7 @@ static void damon_test_split_evenly(struct kunit *test)
 	t = damon_new_target(42);
 	r = damon_new_region(5, 6);
 	damon_add_region(r, t);
-	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 2), -EINVAL);
+	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(r, 2, t), -EINVAL);
 	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 1u);
 
 	damon_for_each_region(r, t) {
