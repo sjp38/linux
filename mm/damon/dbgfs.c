@@ -268,13 +268,15 @@ static void dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)
 
 static int dbgfs_before_terminate(struct damon_ctx *ctx)
 {
-	struct damon_target *t;
+	struct damon_target *t, *next;
 
 	if (!targetid_is_pid(ctx))
 		return 0;
 
-	damon_for_each_target(t, ctx)
+	damon_for_each_target_safe(t, next, ctx) {
 		put_pid((struct pid *)t->id);
+		damon_destroy_target(t);
+	}
 	return 0;
 }
 
