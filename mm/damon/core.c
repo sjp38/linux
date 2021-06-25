@@ -12,6 +12,7 @@
 #include <linux/kthread.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/damon.h>
@@ -109,11 +110,13 @@ struct damos *damon_new_scheme(
 
 	scheme->limit.sz = limit->sz;
 	scheme->limit.ms = limit->ms;
+	scheme->limit.weight_sz = limit->weight_sz;
+	scheme->limit.weight_nr_accesses = limit->weight_nr_accesses;
+	scheme->limit.weight_age = limit->weight_age;
 	scheme->limit.charged_sz = 0;
 	scheme->limit.charged_from = 0;
 	scheme->limit.charge_target_from = NULL;
 	scheme->limit.charge_addr_from = 0;
-
 	return scheme;
 }
 
@@ -546,6 +549,28 @@ static void damon_split_region_at(struct damon_ctx *ctx,
 		struct damon_target *t, struct damon_region *r,
 		unsigned long sz_r);
 
+static bool __damos_valid_target(struct damon_region *r, struct damos *s)
+{
+	unsigned long sz;
+
+	sz = r->ar.end - r->ar.start;
+	return s->min_sz_region <= sz && sz <= s->max_sz_region &&
+		s->min_nr_accesses <= r->nr_accesses &&
+		r->nr_accesses <= s->max_nr_accesses &&
+		s->min_age_region <= r->age && r->age <= s->max_age_region;
+}
+
+static bool damos_valid_target(struct damon_ctx *c, struct damon_target *t,
+		struct damon_region *r, struct damos *s)
+{
+	bool ret = __damos_valid_target(r, s);
+
+	if (!ret || !s->limit.sz || !c->primitive.get_scheme_score)
+		return ret;
+
+	return c->primitive.get_scheme_score(c, t, r, s) >= s->limit.min_score;
+}
+
 static void damon_do_apply_schemes(struct damon_ctx *c,
 				   struct damon_target *t,
 				   struct damon_region *r)
@@ -587,13 +612,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			limit->charge_addr_from = 0;
 		}
 
-		/* Check the target regions condition */
-		if (sz < s->min_sz_region || s->max_sz_region < sz)
-			continue;
-		if (r->nr_accesses < s->min_nr_accesses ||
-				s->max_nr_accesses < r->nr_accesses)
-			continue;
-		if (r->age < s->min_age_region || s->max_age_region < r->age)
+		if (!damos_valid_target(c, t, r, s))
 			continue;
 
 		/* Apply the scheme */
@@ -629,16 +648,44 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 
 	damon_for_each_scheme(s, c) {
 		struct damos_speed_limit *limit = &s->limit;
+		unsigned long cumulated_sz;
+		unsigned int score, max_score = 0;
 
 		if (!limit->sz)
 			continue;
 
 		/* Reset charge window if the duration passed */
-		if (time_after_eq(jiffies, limit->charged_from +
-					msecs_to_jiffies(limit->ms))) {
+		if (time_after_eq(jiffies, s->limit.charged_from +
+					msecs_to_jiffies(s->limit.ms))) {
 			limit->charged_from = jiffies;
 			limit->charged_sz = 0;
 		}
+
+		if (!c->primitive.get_scheme_score)
+			continue;
+
+		/* Fill up the score histogram */
+		memset(limit->histogram, 0, sizeof(limit->histogram));
+		damon_for_each_target(t, c) {
+			damon_for_each_region(r, t) {
+				if (!__damos_valid_target(r, s))
+					continue;
+				score = c->primitive.get_scheme_score(
+						c, t, r, s);
+				limit->histogram[score] +=
+					r->ar.end - r->ar.start;
+				if (score > max_score)
+					max_score = score;
+			}
+		}
+
+		/* Set the min score limit */
+		for (cumulated_sz = 0, score = max_score; ; score--) {
+			cumulated_sz += limit->histogram[score];
+			if (cumulated_sz >= limit->sz || !score)
+				break;
+		}
+		limit->min_score = score;
 	}
 
 	damon_for_each_target(t, c) {
