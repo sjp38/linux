@@ -1,21 +1,14 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v31)
+Changes from Previous Version (v32)
 ===================================
 
-Compared to the v31
-(https://lore.kernel.org/linux-mm/20210621083108.17589-1-sj38.park@gmail.com/),
+Compared to the v32
+(https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/),
 this version contains below minor changes.
 
-- Rebase on latest -mm tree (v5.13-rc7-mmots-2021-06-24-20-54)
+- Rebase on latest -mm tree
 - Collect 'Acked-by:' tags from Shakeel Butt
-- Use 'kthread_run()' (Shakeel Butt)
-- Change default 'update_interval' to 60 seconds (Shakeel Butt)
-- Utilize 'nr_regions' field in each 'damon_target' object (Shakeel Butt)
-- Remove unused parameters in some functions (Shakeel Butt)
-- Use variable name 'ctx' for 'damon_ctx' (Shakeel Butt)
-- Make 'dbgfs' to completely manage pid reference counting (Shakeel Butt)
-- Remove '.owner' setting for debugfs files (Shakeel Butt)
 
 Now all patches of this patchset has at least one 'Reviewed-by:' tags.  Andrew,
 could you please consider merging this into the -mm tree?
@@ -405,6 +398,11 @@ Finally, the last patch (13th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v32
+(https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/)
+- Rebase on latest -mm tree
+- Collect 'Acked-by:' tags from Shakeel Butt
 
 Chages from v31
 (https://lore.kernel.org/linux-mm/20210621083108.17589-1-sj38.park@gmail.com/)
