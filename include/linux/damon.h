@@ -92,38 +92,37 @@ enum damos_action {
 };
 
 /**
- * struct damos_speed_limit - Controls the aggressiveness of the given scheme.
- * @quota_ms:		Time limit in milliseconds.
- * @quota_sz:		Scheme action amount limit in bytes.
- * @window_ms:		Limits charging duration in milliseconds.
+ * struct damos_quota - Controls the aggressiveness of the given scheme.
+ * @ms:			Maximum milliseconds that the scheme can use.
+ * @sz:			Maximum bytes of memory that the action can be applied.
+ * @reset_interval:	Charge reset interval in milliseconds.
  *
  * @weight_sz:		Weight of the region's size for prioritization.
  * @weight_nr_accesses:	Weight of the region's nr_accesses for prioritization.
  * @weight_age:		Weight of the region's age for prioritization.
  *
- * To avoid consuming too much CPU time for applying the &struct damos->action
- * to large memory, DAMON allows users to set a time limit and/or size limit.
- * The limits can beset by writing non-zero values to &quota_ms and &quota_sz,
- * respectively.  If the time limit is set, DAMON tries to use only up to
- * &quota_ms within &window_ms for applying the action.  If the size limit is
- * set, DAMON applies the scheme only up to &quota_sz bytes within &window_ms.
+ * To avoid consuming too much CPU time or IO resource for applying the &struct
+ * damos->action to large memory regions, DAMON allows users to set a time
+ * and/or size quota.  The quotas can be set by writing non-zero values to &ms
+ * and &sz, respectively.  If the time quota is set, DAMON tries to use only up
+ * to &ms milliseconds within &reset_interval for applying the action.  If the
+ * size quota is set, DAMON tries to apply the action only up to &sz bytes
+ * within &reset_interval.
  *
- * Internally, the time limit is transformed to another size limit using
- * estimated throughput of the action of the scheme.  DAMON then compares the
- * limit against the user-defined size limit and use smaller one as the
- * effective limit.
+ * Internally, the time limit is transformed to a size limit using estimated
+ * throughput of the action of the scheme.  DAMON then compares it against &sz
+ * and use smaller one as the effective limit.
  *
- * For selecting regions within the limit, DAMON prioritizes current scheme's
- * target memory regions using the given &struct
- * damon_primitive->get_scheme_score.  You could customize the prioritization
- * logic for your environment by setting &weight_sz, &weight_nr_accesses, and
- * &weight_age, because primitives are encouraged to respect those, though it's
- * not mandatory.
+ * For selecting regions within the quota, DAMON prioritizes current scheme's
+ * target memory regions using the &struct damon_primitive->get_scheme_score.
+ * You could customize the prioritization logic by setting &weight_sz,
+ * &weight_nr_accesses, and &weight_age, because primitives are encouraged to
+ * respect those.
  */
-struct damos_speed_limit {
-	unsigned long quota_ms;
-	unsigned long quota_sz;
-	unsigned long window_ms;
+struct damos_quota {
+	unsigned long ms;
+	unsigned long sz;
+	unsigned long reset_interval;
 
 	unsigned int weight_sz;
 	unsigned int weight_nr_accesses;
@@ -134,9 +133,9 @@ struct damos_speed_limit {
 	unsigned long total_charged_sz;
 	unsigned long total_charged_ns;
 
-	unsigned long quota;	/* Effective quota in bytes */
+	unsigned long esz;	/* Effective size quota in bytes */
 
-	/* For limit accounting */
+	/* For charging */
 	unsigned long charged_sz;
 	unsigned long charged_from;
 	struct damon_target *charge_target_from;
@@ -195,7 +194,7 @@ struct damos_watermarks {
  * @min_age_region:	Minimum age of target regions.
  * @max_age_region:	Maximum age of target regions.
  * @action:		&damo_action to be applied to the target regions.
- * @limit:		Control the aggressiveness of this scheme.
+ * @quota:		Control the aggressiveness of this scheme.
  * @wmarks:		Watermarks for automated (in)activation of this scheme.
  * @stat_count:		Total number of regions that this scheme is applied.
  * @stat_sz:		Total size of regions that this scheme is applied.
@@ -204,7 +203,7 @@ struct damos_watermarks {
  * For each aggregation interval, DAMON finds regions which fit in the
  * condition (&min_sz_region, &max_sz_region, &min_nr_accesses,
  * &max_nr_accesses, &min_age_region, &max_age_region) and applies &action to
- * those.  To avoid consuming too much CPU for the &action, &limit is used.
+ * those.  To avoid consuming too much CPU for the &action, &quota is used.
  *
  * To do the work only when needed, schemes can be activated for specific
  * system situations using &wmarks.  If all schemes that registered to the
@@ -226,7 +225,7 @@ struct damos {
 	unsigned int min_age_region;
 	unsigned int max_age_region;
 	enum damos_action action;
-	struct damos_speed_limit limit;
+	struct damos_quota quota;
 	struct damos_watermarks wmarks;
 	unsigned long stat_count;
 	unsigned long stat_sz;
@@ -461,7 +460,7 @@ struct damos *damon_new_scheme(
 		unsigned long min_sz_region, unsigned long max_sz_region,
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
-		enum damos_action action, struct damos_speed_limit *limit,
+		enum damos_action action, struct damos_quota *quota,
 		struct damos_watermarks *wmarks);
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s);
 void damon_destroy_scheme(struct damos *s);

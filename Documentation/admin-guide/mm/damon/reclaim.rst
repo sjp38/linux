@@ -74,6 +74,42 @@ Time threshold for cold memory regions identification in microseconds.
 If a memory region is not accessed for this or longer time, DAMON_RECLAIM
 identifies the region as cold, and reclaims it.
 
+quota_ms
+--------
+
+Limit of time for the reclamation in milliseconds.
+
+DAMON_RECLAIM tries to use only up to this time within a time window
+(quota_reset_interval_ms) for trying reclamation of cold pages.  This can be
+used for limiting CPU consumption of DAMON_RECLAIM.  If the value is zero, the
+limit is disabled.
+
+100 ms by default.
+
+quota_sz
+--------
+
+Limit of size of memory for the reclamation in bytes.
+
+DAMON_RECLAIM charges amount of memory which it tried to reclaim within a time
+window (quota_reset_interval_ms) and makes no more than this limit is tried.
+This can be used for limiting consumption of CPU and IO.  If this value is
+zero, the limit is disabled.
+
+1 GiB by default.
+
+quota_reset_interval_ms
+-----------------------
+
+The time/size quota charge reset interval in milliseconds.
+
+The charget reset interval for the quota of time (quota_ms) and size
+(quota_sz).  That is, DAMON_RECLAIM does not try reclamation for more than
+quota_ms milliseconds or quota_sz bytes within quota_reset_interval_ms
+milliseconds.
+
+1 second by default.
+
 limit_sz
 --------
 

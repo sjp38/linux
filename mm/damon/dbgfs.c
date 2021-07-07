@@ -231,11 +231,11 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 				s->min_sz_region, s->max_sz_region,
 				s->min_nr_accesses, s->max_nr_accesses,
 				s->min_age_region, s->max_age_region,
-				s->action, s->limit.quota_ms,
-				s->limit.quota_sz, s->limit.window_ms,
-				s->limit.weight_sz,
-				s->limit.weight_nr_accesses,
-				s->limit.weight_age, s->wmarks.metric,
+				s->action, s->quota.ms, s->quota.sz,
+				s->quota.reset_interval,
+				s->quota.weight_sz,
+				s->quota.weight_nr_accesses,
+				s->quota.weight_age, s->wmarks.metric,
 				s->wmarks.interval, s->wmarks.high,
 				s->wmarks.mid, s->wmarks.low, s->stat_count,
 				s->stat_sz);
@@ -317,16 +317,16 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 
 	*nr_schemes = 0;
 	while (pos < len && *nr_schemes < max_nr_schemes) {
-		struct damos_speed_limit limit = {};
+		struct damos_quota quota = {};
 		struct damos_watermarks wmarks;
 
 		ret = sscanf(&str[pos],
 				"%lu %lu %u %u %u %u %u %lu %lu %lu %u %u %u %u %lu %lu %lu %lu%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
-				&min_age, &max_age, &action, &limit.quota_ms,
-				&limit.quota_sz, &limit.window_ms,
-				&limit.weight_sz, &limit.weight_nr_accesses,
-				&limit.weight_age, &wmarks.metric,
+				&min_age, &max_age, &action, &quota.ms,
+				&quota.sz, &quota.reset_interval,
+				&quota.weight_sz, &quota.weight_nr_accesses,
+				&quota.weight_age, &wmarks.metric,
 				&wmarks.interval, &wmarks.high, &wmarks.mid,
 				&wmarks.low, &parsed);
 		if (ret != 18)
@@ -338,7 +338,7 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 
 		pos += parsed;
 		scheme = damon_new_scheme(min_sz, max_sz, min_nr_a, max_nr_a,
-				min_age, max_age, action, &limit, &wmarks);
+				min_age, max_age, action, &quota, &wmarks);
 		if (!scheme)
 			goto fail;
 
@@ -1152,7 +1152,7 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 }
 
 /*
- * v1: Add the scheme speed limit
+ * v1: Add the scheme quota
  */
 static ssize_t dbgfs_version_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)

@@ -247,8 +247,8 @@ int damon_pageout_score(struct damon_ctx *c, struct damon_region *r,
 	int freq_subscore;
 	unsigned int age_in_sec;
 	int age_in_log, age_subscore;
-	unsigned int freq_weight = s->limit.weight_nr_accesses;
-	unsigned int age_weight = s->limit.weight_age;
+	unsigned int freq_weight = s->quota.weight_nr_accesses;
+	unsigned int age_weight = s->quota.weight_age;
 	int hotness;
 
 	max_nr_accesses = c->aggr_interval / c->sample_interval;

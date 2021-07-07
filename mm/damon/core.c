@@ -91,7 +91,7 @@ struct damos *damon_new_scheme(
 		unsigned long min_sz_region, unsigned long max_sz_region,
 		unsigned int min_nr_accesses, unsigned int max_nr_accesses,
 		unsigned int min_age_region, unsigned int max_age_region,
-		enum damos_action action, struct damos_speed_limit *limit,
+		enum damos_action action, struct damos_quota *quota,
 		struct damos_watermarks *wmarks)
 {
 	struct damos *scheme;
@@ -110,19 +110,19 @@ struct damos *damon_new_scheme(
 	scheme->stat_sz = 0;
 	INIT_LIST_HEAD(&scheme->list);
 
-	scheme->limit.quota_ms = limit->quota_ms;
-	scheme->limit.quota_sz = limit->quota_sz;
-	scheme->limit.window_ms = limit->window_ms;
-	scheme->limit.weight_sz = limit->weight_sz;
-	scheme->limit.weight_nr_accesses = limit->weight_nr_accesses;
-	scheme->limit.weight_age = limit->weight_age;
-	scheme->limit.total_charged_sz = 0;
-	scheme->limit.total_charged_ns = 0;
-	scheme->limit.quota = 0;
-	scheme->limit.charged_sz = 0;
-	scheme->limit.charged_from = 0;
-	scheme->limit.charge_target_from = NULL;
-	scheme->limit.charge_addr_from = 0;
+	scheme->quota.ms = quota->ms;
+	scheme->quota.sz = quota->sz;
+	scheme->quota.reset_interval = quota->reset_interval;
+	scheme->quota.weight_sz = quota->weight_sz;
+	scheme->quota.weight_nr_accesses = quota->weight_nr_accesses;
+	scheme->quota.weight_age = quota->weight_age;
+	scheme->quota.total_charged_sz = 0;
+	scheme->quota.total_charged_ns = 0;
+	scheme->quota.esz = 0;
+	scheme->quota.charged_sz = 0;
+	scheme->quota.charged_from = 0;
+	scheme->quota.charge_target_from = NULL;
+	scheme->quota.charge_addr_from = 0;
 
 	scheme->wmarks.metric = wmarks->metric;
 	scheme->wmarks.interval = wmarks->interval;
@@ -579,10 +579,10 @@ static bool damos_valid_target(struct damon_ctx *c, struct damon_target *t,
 {
 	bool ret = __damos_valid_target(r, s);
 
-	if (!ret || !s->limit.quota || !c->primitive.get_scheme_score)
+	if (!ret || !s->quota.esz || !c->primitive.get_scheme_score)
 		return ret;
 
-	return c->primitive.get_scheme_score(c, t, r, s) >= s->limit.min_score;
+	return c->primitive.get_scheme_score(c, t, r, s) >= s->quota.min_score;
 }
 
 static void damon_do_apply_schemes(struct damon_ctx *c,
@@ -592,33 +592,33 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 	struct damos *s;
 
 	damon_for_each_scheme(s, c) {
-		struct damos_speed_limit *limit = &s->limit;
+		struct damos_quota *quota = &s->quota;
 		unsigned long sz = r->ar.end - r->ar.start;
 		struct timespec64 begin, end;
 
 		if (!s->wmarks.activated)
 			continue;
 
-		/* Check the limit */
-		if (limit->quota && limit->charged_sz >= limit->quota)
+		/* Check the quota */
+		if (quota->esz && quota->charged_sz >= quota->esz)
 			continue;
 
 		/* Skip previously charged regions */
-		if (limit->charge_target_from) {
-			if (t != limit->charge_target_from)
+		if (quota->charge_target_from) {
+			if (t != quota->charge_target_from)
 				continue;
 			if (r == damon_last_region(t)) {
-				limit->charge_target_from = NULL;
-				limit->charge_addr_from = 0;
+				quota->charge_target_from = NULL;
+				quota->charge_addr_from = 0;
 				continue;
 			}
-			if (limit->charge_addr_from &&
-					r->ar.end <= limit->charge_addr_from)
+			if (quota->charge_addr_from &&
+					r->ar.end <= quota->charge_addr_from)
 				continue;
 
-			if (limit->charge_addr_from && r->ar.start <
-					limit->charge_addr_from) {
-				sz = ALIGN_DOWN(limit->charge_addr_from -
+			if (quota->charge_addr_from && r->ar.start <
+					quota->charge_addr_from) {
+				sz = ALIGN_DOWN(quota->charge_addr_from -
 						r->ar.start, DAMON_MIN_REGION);
 				if (!sz) {
 					if (r->ar.end - r->ar.start <=
@@ -630,8 +630,8 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				r = damon_next_region(r);
 				sz = r->ar.end - r->ar.start;
 			}
-			limit->charge_target_from = NULL;
-			limit->charge_addr_from = 0;
+			quota->charge_target_from = NULL;
+			quota->charge_addr_from = 0;
 		}
 
 		if (!damos_valid_target(c, t, r, s))
@@ -639,10 +639,9 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 
 		/* Apply the scheme */
 		if (c->primitive.apply_scheme) {
-			if (limit->quota && limit->charged_sz + sz >
-					limit->quota) {
-				sz = ALIGN_DOWN(limit->quota -
-						limit->charged_sz,
+			if (quota->esz &&
+					quota->charged_sz + sz > quota->esz) {
+				sz = ALIGN_DOWN(quota->esz - quota->charged_sz,
 						DAMON_MIN_REGION);
 				if (!sz)
 					goto update_stat;
@@ -651,13 +650,13 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 			ktime_get_coarse_ts64(&begin);
 			c->primitive.apply_scheme(c, t, r, s);
 			ktime_get_coarse_ts64(&end);
-			limit->total_charged_ns += timespec64_to_ns(&end) -
+			quota->total_charged_ns += timespec64_to_ns(&end) -
 				timespec64_to_ns(&begin);
-			limit->charged_sz += sz;
-			if (limit->quota && limit->charged_sz >= limit->quota)
+			quota->charged_sz += sz;
+			if (quota->esz && quota->charged_sz >= quota->esz)
 			{
-				limit->charge_target_from = t;
-				limit->charge_addr_from = r->ar.end + 1;
+				quota->charge_target_from = t;
+				quota->charge_addr_from = r->ar.end + 1;
 			}
 		}
 		if (s->action != DAMOS_STAT)
@@ -669,27 +668,27 @@ update_stat:
 	}
 }
 
-/* Shouldn't be called if limit->quota_ms and limit->quota_sz are zero */
-static void damon_set_effective_quota(struct damos_speed_limit *limit)
+/* Shouldn't be called if quota->ms and quota->sz are zero */
+static void damon_set_effective_quota(struct damos_quota *q)
 {
 	unsigned long throughput;
 	unsigned long quota;
 
-	if (!limit->quota_ms) {
-		limit->quota = limit->quota_sz;
+	if (!q->ms) {
+		q->esz = q->sz;
 		return;
 	}
 
-	if (limit->total_charged_ns)
-		throughput = limit->total_charged_sz * 1000000 /
-			limit->total_charged_ns;
+	if (q->total_charged_ns)
+		throughput = q->total_charged_sz * 1000000 /
+			q->total_charged_ns;
 	else
 		throughput = PAGE_SIZE * 1024;
-	quota = throughput * limit->quota_ms;
+	quota = throughput * q->ms;
 
-	if (limit->quota_sz && limit->quota_sz < quota)
-		quota = limit->quota_sz;
-	limit->quota = quota;
+	if (q->sz && q->sz < quota)
+		quota = q->sz;
+	q->esz = quota;
 }
 
 static void kdamond_apply_schemes(struct damon_ctx *c)
@@ -699,51 +698,51 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 	struct damos *s;
 
 	damon_for_each_scheme(s, c) {
-		struct damos_speed_limit *limit = &s->limit;
+		struct damos_quota *quota = &s->quota;
 		unsigned long cumulated_sz;
 		unsigned int score, max_score = 0;
 
 		if (!s->wmarks.activated)
 			continue;
 
-		if (!limit->quota_ms && !limit->quota_sz)
+		if (!quota->ms && !quota->sz)
 			continue;
 
 		/* New charge window starts */
-		if (time_after_eq(jiffies, s->limit.charged_from +
+		if (time_after_eq(jiffies, s->quota.charged_from +
 					msecs_to_jiffies(
-						s->limit.window_ms))) {
-			limit->total_charged_sz += limit->charged_sz;
-			limit->charged_from = jiffies;
-			limit->charged_sz = 0;
-			damon_set_effective_quota(limit);
+						s->quota.reset_interval))) {
+			quota->total_charged_sz += quota->charged_sz;
+			quota->charged_from = jiffies;
+			quota->charged_sz = 0;
+			damon_set_effective_quota(quota);
 		}
 
 		if (!c->primitive.get_scheme_score)
 			continue;
 
 		/* Fill up the score histogram */
-		memset(limit->histogram, 0, sizeof(limit->histogram));
+		memset(quota->histogram, 0, sizeof(quota->histogram));
 		damon_for_each_target(t, c) {
 			damon_for_each_region(r, t) {
 				if (!__damos_valid_target(r, s))
 					continue;
 				score = c->primitive.get_scheme_score(
 						c, t, r, s);
-				limit->histogram[score] +=
+				quota->histogram[score] +=
 					r->ar.end - r->ar.start;
 				if (score > max_score)
 					max_score = score;
 			}
 		}
 
-		/* Set the min score limit */
+		/* Set the min score */
 		for (cumulated_sz = 0, score = max_score; ; score--) {
-			cumulated_sz += limit->histogram[score];
-			if (cumulated_sz >= limit->quota || !score)
+			cumulated_sz += quota->histogram[score];
+			if (cumulated_sz >= quota->esz || !score)
 				break;
 		}
-		limit->min_score = score;
+		quota->min_score = score;
 	}
 
 	damon_for_each_target(t, c) {
