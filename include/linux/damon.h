@@ -93,38 +93,56 @@ enum damos_action {
 
 /**
  * struct damos_speed_limit - Controls the aggressiveness of the given scheme.
- * @sz:			Scheme action amount limit in bytes.
- * @ms:			Scheme action amount charge duration.
+ * @quota_ms:		Time limit in milliseconds.
+ * @quota_sz:		Scheme action amount limit in bytes.
+ * @window_ms:		Limits charging duration in milliseconds.
  *
  * @weight_sz:		Weight of the region's size for prioritization.
  * @weight_nr_accesses:	Weight of the region's nr_accesses for prioritization.
  * @weight_age:		Weight of the region's age for prioritization.
  *
  * To avoid consuming too much CPU time for applying the &struct damos->action
- * to large memory, DAMON applies it to only up to &sz bytes within &ms.  For
- * selecting regions within the limit, DAMON prioritizes current scheme's
+ * to large memory, DAMON allows users to set a time limit and/or size limit.
+ * The limits can beset by writing non-zero values to &quota_ms and &quota_sz,
+ * respectively.  If the time limit is set, DAMON tries to use only up to
+ * &quota_ms within &window_ms for applying the action.  If the size limit is
+ * set, DAMON applies the scheme only up to &quota_sz bytes within &window_ms.
+ *
+ * Internally, the time limit is transformed to another size limit using
+ * estimated throughput of the action of the scheme.  DAMON then compares the
+ * limit against the user-defined size limit and use smaller one as the
+ * effective limit.
+ *
+ * For selecting regions within the limit, DAMON prioritizes current scheme's
  * target memory regions using the given &struct
  * damon_primitive->get_scheme_score.  You could customize the prioritization
  * logic for your environment by setting &weight_sz, &weight_nr_accesses, and
  * &weight_age, because primitives are encouraged to respect those, though it's
  * not mandatory.
- *
- * If &sz is 0, the limit is disabled.
  */
 struct damos_speed_limit {
-	unsigned long sz;
-	unsigned long ms;
+	unsigned long quota_ms;
+	unsigned long quota_sz;
+	unsigned long window_ms;
 
 	unsigned int weight_sz;
 	unsigned int weight_nr_accesses;
 	unsigned int weight_age;
 
-/* private: for limit accounting */
+/* private: */
+	/* For throughput estimation */
+	unsigned long total_charged_sz;
+	unsigned long total_charged_ns;
+
+	unsigned long quota;	/* Effective quota in bytes */
+
+	/* For limit accounting */
 	unsigned long charged_sz;
 	unsigned long charged_from;
 	struct damon_target *charge_target_from;
 	unsigned long charge_addr_from;
 
+	/* For prioritization */
 	unsigned long histogram[DAMOS_MAX_SCORE + 1];
 	unsigned int min_score;
 };

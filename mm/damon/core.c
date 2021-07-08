@@ -110,11 +110,15 @@ struct damos *damon_new_scheme(
 	scheme->stat_sz = 0;
 	INIT_LIST_HEAD(&scheme->list);
 
-	scheme->limit.sz = limit->sz;
-	scheme->limit.ms = limit->ms;
+	scheme->limit.quota_ms = limit->quota_ms;
+	scheme->limit.quota_sz = limit->quota_sz;
+	scheme->limit.window_ms = limit->window_ms;
 	scheme->limit.weight_sz = limit->weight_sz;
 	scheme->limit.weight_nr_accesses = limit->weight_nr_accesses;
 	scheme->limit.weight_age = limit->weight_age;
+	scheme->limit.total_charged_sz = 0;
+	scheme->limit.total_charged_ns = 0;
+	scheme->limit.quota = 0;
 	scheme->limit.charged_sz = 0;
 	scheme->limit.charged_from = 0;
 	scheme->limit.charge_target_from = NULL;
@@ -575,7 +579,7 @@ static bool damos_valid_target(struct damon_ctx *c, struct damon_target *t,
 {
 	bool ret = __damos_valid_target(r, s);
 
-	if (!ret || !s->limit.sz || !c->primitive.get_scheme_score)
+	if (!ret || !s->limit.quota || !c->primitive.get_scheme_score)
 		return ret;
 
 	return c->primitive.get_scheme_score(c, t, r, s) >= s->limit.min_score;
@@ -590,12 +594,13 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 	damon_for_each_scheme(s, c) {
 		struct damos_speed_limit *limit = &s->limit;
 		unsigned long sz = r->ar.end - r->ar.start;
+		struct timespec64 begin, end;
 
 		if (!s->wmarks.activated)
 			continue;
 
 		/* Check the limit */
-		if (limit->sz && limit->charged_sz >= limit->sz)
+		if (limit->quota && limit->charged_sz >= limit->quota)
 			continue;
 
 		/* Skip previously charged regions */
@@ -634,16 +639,23 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 
 		/* Apply the scheme */
 		if (c->primitive.apply_scheme) {
-			if (limit->sz && limit->charged_sz + sz > limit->sz) {
-				sz = ALIGN_DOWN(limit->sz - limit->charged_sz,
+			if (limit->quota && limit->charged_sz + sz >
+					limit->quota) {
+				sz = ALIGN_DOWN(limit->quota -
+						limit->charged_sz,
 						DAMON_MIN_REGION);
 				if (!sz)
 					goto update_stat;
 				damon_split_region_at(c, t, r, sz);
 			}
+			ktime_get_coarse_ts64(&begin);
 			c->primitive.apply_scheme(c, t, r, s);
+			ktime_get_coarse_ts64(&end);
+			limit->total_charged_ns += timespec64_to_ns(&end) -
+				timespec64_to_ns(&begin);
 			limit->charged_sz += sz;
-			if (limit->sz && limit->charged_sz >= limit->sz) {
+			if (limit->quota && limit->charged_sz >= limit->quota)
+			{
 				limit->charge_target_from = t;
 				limit->charge_addr_from = r->ar.end + 1;
 			}
@@ -655,6 +667,29 @@ update_stat:
 		s->stat_count++;
 		s->stat_sz += sz;
 	}
+}
+
+/* Shouldn't be called if limit->quota_ms and limit->quota_sz are zero */
+static void damon_set_effective_quota(struct damos_speed_limit *limit)
+{
+	unsigned long throughput;
+	unsigned long quota;
+
+	if (!limit->quota_ms) {
+		limit->quota = limit->quota_sz;
+		return;
+	}
+
+	if (limit->total_charged_ns)
+		throughput = limit->total_charged_sz * 1000000 /
+			limit->total_charged_ns;
+	else
+		throughput = PAGE_SIZE * 1024;
+	quota = throughput * limit->quota_ms;
+
+	if (limit->quota_sz && limit->quota_sz < quota)
+		quota = limit->quota_sz;
+	limit->quota = quota;
 }
 
 static void kdamond_apply_schemes(struct damon_ctx *c)
@@ -671,14 +706,17 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 		if (!s->wmarks.activated)
 			continue;
 
-		if (!limit->sz)
+		if (!limit->quota_ms && !limit->quota_sz)
 			continue;
 
-		/* Reset charge window if the duration passed */
+		/* New charge window starts */
 		if (time_after_eq(jiffies, s->limit.charged_from +
-					msecs_to_jiffies(s->limit.ms))) {
+					msecs_to_jiffies(
+						s->limit.window_ms))) {
+			limit->total_charged_sz += limit->charged_sz;
 			limit->charged_from = jiffies;
 			limit->charged_sz = 0;
+			damon_set_effective_quota(limit);
 		}
 
 		if (!c->primitive.get_scheme_score)
@@ -702,7 +740,7 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 		/* Set the min score limit */
 		for (cumulated_sz = 0, score = max_score; ; score--) {
 			cumulated_sz += limit->histogram[score];
-			if (cumulated_sz >= limit->sz || !score)
+			if (cumulated_sz >= limit->quota || !score)
 				break;
 		}
 		limit->min_score = score;
