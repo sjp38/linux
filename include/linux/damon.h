@@ -93,6 +93,7 @@ enum damos_action {
 
 /**
  * struct damos_quota - Controls the aggressiveness of the given scheme.
+ * @ms:			Maximum milliseconds that the scheme can use.
  * @sz:			Maximum bytes of memory that the action can be applied.
  * @reset_interval:	Charge reset interval in milliseconds.
  *
@@ -101,10 +102,17 @@ enum damos_action {
  * @weight_age:		Weight of the region's age for prioritization.
  *
  * To avoid consuming too much CPU time or IO resources for applying the
- * &struct damos->action to large memory, DAMON allows users to set a size
- * quota.  The quota can be set by writing non-zero values to &sz.  If the size
- * quota is set, DAMON tries to apply the action only up to &sz bytes within
- * &reset_interval.
+ * &struct damos->action to large memory, DAMON allows users to set a time
+ * and/or size quotas.  The quotas can be set by writing non-zero values to &ms
+ * and &sz, respectively.  If the time quota is set, DAMON tries to use only up
+ * to &ms milliseconds within &reset_interval for applying the action.  If the
+ * size quota is set, DAMON tries to apply the action only up to &sz bytes
+ * within &reset_interval.
+ *
+ * Internally, the time limit is transformed to another size limit using
+ * estimated throughput of the action of the scheme.  DAMON then compares the
+ * limit against the user-defined size limit and use smaller one as the
+ * effective limit.
  *
  * For selecting regions within the quota, DAMON prioritizes current scheme's
  * target memory regions using the given &struct
@@ -114,6 +122,7 @@ enum damos_action {
  * not mandatory.
  */
 struct damos_quota {
+	unsigned long ms;
 	unsigned long sz;
 	unsigned long reset_interval;
 
@@ -122,6 +131,12 @@ struct damos_quota {
 	unsigned int weight_age;
 
 /* private: */
+	/* For throughput estimation */
+	unsigned long total_charged_sz;
+	unsigned long total_charged_ns;
+
+	unsigned long esz;	/* Effective size quota in bytes */
+
 	/* For charging the quota */
 	unsigned long charged_sz;
 	unsigned long charged_from;
