@@ -109,17 +109,15 @@ enum damos_action {
  * size quota is set, DAMON tries to apply the action only up to &sz bytes
  * within &reset_interval.
  *
- * Internally, the time limit is transformed to another size limit using
- * estimated throughput of the action of the scheme.  DAMON then compares the
- * limit against the user-defined size limit and use smaller one as the
- * effective limit.
+ * Internally, the time limit is transformed to a size limit using estimated
+ * throughput of the action of the scheme.  DAMON then compares it against &sz
+ * and use smaller one as the effective limit.
  *
  * For selecting regions within the quota, DAMON prioritizes current scheme's
- * target memory regions using the given &struct
- * damon_primitive->get_scheme_score.  You could customize the prioritization
- * logic for your environment by setting &weight_sz, &weight_nr_accesses, and
- * &weight_age, because primitives are encouraged to respect those, though it's
- * not mandatory.
+ * target memory regions using the &struct damon_primitive->get_scheme_score.
+ * You could customize the prioritization logic by setting &weight_sz,
+ * &weight_nr_accesses, and &weight_age, because primitives are encouraged to
+ * respect those.
  */
 struct damos_quota {
 	unsigned long ms;

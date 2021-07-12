@@ -118,6 +118,7 @@ struct damos *damon_new_scheme(
 	scheme->quota.weight_age = quota->weight_age;
 	scheme->quota.total_charged_sz = 0;
 	scheme->quota.total_charged_ns = 0;
+	scheme->quota.esz = 0;
 	scheme->quota.charged_sz = 0;
 	scheme->quota.charged_from = 0;
 	scheme->quota.charge_target_from = NULL;
@@ -638,8 +639,8 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 
 		/* Apply the scheme */
 		if (c->primitive.apply_scheme) {
-			if (quota->esz && quota->charged_sz + sz >
-					quota->esz) {
+			if (quota->esz &&
+					quota->charged_sz + sz > quota->esz) {
 				sz = ALIGN_DOWN(quota->esz - quota->charged_sz,
 						DAMON_MIN_REGION);
 				if (!sz)
@@ -735,7 +736,7 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 			}
 		}
 
-		/* Set the min score limit */
+		/* Set the min score */
 		for (cumulated_sz = 0, score = max_score; ; score--) {
 			cumulated_sz += quota->histogram[score];
 			if (cumulated_sz >= quota->esz || !score)

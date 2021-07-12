@@ -1152,7 +1152,7 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 }
 
 /*
- * v1: Add the scheme speed limit
+ * v1: Add the scheme quota
  */
 static ssize_t dbgfs_version_read(struct file *file,
 		char __user *buf, size_t count, loff_t *ppos)
