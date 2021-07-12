@@ -231,7 +231,8 @@ static ssize_t sprint_schemes(struct damon_ctx *c, char *buf, ssize_t len)
 				s->min_sz_region, s->max_sz_region,
 				s->min_nr_accesses, s->max_nr_accesses,
 				s->min_age_region, s->max_age_region,
-				s->action, s->limit.sz, s->limit.ms,
+				s->action,
+				s->quota.sz, s->quota.reset_interval,
 				s->stat_count, s->stat_sz);
 		if (!rc)
 			return -ENOMEM;
@@ -315,8 +316,8 @@ static struct damos **str_to_schemes(const char *str, ssize_t len,
 
 		ret = sscanf(&str[pos], "%lu %lu %u %u %u %u %u %lu %lu%n",
 				&min_sz, &max_sz, &min_nr_a, &max_nr_a,
-				&min_age, &max_age, &action, &limit.sz,
-				&limit.ms, &parsed);
+				&min_age, &max_age, &action, &quota.sz,
+				&quota.reset_interval, &parsed);
 		if (ret != 9)
 			break;
 		if (!damos_action_valid(action)) {
