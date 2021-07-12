@@ -40,23 +40,43 @@ static unsigned long min_age __read_mostly = 5000000;
 module_param(min_age, ulong, 0600);
 
 /*
- * Maximum bytes of memory that can be reclaimed in a charging window.
+ * Limit of time for trying the reclamation in milliseconds.
  *
- * DAMON_RECLAIM charges amount of memory which has reclaimed within each
- * charging time window and makes no more than this limit is charged.  This
- * could be useful for limiting CPU consumption of DAMON_RECLAIM.  1 GiB by
- * default.
+ * DAMON_RECLAIM tries to use only up to this time within a time window
+ * (quota_reset_interval_ms) for trying reclamation of cold pages.  This can be
+ * used for limiting CPU consumption of DAMON_RECLAIM.  If the value is zero,
+ * the limit is disabled.
+ *
+ * 100 ms by default.
  */
-static unsigned long limit_sz __read_mostly = 1024 * 1024 * 1024;
-module_param(limit_sz, ulong, 0600);
+static unsigned long quota_ms __read_mostly = 100;
+module_param(quota_ms, ulong, 0600);
 
 /*
- * The amount of reclaimed memory charging window in milliseconds.
+ * Limit of size of memory for the reclamation in bytes.
  *
- * The charging time window for limit_sz.  1 second by default.
+ * DAMON_RECLAIM charges amount of memory which it tried to reclaim within a
+ * time window (quota_reset_interval_ms) and makes no more than this limit is
+ * tried.  This can be used for limiting consumption of CPU and IO.  If this
+ * value is zero, the limit is disabled.
+ *
+ * 1 GiB by default.
  */
-static unsigned long limit_ms __read_mostly = 1000;
-module_param(limit_ms, ulong, 0600);
+static unsigned long quota_sz __read_mostly = 1024 * 1024 * 1024;
+module_param(quota_sz, ulong, 0600);
+
+/*
+ * The time/size quota charge reset interval in milliseconds.
+ *
+ * The charge reset interval for the quota of time (quota_ms) and size
+ * (quota_sz).  That is, DAMON_RECLAIM does not try reclamation for more than
+ * quota_ms milliseconds or quota_sz bytes within quota_reset_interval_ms
+ * milliseconds.
+ *
+ * 1 second by default.
+ */
+static unsigned long quota_reset_interval_ms __read_mostly = 1000;
+module_param(quota_reset_interval_ms, ulong, 0600);
 
 /*
  * The watermarks check time interval in microseconds.
@@ -210,11 +230,15 @@ static struct damos *damon_reclaim_new_scheme(void)
 		.mid = wmarks_mid,
 		.low = wmarks_low,
 	};
-	struct damos_speed_limit limit = {
-		/* Do not page out more than limit_sz bytes within limit_ms */
-		.sz = limit_sz,
-		.ms = limit_ms,
-		/* Within the limit, page out older regions first. */
+	struct damos_quota quota = {
+		/*
+		 * Do not try reclamation for more than quota_ms milliseconds
+		 * or quota_sz bytes within quota_reset_interval_ms.
+		 */
+		.ms = quota_ms,
+		.sz = quota_sz,
+		.reset_interval = quota_reset_interval_ms,
+		/* Within the quota, page out older regions first. */
 		.weight_sz = 0,
 		.weight_nr_accesses = 0,
 		.weight_age = 1
@@ -228,8 +252,8 @@ static struct damos *damon_reclaim_new_scheme(void)
 			min_age / aggr_interval, UINT_MAX,
 			/* page out those, as soon as found */
 			DAMOS_PAGEOUT,
-			/* under the speed limit. */
-			&limit,
+			/* under the quota. */
+			&quota,
 			/* (De)activate this according to the watermarks. */
 			&wmarks);
 
