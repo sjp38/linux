@@ -7,7 +7,7 @@ Compared to the v33
 (https://lore.kernel.org/linux-mm/20210713123356.6924-1-sj38.park@gmail.com/),
 this version contains below minor changes.
 
-- Remove unnecessary asterisks from the MAINTAINERS file update
+- Remove unnecessary asterisks from the MAINTAINERS file update (Joe Perches)
 
 Now all patches of this patchset has at least one 'Reviewed-by:' or 'Acked-by:'
 tags.  Andrew, could you please consider merging this into the -mm tree?
@@ -399,7 +399,7 @@ Patch History
 
 Changes from v33
 (https://lore.kernel.org/linux-mm/20210713123356.6924-1-sj38.park@gmail.com/),
-- Remove unnecessary asterisks from the MAINTAINERS file update
+- Remove unnecessary asterisks from the MAINTAINERS file update (Joe Perches)
 
 Changes from v32
 (https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/)
