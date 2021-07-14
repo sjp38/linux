@@ -1,14 +1,13 @@
 Subject: Introduce Data Access MONitor (DAMON)
 
-Changes from Previous Version (v32)
+Changes from Previous Version (v33)
 ===================================
 
-Compared to the v32
-(https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/),
+Compared to the v33
+(https://lore.kernel.org/linux-mm/20210713123356.6924-1-sj38.park@gmail.com/),
 this version contains below minor changes.
 
-- Rebase on latest mainline (7fef2edf7cc7)
-- Collect 'Acked-by:' tags from Shakeel Butt
+- Remove unnecessary asterisks from the MAINTAINERS file update
 
 Now all patches of this patchset has at least one 'Reviewed-by:' or 'Acked-by:'
 tags.  Andrew, could you please consider merging this into the -mm tree?
@@ -317,10 +316,10 @@ Baseline and Complete Git Trees
 The patches are based on the latest mainline (7d0fc5c62385).  You can also
 clone the complete git tree:
 
-    $ git clone git://github.com/sjp38/linux -b damon/patches/v33
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v34
 
 The web is also available:
-https://github.com/sjp38/linux/releases/tag/damon/patches/v33
+https://github.com/sjp38/linux/releases/tag/damon/patches/v34
 
 Development Trees
 -----------------
@@ -361,7 +360,7 @@ You can clone it and use 'diff' for easy review of changes between different
 versions of the patchset.  For example:
 
     $ git clone https://github.com/sjp38/damon-patches && cd damon-patches
-    $ diff -u damon/v32 damon/v33
+    $ diff -u damon/v32 damon/v34
 
 Sequence Of Patches
 ===================
@@ -397,6 +396,10 @@ Finally, the last patch (13th) updates the MAINTAINERS file.
 
 Patch History
 =============
+
+Changes from v33
+(https://lore.kernel.org/linux-mm/20210713123356.6924-1-sj38.park@gmail.com/),
+- Remove unnecessary asterisks from the MAINTAINERS file update
 
 Changes from v32
 (https://lore.kernel.org/linux-mm/20210628133355.18576-1-sj38.park@gmail.com/)
