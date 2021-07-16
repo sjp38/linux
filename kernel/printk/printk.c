@@ -397,7 +397,10 @@ static struct latched_seq clear_seq = {
 /* the maximum size of a formatted record (i.e. with prefix added per line) */
 #define CONSOLE_LOG_MAX		1024
 
-/* the maximum size allowed to be reserved for a record */
+/*
+ * The maximum size allowed to be reserved for a record.
+ * Keep in sync with rust/kernel/print.rs.
+ */
 #define LOG_LINE_MAX		(CONSOLE_LOG_MAX - PREFIX_MAX)
 
 #define LOG_LEVEL(v)		((v) & 0x07)
@@ -2545,6 +2548,7 @@ void console_unlock(void)
 	bool do_cond_resched, retry;
 	struct printk_info info;
 	struct printk_record r;
+	u64 __maybe_unused next_seq;
 
 	if (console_suspended) {
 		up_console_sem();
@@ -2654,8 +2658,10 @@ skip:
 			cond_resched();
 	}
 
-	console_locked = 0;
+	/* Get consistent value of the next-to-be-used sequence number. */
+	next_seq = console_seq;
 
+	console_locked = 0;
 	up_console_sem();
 
 	/*
@@ -2664,7 +2670,7 @@ skip:
 	 * there's a new owner and the console_unlock() from them will do the
 	 * flush, no worries.
 	 */
-	retry = prb_read_valid(prb, console_seq, NULL);
+	retry = prb_read_valid(prb, next_seq, NULL);
 	printk_safe_exit_irqrestore(flags);
 
 	if (retry && console_trylock())

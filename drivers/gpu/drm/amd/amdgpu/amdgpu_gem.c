@@ -79,7 +79,8 @@ static const struct vm_operations_struct amdgpu_gem_vm_ops = {
 	.fault = amdgpu_gem_fault,
 	.open = ttm_bo_vm_open,
 	.close = ttm_bo_vm_close,
-	.access = ttm_bo_vm_access
+	.access = ttm_bo_vm_access,
+	.mprotect = ttm_bo_vm_mprotect
 };
 
 static void amdgpu_gem_object_free(struct drm_gem_object *gobj)
@@ -612,7 +613,7 @@ static void amdgpu_gem_va_update_vm(struct amdgpu_device *adev,
 
 	if (operation == AMDGPU_VA_OP_MAP ||
 	    operation == AMDGPU_VA_OP_REPLACE) {
-		r = amdgpu_vm_bo_update(adev, bo_va, false, NULL);
+		r = amdgpu_vm_bo_update(adev, bo_va, false);
 		if (r)
 			goto error;
 	}
