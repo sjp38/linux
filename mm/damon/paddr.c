@@ -20,11 +20,11 @@
  * of the primitives.
  */
 
-static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
+static int __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
 	damon_va_mkold(vma->vm_mm, addr);
-	return true;
+	return SWAP_AGAIN;
 }
 
 static void damon_pa_mkold(unsigned long paddr)
@@ -82,15 +82,14 @@ struct damon_pa_access_chk_result {
 	bool accessed;
 };
 
-static bool damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
+static int damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
 	struct damon_pa_access_chk_result *result = arg;
 
 	result->accessed = damon_va_young(vma->vm_mm, addr, &result->page_sz);
 
-	/* If accessed, stop walking */
-	return !result->accessed;
+	return SWAP_AGAIN;
 }
 
 static bool damon_pa_young(unsigned long paddr, unsigned long *page_sz)
@@ -194,5 +193,4 @@ void damon_pa_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_pa_target_valid;
 	ctx->primitive.cleanup = NULL;
-	ctx->primitive.apply_scheme = NULL;
 }
