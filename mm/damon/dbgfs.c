@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/page_idle.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 
 #define MIN_RECORD_BUFFER_LEN	1024
 #define MAX_RECORD_BUFFER_LEN	(4 * 1024 * 1024)
@@ -165,13 +166,13 @@ static int dbgfs_set_recording(struct damon_ctx *ctx,
 	}
 
 	recorder->rbuf_len = rbuf_len;
-	kfree(recorder->rbuf);
+	vfree(recorder->rbuf);
 	recorder->rbuf = NULL;
 	kfree(recorder->rfile_path);
 	recorder->rfile_path = NULL;
 
 	if (rbuf_len) {
-		recorder->rbuf = kvmalloc(rbuf_len, GFP_KERNEL);
+		recorder->rbuf = vmalloc(rbuf_len);
 		if (!recorder->rbuf)
 			return -ENOMEM;
 	}
@@ -448,7 +449,7 @@ static void dbgfs_flush_rbuffer(struct dbgfs_recorder *rec)
 	}
 
 	while (rec->rbuf_offset) {
-		sz = kernel_write(rfile, rec->rbuf, rec->rbuf_offset, &pos);
+		sz = kernel_write(rfile, rec->rbuf, rec->rbuf_offset, pos);
 		if (sz < 0)
 			break;
 		rec->rbuf_offset -= sz;
@@ -525,7 +526,7 @@ static int dbgfs_after_aggregation(struct damon_ctx *c)
 	struct timespec64 now;
 	unsigned int nr;
 
-	ktime_get_coarse_ts64(&now);
+	ktime_get_ts64(&now);
 
 	dbgfs_write_rbuf(c, &now, sizeof(now));
 	nr = nr_damon_targets(c);
