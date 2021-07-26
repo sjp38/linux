@@ -8,7 +8,6 @@
 #define pr_fmt(fmt) "damon-va: " fmt
 
 #include <asm-generic/mman-common.h>
-#include <linux/sched/task.h>
 
 #include "prmtv-common.h"
 

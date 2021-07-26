@@ -5,6 +5,8 @@
  * Author: SeongJae Park <sjpark@amazon.de>
  */
 
+#include <linux/hugetlb.h>
+
 #include "prmtv-common.h"
 
 static int damon_follow_pte(struct mm_struct *mm, unsigned long address,
@@ -54,15 +56,19 @@ out:
  */
 struct page *damon_get_page(unsigned long pfn)
 {
-	struct page *page = pfn_to_online_page(pfn);
+	struct page *page = pfn_to_page(pfn);
+	struct zone *zone;
 
 	if (!page || !PageLRU(page) || !get_page_unless_zero(page))
 		return NULL;
 
+	zone = page_zone(page);
+	spin_lock_irq(zone_lru_lock(zone));
 	if (unlikely(!PageLRU(page))) {
 		put_page(page);
 		page = NULL;
 	}
+	spin_unlock_irq(zone_lru_lock(zone));
 	return page;
 }
 
@@ -127,7 +133,7 @@ void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
 
-	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &ptl))
 		return;
 
 	if (pte) {
@@ -148,7 +154,7 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	struct page *page;
 	bool young = false;
 
-	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &ptl))
 		return false;
 
 	*page_sz = PAGE_SIZE;
