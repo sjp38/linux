@@ -27,7 +27,7 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->aggr_interval = 100 * 1000;
 	ctx->primitive_update_interval = 60 * 1000 * 1000;
 
-	ktime_get_coarse_ts64(&ctx->last_aggregation);
+	ktime_get_ts64(&ctx->last_aggregation);
 	ctx->last_primitive_update = ctx->last_aggregation;
 
 	mutex_init(&ctx->kdamond_lock);
@@ -200,7 +200,7 @@ static bool damon_check_reset_time_interval(struct timespec64 *baseline,
 {
 	struct timespec64 now;
 
-	ktime_get_coarse_ts64(&now);
+	ktime_get_ts64(&now);
 	if ((timespec64_to_ns(&now) - timespec64_to_ns(baseline)) <
 			interval * 1000)
 		return false;
