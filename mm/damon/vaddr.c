@@ -8,12 +8,11 @@
 #define pr_fmt(fmt) "damon-va: " fmt
 
 #include <linux/damon.h>
+#include <linux/hugetlb.h>
 #include <linux/mm.h>
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
 #include <linux/random.h>
-#include <linux/sched/mm.h>
-#include <linux/sched/task.h>
 #include <linux/slab.h>
 
 #ifdef CONFIG_DAMON_VADDR_KUNIT_TEST
@@ -379,15 +378,19 @@ void damon_va_update(struct damon_ctx *ctx)
  */
 static struct page *damon_get_page(unsigned long pfn)
 {
-	struct page *page = pfn_to_online_page(pfn);
+	struct page *page = pfn_to_page(pfn);
+	struct zone *zone;
 
 	if (!page || !PageLRU(page) || !get_page_unless_zero(page))
 		return NULL;
 
+	zone = page_zone(page);
+	spin_lock_irq(zone_lru_lock(zone));
 	if (unlikely(!PageLRU(page))) {
 		put_page(page);
 		page = NULL;
 	}
+	spin_unlock_irq(zone_lru_lock(zone));
 	return page;
 }
 
@@ -446,13 +449,51 @@ static void damon_pmdp_mkold(pmd_t *pmd, struct mm_struct *mm,
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 }
 
+static int damon_follow_pte(struct mm_struct *mm, unsigned long address,
+		pte_t **ptepp, spinlock_t **ptlp)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *ptep;
+
+	pgd = pgd_offset(mm, address);
+	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
+		goto out;
+
+	pud = pud_offset(pgd, address);
+	if (pud_none(*pud) || unlikely(pud_bad(*pud)))
+		goto out;
+
+	pmd = pmd_offset(pud, address);
+	VM_BUG_ON(pmd_trans_huge(*pmd));
+	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
+		goto out;
+
+	/* We cannot handle huge page PFN maps. Luckily they don't exist. */
+	if (pmd_huge(*pmd))
+		goto out;
+
+	ptep = pte_offset_map_lock(mm, pmd, address, ptlp);
+	if (!ptep)
+		goto out;
+	if (!pte_present(*ptep))
+		goto unlock;
+	*ptepp = ptep;
+	return 0;
+unlock:
+	pte_unmap_unlock(ptep, *ptlp);
+out:
+	return -EINVAL;
+}
+
 static void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 {
 	pte_t *pte = NULL;
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
 
-	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &ptl))
 		return;
 
 	if (pte) {
@@ -501,7 +542,7 @@ static bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	struct page *page;
 	bool young = false;
 
-	if (follow_invalidate_pte(mm, addr, NULL, &pte, &pmd, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &ptl))
 		return false;
 
 	*page_sz = PAGE_SIZE;
