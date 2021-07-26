@@ -10,7 +10,6 @@
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
 #include <linux/random.h>
-#include <linux/sched/mm.h>
 #include <linux/slab.h>
 
 /* Get a random number in [l, r) */
