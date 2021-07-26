@@ -226,7 +226,7 @@ struct damon_ctx {
 #ifdef CONFIG_DAMON
 
 struct damon_region *damon_new_region(unsigned long start, unsigned long end);
-inline void damon_insert_region(struct damon_region *r,
+void damon_insert_region(struct damon_region *r,
 		struct damon_region *prev, struct damon_region *next,
 		struct damon_target *t);
 void damon_add_region(struct damon_region *r, struct damon_target *t);

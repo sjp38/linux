@@ -385,4 +385,6 @@ static inline ssize_t debugfs_write_file_bool(struct file *file,
 
 #endif
 
+struct dentry *debugfs_lookup(const char *name, struct dentry *parent);
+
 #endif
