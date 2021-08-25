@@ -10,7 +10,7 @@
 #include "prmtv-common.h"
 
 static int damon_follow_pte(struct mm_struct *mm, unsigned long address,
-		pte_t **ptepp, spinlock_t **ptlp)
+		pte_t **ptepp, pmd_t **pmdpp, spinlock_t **ptlp)
 {
 	pgd_t *pgd;
 	pud_t *pud;
@@ -26,11 +26,18 @@ static int damon_follow_pte(struct mm_struct *mm, unsigned long address,
 		goto out;
 
 	pmd = pmd_offset(pud, address);
-	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
-		goto out;
+	if (pmd_huge(*pmd)) {
+		if (!pmdpp)
+			goto out;
 
-	/* We cannot handle huge page PFN maps. Luckily they don't exist. */
-	if (pmd_huge(*pmd))
+		*ptlp = pmd_lock(mm, pmd);
+		if (pmd_huge(*pmd)) {
+			*pmdpp = pmd;
+			return 0;
+		}
+		spin_unlock(*ptlp);
+	}
+	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
 		goto out;
 
 	ptep = pte_offset_map_lock(mm, pmd, address, ptlp);
@@ -132,7 +139,7 @@ void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 	pmd_t *pmd = NULL;
 	spinlock_t *ptl;
 
-	if (damon_follow_pte(mm, addr, &pte, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &pmd, &ptl))
 		return;
 
 	if (pte) {
@@ -153,7 +160,7 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 	struct page *page;
 	bool young = false;
 
-	if (damon_follow_pte(mm, addr, &pte, &ptl))
+	if (damon_follow_pte(mm, addr, &pte, &pmd, &ptl))
 		return false;
 
 	*page_sz = PAGE_SIZE;
