@@ -202,7 +202,20 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 static bool __damon_pa_mkold(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
-	damon_va_mkold(vma->vm_mm, addr);
+	struct page_vma_mapped_walk pvmw = {
+		.page = page,
+		.vma = vma,
+		.address = addr,
+	};
+
+	while (page_vma_mapped_walk(&pvmw)) {
+		addr = pvmw.address;
+		if (pvmw.pte) {
+			damon_ptep_mkold(pvmw.pte, vma->vm_mm, addr);
+		} else {
+			damon_pmdp_mkold(pvmw.pmd, vma->vm_mm, addr);
+		}
+	}
 	return true;
 }
 
@@ -246,8 +259,35 @@ static bool damon_pa_accessed(struct page *page, struct vm_area_struct *vma,
 		unsigned long addr, void *arg)
 {
 	struct damon_pa_access_chk_result *result = arg;
+	struct page_vma_mapped_walk pvmw = {
+		.page = page,
+		.vma = vma,
+		.address = addr,
+	};
 
-	result->accessed = damon_va_young(vma->vm_mm, addr, &result->page_sz);
+	result->accessed = false;
+	result->page_sz = PAGE_SIZE;
+	while (page_vma_mapped_walk(&pvmw)) {
+		addr = pvmw.address;
+		if (pvmw.pte) {
+			result->accessed = pte_young(*pvmw.pte) ||
+				!page_is_idle(page) ||
+				mmu_notifier_test_young(vma->vm_mm, addr);
+		} else {
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+			result->accessed = pmd_young(*pvmw.pmd) ||
+				!page_is_idle(page) ||
+				mmu_notifier_test_young(vma->vm_mm, addr);
+			result->page_sz = ((1UL) << HPAGE_PMD_SHIFT);
+#else
+			WARN_ON_ONCE(1);
+#endif	/* CONFIG_TRANSPARENT_HUGEPAGE */
+		}
+		if (result->accessed) {
+			page_vma_mapped_walk_done(&pvmw);
+			break;
+		}
+	}
 
 	/* If accessed, stop walking */
 	return !result->accessed;
