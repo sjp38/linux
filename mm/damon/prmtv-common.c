@@ -119,9 +119,9 @@ static struct mm_walk_ops damon_mkold_ops = {
 
 void damon_va_mkold(struct mm_struct *mm, unsigned long addr)
 {
-	mmap_read_lock(mm);
+	down_read(&mm->mmap_sem);
 	walk_page_range(mm, addr, addr + 1, &damon_mkold_ops, NULL);
-	mmap_read_unlock(mm);
+	up_read(&mm->mmap_sem);
 }
 
 struct damon_young_walk_private {
@@ -193,8 +193,8 @@ bool damon_va_young(struct mm_struct *mm, unsigned long addr,
 		.young = false,
 	};
 
-	mmap_read_lock(mm);
+	down_read(&mm->mmap_sem);
 	walk_page_range(mm, addr, addr + 1, &damon_young_ops, &arg);
-	mmap_read_unlock(mm);
+	up_read(&mm->mmap_sem);
 	return arg.young;
 }
