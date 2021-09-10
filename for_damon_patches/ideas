@@ -1,0 +1,9 @@
+For accuracy improvement
+========================
+
+- Use LRU index of page as the address scheme
+- On top of LRU index-as-an-address idea, we can move pages in LRU according to
+  the hotness.  This even improves LRU itself.
+- Cons of this idea is the fact that it cannot work for vaddr or paddr.
+- How about having another address space for DAMON (translate vaddr or paddr
+  into DAMON address) and moving pages in the DAMON-address-space?
