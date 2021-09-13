@@ -1,9 +1,29 @@
+Support cgroups
+===============
+
+LRU index-as-an-address
+-----------------------
+
+Use the index of each page in its LRU list as its address.
+
 For accuracy improvement
 ========================
 
-- Use LRU index of page as the address scheme
-- On top of LRU index-as-an-address idea, we can move pages in LRU according to
-  the hotness.  This even improves LRU itself.
-- Cons of this idea is the fact that it cannot work for vaddr or paddr.
-- How about having another address space for DAMON (translate vaddr or paddr
-  into DAMON address) and moving pages in the DAMON-address-space?
+Dynamic monitoring attributes adjustment
+----------------------------------------
+
+Based on current monitoring results, adjust sampling interval and/or number of
+regions.
+
+Monitoring results-based Address Adjustment
+-------------------------------------------
+
+Migrating memory regions on the address space so that memory regions having
+similar access pattern are nearly placed.
+
+Yet another address space for DAMON
+-----------------------------------
+
+The monitoring results-based address adjustment works for LRU
+index-as-an-address case only.  We can make internal address translation
+mechanism and do the monitoring via the DAMON-internal address space.
