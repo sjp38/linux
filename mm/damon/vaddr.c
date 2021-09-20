@@ -660,5 +660,6 @@ void damon_va_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.apply_scheme = damon_va_apply_scheme;
 	ctx->primitive.get_scheme_score = damon_va_scheme_score;
 }
+EXPORT_SYMBOL(damon_va_set_primitives);
 
 #include "vaddr-test.h"

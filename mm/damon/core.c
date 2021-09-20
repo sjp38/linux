@@ -143,6 +143,7 @@ struct damos *damon_new_scheme(
 
 	return scheme;
 }
+EXPORT_SYMBOL(damon_new_scheme);
 
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s)
 {
@@ -164,6 +165,7 @@ void damon_destroy_scheme(struct damos *s)
 	damon_del_scheme(s);
 	damon_free_scheme(s);
 }
+EXPORT_SYMBOL(damon_destroy_scheme);
 
 /*
  * Construct a damon_target struct
@@ -184,11 +186,13 @@ struct damon_target *damon_new_target(unsigned long id)
 
 	return t;
 }
+EXPORT_SYMBOL(damon_new_target);
 
 void damon_add_target(struct damon_ctx *ctx, struct damon_target *t)
 {
 	list_add_tail(&t->list, &ctx->adaptive_targets);
 }
+EXPORT_SYMBOL(damon_add_target);
 
 static void damon_del_target(struct damon_target *t)
 {
@@ -209,6 +213,7 @@ void damon_destroy_target(struct damon_target *t)
 	damon_del_target(t);
 	damon_free_target(t);
 }
+EXPORT_SYMBOL(damon_destroy_target);
 
 static void damon_nr_regions_verify(struct damon_target *t)
 {
@@ -262,6 +267,7 @@ struct damon_ctx *damon_new_ctx(enum damon_target_type type)
 
 	return ctx;
 }
+EXPORT_SYMBOL(damon_new_ctx);
 
 static void damon_destroy_targets(struct damon_ctx *ctx)
 {
@@ -287,6 +293,7 @@ void damon_destroy_ctx(struct damon_ctx *ctx)
 
 	kfree(ctx);
 }
+EXPORT_SYMBOL(damon_destroy_ctx);
 
 /**
  * damon_set_targets() - Set monitoring targets.
@@ -360,6 +367,7 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,
 
 	return 0;
 }
+EXPORT_SYMBOL(damon_set_attrs);
 
 /**
  * damon_set_schemes() - Set data access monitoring based operation schemes.
@@ -384,6 +392,7 @@ int damon_set_schemes(struct damon_ctx *ctx, struct damos **schemes,
 		damon_add_scheme(ctx, schemes[i]);
 	return 0;
 }
+EXPORT_SYMBOL(damon_set_schemes);
 
 /**
  * damon_nr_running_ctxs() - Return number of currently running contexts.
@@ -494,6 +503,7 @@ int damon_start(struct damon_ctx **ctxs, int nr_ctxs)
 
 	return err;
 }
+EXPORT_SYMBOL(damon_start);
 
 /*
  * __damon_stop() - Stops monitoring of given context.
@@ -537,6 +547,7 @@ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs)
 
 	return err;
 }
+EXPORT_SYMBOL(damon_stop);
 
 /*
  * damon_check_reset_time_interval() - Check if a time interval is elapsed.
