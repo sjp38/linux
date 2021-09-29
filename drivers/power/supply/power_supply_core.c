@@ -1098,6 +1098,12 @@ static void psy_unregister_cooler(struct power_supply *psy)
 	thermal_cooling_device_unregister(psy->tcd);
 }
 #else
+static bool psy_has_property(const struct power_supply_desc *psy_desc,
+			     enum power_supply_property psp)
+{
+	return false;
+}
+
 static int psy_register_thermal(struct power_supply *psy)
 {
 	return 0;
