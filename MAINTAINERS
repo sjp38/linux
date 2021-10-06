@@ -591,6 +591,12 @@ L:	platform-driver-x86@vger.kernel.org
 S:	Maintained
 F:	drivers/platform/x86/adv_swbutton.c
 
+ADXL313 THREE-AXIS DIGITAL ACCELEROMETER DRIVER
+M:	Lucas Stankus <lucas.p.stankus@gmail.com>
+S:	Supported
+F:	Documentation/devicetree/bindings/iio/accel/adi,adxl313.yaml
+F:	drivers/iio/accel/adxl313*
+
 ADXL34X THREE-AXIS DIGITAL ACCELEROMETER DRIVER (ADXL345/ADXL346)
 M:	Michael Hennerich <michael.hennerich@analog.com>
 S:	Supported
@@ -598,6 +604,16 @@ W:	http://wiki.analog.com/ADXL345
 W:	http://ez.analog.com/community/linux-device-drivers
 F:	Documentation/devicetree/bindings/iio/accel/adi,adxl345.yaml
 F:	drivers/input/misc/adxl34x.c
+
+ADXL355 THREE-AXIS DIGITAL ACCELEROMETER DRIVER
+M:	Puranjay Mohan <puranjay12@gmail.com>
+L:	linux-iio@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/iio/accel/adi,adxl355.yaml
+F:	drivers/iio/accel/adxl355.h
+F:	drivers/iio/accel/adxl355_core.c
+F:	drivers/iio/accel/adxl355_i2c.c
+F:	drivers/iio/accel/adxl355_spi.c
 
 ADXL372 THREE-AXIS DIGITAL ACCELEROMETER DRIVER
 M:	Michael Hennerich <michael.hennerich@analog.com>
@@ -1720,6 +1736,7 @@ C:	irc://irc.oftc.net/asahi-dev
 T:	git https://github.com/AsahiLinux/linux.git
 F:	Documentation/devicetree/bindings/arm/apple.yaml
 F:	Documentation/devicetree/bindings/interrupt-controller/apple,aic.yaml
+F:	Documentation/devicetree/bindings/pci/apple,pcie.yaml
 F:	Documentation/devicetree/bindings/pinctrl/apple,pinctrl.yaml
 F:	arch/arm64/boot/dts/apple/
 F:	drivers/irqchip/irq-apple-aic.c
@@ -2237,6 +2254,7 @@ F:	arch/arm/mach-pxa/mioa701.c
 
 ARM/MStar/Sigmastar Armv7 SoC support
 M:	Daniel Palmer <daniel@thingy.jp>
+M:	Romain Perier <romain.perier@gmail.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 W:	http://linux-chenxing.org/
@@ -2248,6 +2266,7 @@ F:	arch/arm/boot/dts/mstar-*
 F:	arch/arm/mach-mstar/
 F:	drivers/clk/mstar/
 F:	drivers/gpio/gpio-msc313.c
+F:	drivers/rtc/rtc-msc313.c
 F:	drivers/watchdog/msc313e_wdt.c
 F:	include/dt-bindings/clock/mstar-*
 F:	include/dt-bindings/gpio/msc313-gpio.h
@@ -3113,6 +3132,7 @@ W:	https://github.com/linux-audit
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/pcmoore/audit.git
 F:	include/asm-generic/audit_*.h
 F:	include/linux/audit.h
+F:	include/linux/audit_arch.h
 F:	include/uapi/linux/audit.h
 F:	kernel/audit*
 F:	lib/*audit.c
@@ -3290,14 +3310,14 @@ M:	Yury Norov <yury.norov@gmail.com>
 R:	Andy Shevchenko <andriy.shevchenko@linux.intel.com>
 R:	Rasmus Villemoes <linux@rasmusvillemoes.dk>
 S:	Maintained
-F:	include/asm-generic/bitops/find.h
 F:	include/linux/bitmap.h
+F:	include/linux/find.h
 F:	lib/bitmap.c
 F:	lib/find_bit.c
 F:	lib/find_bit_benchmark.c
 F:	lib/test_bitmap.c
-F:	tools/include/asm-generic/bitops/find.h
 F:	tools/include/linux/bitmap.h
+F:	tools/include/linux/find.h
 F:	tools/lib/bitmap.c
 F:	tools/lib/find_bit.c
 
@@ -4430,6 +4450,17 @@ F:	drivers/power/supply/cros_usbpd-charger.c
 N:	cros_ec
 N:	cros-ec
 
+CHROMEOS EC USB TYPE-C DRIVER
+M:	Prashant Malani <pmalani@chromium.org>
+S:	Maintained
+F:	drivers/platform/chrome/cros_ec_typec.c
+
+CHROMEOS EC USB PD NOTIFY DRIVER
+M:	Prashant Malani <pmalani@chromium.org>
+S:	Maintained
+F:	drivers/platform/chrome/cros_usbpd_notify.c
+F:	include/linux/platform_data/cros_usbpd_notify.h
+
 CHRONTEL CH7322 CEC DRIVER
 M:	Jeff Chase <jnchase@google.com>
 L:	linux-media@vger.kernel.org
@@ -4805,7 +4836,8 @@ F:	Documentation/ABI/testing/sysfs-bus-counter
 F:	Documentation/driver-api/generic-counter.rst
 F:	drivers/counter/
 F:	include/linux/counter.h
-F:	include/linux/counter_enum.h
+F:	include/uapi/linux/counter.h
+F:	tools/counter/
 
 CP2615 I2C DRIVER
 M:	Bence Csókás <bence98@sch.bme.hu>
@@ -5122,6 +5154,13 @@ M:	Linus Walleij <linus.walleij@linaro.org>
 L:	linux-input@vger.kernel.org
 S:	Maintained
 F:	drivers/input/touchscreen/cy8ctma140.c
+
+CYPRESS STREETFIGHTER TOUCHKEYS DRIVER
+M:	Yassine Oudjana <y.oudjana@protonmail.com>
+L:	linux-input@vger.kernel.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/input/cypress-sf.yaml
+F:	drivers/input/keyboard/cypress-sf.c
 
 CYTTSP TOUCHSCREEN DRIVER
 M:	Linus Walleij <linus.walleij@linaro.org>
@@ -6019,6 +6058,12 @@ T:	git git://anongit.freedesktop.org/drm/drm-misc
 F:	Documentation/devicetree/bindings/display/panel/samsung,lms397kf04.yaml
 F:	drivers/gpu/drm/panel/panel-samsung-db7430.c
 
+DRM DRIVER FOR SAMSUNG S6D27A1 PANELS
+M:	Markuss Broks <markuss.broks@gmail.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/display/panel/samsung,s6d27a1.yaml
+F:	drivers/gpu/drm/panel/panel-samsung-s6d27a1.c
+
 DRM DRIVER FOR SITRONIX ST7703 PANELS
 M:	Guido Günther <agx@sigxcpu.org>
 R:	Purism Kernel Team <kernel@puri.sm>
@@ -6426,6 +6471,14 @@ T:	git git://anongit.freedesktop.org/drm/drm-misc
 F:	drivers/gpu/drm/ttm/
 F:	include/drm/ttm/
 
+DRM GPU SCHEDULER
+M:	Andrey Grodzovsky <andrey.grodzovsky@amd.com>
+L:	dri-devel@lists.freedesktop.org
+S:	Maintained
+T:	git git://anongit.freedesktop.org/drm/drm-misc
+F:	drivers/gpu/drm/scheduler/
+F:	include/drm/gpu_scheduler.h
+
 DSBR100 USB FM RADIO DRIVER
 M:	Alexey Klimov <klimov.linux@gmail.com>
 L:	linux-media@vger.kernel.org
@@ -6684,7 +6737,7 @@ S:	Supported
 F:	drivers/edac/dmc520_edac.c
 
 EDAC-E752X
-M:	Mark Gross <mark.gross@intel.com>
+M:	Mark Gross <markgross@kernel.org>
 L:	linux-edac@vger.kernel.org
 S:	Maintained
 F:	drivers/edac/e752x_edac.c
@@ -7324,6 +7377,15 @@ L:	netdev@vger.kernel.org
 S:	Maintained
 F:	drivers/net/ethernet/nvidia/*
 
+FORTIFY_SOURCE
+M:	Kees Cook <keescook@chomium.org>
+L:	linux-hardening@vger.kernel.org
+S:	Supported
+F:	include/linux/fortify-string.h
+F:	lib/test_fortify/*
+F:	scripts/test_fortify.sh
+K:	\b__NO_FORTIFY\b
+
 FPGA DFL DRIVERS
 M:	Wu Hao <hao.wu@intel.com>
 R:	Tom Rix <trix@redhat.com>
@@ -7338,10 +7400,11 @@ F:	include/uapi/linux/fpga-dfl.h
 
 FPGA MANAGER FRAMEWORK
 M:	Moritz Fischer <mdf@kernel.org>
+M:	Wu Hao <hao.wu@intel.com>
+M:	Xu Yilun <yilun.xu@intel.com>
 R:	Tom Rix <trix@redhat.com>
 L:	linux-fpga@vger.kernel.org
 S:	Maintained
-W:	http://www.rocketboards.org
 Q:	http://patchwork.kernel.org/project/linux-fpga/list/
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/mdf/linux-fpga.git
 F:	Documentation/devicetree/bindings/fpga/
@@ -7929,9 +7992,10 @@ F:	drivers/media/usb/go7007/
 
 GOODIX TOUCHSCREEN
 M:	Bastien Nocera <hadess@hadess.net>
+M:	Hans de Goede <hdegoede@redhat.com>
 L:	linux-input@vger.kernel.org
 S:	Maintained
-F:	drivers/input/touchscreen/goodix.c
+F:	drivers/input/touchscreen/goodix*
 
 GOOGLE ETHERNET DRIVERS
 M:	Jeroen de Borst <jeroendb@google.com>
@@ -8192,7 +8256,7 @@ T:	git git://linuxtv.org/anttip/media_tree.git
 F:	drivers/media/usb/hackrf/
 
 HANTRO VPU CODEC DRIVER
-M:	Ezequiel Garcia <ezequiel@collabora.com>
+M:	Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>
 M:	Philipp Zabel <p.zabel@pengutronix.de>
 L:	linux-media@vger.kernel.org
 L:	linux-rockchip@lists.infradead.org
@@ -8609,9 +8673,8 @@ F:	Documentation/devicetree/bindings/iio/humidity/st,hts221.yaml
 F:	drivers/iio/humidity/hts221*
 
 HUAWEI ETHERNET DRIVER
-M:	Bin Luo <luobin9@huawei.com>
 L:	netdev@vger.kernel.org
-S:	Supported
+S:	Orphan
 F:	Documentation/networking/device_drivers/ethernet/huawei/hinic.rst
 F:	drivers/net/ethernet/huawei/hinic/
 
@@ -9480,6 +9543,12 @@ L:	linux-crypto@vger.kernel.org
 S:	Maintained
 F:	drivers/crypto/ixp4xx_crypto.c
 
+INTEL ISHTP ECLITE DRIVER
+M:	Sumesh K Naduvalath <sumesh.k.naduvalath@intel.com>
+L:	platform-driver-x86@vger.kernel.org
+S:	Supported
+F:	drivers/platform/x86/intel/ishtp_eclite.c
+
 INTEL IXP4XX QMGR, NPE, ETHERNET and HSS SUPPORT
 M:	Krzysztof Halasa <khalasa@piap.pl>
 S:	Maintained
@@ -9996,6 +10065,7 @@ JC42.4 TEMPERATURE SENSOR DRIVER
 M:	Guenter Roeck <linux@roeck-us.net>
 L:	linux-hwmon@vger.kernel.org
 S:	Maintained
+F:	Documentation/devicetree/bindings/hwmon/jedec,jc42.yaml
 F:	Documentation/hwmon/jc42.rst
 F:	drivers/hwmon/jc42.c
 
@@ -10035,6 +10105,7 @@ F:	include/linux/jbd2.h
 JPU V4L2 MEM2MEM DRIVER FOR RENESAS
 M:	Mikhail Ulyanov <mikhail.ulyanov@cogentembedded.com>
 L:	linux-media@vger.kernel.org
+L:	linux-renesas-soc@vger.kernel.org
 S:	Maintained
 F:	drivers/media/platform/rcar_jpu.c
 
@@ -10890,7 +10961,7 @@ LM90 HARDWARE MONITOR DRIVER
 M:	Jean Delvare <jdelvare@suse.com>
 L:	linux-hwmon@vger.kernel.org
 S:	Maintained
-F:	Documentation/devicetree/bindings/hwmon/lm90.txt
+F:	Documentation/devicetree/bindings/hwmon/national,lm90.yaml
 F:	Documentation/hwmon/lm90.rst
 F:	drivers/hwmon/lm90.c
 F:	include/dt-bindings/thermal/lm90.h
@@ -11866,6 +11937,14 @@ M:	Sean Wang <sean.wang@mediatek.com>
 S:	Maintained
 F:	drivers/char/hw_random/mtk-rng.c
 
+MEDIATEK SMI DRIVER
+M:	Yong Wu <yong.wu@mediatek.com>
+L:	linux-mediatek@lists.infradead.org (moderated for non-subscribers)
+S:	Supported
+F:	Documentation/devicetree/bindings/memory-controllers/mediatek,smi*
+F:	drivers/memory/mtk-smi.c
+F:	include/soc/mediatek/smi.h
+
 MEDIATEK SWITCH DRIVER
 M:	Sean Wang <sean.wang@mediatek.com>
 M:	Landen Chao <Landen.Chao@mediatek.com>
@@ -11980,7 +12059,7 @@ F:	drivers/net/ethernet/mellanox/mlxfw/
 
 MELLANOX HARDWARE PLATFORM SUPPORT
 M:	Hans de Goede <hdegoede@redhat.com>
-M:	Mark Gross <mgross@linux.intel.com>
+M:	Mark Gross <markgross@kernel.org>
 M:	Vadim Pasternak <vadimp@nvidia.com>
 L:	platform-driver-x86@vger.kernel.org
 S:	Supported
@@ -12432,7 +12511,7 @@ F:	drivers/platform/surface/surface_gpe.c
 
 MICROSOFT SURFACE HARDWARE PLATFORM SUPPORT
 M:	Hans de Goede <hdegoede@redhat.com>
-M:	Mark Gross <mgross@linux.intel.com>
+M:	Mark Gross <markgross@kernel.org>
 M:	Maximilian Luz <luzmaximilian@gmail.com>
 L:	platform-driver-x86@vger.kernel.org
 S:	Maintained
@@ -12749,6 +12828,7 @@ M:	Laurent Pinchart <laurent.pinchart@ideasonboard.com>
 L:	linux-media@vger.kernel.org
 S:	Maintained
 T:	git git://linuxtv.org/media_tree.git
+F:	Documentation/devicetree/bindings/media/i2c/aptina,mt9p031.yaml
 F:	drivers/media/i2c/mt9p031.c
 F:	include/media/i2c/mt9p031.h
 
@@ -13466,6 +13546,13 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/display/imx/nxp,imx8mq-dcss.yaml
 F:	drivers/gpu/drm/imx/dcss/
 
+NXP i.MX 8QXP ADC DRIVER
+M:	Cai Huoqing <caihuoqing@baidu.com>
+L:	linux-iio@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/iio/adc/nxp,imx8qxp-adc.yaml
+F:	drivers/iio/adc/imx8qxp-adc.c
+
 NXP PF8100/PF8121A/PF8200 PMIC REGULATOR DEVICE DRIVER
 M:	Jagan Teki <jagan@amarulasolutions.com>
 S:	Maintained
@@ -13800,6 +13887,13 @@ L:	linux-media@vger.kernel.org
 S:	Maintained
 T:	git git://linuxtv.org/media_tree.git
 F:	drivers/media/i2c/ov13858.c
+
+OMNIVISION OV13B10 SENSOR DRIVER
+M:	Arec Kao <arec.kao@intel.com>
+L:	linux-media@vger.kernel.org
+S:	Maintained
+T:	git git://linuxtv.org/media_tree.git
+F:	drivers/media/i2c/ov13b10.c
 
 OMNIVISION OV2680 SENSOR DRIVER
 M:	Rui Miguel Silva <rmfrfs@gmail.com>
@@ -15906,7 +16000,7 @@ M:	Bjorn Andersson <bjorn.andersson@linaro.org>
 M:	Mathieu Poirier <mathieu.poirier@linaro.org>
 L:	linux-remoteproc@vger.kernel.org
 S:	Maintained
-T:	git git://git.kernel.org/pub/scm/linux/kernel/git/andersson/remoteproc.git rproc-next
+T:	git https://git.kernel.org/pub/scm/linux/kernel/git/remoteproc/linux.git rproc-next
 F:	Documentation/ABI/testing/sysfs-class-remoteproc
 F:	Documentation/devicetree/bindings/remoteproc/
 F:	Documentation/staging/remoteproc.rst
@@ -15920,7 +16014,7 @@ M:	Bjorn Andersson <bjorn.andersson@linaro.org>
 M:	Mathieu Poirier <mathieu.poirier@linaro.org>
 L:	linux-remoteproc@vger.kernel.org
 S:	Maintained
-T:	git git://git.kernel.org/pub/scm/linux/kernel/git/andersson/remoteproc.git rpmsg-next
+T:	git https://git.kernel.org/pub/scm/linux/kernel/git/remoteproc/linux.git rpmsg-next
 F:	Documentation/ABI/testing/sysfs-bus-rpmsg
 F:	Documentation/staging/rpmsg.rst
 F:	drivers/rpmsg/
@@ -16113,7 +16207,7 @@ F:	include/uapi/linux/rkisp1-config.h
 
 ROCKCHIP RASTER 2D GRAPHIC ACCELERATION UNIT DRIVER
 M:	Jacob Chen <jacob-chen@iotwrt.com>
-M:	Ezequiel Garcia <ezequiel@collabora.com>
+M:	Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>
 L:	linux-media@vger.kernel.org
 L:	linux-rockchip@lists.infradead.org
 S:	Maintained
@@ -16121,7 +16215,7 @@ F:	Documentation/devicetree/bindings/media/rockchip-rga.yaml
 F:	drivers/media/platform/rockchip/rga/
 
 ROCKCHIP VIDEO DECODER DRIVER
-M:	Ezequiel Garcia <ezequiel@collabora.com>
+M:	Ezequiel Garcia <ezequiel@vanguardiasur.com.ar>
 L:	linux-media@vger.kernel.org
 L:	linux-rockchip@lists.infradead.org
 S:	Maintained
@@ -16273,6 +16367,20 @@ M:	Jack Wang <jinpu.wang@ionos.com>
 L:	linux-rdma@vger.kernel.org
 S:	Maintained
 F:	drivers/infiniband/ulp/rtrs/
+
+RUST
+M:	Miguel Ojeda <ojeda@kernel.org>
+M:	Alex Gaynor <alex.gaynor@gmail.com>
+M:	Wedson Almeida Filho <wedsonaf@google.com>
+L:	rust-for-linux@vger.kernel.org
+S:	Supported
+W:	https://github.com/Rust-for-Linux/linux
+B:	https://github.com/Rust-for-Linux/linux/issues
+T:	git https://github.com/Rust-for-Linux/linux.git rust-next
+F:	rust/
+F:	samples/rust/
+F:	Documentation/rust/
+K:	\b(?i:rust)\b
 
 RXRPC SOCKETS (AF_RXRPC)
 M:	David Howells <dhowells@redhat.com>
@@ -16865,6 +16973,13 @@ M:	Jiri Slaby <jirislaby@kernel.org>
 S:	Maintained
 F:	drivers/misc/phantom.c
 F:	include/uapi/linux/phantom.h
+
+SENSEAIR SUNRISE 006-0-0007
+M:	Jacopo Mondi <jacopo@jmondi.org>
+S:	Maintained
+F:	Documentation/ABI/testing/sysfs-bus-iio-chemical-sunrise-co2
+F:	Documentation/devicetree/bindings/iio/chemical/senseair,sunrise.yaml
+F:	drivers/iio/chemical/sunrise_co2.c
 
 SENSIRION SCD30 CARBON DIOXIDE SENSOR DRIVER
 M:	Tomasz Duszynski <tomasz.duszynski@octakon.com>
@@ -17794,7 +17909,6 @@ F:	drivers/staging/nvec/
 
 STAGING - OLPC SECONDARY DISPLAY CONTROLLER (DCON)
 M:	Jens Frederich <jfrederich@gmail.com>
-M:	Daniel Drake <dsd@laptop.org>
 M:	Jon Nettleton <jon.nettleton@gmail.com>
 S:	Maintained
 W:	http://wiki.laptop.org/go/DCON
@@ -18455,7 +18569,7 @@ S:	Supported
 F:	drivers/net/ethernet/tehuti/*
 
 TELECOM CLOCK DRIVER FOR MCPL0010
-M:	Mark Gross <mark.gross@intel.com>
+M:	Mark Gross <markgross@kernel.org>
 S:	Supported
 F:	drivers/char/tlclk.c
 
@@ -20242,6 +20356,12 @@ L:	linux-wireless@vger.kernel.org
 S:	Odd fixes
 F:	drivers/net/wireless/wl3501*
 
+WMAA BACKLIGHT DRIVER
+M:	Daniel Dadap <ddadap@nvidia.com>
+L:	platform-driver-x86@vger.kernel.org
+S:	Supported
+F:	drivers/platform/x86/wmaa-backlight-wmi.c
+
 WOLFSON MICROELECTRONICS DRIVERS
 L:	patches@opensource.cirrus.com
 S:	Supported
@@ -20371,7 +20491,7 @@ F:	arch/x86/mm/
 
 X86 PLATFORM DRIVERS
 M:	Hans de Goede <hdegoede@redhat.com>
-M:	Mark Gross <mgross@linux.intel.com>
+M:	Mark Gross <markgross@kernel.org>
 L:	platform-driver-x86@vger.kernel.org
 S:	Maintained
 T:	git git://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git
@@ -20700,7 +20820,6 @@ S:	Maintained
 F:	mm/zbud.c
 
 ZD1211RW WIRELESS DRIVER
-M:	Daniel Drake <dsd@gentoo.org>
 M:	Ulrich Kunitz <kune@deine-taler.de>
 L:	linux-wireless@vger.kernel.org
 L:	zd1211-devs@lists.sourceforge.net (subscribers-only)

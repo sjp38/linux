@@ -199,6 +199,7 @@ void v9fs_cache_inode_reset_cookie(struct inode *inode)
 
 	mutex_unlock(&v9inode->fscache_lock);
 }
+<<<<<<< HEAD
 
 int __v9fs_fscache_release_page(struct page *page, gfp_t gfp)
 {
@@ -336,3 +337,5 @@ void __v9fs_fscache_wait_on_page_write(struct inode *inode, struct page *page)
 	if (PageFsCache(page))
 		fscache_wait_on_page_write(v9inode->fscache, page);
 }
+=======
+>>>>>>> linux-next/akpm-base

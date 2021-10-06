@@ -51,8 +51,10 @@
 #define SMK_RECEIVING	1
 #define SMK_SENDING	2
 
+#ifdef SMACK_IPV6_PORT_LABELING
 static DEFINE_MUTEX(smack_ipv6_lock);
 static LIST_HEAD(smk_ipv6_port_list);
+#endif
 struct kmem_cache *smack_rule_cache;
 int smack_enabled __initdata;
 
@@ -2603,7 +2605,6 @@ static void smk_ipv6_port_label(struct socket *sock, struct sockaddr *address)
 	mutex_unlock(&smack_ipv6_lock);
 	return;
 }
-#endif
 
 /**
  * smk_ipv6_port_check - check Smack port access
@@ -2666,6 +2667,7 @@ static int smk_ipv6_port_check(struct sock *sk, struct sockaddr_in6 *address,
 
 	return smk_ipv6_check(skp, object, address, act);
 }
+#endif
 
 /**
  * smack_inode_setsecurity - set smack xattrs
@@ -2852,8 +2854,9 @@ static int smack_socket_connect(struct socket *sock, struct sockaddr *sap,
 			rc = smk_ipv6_check(ssp->smk_out, rsp, sip,
 					    SMK_CONNECTING);
 		}
-		if (__is_defined(SMACK_IPV6_PORT_LABELING))
-			rc = smk_ipv6_port_check(sock->sk, sip, SMK_CONNECTING);
+#ifdef SMACK_IPV6_PORT_LABELING
+		rc = smk_ipv6_port_check(sock->sk, sip, SMK_CONNECTING);
+#endif
 
 		return rc;
 	}
@@ -4634,7 +4637,7 @@ static int smack_inode_copy_up(struct dentry *dentry, struct cred **new)
 	/*
 	 * Get label from overlay inode and set it in create_sid
 	 */
-	isp = smack_inode(d_inode(dentry->d_parent));
+	isp = smack_inode(d_inode(dentry));
 	skp = isp->smk_inode;
 	tsp->smk_task = skp;
 	*new = new_creds;
@@ -4690,6 +4693,48 @@ static int smack_dentry_create_files_as(struct dentry *dentry, int mode,
 	}
 	return 0;
 }
+
+#ifdef CONFIG_IO_URING
+/**
+ * smack_uring_override_creds - Is io_uring cred override allowed?
+ * @new: the target creds
+ *
+ * Check to see if the current task is allowed to override it's credentials
+ * to service an io_uring operation.
+ */
+static int smack_uring_override_creds(const struct cred *new)
+{
+	struct task_smack *tsp = smack_cred(current_cred());
+	struct task_smack *nsp = smack_cred(new);
+
+	/*
+	 * Allow the degenerate case where the new Smack value is
+	 * the same as the current Smack value.
+	 */
+	if (tsp->smk_task == nsp->smk_task)
+		return 0;
+
+	if (smack_privileged_cred(CAP_MAC_OVERRIDE, current_cred()))
+		return 0;
+
+	return -EPERM;
+}
+
+/**
+ * smack_uring_sqpoll - check if a io_uring polling thread can be created
+ *
+ * Check to see if the current task is allowed to create a new io_uring
+ * kernel polling thread.
+ */
+static int smack_uring_sqpoll(void)
+{
+	if (smack_privileged_cred(CAP_MAC_ADMIN, current_cred()))
+		return 0;
+
+	return -EPERM;
+}
+
+#endif /* CONFIG_IO_URING */
 
 struct lsm_blob_sizes smack_blob_sizes __lsm_ro_after_init = {
 	.lbs_cred = sizeof(struct task_smack),
@@ -4843,6 +4888,10 @@ static struct security_hook_list smack_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(inode_copy_up, smack_inode_copy_up),
 	LSM_HOOK_INIT(inode_copy_up_xattr, smack_inode_copy_up_xattr),
 	LSM_HOOK_INIT(dentry_create_files_as, smack_dentry_create_files_as),
+#ifdef CONFIG_IO_URING
+	LSM_HOOK_INIT(uring_override_creds, smack_uring_override_creds),
+	LSM_HOOK_INIT(uring_sqpoll, smack_uring_sqpoll),
+#endif
 };
 
 
