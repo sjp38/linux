@@ -29,15 +29,8 @@
 #include "fid.h"
 
 /**
-<<<<<<< HEAD
- * v9fs_fid_readpage - read an entire page in from 9P
- * @data: Opaque pointer to the fid being read
- * @page: structure to page
- *
-=======
  * v9fs_req_issue_op - Issue a read from 9P
  * @subreq: The read to make
->>>>>>> linux-next/akpm-base
  */
 static void v9fs_req_issue_op(struct netfs_read_subrequest *subreq)
 {
