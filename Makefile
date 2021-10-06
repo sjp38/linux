@@ -2,7 +2,7 @@
 VERSION = 5
 PATCHLEVEL = 19
 SUBLEVEL = 0
-EXTRAVERSION = -rc1
+EXTRAVERSION = -rc1-mm-unstable-damon
 NAME = Superb Owl
 
 # *DOCUMENTATION*
