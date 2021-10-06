@@ -2,7 +2,7 @@
 VERSION = 5
 PATCHLEVEL = 15
 SUBLEVEL = 0
-EXTRAVERSION = -rc5-mm1
+EXTRAVERSION = -rc5-mm1-damon
 NAME = Opossums on Parade
 
 # *DOCUMENTATION*
