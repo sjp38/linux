@@ -56,20 +56,6 @@ static inline void mmgrab_lazy_tlb(struct mm_struct *mm)
 		mmgrab(mm);
 }
 
-static inline void mmdrop_lazy_tlb(struct mm_struct *mm)
-{
-	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT)) {
-		mmdrop(mm);
-	} else {
-		/*
-		 * mmdrop_lazy_tlb must provide a full memory barrier, see the
-		 * membarrier comment in finish_task_switch which relies on
-		 * this.
-		 */
-		smp_mb();
-	}
-}
-
 #ifdef CONFIG_PREEMPT_RT
 /*
  * RCU callback for delayed mm drop. Not strictly RCU, but call_rcu() is
@@ -98,6 +84,20 @@ static inline void mmdrop_sched(struct mm_struct *mm)
 	mmdrop(mm);
 }
 #endif
+
+static inline void mmdrop_lazy_tlb(struct mm_struct *mm)
+{
+	if (IS_ENABLED(CONFIG_MMU_LAZY_TLB_REFCOUNT)) {
+		mmdrop_sched(mm);
+	} else {
+		/*
+		 * mmdrop_lazy_tlb must provide a full memory barrier, see the
+		 * membarrier comment in finish_task_switch which relies on
+		 * this.
+		 */
+		smp_mb();
+	}
+}
 
 /**
  * mmget() - Pin the address space associated with a &struct mm_struct.
