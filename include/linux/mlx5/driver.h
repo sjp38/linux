@@ -59,6 +59,8 @@
 
 #define MLX5_ADEV_NAME "mlx5_core"
 
+#define MLX5_IRQ_EQ_CTRL (U8_MAX)
+
 enum {
 	MLX5_BOARD_ID_LEN = 64,
 };
@@ -1005,8 +1007,6 @@ void mlx5_cmd_mbox_status(void *out, u8 *status, u32 *syndrome);
 bool mlx5_cmd_is_down(struct mlx5_core_dev *dev);
 
 int mlx5_core_get_caps(struct mlx5_core_dev *dev, enum mlx5_cap_type cap_type);
-int mlx5_cmd_alloc_uar(struct mlx5_core_dev *dev, u32 *uarn);
-int mlx5_cmd_free_uar(struct mlx5_core_dev *dev, u32 uarn);
 void mlx5_health_flush(struct mlx5_core_dev *dev);
 void mlx5_health_cleanup(struct mlx5_core_dev *dev);
 int mlx5_health_init(struct mlx5_core_dev *dev);

@@ -10,6 +10,12 @@ OUTPUT_ARCH(riscv)
 SECTIONS
 {
 	PROVIDE(_vdso_data = . - __VVAR_PAGES * PAGE_SIZE);
+<<<<<<< HEAD
+=======
+#ifdef CONFIG_TIME_NS
+	PROVIDE(_timens_data = _vdso_data + PAGE_SIZE);
+#endif
+>>>>>>> linux-next/akpm-base
 	. = SIZEOF_HEADERS;
 
 	.hash		: { *(.hash) }			:text

@@ -22,7 +22,11 @@
  */
 #ifdef CONFIG_MMU
 
+<<<<<<< HEAD
 #define __VVAR_PAGES    1
+=======
+#define __VVAR_PAGES    2
+>>>>>>> linux-next/akpm-base
 
 #ifndef __ASSEMBLY__
 #include <generated/vdso-offsets.h>
