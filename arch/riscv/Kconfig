@@ -562,8 +562,5 @@ menu "Power management options"
 source "kernel/power/Kconfig"
 
 endmenu
-<<<<<<< HEAD
-=======
 
 source "arch/riscv/kvm/Kconfig"
->>>>>>> linux-next/akpm-base

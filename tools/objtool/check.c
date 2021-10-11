@@ -382,11 +382,7 @@ static int decode_instructions(struct objtool_file *file)
 			insn->sec = sec;
 			insn->offset = offset;
 
-<<<<<<< HEAD
-			ret = arch_decode_instruction(file->elf, sec, offset,
-=======
 			ret = arch_decode_instruction(file, sec, offset,
->>>>>>> linux-next/akpm-base
 						      sec->sh.sh_size - offset,
 						      &insn->len, &insn->type,
 						      &insn->immediate,
