@@ -35,8 +35,8 @@ the reason, this document describes only the debugfs interface
 debugfs Interface
 =================
 
-DAMON exports five files, ``attrs``, ``target_ids``, ``init_regions``,
-``schemes`` and ``monitor_on`` under its debugfs directory,
+DAMON exports six files, ``attrs``, ``target_ids``, ``init_regions``,
+``record``, ``schemes`` and ``monitor_on`` under its debugfs directory,
 ``<debugfs>/damon/``.
 
 
@@ -124,6 +124,24 @@ virtual memory monitoring, DAMON will automatically updates the boundary of the
 regions after one ``regions update interval``.  Therefore, users should set the
 ``regions update interval`` large enough in this case, if they don't want the
 update.
+
+
+Record
+------
+
+This debugfs file allows you to record monitored access patterns in a regular
+binary file.  The recorded results are first written in an in-memory buffer and
+flushed to a file in batch.  Users can get and set the size of the buffer and
+the path to the result file by reading from and writing to the ``record`` file.
+For example, below commands set the buffer to be 4 KiB and the result to be
+saved in ``/damon.data``. ::
+
+    # cd <debugfs>/damon
+    # echo "4096 /damon.data" > record
+    # cat record
+    4096 /damon.data
+
+The recording can be disabled by setting the buffer size zero.
 
 
 Schemes
