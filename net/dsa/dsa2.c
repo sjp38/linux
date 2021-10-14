@@ -170,7 +170,7 @@ void dsa_bridge_num_put(const struct net_device *bridge_dev, int bridge_num)
 	/* Check if the bridge is still in use, otherwise it is time
 	 * to clean it up so we can reuse this bridge_num later.
 	 */
-	if (!dsa_bridge_num_find(bridge_dev))
+	if (dsa_bridge_num_find(bridge_dev) < 0)
 		clear_bit(bridge_num, &dsa_fwd_offloading_bridges);
 }
 
@@ -811,7 +811,9 @@ static int dsa_switch_setup_tag_protocol(struct dsa_switch *ds)
 		if (!dsa_is_cpu_port(ds, port))
 			continue;
 
+		rtnl_lock();
 		err = ds->ops->change_tag_protocol(ds, port, tag_ops->proto);
+		rtnl_unlock();
 		if (err) {
 			dev_err(ds->dev, "Unable to use tag protocol \"%s\": %pe\n",
 				tag_ops->name, ERR_PTR(err));
@@ -848,10 +850,6 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	dl_priv = devlink_priv(ds->devlink);
 	dl_priv->ds = ds;
 
-	err = devlink_register(ds->devlink);
-	if (err)
-		goto free_devlink;
-
 	/* Setup devlink port instances now, so that the switch
 	 * setup() can register regions etc, against the ports
 	 */
@@ -877,8 +875,6 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	if (err)
 		goto teardown;
 
-	devlink_params_publish(ds->devlink);
-
 	if (!ds->slave_mii_bus && ds->ops->phy_read) {
 		ds->slave_mii_bus = mdiobus_alloc();
 		if (!ds->slave_mii_bus) {
@@ -894,7 +890,7 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	}
 
 	ds->setup = true;
-
+	devlink_register(ds->devlink);
 	return 0;
 
 free_slave_mii_bus:
@@ -909,11 +905,8 @@ unregister_devlink_ports:
 	list_for_each_entry(dp, &ds->dst->ports, list)
 		if (dp->ds == ds)
 			dsa_port_devlink_teardown(dp);
-	devlink_unregister(ds->devlink);
-free_devlink:
 	devlink_free(ds->devlink);
 	ds->devlink = NULL;
-
 	return err;
 }
 
@@ -923,6 +916,9 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 
 	if (!ds->setup)
 		return;
+
+	if (ds->devlink)
+		devlink_unregister(ds->devlink);
 
 	if (ds->slave_mii_bus && ds->ops->phy_read) {
 		mdiobus_unregister(ds->slave_mii_bus);
@@ -939,7 +935,6 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 		list_for_each_entry(dp, &ds->dst->ports, list)
 			if (dp->ds == ds)
 				dsa_port_devlink_teardown(dp);
-		devlink_unregister(ds->devlink);
 		devlink_free(ds->devlink);
 		ds->devlink = NULL;
 	}

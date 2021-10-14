@@ -223,7 +223,6 @@ int smc_nl_get_sys_info(struct sk_buff *skb, struct netlink_callback *cb)
 	struct smc_nl_dmp_ctx *cb_ctx = smc_nl_dmp_ctx(cb);
 	char hostname[SMC_MAX_HOSTNAME_LEN + 1];
 	char smc_seid[SMC_MAX_EID_LEN + 1];
-	struct smcd_dev *smcd_dev;
 	struct nlattr *attrs;
 	u8 *seid = NULL;
 	u8 *host = NULL;
@@ -252,13 +251,8 @@ int smc_nl_get_sys_info(struct sk_buff *skb, struct netlink_callback *cb)
 		if (nla_put_string(skb, SMC_NLA_SYS_LOCAL_HOST, hostname))
 			goto errattr;
 	}
-	mutex_lock(&smcd_dev_list.mutex);
-	smcd_dev = list_first_entry_or_null(&smcd_dev_list.list,
-					    struct smcd_dev, list);
-	if (smcd_dev)
-		smc_ism_get_system_eid(smcd_dev, &seid);
-	mutex_unlock(&smcd_dev_list.mutex);
-	if (seid && smc_ism_is_v2_capable()) {
+	if (smc_ism_is_v2_capable()) {
+		smc_ism_get_system_eid(&seid);
 		memcpy(smc_seid, seid, SMC_MAX_EID_LEN);
 		smc_seid[SMC_MAX_EID_LEN] = 0;
 		if (nla_put_string(skb, SMC_NLA_SYS_SEID, smc_seid))
@@ -949,7 +943,7 @@ struct smc_link *smc_switch_conns(struct smc_link_group *lgr,
 		to_lnk = &lgr->lnk[i];
 		break;
 	}
-	if (!to_lnk) {
+	if (!to_lnk || !smc_wr_tx_link_hold(to_lnk)) {
 		smc_lgr_terminate_sched(lgr);
 		return NULL;
 	}
@@ -981,24 +975,26 @@ again:
 		read_unlock_bh(&lgr->conns_lock);
 		/* pre-fetch buffer outside of send_lock, might sleep */
 		rc = smc_cdc_get_free_slot(conn, to_lnk, &wr_buf, NULL, &pend);
-		if (rc) {
-			smcr_link_down_cond_sched(to_lnk);
-			return NULL;
-		}
+		if (rc)
+			goto err_out;
 		/* avoid race with smcr_tx_sndbuf_nonempty() */
 		spin_lock_bh(&conn->send_lock);
 		smc_switch_link_and_count(conn, to_lnk);
 		rc = smc_switch_cursor(smc, pend, wr_buf);
 		spin_unlock_bh(&conn->send_lock);
 		sock_put(&smc->sk);
-		if (rc) {
-			smcr_link_down_cond_sched(to_lnk);
-			return NULL;
-		}
+		if (rc)
+			goto err_out;
 		goto again;
 	}
 	read_unlock_bh(&lgr->conns_lock);
+	smc_wr_tx_link_put(to_lnk);
 	return to_lnk;
+
+err_out:
+	smcr_link_down_cond_sched(to_lnk);
+	smc_wr_tx_link_put(to_lnk);
+	return NULL;
 }
 
 static void smcr_buf_unuse(struct smc_buf_desc *rmb_desc,
