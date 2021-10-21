@@ -1600,6 +1600,7 @@ void folio_end_writeback(struct folio *folio)
 
 	smp_mb__after_atomic();
 	folio_wake(folio, PG_writeback);
+	acct_reclaim_writeback(folio_page(folio, 0));
 	folio_put(folio);
 }
 EXPORT_SYMBOL(folio_end_writeback);
