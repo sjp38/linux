@@ -1851,6 +1851,7 @@ static int smc_probe(struct net_device *dev, void __iomem *ioaddr,
 	int retval;
 	unsigned int val, revision_register;
 	const char *version_string;
+	u8 addr[ETH_ALEN];
 
 	DBG(2, dev, "%s: %s\n", CARDNAME, __func__);
 
@@ -1922,7 +1923,8 @@ static int smc_probe(struct net_device *dev, void __iomem *ioaddr,
 
 	/* Get the MAC address */
 	SMC_SELECT_BANK(lp, 1);
-	SMC_GET_MAC_ADDR(lp, dev->dev_addr);
+	SMC_GET_MAC_ADDR(lp, addr);
+	eth_hw_addr_set(dev, addr);
 
 	/* now, reset the chip, and put it into a known state */
 	smc_reset(dev);
@@ -2190,6 +2192,7 @@ static const struct of_device_id smc91x_match[] = {
 };
 MODULE_DEVICE_TABLE(of, smc91x_match);
 
+#if defined(CONFIG_GPIOLIB)
 /**
  * try_toggle_control_gpio - configure a gpio if it exists
  * @dev: net device
@@ -2220,6 +2223,15 @@ static int try_toggle_control_gpio(struct device *dev,
 
 	return 0;
 }
+#else
+static int try_toggle_control_gpio(struct device *dev,
+				   struct gpio_desc **desc,
+				   const char *name, int index,
+				   int value, unsigned int nsdelay)
+{
+	return 0;
+}
+#endif
 #endif
 
 /*
