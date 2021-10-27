@@ -412,8 +412,7 @@ static int __damon_start(struct damon_ctx *ctx)
 		if (IS_ERR(ctx->kdamond)) {
 			err = PTR_ERR(ctx->kdamond);
 			ctx->kdamond = NULL;
-		} else
-			get_task_struct(ctx->kdamond);
+		}
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
@@ -463,18 +462,20 @@ int damon_start(struct damon_ctx **ctxs, int nr_ctxs)
  */
 static int __damon_stop(struct damon_ctx *ctx)
 {
-	int ret = -EPERM;
+	struct task_struct *tsk;
 
 	mutex_lock(&ctx->kdamond_lock);
-	if (ctx->kdamond) {
-		kthread_stop(ctx->kdamond);
-		put_task_struct(ctx->kdamond);
-		ctx->kdamond = NULL;
-		ret = 0;
+	tsk = ctx->kdamond;
+	if (tsk) {
+		get_task_struct(tsk);
+		mutex_unlock(&ctx->kdamond_lock);
+		kthread_stop(tsk);
+		put_task_struct(tsk);
+		return 0;
 	}
 	mutex_unlock(&ctx->kdamond_lock);
 
-	return ret;
+	return -EPERM;
 }
 
 /**
@@ -1073,6 +1074,9 @@ static int kdamond_fn(void *data)
 		ctx->primitive.cleanup(ctx);
 
 	pr_debug("kdamond (%d) finishes\n", current->pid);
+	mutex_lock(&ctx->kdamond_lock);
+	ctx->kdamond = NULL;
+	mutex_unlock(&ctx->kdamond_lock);
 
 	mutex_lock(&damon_lock);
 	nr_running_ctxs--;
