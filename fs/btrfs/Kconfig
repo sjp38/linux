@@ -20,6 +20,7 @@ config BTRFS_FS
 	select SRCU
 	depends on !PPC_256K_PAGES	# powerpc
 	depends on !PAGE_SIZE_256KB	# hexagon
+	depends on BROKEN
 
 	help
 	  Btrfs is a general purpose copy-on-write filesystem with extents,
