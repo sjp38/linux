@@ -832,41 +832,94 @@ static int __init xbc_verify_tree(void)
 	return 0;
 }
 
+/* Need to setup xbc_data and xbc_nodes before call this. */
+static int __init xbc_parse_tree(void)
+{
+	char *p, *q;
+	int ret, c;
+
+	last_parent = NULL;
+	p = xbc_data;
+	do {
+		q = strpbrk(p, "{}=+;:\n#");
+		if (!q) {
+			p = skip_spaces(p);
+			if (*p != '\0')
+				ret = xbc_parse_error("No delimiter", p);
+			break;
+		}
+
+		c = *q;
+		*q++ = '\0';
+		switch (c) {
+		case ':':
+		case '+':
+			if (*q++ != '=') {
+				ret = xbc_parse_error(c == '+' ?
+						"Wrong '+' operator" :
+						"Wrong ':' operator",
+							q - 2);
+				break;
+			}
+			fallthrough;
+		case '=':
+			ret = xbc_parse_kv(&p, q, c);
+			break;
+		case '{':
+			ret = xbc_open_brace(&p, q);
+			break;
+		case '#':
+			q = skip_comment(q);
+			fallthrough;
+		case ';':
+		case '\n':
+			ret = xbc_parse_key(&p, q);
+			break;
+		case '}':
+			ret = xbc_close_brace(&p, q);
+			break;
+		}
+	} while (!ret);
+
+	return ret;
+}
+
 /**
- * xbc_destroy_all() - Clean up all parsed bootconfig
+ * xbc_exit() - Clean up all parsed bootconfig
  *
  * This clears all data structures of parsed bootconfig on memory.
  * If you need to reuse xbc_init() with new boot config, you can
  * use this.
  */
-void __init xbc_destroy_all(void)
+void __init xbc_exit(void)
 {
+	xbc_free_mem(xbc_data, xbc_data_size);
 	xbc_data = NULL;
 	xbc_data_size = 0;
 	xbc_node_num = 0;
-	memblock_free(xbc_nodes, sizeof(struct xbc_node) * XBC_NODE_MAX);
+	xbc_free_mem(xbc_nodes, sizeof(struct xbc_node) * XBC_NODE_MAX);
 	xbc_nodes = NULL;
 	brace_index = 0;
 }
 
 /**
  * xbc_init() - Parse given XBC file and build XBC internal tree
- * @buf: boot config text
+ * @data: The boot config text original data
+ * @size: The size of @data
  * @emsg: A pointer of const char * to store the error message
  * @epos: A pointer of int to store the error position
  *
- * This parses the boot config text in @buf. @buf must be a
- * null terminated string and smaller than XBC_DATA_MAX.
+ * This parses the boot config text in @data. @size must be smaller
+ * than XBC_DATA_MAX.
  * Return the number of stored nodes (>0) if succeeded, or -errno
  * if there is any error.
  * In error cases, @emsg will be updated with an error message and
  * @epos will be updated with the error position which is the byte offset
  * of @buf. If the error is not a parser error, @epos will be -1.
  */
-int __init xbc_init(char *buf, const char **emsg, int *epos)
+int __init xbc_init(const char *data, size_t size, const char **emsg, int *epos)
 {
-	char *p, *q;
-	int ret, c;
+	int ret;
 
 	if (epos)
 		*epos = -1;
