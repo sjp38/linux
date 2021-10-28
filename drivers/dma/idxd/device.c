@@ -427,7 +427,6 @@ void idxd_wq_quiesce(struct idxd_wq *wq)
 {
 	percpu_ref_kill(&wq->wq_active);
 	wait_for_completion(&wq->wq_dead);
-	percpu_ref_exit(&wq->wq_active);
 }
 
 /* Device control bits */
@@ -584,6 +583,8 @@ void idxd_device_reset(struct idxd_device *idxd)
 	spin_lock(&idxd->dev_lock);
 	idxd_device_clear_state(idxd);
 	idxd->state = IDXD_DEV_DISABLED;
+	idxd_unmask_error_interrupts(idxd);
+	idxd_msix_perm_setup(idxd);
 	spin_unlock(&idxd->dev_lock);
 }
 
@@ -792,7 +793,7 @@ static int idxd_groups_config_write(struct idxd_device *idxd)
 	struct device *dev = &idxd->pdev->dev;
 
 	/* Setup bandwidth token limit */
-	if (idxd->token_limit) {
+	if (idxd->hw.gen_cap.config_en && idxd->token_limit) {
 		reg.bits = ioread32(idxd->reg_base + IDXD_GENCFG_OFFSET);
 		reg.token_limit = idxd->token_limit;
 		iowrite32(reg.bits, idxd->reg_base + IDXD_GENCFG_OFFSET);
@@ -1051,8 +1052,6 @@ static int idxd_wq_load_config(struct idxd_wq *wq)
 
 	wq->size = wq->wqcfg->wq_size;
 	wq->threshold = wq->wqcfg->wq_thresh;
-	if (wq->wqcfg->priv)
-		wq->type = IDXD_WQT_KERNEL;
 
 	/* The driver does not support shared WQ mode in read-only config yet */
 	if (wq->wqcfg->mode == 0 || wq->wqcfg->pasid_en)

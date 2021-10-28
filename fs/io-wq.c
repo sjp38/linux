@@ -14,6 +14,7 @@
 #include <linux/rculist_nulls.h>
 #include <linux/cpu.h>
 #include <linux/tracehook.h>
+#include <linux/audit.h>
 #include <uapi/linux/io_uring.h>
 
 #include "io-wq.h"
@@ -178,8 +179,7 @@ static void io_worker_exit(struct io_worker *worker)
 {
 	struct io_wqe *wqe = worker->wqe;
 
-	if (refcount_dec_and_test(&worker->ref))
-		complete(&worker->ref_done);
+	io_worker_release(worker);
 	wait_for_completion(&worker->ref_done);
 
 	raw_spin_lock(&wqe->lock);
@@ -323,8 +323,10 @@ static bool io_queue_worker_create(struct io_worker *worker,
 
 	init_task_work(&worker->create_work, func);
 	worker->create_index = acct->index;
-	if (!task_work_add(wq->task, &worker->create_work, TWA_SIGNAL))
+	if (!task_work_add(wq->task, &worker->create_work, TWA_SIGNAL)) {
+		clear_bit_unlock(0, &worker->create_state);
 		return true;
+	}
 	clear_bit_unlock(0, &worker->create_state);
 fail_release:
 	io_worker_release(worker);
@@ -556,6 +558,8 @@ static int io_wqe_worker(void *data)
 	snprintf(buf, sizeof(buf), "iou-wrk-%d", wq->task->pid);
 	set_task_comm(current, buf);
 
+	audit_alloc_kernel(current);
+
 	while (!test_bit(IO_WQ_BIT_EXIT, &wq->state)) {
 		long ret;
 
@@ -594,6 +598,7 @@ loop:
 		io_worker_handle_work(worker);
 	}
 
+	audit_free(current);
 	io_worker_exit(worker);
 	return 0;
 }
@@ -716,11 +721,8 @@ static void io_workqueue_create(struct work_struct *work)
 	struct io_worker *worker = container_of(work, struct io_worker, work);
 	struct io_wqe_acct *acct = io_wqe_get_acct(worker);
 
-	if (!io_queue_worker_create(worker, acct, create_worker_cont)) {
-		clear_bit_unlock(0, &worker->create_state);
-		io_worker_release(worker);
+	if (!io_queue_worker_create(worker, acct, create_worker_cont))
 		kfree(worker);
-	}
 }
 
 static bool create_io_worker(struct io_wq *wq, struct io_wqe *wqe, int index)

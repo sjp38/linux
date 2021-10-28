@@ -4,16 +4,24 @@
  * Masami Hiramatsu <mhiramat@kernel.org>
  */
 
-#define pr_fmt(fmt)    "bootconfig: " fmt
-
+#ifdef __KERNEL__
 #include <linux/bootconfig.h>
 #include <linux/bug.h>
 #include <linux/ctype.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/memblock.h>
-#include <linux/printk.h>
 #include <linux/string.h>
+#else /* !__KERNEL__ */
+/*
+ * NOTE: This is only for tools/bootconfig, because tools/bootconfig will
+ * run the parser sanity test.
+ * This does NOT mean lib/bootconfig.c is available in the user space.
+ * However, if you change this file, please make sure the tools/bootconfig
+ * has no issue on building and running.
+ */
+#include <linux/bootconfig.h>
+#endif
 
 /*
  * Extra Boot Config (XBC) is given as tree-structured ascii text of
@@ -33,6 +41,50 @@ static const char *xbc_err_msg __initdata;
 static int xbc_err_pos __initdata;
 static int open_brace[XBC_DEPTH_MAX] __initdata;
 static int brace_index __initdata;
+
+#ifdef __KERNEL__
+static inline void * __init xbc_alloc_mem(size_t size)
+{
+	return memblock_alloc(size, SMP_CACHE_BYTES);
+}
+
+static inline void __init xbc_free_mem(void *addr, size_t size)
+{
+	memblock_free_ptr(addr, size);
+}
+
+#else /* !__KERNEL__ */
+
+static inline void *xbc_alloc_mem(size_t size)
+{
+	return malloc(size);
+}
+
+static inline void xbc_free_mem(void *addr, size_t size)
+{
+	free(addr);
+}
+#endif
+/**
+ * xbc_get_info() - Get the information of loaded boot config
+ * node_size: A pointer to store the number of nodes.
+ * data_size: A pointer to store the size of bootconfig data.
+ *
+ * Get the number of used nodes in @node_size if it is not NULL,
+ * and the size of bootconfig data in @data_size if it is not NULL.
+ * Return 0 if the boot config is initialized, or return -ENODEV.
+ */
+int __init xbc_get_info(int *node_size, size_t *data_size)
+{
+	if (!xbc_data)
+		return -ENODEV;
+
+	if (node_size)
+		*node_size = xbc_node_num;
+	if (data_size)
+		*data_size = xbc_data_size;
+	return 0;
+}
 
 static int __init xbc_parse_error(const char *msg, const char *p)
 {
@@ -226,7 +278,7 @@ int __init xbc_node_compose_key_after(struct xbc_node *root,
 				      struct xbc_node *node,
 				      char *buf, size_t size)
 {
-	u16 keys[XBC_DEPTH_MAX];
+	uint16_t keys[XBC_DEPTH_MAX];
 	int depth = 0, ret = 0, total = 0;
 
 	if (!node || node == root)
@@ -341,21 +393,21 @@ const char * __init xbc_node_find_next_key_value(struct xbc_node *root,
 
 /* XBC parse and tree build */
 
-static int __init xbc_init_node(struct xbc_node *node, char *data, u32 flag)
+static int __init xbc_init_node(struct xbc_node *node, char *data, uint32_t flag)
 {
 	unsigned long offset = data - xbc_data;
 
 	if (WARN_ON(offset >= XBC_DATA_MAX))
 		return -EINVAL;
 
-	node->data = (u16)offset | flag;
+	node->data = (uint16_t)offset | flag;
 	node->child = 0;
 	node->next = 0;
 
 	return 0;
 }
 
-static struct xbc_node * __init xbc_add_node(char *data, u32 flag)
+static struct xbc_node * __init xbc_add_node(char *data, uint32_t flag)
 {
 	struct xbc_node *node;
 
@@ -385,7 +437,7 @@ static inline __init struct xbc_node *xbc_last_child(struct xbc_node *node)
 	return node;
 }
 
-static struct xbc_node * __init __xbc_add_sibling(char *data, u32 flag, bool head)
+static struct xbc_node * __init __xbc_add_sibling(char *data, uint32_t flag, bool head)
 {
 	struct xbc_node *sib, *node = xbc_add_node(data, flag);
 
@@ -412,17 +464,17 @@ static struct xbc_node * __init __xbc_add_sibling(char *data, u32 flag, bool hea
 	return node;
 }
 
-static inline struct xbc_node * __init xbc_add_sibling(char *data, u32 flag)
+static inline struct xbc_node * __init xbc_add_sibling(char *data, uint32_t flag)
 {
 	return __xbc_add_sibling(data, flag, false);
 }
 
-static inline struct xbc_node * __init xbc_add_head_sibling(char *data, u32 flag)
+static inline struct xbc_node * __init xbc_add_head_sibling(char *data, uint32_t flag)
 {
 	return __xbc_add_sibling(data, flag, true);
 }
 
-static inline __init struct xbc_node *xbc_add_child(char *data, u32 flag)
+static inline __init struct xbc_node *xbc_add_child(char *data, uint32_t flag)
 {
 	struct xbc_node *node = xbc_add_sibling(data, flag);
 
@@ -824,69 +876,33 @@ int __init xbc_init(char *buf, const char **emsg, int *epos)
 			*emsg = "Bootconfig is already initialized";
 		return -EBUSY;
 	}
-
-	ret = strlen(buf);
-	if (ret > XBC_DATA_MAX - 1 || ret == 0) {
+	if (size > XBC_DATA_MAX || size == 0) {
 		if (emsg)
-			*emsg = ret ? "Config data is too big" :
+			*emsg = size ? "Config data is too big" :
 				"Config data is empty";
 		return -ERANGE;
 	}
 
-	xbc_nodes = memblock_alloc(sizeof(struct xbc_node) * XBC_NODE_MAX,
-				   SMP_CACHE_BYTES);
+	xbc_data = xbc_alloc_mem(size + 1);
+	if (!xbc_data) {
+		if (emsg)
+			*emsg = "Failed to allocate bootconfig data";
+		return -ENOMEM;
+	}
+	memcpy(xbc_data, data, size);
+	xbc_data[size] = '\0';
+	xbc_data_size = size + 1;
+
+	xbc_nodes = xbc_alloc_mem(sizeof(struct xbc_node) * XBC_NODE_MAX);
 	if (!xbc_nodes) {
 		if (emsg)
 			*emsg = "Failed to allocate bootconfig nodes";
+		xbc_exit();
 		return -ENOMEM;
 	}
 	memset(xbc_nodes, 0, sizeof(struct xbc_node) * XBC_NODE_MAX);
-	xbc_data = buf;
-	xbc_data_size = ret + 1;
-	last_parent = NULL;
 
-	p = buf;
-	do {
-		q = strpbrk(p, "{}=+;:\n#");
-		if (!q) {
-			p = skip_spaces(p);
-			if (*p != '\0')
-				ret = xbc_parse_error("No delimiter", p);
-			break;
-		}
-
-		c = *q;
-		*q++ = '\0';
-		switch (c) {
-		case ':':
-		case '+':
-			if (*q++ != '=') {
-				ret = xbc_parse_error(c == '+' ?
-						"Wrong '+' operator" :
-						"Wrong ':' operator",
-							q - 2);
-				break;
-			}
-			fallthrough;
-		case '=':
-			ret = xbc_parse_kv(&p, q, c);
-			break;
-		case '{':
-			ret = xbc_open_brace(&p, q);
-			break;
-		case '#':
-			q = skip_comment(q);
-			fallthrough;
-		case ';':
-		case '\n':
-			ret = xbc_parse_key(&p, q);
-			break;
-		case '}':
-			ret = xbc_close_brace(&p, q);
-			break;
-		}
-	} while (!ret);
-
+	ret = xbc_parse_tree();
 	if (!ret)
 		ret = xbc_verify_tree();
 
@@ -895,27 +911,9 @@ int __init xbc_init(char *buf, const char **emsg, int *epos)
 			*epos = xbc_err_pos;
 		if (emsg)
 			*emsg = xbc_err_msg;
-		xbc_destroy_all();
+		xbc_exit();
 	} else
 		ret = xbc_node_num;
 
 	return ret;
-}
-
-/**
- * xbc_debug_dump() - Dump current XBC node list
- *
- * Dump the current XBC node list on printk buffer for debug.
- */
-void __init xbc_debug_dump(void)
-{
-	int i;
-
-	for (i = 0; i < xbc_node_num; i++) {
-		pr_debug("[%d] %s (%s) .next=%d, .child=%d .parent=%d\n", i,
-			xbc_node_get_data(xbc_nodes + i),
-			xbc_node_is_value(xbc_nodes + i) ? "value" : "key",
-			xbc_nodes[i].next, xbc_nodes[i].child,
-			xbc_nodes[i].parent);
-	}
 }

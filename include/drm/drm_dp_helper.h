@@ -453,6 +453,7 @@ struct drm_panel;
 # define DP_FEC_UNCORR_BLK_ERROR_COUNT_CAP  (1 << 1)
 # define DP_FEC_CORR_BLK_ERROR_COUNT_CAP    (1 << 2)
 # define DP_FEC_BIT_ERROR_COUNT_CAP	    (1 << 3)
+#define DP_FEC_CAPABILITY_1			0x091   /* 2.0 */
 
 /* DP-HDMI2.1 PCON DSC ENCODER SUPPORT */
 #define DP_PCON_DSC_ENCODER_CAP_SIZE        0xC	/* 0x9E - 0x92 */
@@ -536,6 +537,9 @@ struct drm_panel;
 #define DP_DSC_BRANCH_OVERALL_THROUGHPUT_0  0x0a0   /* DP 1.4a SCR */
 #define DP_DSC_BRANCH_OVERALL_THROUGHPUT_1  0x0a1
 #define DP_DSC_BRANCH_MAX_LINE_WIDTH        0x0a2
+
+/* DFP Capability Extension */
+#define DP_DFP_CAPABILITY_EXTENSION_SUPPORT	0x0a3	/* 2.0 */
 
 /* Link Configuration */
 #define	DP_LINK_BW_SET		            0x100
@@ -688,6 +692,7 @@ struct drm_panel;
 
 #define DP_DSC_ENABLE                       0x160   /* DP 1.4 */
 # define DP_DECOMPRESSION_EN                (1 << 0)
+#define DP_DSC_CONFIGURATION				0x161	/* DP 2.0 */
 
 #define DP_PSR_EN_CFG				0x170   /* XXX 1.2? */
 # define DP_PSR_ENABLE				BIT(0)
@@ -743,6 +748,7 @@ struct drm_panel;
 # define DP_RECEIVE_PORT_0_STATUS	    (1 << 0)
 # define DP_RECEIVE_PORT_1_STATUS	    (1 << 1)
 # define DP_STREAM_REGENERATION_STATUS      (1 << 2) /* 2.0 */
+# define DP_INTRA_HOP_AUX_REPLY_INDICATION	(1 << 3) /* 2.0 */
 
 #define DP_ADJUST_REQUEST_LANE0_1	    0x206
 #define DP_ADJUST_REQUEST_LANE2_3	    0x207
@@ -864,6 +870,8 @@ struct drm_panel;
 # define DP_PHY_TEST_PATTERN_PRBS7          0x3
 # define DP_PHY_TEST_PATTERN_80BIT_CUSTOM   0x4
 # define DP_PHY_TEST_PATTERN_CP2520         0x5
+
+#define DP_PHY_SQUARE_PATTERN				0x249
 
 #define DP_TEST_HBR2_SCRAMBLER_RESET        0x24A
 #define DP_TEST_80BIT_CUSTOM_PATTERN_7_0    0x250
@@ -1106,8 +1114,27 @@ struct drm_panel;
 # define DP_UHBR20                             (1 << 1)
 # define DP_UHBR13_5                           (1 << 2)
 
-#define DP_128B132B_TRAINING_AUX_RD_INTERVAL   0x2216 /* 2.0 */
-# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_MASK 0x7f
+#define DP_128B132B_TRAINING_AUX_RD_INTERVAL                    0x2216 /* 2.0 */
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_MASK              0x7f
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_400_US            0x00
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_4_MS              0x01
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_8_MS              0x02
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_12_MS             0x03
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_16_MS             0x04
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_32_MS             0x05
+# define DP_128B132B_TRAINING_AUX_RD_INTERVAL_64_MS             0x06
+
+#define DP_TEST_264BIT_CUSTOM_PATTERN_7_0		0x2230
+#define DP_TEST_264BIT_CUSTOM_PATTERN_263_256	0x2250
+
+/* DSC Extended Capability Branch Total DSC Resources */
+#define DP_DSC_SUPPORT_AND_DSC_DECODER_COUNT		0x2260	/* 2.0 */
+# define DP_DSC_DECODER_COUNT_MASK			(0b111 << 5)
+# define DP_DSC_DECODER_COUNT_SHIFT			5
+#define DP_DSC_MAX_SLICE_COUNT_AND_AGGREGATION_0	0x2270	/* 2.0 */
+# define DP_DSC_DECODER_0_MAXIMUM_SLICE_COUNT_MASK	(1 << 0)
+# define DP_DSC_DECODER_0_AGGREGATION_SUPPORT_MASK	(0b111 << 1)
+# define DP_DSC_DECODER_0_AGGREGATION_SUPPORT_SHIFT	1
 
 /* Protocol Converter Extension */
 /* HDMI CEC tunneling over AUX DP 1.3 section 5.3.3.3.1 DPCD 1.4+ */
@@ -1319,6 +1346,10 @@ struct drm_panel;
 #define DP_MAX_LANE_COUNT_PHY_REPEATER			    0xf0004 /* 1.4a */
 #define DP_Repeater_FEC_CAPABILITY			    0xf0004 /* 1.4 */
 #define DP_PHY_REPEATER_EXTENDED_WAIT_TIMEOUT		    0xf0005 /* 1.4a */
+#define DP_MAIN_LINK_CHANNEL_CODING_PHY_REPEATER	    0xf0006 /* 2.0 */
+# define DP_PHY_REPEATER_128B132B_SUPPORTED		    (1 << 0)
+/* See DP_128B132B_SUPPORTED_LINK_RATES for values */
+#define DP_PHY_REPEATER_128B132B_RATES			    0xf0007 /* 2.0 */
 
 enum drm_dp_phy {
 	DP_PHY_DPRX,
@@ -1364,6 +1395,11 @@ enum drm_dp_phy {
 #define DP_TRANSMITTER_CAPABILITY_PHY_REPEATER1		    0xf0021 /* 1.4a */
 # define DP_VOLTAGE_SWING_LEVEL_3_SUPPORTED		    BIT(0)
 # define DP_PRE_EMPHASIS_LEVEL_3_SUPPORTED		    BIT(1)
+
+#define DP_128B132B_TRAINING_AUX_RD_INTERVAL_PHY_REPEATER1  0xf0022 /* 2.0 */
+#define DP_128B132B_TRAINING_AUX_RD_INTERVAL_PHY_REPEATER(dp_phy)	\
+	DP_LTTPR_REG(dp_phy, DP_128B132B_TRAINING_AUX_RD_INTERVAL_PHY_REPEATER1)
+/* see DP_128B132B_TRAINING_AUX_RD_INTERVAL for values */
 
 #define DP_LANE0_1_STATUS_PHY_REPEATER1			    0xf0030 /* 1.3 */
 #define DP_LANE0_1_STATUS_PHY_REPEATER(dp_phy) \
@@ -1490,6 +1526,8 @@ u8 drm_dp_get_adjust_request_voltage(const u8 link_status[DP_LINK_STATUS_SIZE],
 				     int lane);
 u8 drm_dp_get_adjust_request_pre_emphasis(const u8 link_status[DP_LINK_STATUS_SIZE],
 					  int lane);
+u8 drm_dp_get_adjust_tx_ffe_preset(const u8 link_status[DP_LINK_STATUS_SIZE],
+				   int lane);
 u8 drm_dp_get_adjust_request_post_cursor(const u8 link_status[DP_LINK_STATUS_SIZE],
 					 unsigned int lane);
 
@@ -1500,6 +1538,11 @@ u8 drm_dp_get_adjust_request_post_cursor(const u8 link_status[DP_LINK_STATUS_SIZ
 #define EDP_DISPLAY_CTL_CAP_SIZE	3
 #define DP_LTTPR_COMMON_CAP_SIZE	8
 #define DP_LTTPR_PHY_CAP_SIZE		3
+
+int drm_dp_read_clock_recovery_delay(struct drm_dp_aux *aux, const u8 dpcd[DP_RECEIVER_CAP_SIZE],
+				     enum drm_dp_phy dp_phy, bool uhbr);
+int drm_dp_read_channel_eq_delay(struct drm_dp_aux *aux, const u8 dpcd[DP_RECEIVER_CAP_SIZE],
+				 enum drm_dp_phy dp_phy, bool uhbr);
 
 void drm_dp_link_train_clock_recovery_delay(const struct drm_dp_aux *aux,
 					    const u8 dpcd[DP_RECEIVER_CAP_SIZE]);

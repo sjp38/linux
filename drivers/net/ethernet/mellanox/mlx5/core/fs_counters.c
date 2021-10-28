@@ -40,6 +40,7 @@
 #define MLX5_FC_STATS_PERIOD msecs_to_jiffies(1000)
 /* Max number of counters to query in bulk read is 32K */
 #define MLX5_SW_MAX_COUNTERS_BULK BIT(15)
+#define MLX5_SF_NUM_COUNTERS_BULK 6
 #define MLX5_FC_POOL_MAX_THRESHOLD BIT(18)
 #define MLX5_FC_POOL_USED_BUFF_RATIO 10
 
@@ -146,8 +147,12 @@ static void mlx5_fc_stats_remove(struct mlx5_core_dev *dev,
 
 static int get_max_bulk_query_len(struct mlx5_core_dev *dev)
 {
-	return min_t(int, MLX5_SW_MAX_COUNTERS_BULK,
-			  (1 << MLX5_CAP_GEN(dev, log_max_flow_counter_bulk)));
+	int num_counters_bulk = mlx5_core_is_sf(dev) ?
+					MLX5_SF_NUM_COUNTERS_BULK :
+					MLX5_SW_MAX_COUNTERS_BULK;
+
+	return min_t(int, num_counters_bulk,
+		     (1 << MLX5_CAP_GEN(dev, log_max_flow_counter_bulk)));
 }
 
 static void update_counter_cache(int index, u32 *bulk_raw_data,
@@ -497,8 +502,7 @@ static struct mlx5_fc_bulk *mlx5_fc_bulk_create(struct mlx5_core_dev *dev)
 	alloc_bitmask = MLX5_CAP_GEN(dev, flow_counter_bulk_alloc);
 	bulk_len = alloc_bitmask > 0 ? MLX5_FC_BULK_NUM_FCS(alloc_bitmask) : 1;
 
-	bulk = kvzalloc(sizeof(*bulk) + bulk_len * sizeof(struct mlx5_fc),
-			GFP_KERNEL);
+	bulk = kvzalloc(struct_size(bulk, fcs, bulk_len), GFP_KERNEL);
 	if (!bulk)
 		goto err_alloc_bulk;
 

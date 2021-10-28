@@ -89,7 +89,8 @@ static int ethtool_get_features(struct net_device *dev, void __user *useraddr)
 	if (copy_to_user(useraddr, &cmd, sizeof(cmd)))
 		return -EFAULT;
 	useraddr += sizeof(cmd);
-	if (copy_to_user(useraddr, features, copy_size * sizeof(*features)))
+	if (copy_to_user(useraddr, features,
+			 array_size(copy_size, sizeof(*features))))
 		return -EFAULT;
 
 	return 0;
@@ -335,7 +336,7 @@ EXPORT_SYMBOL(ethtool_intersect_link_masks);
 void ethtool_convert_legacy_u32_to_link_mode(unsigned long *dst,
 					     u32 legacy_u32)
 {
-	bitmap_zero(dst, __ETHTOOL_LINK_MODE_MASK_NBITS);
+	linkmode_zero(dst);
 	dst[0] = legacy_u32;
 }
 EXPORT_SYMBOL(ethtool_convert_legacy_u32_to_link_mode);
@@ -350,11 +351,10 @@ bool ethtool_convert_link_mode_to_legacy_u32(u32 *legacy_u32,
 	if (__ETHTOOL_LINK_MODE_MASK_NBITS > 32) {
 		__ETHTOOL_DECLARE_LINK_MODE_MASK(ext);
 
-		bitmap_zero(ext, __ETHTOOL_LINK_MODE_MASK_NBITS);
+		linkmode_zero(ext);
 		bitmap_fill(ext, 32);
 		bitmap_complement(ext, ext, __ETHTOOL_LINK_MODE_MASK_NBITS);
-		if (bitmap_intersects(ext, src,
-				      __ETHTOOL_LINK_MODE_MASK_NBITS)) {
+		if (linkmode_intersects(ext, src)) {
 			/* src mask goes beyond bit 31 */
 			retval = false;
 		}
@@ -799,7 +799,7 @@ static noinline_for_stack int ethtool_get_sset_info(struct net_device *dev,
 		goto out;
 
 	useraddr += offsetof(struct ethtool_sset_info, data);
-	if (copy_to_user(useraddr, info_buf, idx * sizeof(u32)))
+	if (copy_to_user(useraddr, info_buf, array_size(idx, sizeof(u32))))
 		goto out;
 
 	ret = 0;
@@ -1022,7 +1022,7 @@ static int ethtool_copy_validate_indir(u32 *indir, void __user *useraddr,
 {
 	int i;
 
-	if (copy_from_user(indir, useraddr, size * sizeof(indir[0])))
+	if (copy_from_user(indir, useraddr, array_size(size, sizeof(indir[0]))))
 		return -EFAULT;
 
 	/* Validate ring indices */
@@ -1537,6 +1537,10 @@ static int ethtool_get_any_eeprom(struct net_device *dev, void __user *useraddr,
 		ret = getter(dev, &eeprom, data);
 		if (ret)
 			break;
+		if (!eeprom.len) {
+			ret = -EIO;
+			break;
+		}
 		if (copy_to_user(userbuf, data, eeprom.len)) {
 			ret = -EFAULT;
 			break;
@@ -1891,7 +1895,7 @@ static int ethtool_self_test(struct net_device *dev, char __user *useraddr)
 	if (copy_to_user(useraddr, &test, sizeof(test)))
 		goto out;
 	useraddr += sizeof(test);
-	if (copy_to_user(useraddr, data, test.len * sizeof(u64)))
+	if (copy_to_user(useraddr, data, array_size(test.len, sizeof(u64))))
 		goto out;
 	ret = 0;
 
@@ -1933,7 +1937,8 @@ static int ethtool_get_strings(struct net_device *dev, void __user *useraddr)
 		goto out;
 	useraddr += sizeof(gstrings);
 	if (gstrings.len &&
-	    copy_to_user(useraddr, data, gstrings.len * ETH_GSTRING_LEN))
+	    copy_to_user(useraddr, data,
+			 array_size(gstrings.len, ETH_GSTRING_LEN)))
 		goto out;
 	ret = 0;
 

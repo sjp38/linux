@@ -138,9 +138,6 @@ static int rockchip_drm_bind(struct device *dev)
 
 	drm_dev->dev_private = private;
 
-	INIT_LIST_HEAD(&private->psr_list);
-	mutex_init(&private->psr_list_lock);
-
 	ret = rockchip_drm_init_iommu(drm_dev);
 	if (ret)
 		goto err_free;
@@ -202,16 +199,7 @@ static void rockchip_drm_unbind(struct device *dev)
 	drm_dev_put(drm_dev);
 }
 
-static const struct file_operations rockchip_drm_driver_fops = {
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.mmap = rockchip_gem_mmap,
-	.poll = drm_poll,
-	.read = drm_read,
-	.unlocked_ioctl = drm_ioctl,
-	.compat_ioctl = drm_compat_ioctl,
-	.release = drm_release,
-};
+DEFINE_DRM_GEM_FOPS(rockchip_drm_driver_fops);
 
 static const struct drm_driver rockchip_drm_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
@@ -220,7 +208,7 @@ static const struct drm_driver rockchip_drm_driver = {
 	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
 	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
 	.gem_prime_import_sg_table	= rockchip_gem_prime_import_sg_table,
-	.gem_prime_mmap		= rockchip_gem_mmap_buf,
+	.gem_prime_mmap		= drm_gem_prime_mmap,
 	.fops			= &rockchip_drm_driver_fops,
 	.name	= DRIVER_NAME,
 	.desc	= DRIVER_DESC,
@@ -275,10 +263,17 @@ int rockchip_drm_endpoint_is_subdriver(struct device_node *ep)
 		return -ENODEV;
 
 	/* status disabled will prevent creation of platform-devices */
+	if (!of_device_is_available(node)) {
+		of_node_put(node);
+		return -ENODEV;
+	}
+
 	pdev = of_find_device_by_node(node);
 	of_node_put(node);
+
+	/* enabled non-platform-devices can immediately return here */
 	if (!pdev)
-		return -ENODEV;
+		return false;
 
 	/*
 	 * All rockchip subdrivers have probed at this point, so
@@ -370,7 +365,7 @@ static int rockchip_drm_platform_of_probe(struct device *dev)
 		}
 
 		iommu = of_parse_phandle(port->parent, "iommus", 0);
-		if (!iommu || !of_device_is_available(iommu->parent)) {
+		if (!iommu || !of_device_is_available(iommu)) {
 			DRM_DEV_DEBUG(dev,
 				      "no iommu attached for %pOF, using non-iommu buffers\n",
 				      port->parent);

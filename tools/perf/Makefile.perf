@@ -130,6 +130,8 @@ include ../scripts/utilities.mak
 #
 # Define LIBTRACEEVENT_DYNAMIC to enable libtraceevent dynamic linking
 #
+# Define LIBTRACEFS_DYNAMIC to enable libtracefs dynamic linking
+#
 
 # As per kernel Makefile, avoid funny character set dependencies
 unexport LC_ALL
@@ -786,6 +788,8 @@ endif
 $(OUTPUT)dlfilters/%.o: dlfilters/%.c include/perf/perf_dlfilter.h
 	$(Q)$(MKDIR) -p $(OUTPUT)dlfilters
 	$(QUIET_CC)$(CC) -c -Iinclude $(EXTRA_CFLAGS) -o $@ -fpic $<
+
+.SECONDARY: $(DLFILTERS:.so=.o)
 
 $(OUTPUT)dlfilters/%.so: $(OUTPUT)dlfilters/%.o
 	$(QUIET_LINK)$(CC) $(EXTRA_CFLAGS) -shared -o $@ $<

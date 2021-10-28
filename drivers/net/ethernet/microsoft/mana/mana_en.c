@@ -1610,7 +1610,7 @@ static int mana_init_port(struct net_device *ndev)
 	if (apc->num_queues > apc->max_queues)
 		apc->num_queues = apc->max_queues;
 
-	ether_addr_copy(ndev->dev_addr, apc->mac_addr);
+	eth_hw_addr_set(ndev, apc->mac_addr);
 
 	return 0;
 
@@ -1667,24 +1667,23 @@ int mana_attach(struct net_device *ndev)
 	if (err)
 		return err;
 
-	err = mana_alloc_queues(ndev);
-	if (err) {
-		kfree(apc->rxqs);
-		apc->rxqs = NULL;
-		return err;
+	if (apc->port_st_save) {
+		err = mana_alloc_queues(ndev);
+		if (err) {
+			mana_cleanup_port_context(apc);
+			return err;
+		}
 	}
-
-	netif_device_attach(ndev);
 
 	apc->port_is_up = apc->port_st_save;
 
 	/* Ensure port state updated before txq state */
 	smp_wmb();
 
-	if (apc->port_is_up) {
+	if (apc->port_is_up)
 		netif_carrier_on(ndev);
-		netif_tx_wake_all_queues(ndev);
-	}
+
+	netif_device_attach(ndev);
 
 	return 0;
 }

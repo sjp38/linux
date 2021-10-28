@@ -167,6 +167,19 @@
 			__entry->center_freq1, __entry->freq1_offset,	\
 			__entry->center_freq2
 
+#define FILS_AAD_ASSIGN(fa)						\
+	do {								\
+		if (fa) {						\
+			ether_addr_copy(__entry->macaddr, fa->macaddr);	\
+			__entry->kek_len = fa->kek_len;			\
+		} else {						\
+			eth_zero_addr(__entry->macaddr);		\
+			__entry->kek_len = 0;				\
+		}							\
+	} while (0)
+#define FILS_AAD_PR_FMT							\
+	"macaddr: %pM, kek_len: %d"
+
 #define SINFO_ENTRY __field(int, generation)	    \
 		    __field(u32, connected_time)    \
 		    __field(u32, inactive_time)	    \
@@ -2614,6 +2627,24 @@ DEFINE_EVENT(wiphy_wdev_cookie_evt, rdev_abort_pmsr,
 	TP_ARGS(wiphy, wdev, cookie)
 );
 
+TRACE_EVENT(rdev_set_fils_aad,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
+		 struct cfg80211_fils_aad *fils_aad),
+	TP_ARGS(wiphy, netdev, fils_aad),
+	TP_STRUCT__entry(WIPHY_ENTRY
+		NETDEV_ENTRY
+		__array(u8, macaddr, ETH_ALEN)
+		__field(u8, kek_len)
+	),
+	TP_fast_assign(WIPHY_ASSIGN;
+		NETDEV_ASSIGN;
+		FILS_AAD_ASSIGN(fils_aad);
+	),
+	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT ", " FILS_AAD_PR_FMT,
+		  WIPHY_PR_ARG, NETDEV_PR_ARG, __entry->macaddr,
+		  __entry->kek_len)
+);
+
 /*************************************************************
  *	     cfg80211 exported functions traces		     *
  *************************************************************/
@@ -3641,6 +3672,25 @@ TRACE_EVENT(cfg80211_bss_color_notify,
 	TP_printk(NETDEV_PR_FMT ", cmd: %x, count: %u, bitmap: %llx",
 		  NETDEV_PR_ARG, __entry->cmd, __entry->count,
 		  __entry->color_bitmap)
+);
+
+TRACE_EVENT(rdev_set_radar_offchan,
+	TP_PROTO(struct wiphy *wiphy, struct cfg80211_chan_def *chandef),
+
+	TP_ARGS(wiphy, chandef),
+
+	TP_STRUCT__entry(
+		WIPHY_ENTRY
+		CHAN_DEF_ENTRY
+	),
+
+	TP_fast_assign(
+		WIPHY_ASSIGN;
+		CHAN_DEF_ASSIGN(chandef)
+	),
+
+	TP_printk(WIPHY_PR_FMT ", " CHAN_DEF_PR_FMT,
+		  WIPHY_PR_ARG, CHAN_DEF_PR_ARG)
 );
 
 #endif /* !__RDEV_OPS_TRACE || TRACE_HEADER_MULTI_READ */

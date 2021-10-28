@@ -33,7 +33,7 @@
 #define SWITCH_CHANNEL_DELAY_AL7230 200 /* us */
 #define AL7230_PWR_IDX_LEN    64
 
-static const unsigned long dwAL2230InitTable[CB_AL2230_INIT_SEQ] = {
+static const unsigned long al2230_init_table[CB_AL2230_INIT_SEQ] = {
 	0x03F79000 + (BY_AL2230_REG_LEN << 3) + IFREGCTL_REGW,
 	0x03333100 + (BY_AL2230_REG_LEN << 3) + IFREGCTL_REGW,
 	0x01A00200 + (BY_AL2230_REG_LEN << 3) + IFREGCTL_REGW,
@@ -406,7 +406,7 @@ static const unsigned long dwAL7230ChannelTable2[CB_MAX_CHANNEL] = {
  */
 static bool s_bAL7230Init(struct vnt_private *priv)
 {
-	void __iomem *iobase = priv->PortOffset;
+	void __iomem *iobase = priv->port_offset;
 	int     ii;
 	bool ret;
 
@@ -455,7 +455,7 @@ static bool s_bAL7230Init(struct vnt_private *priv)
  */
 static bool s_bAL7230SelectChannel(struct vnt_private *priv, unsigned char byChannel)
 {
-	void __iomem *iobase = priv->PortOffset;
+	void __iomem *iobase = priv->port_offset;
 	bool ret;
 
 	ret = true;
@@ -494,7 +494,7 @@ static bool s_bAL7230SelectChannel(struct vnt_private *priv, unsigned char byCha
  */
 bool IFRFbWriteEmbedded(struct vnt_private *priv, unsigned long dwData)
 {
-	void __iomem *iobase = priv->PortOffset;
+	void __iomem *iobase = priv->port_offset;
 	unsigned short ww;
 	unsigned long dwValue;
 
@@ -527,7 +527,7 @@ bool IFRFbWriteEmbedded(struct vnt_private *priv, unsigned long dwData)
  */
 static bool RFbAL2230Init(struct vnt_private *priv)
 {
-	void __iomem *iobase = priv->PortOffset;
+	void __iomem *iobase = priv->port_offset;
 	int     ii;
 	bool ret;
 
@@ -545,7 +545,7 @@ static bool RFbAL2230Init(struct vnt_private *priv)
 	IFRFbWriteEmbedded(priv, (0x07168700 + (BY_AL2230_REG_LEN << 3) + IFREGCTL_REGW));
 
 	for (ii = 0; ii < CB_AL2230_INIT_SEQ; ii++)
-		ret &= IFRFbWriteEmbedded(priv, dwAL2230InitTable[ii]);
+		ret &= IFRFbWriteEmbedded(priv, al2230_init_table[ii]);
 	MACvTimer0MicroSDelay(priv, 30); /* delay 30 us */
 
 	/* PLL On */
@@ -557,7 +557,7 @@ static bool RFbAL2230Init(struct vnt_private *priv)
 	ret &= IFRFbWriteEmbedded(priv, (0x00780f00 + (BY_AL2230_REG_LEN << 3) + IFREGCTL_REGW));
 	MACvTimer0MicroSDelay(priv, 30);/* 30us */
 	ret &= IFRFbWriteEmbedded(priv,
-				  dwAL2230InitTable[CB_AL2230_INIT_SEQ - 1]);
+				  al2230_init_table[CB_AL2230_INIT_SEQ - 1]);
 
 	MACvWordRegBitsOn(iobase, MAC_REG_SOFTPWRCTL, (SOFTPWRCTL_SWPE3    |
 							 SOFTPWRCTL_SWPE2    |
@@ -572,7 +572,7 @@ static bool RFbAL2230Init(struct vnt_private *priv)
 
 static bool RFbAL2230SelectChannel(struct vnt_private *priv, unsigned char byChannel)
 {
-	void __iomem *iobase = priv->PortOffset;
+	void __iomem *iobase = priv->port_offset;
 	bool ret;
 
 	ret = true;
@@ -670,63 +670,63 @@ bool RFbSelectChannel(struct vnt_private *priv, unsigned char byRFType,
  * Parameters:
  *  In:
  *      iobase      - I/O base address
- *      uChannel    - channel number
+ *      channel     - channel number
  *      bySleepCnt  - SleepProgSyn count
  *
  * Return Value: None.
  *
  */
-bool RFvWriteWakeProgSyn(struct vnt_private *priv, unsigned char byRFType,
-			 u16 uChannel)
+bool RFvWriteWakeProgSyn(struct vnt_private *priv, unsigned char rf_type,
+			 u16 channel)
 {
-	void __iomem *iobase = priv->PortOffset;
-	int   ii;
-	unsigned char byInitCount = 0;
-	unsigned char bySleepCount = 0;
+	void __iomem *iobase = priv->port_offset;
+	int i;
+	unsigned char init_count = 0;
+	unsigned char sleep_count = 0;
 
 	VNSvOutPortW(iobase + MAC_REG_MISCFFNDEX, 0);
-	switch (byRFType) {
+	switch (rf_type) {
 	case RF_AIROHA:
 	case RF_AL2230S:
 
-		if (uChannel > CB_MAX_CHANNEL_24G)
+		if (channel > CB_MAX_CHANNEL_24G)
 			return false;
 
 		 /* Init Reg + Channel Reg (2) */
-		byInitCount = CB_AL2230_INIT_SEQ + 2;
-		bySleepCount = 0;
-		if (byInitCount > (MISCFIFO_SYNDATASIZE - bySleepCount))
+		init_count = CB_AL2230_INIT_SEQ + 2;
+		sleep_count = 0;
+		if (init_count > (MISCFIFO_SYNDATASIZE - sleep_count))
 			return false;
 
-		for (ii = 0; ii < CB_AL2230_INIT_SEQ; ii++)
-			MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL2230InitTable[ii]);
+		for (i = 0; i < CB_AL2230_INIT_SEQ; i++)
+			MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), al2230_init_table[i]);
 
-		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL2230ChannelTable0[uChannel - 1]);
-		ii++;
-		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL2230ChannelTable1[uChannel - 1]);
+		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL2230ChannelTable0[channel - 1]);
+		i++;
+		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL2230ChannelTable1[channel - 1]);
 		break;
 
 		/* Need to check, PLLON need to be low for channel setting */
 	case RF_AIROHA7230:
 		 /* Init Reg + Channel Reg (3) */
-		byInitCount = CB_AL7230_INIT_SEQ + 3;
-		bySleepCount = 0;
-		if (byInitCount > (MISCFIFO_SYNDATASIZE - bySleepCount))
+		init_count = CB_AL7230_INIT_SEQ + 3;
+		sleep_count = 0;
+		if (init_count > (MISCFIFO_SYNDATASIZE - sleep_count))
 			return false;
 
-		if (uChannel <= CB_MAX_CHANNEL_24G) {
-			for (ii = 0; ii < CB_AL7230_INIT_SEQ; ii++)
-				MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL7230InitTable[ii]);
+		if (channel <= CB_MAX_CHANNEL_24G) {
+			for (i = 0; i < CB_AL7230_INIT_SEQ; i++)
+				MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL7230InitTable[i]);
 		} else {
-			for (ii = 0; ii < CB_AL7230_INIT_SEQ; ii++)
-				MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL7230InitTableAMode[ii]);
+			for (i = 0; i < CB_AL7230_INIT_SEQ; i++)
+				MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL7230InitTableAMode[i]);
 		}
 
-		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL7230ChannelTable0[uChannel - 1]);
-		ii++;
-		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL7230ChannelTable1[uChannel - 1]);
-		ii++;
-		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + ii), dwAL7230ChannelTable2[uChannel - 1]);
+		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL7230ChannelTable0[channel - 1]);
+		i++;
+		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL7230ChannelTable1[channel - 1]);
+		i++;
+		MACvSetMISCFifo(priv, (unsigned short)(MISCFIFO_SYNDATA_IDX + i), dwAL7230ChannelTable2[channel - 1]);
 		break;
 
 	case RF_NOTHING:
@@ -736,7 +736,7 @@ bool RFvWriteWakeProgSyn(struct vnt_private *priv, unsigned char byRFType,
 		return false;
 	}
 
-	MACvSetMISCFifo(priv, MISCFIFO_SYNINFO_IDX, (unsigned long)MAKEWORD(bySleepCount, byInitCount));
+	MACvSetMISCFifo(priv, MISCFIFO_SYNINFO_IDX, (unsigned long)MAKEWORD(sleep_count, init_count));
 
 	return true;
 }

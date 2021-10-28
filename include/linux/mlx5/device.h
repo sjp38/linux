@@ -541,19 +541,21 @@ struct mlx5_cmd_layout {
 	u8		status_own;
 };
 
-enum mlx5_fatal_assert_bit_offsets {
-	MLX5_RFR_OFFSET = 31,
+enum mlx5_rfr_severity_bit_offsets {
+	MLX5_RFR_BIT_OFFSET = 0x7,
 };
 
 struct health_buffer {
-	__be32		assert_var[5];
-	__be32		rsvd0[3];
+	__be32		assert_var[6];
+	__be32		rsvd0[2];
 	__be32		assert_exit_ptr;
 	__be32		assert_callra;
-	__be32		rsvd1[2];
+	__be32		rsvd1[1];
+	__be32		time;
 	__be32		fw_ver;
 	__be32		hw_id;
-	__be32		rfr;
+	u8		rfr_severity;
+	u8		rsvd2[3];
 	u8		irisc_index;
 	u8		synd;
 	__be16		ext_synd;
@@ -577,7 +579,9 @@ struct mlx5_init_seg {
 	__be32			rsvd1[120];
 	__be32			initializing;
 	struct health_buffer	health;
-	__be32			rsvd2[880];
+	__be32			rsvd2[878];
+	__be32			cmd_exec_to;
+	__be32			cmd_q_init_to;
 	__be32			internal_timer_h;
 	__be32			internal_timer_l;
 	__be32			rsvd3[2];
@@ -1183,6 +1187,7 @@ enum mlx5_cap_type {
 	MLX5_CAP_DEV_EVENT = 0x14,
 	MLX5_CAP_IPSEC,
 	MLX5_CAP_GENERAL_2 = 0x20,
+	MLX5_CAP_PORT_SELECTION = 0x25,
 	/* NUM OF CAP Types */
 	MLX5_CAP_NUM
 };
@@ -1340,6 +1345,20 @@ enum mlx5_qcam_feature_groups {
 	MLX5_GET(e_switch_cap, \
 		 mdev->caps.hca[MLX5_CAP_ESWITCH]->max, cap)
 
+#define MLX5_CAP_PORT_SELECTION(mdev, cap) \
+	MLX5_GET(port_selection_cap, \
+		 mdev->caps.hca[MLX5_CAP_PORT_SELECTION]->cur, cap)
+
+#define MLX5_CAP_PORT_SELECTION_MAX(mdev, cap) \
+	MLX5_GET(port_selection_cap, \
+		 mdev->caps.hca[MLX5_CAP_PORT_SELECTION]->max, cap)
+
+#define MLX5_CAP_FLOWTABLE_PORT_SELECTION(mdev, cap) \
+	MLX5_CAP_PORT_SELECTION(mdev, flow_table_properties_port_selection.cap)
+
+#define MLX5_CAP_FLOWTABLE_PORT_SELECTION_MAX(mdev, cap) \
+	MLX5_CAP_PORT_SELECTION_MAX(mdev, flow_table_properties_port_selection.cap)
+
 #define MLX5_CAP_ODP(mdev, cap)\
 	MLX5_GET(odp_cap, mdev->caps.hca[MLX5_CAP_ODP]->cur, cap)
 
@@ -1456,6 +1475,8 @@ static inline u16 mlx5_to_sw_pkey_sz(int pkey_sz)
 	return MLX5_MIN_PKEY_TABLE_SIZE << pkey_sz;
 }
 
+#define MLX5_RDMA_RX_NUM_COUNTERS_PRIOS 2
+#define MLX5_RDMA_TX_NUM_COUNTERS_PRIOS 1
 #define MLX5_BY_PASS_NUM_REGULAR_PRIOS 16
 #define MLX5_BY_PASS_NUM_DONT_TRAP_PRIOS 16
 #define MLX5_BY_PASS_NUM_MULTICAST_PRIOS 1

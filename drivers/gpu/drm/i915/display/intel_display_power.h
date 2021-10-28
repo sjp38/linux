@@ -117,7 +117,7 @@ enum intel_display_power_domain {
 	POWER_DOMAIN_GMBUS,
 	POWER_DOMAIN_MODESET,
 	POWER_DOMAIN_GT_IRQ,
-	POWER_DOMAIN_DPLL_DC_OFF,
+	POWER_DOMAIN_DC_OFF,
 	POWER_DOMAIN_TC_COLD_OFF,
 	POWER_DOMAIN_INIT,
 
@@ -408,6 +408,10 @@ void gen9_dbuf_slices_update(struct drm_i915_private *dev_priv,
 
 #define with_intel_display_power(i915, domain, wf) \
 	for ((wf) = intel_display_power_get((i915), (domain)); (wf); \
+	     intel_display_power_put_async((i915), (domain), (wf)), (wf) = 0)
+
+#define with_intel_display_power_if_enabled(i915, domain, wf) \
+	for ((wf) = intel_display_power_get_if_enabled((i915), (domain)); (wf); \
 	     intel_display_power_put_async((i915), (domain), (wf)), (wf) = 0)
 
 void chv_phy_powergate_lanes(struct intel_encoder *encoder,

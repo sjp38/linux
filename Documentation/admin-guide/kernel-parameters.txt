@@ -600,6 +600,14 @@
 			loops can be debugged more effectively on production
 			systems.
 
+	clocksource.max_cswd_coarse_reads= [KNL]
+			Number of consecutive clocksource_watchdog()
+			coarse reads (that is, clocksource reads that
+			were unduly delayed) that are permitted before
+			the kernel complains (gently).	Set to a value
+			less than or equal to zero to suppress these
+			complaints.
+
 	clocksource.max_cswd_read_retries= [KNL]
 			Number of clocksource_watchdog() retries due to
 			external delays before the clock will be marked
@@ -840,11 +848,6 @@
 			(one device per port)
 			Format: <port#>,<type>
 			See also Documentation/input/devices/joystick-parport.rst
-
-	ddebug_query=	[KNL,DYNAMIC_DEBUG] Enable debug messages at early boot
-			time. See
-			Documentation/admin-guide/dynamic-debug-howto.rst for
-			details.  Deprecated, see dyndbg.
 
 	debug		[KNL] Enable kernel debugging (events log level).
 
@@ -2357,7 +2360,14 @@
 			[KVM] Controls how many 4KiB pages are periodically zapped
 			back to huge pages.  0 disables the recovery, otherwise if
 			the value is N KVM will zap 1/Nth of the 4KiB pages every
-			minute.  The default is 60.
+			period (see below).  The default is 60.
+
+	kvm.nx_huge_pages_recovery_period_ms=
+			[KVM] Controls the time period at which KVM zaps 4KiB pages
+			back to huge pages. If the value is a non-zero N, KVM will
+			zap a portion (see ratio above) of the pages every N msecs.
+			If the value is 0 (the default), KVM will pick a period based
+			on the ratio, such that a page is zapped after 1 hour on average.
 
 	kvm-amd.nested=	[KVM,AMD] Allow nested virtualization in KVM/SVM.
 			Default is 1 (enabled)
@@ -2369,6 +2379,8 @@
 	kvm-arm.mode=
 			[KVM,ARM] Select one of KVM/arm64's modes of operation.
 
+			none: Forcefully disable KVM.
+
 			nvhe: Standard nVHE-based mode, without support for
 			      protected guests.
 
@@ -2376,7 +2388,9 @@
 				   state is kept private from the host.
 				   Not valid if the kernel is running in EL2.
 
-			Defaults to VHE/nVHE based on hardware support.
+			Defaults to VHE/nVHE based on hardware support. Setting
+			mode to "protected" will disable kexec and hibernation
+			for the host.
 
 	kvm-arm.vgic_v3_group0_trap=
 			[KVM,ARM] Trap guest accesses to GICv3 group-0
@@ -4469,10 +4483,6 @@
 			on rcutree.qhimark at boot time and to zero to
 			disable more aggressive help enlistment.
 
-	rcutree.rcu_idle_gp_delay= [KNL]
-			Set wakeup interval for idle CPUs that have
-			RCU callbacks (RCU_FAST_NO_HZ=y).
-
 	rcutree.rcu_kick_kthreads= [KNL]
 			Cause the grace-period kthread to get an extra
 			wake_up() if it sleeps three times longer than
@@ -4986,6 +4996,18 @@
 			an IOTLB flush. Default is lazy flushing before reuse,
 			which is faster.
 
+	s390_iommu_aperture=	[KNL,S390]
+			Specifies the size of the per device DMA address space
+			accessible through the DMA and IOMMU APIs as a decimal
+			factor of the size of main memory.
+			The default is 1 meaning that one can concurrently use
+			as many DMA addresses as physical memory is installed,
+			if supported by hardware, and thus map all of memory
+			once. With a value of 2 one can map all of memory twice
+			and so on. As a special case a factor of 0 imposes no
+			restrictions other than those given by hardware at the
+			cost of significant additional memory use for tables.
+
 	sa1100ir	[NET]
 			See drivers/net/irda/sa1100_ir.c.
 
@@ -5307,8 +5329,7 @@
 			auto    - Kernel selects the mitigation depending on
 				  the available CPU features and vulnerability.
 
-			Default mitigation:
-			If CONFIG_SECCOMP=y then "seccomp", otherwise "prctl"
+			Default mitigation: "prctl"
 
 			Not specifying this option is equivalent to
 			spectre_v2_user=auto.
@@ -5352,7 +5373,7 @@
 				  will disable SSB unless they explicitly opt out.
 
 			Default mitigations:
-			X86:	If CONFIG_SECCOMP=y "seccomp", otherwise "prctl"
+			X86:	"prctl"
 
 			On powerpc the options are:
 
