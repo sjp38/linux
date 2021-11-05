@@ -879,12 +879,22 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,
 	}
 
 	mutex_lock(&damon_dbgfs_lock);
-	if (!strncmp(kbuf, "on", count))
+	if (!strncmp(kbuf, "on", count)) {
+		int i;
+
+		for (i = 0; i < dbgfs_nr_ctxs; i++) {
+			if (damon_targets_empty(dbgfs_ctxs[i])) {
+				kfree(kbuf);
+				mutex_unlock(&damon_dbgfs_lock);
+				return -EINVAL;
+			}
+		}
 		ret = damon_start(dbgfs_ctxs, dbgfs_nr_ctxs);
-	else if (!strncmp(kbuf, "off", count))
+	} else if (!strncmp(kbuf, "off", count)) {
 		ret = damon_stop(dbgfs_ctxs, dbgfs_nr_ctxs);
-	else
-		err = -EINVAL;
+	} else {
+		ret = -EINVAL;
+	}
 	mutex_unlock(&damon_dbgfs_lock);
 
 	if (!ret)
