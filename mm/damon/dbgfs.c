@@ -188,13 +188,19 @@ static ssize_t dbgfs_record_write(struct file *file,
 	struct damon_ctx *ctx = file->private_data;
 	char *kbuf;
 	unsigned int rbuf_len;
-	char rfile_path[MAX_RFILE_PATH_LEN];
+	char *rfile_path;
 	ssize_t ret = count;
 	int err;
 
 	kbuf = user_input_str(buf, count, ppos);
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
+
+	rfile_path = kmalloc(count + 1, GFP_KERNEL);
+	if (!rfile_path) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	if (sscanf(kbuf, "%u %s",
 				&rbuf_len, rfile_path) != 2) {
