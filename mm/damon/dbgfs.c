@@ -456,7 +456,7 @@ static int dbgfs_rm_context(char *name)
 
 	for (i = 0, j = 0; i < dbgfs_nr_ctxs; i++) {
 		if (dbgfs_dirs[i] == dir) {
-			debugfs_remove(dbgfs_dirs[i]);
+			debugfs_remove_recursive(dbgfs_dirs[i]);
 			dbgfs_destroy_ctx(dbgfs_ctxs[i]);
 			continue;
 		}
