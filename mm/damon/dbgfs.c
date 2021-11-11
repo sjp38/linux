@@ -164,6 +164,7 @@ static int dbgfs_set_recording(struct damon_ctx *ctx,
 	}
 
 	recorder->rbuf_len = rbuf_len;
+	recorder->rbuf_offset = 0;
 	kfree(recorder->rbuf);
 	recorder->rbuf = NULL;
 	kfree(recorder->rfile_path);
