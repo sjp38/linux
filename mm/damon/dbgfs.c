@@ -133,7 +133,7 @@ static ssize_t dbgfs_schemes_read(struct file *file, char __user *buf,
 	char *kbuf;
 	ssize_t len;
 
-	kbuf = kmalloc(count, GFP_KERNEL);
+	kbuf = kmalloc(count, GFP_KERNEL | __GFP_NOWARN);
 	if (!kbuf)
 		return -ENOMEM;
 
@@ -452,7 +452,7 @@ static ssize_t dbgfs_init_regions_read(struct file *file, char __user *buf,
 	char *kbuf;
 	ssize_t len;
 
-	kbuf = kmalloc(count, GFP_KERNEL);
+	kbuf = kmalloc(count, GFP_KERNEL | __GFP_NOWARN);
 	if (!kbuf)
 		return -ENOMEM;
 
