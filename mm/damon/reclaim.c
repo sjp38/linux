@@ -185,6 +185,18 @@ module_param(monitor_region_end, ulong, 0600);
 static int kdamond_pid __read_mostly = -1;
 module_param(kdamond_pid, int, 0400);
 
+/*
+ * Number of memory regions that tried to be reclaimed.
+ */
+static unsigned long nr_reclaim_tried_regions __read_mostly;
+module_param(nr_reclaim_tried_regions, ulong, 0400);
+
+/*
+ * Total bytes of memory regions that tried to be reclaimed.
+ */
+static unsigned long bytes_reclaim_tried_regions __read_mostly;
+module_param(bytes_reclaim_tried_regions, ulong, 0400);
+
 static struct damon_ctx *ctx;
 static struct damon_target *target;
 
@@ -333,6 +345,17 @@ static void damon_reclaim_timer_fn(struct work_struct *work)
 }
 static DECLARE_DELAYED_WORK(damon_reclaim_timer, damon_reclaim_timer_fn);
 
+static int damon_reclaim_update_stat(struct damon_ctx *c)
+{
+	struct damos *s;
+
+	damon_for_each_scheme(s, c) {
+		nr_reclaim_tried_regions= s->stat.nr_tried;
+		bytes_reclaim_tried_regions = s->stat.sz_tried;
+	}
+	return 0;
+}
+
 static int __init damon_reclaim_init(void)
 {
 	ctx = damon_new_ctx(DAMON_ADAPTIVE_TARGET);
@@ -340,6 +363,7 @@ static int __init damon_reclaim_init(void)
 		return -ENOMEM;
 
 	damon_pa_set_primitives(ctx);
+	ctx->callback.after_aggregation = damon_reclaim_update_stat;
 
 	/* 4242 means nothing but fun */
 	target = damon_new_target(4242);
