@@ -186,6 +186,20 @@ struct damos_watermarks {
 };
 
 /**
+ * struct damos_stat - Statistics on a given scheme.
+ * @nr_tried:	Total number of regions that the scheme is tried to be applied.
+ * @sz_tried:	Total size of regions that the scheme is tried to be applied.
+ * @nr_applied:	Total number of regions that the scheme is applied.
+ * @sz_applied:	Total size of regions that the scheme is applied.
+ */
+struct damos_stat {
+	unsigned long nr_tried;
+	unsigned long sz_tried;
+	unsigned long nr_applied;
+	unsigned long sz_applied;
+};
+
+/**
  * struct damos - Represents a Data Access Monitoring-based Operation Scheme.
  * @min_sz_region:	Minimum size of target regions.
  * @max_sz_region:	Maximum size of target regions.
@@ -196,8 +210,7 @@ struct damos_watermarks {
  * @action:		&damo_action to be applied to the target regions.
  * @quota:		Control the aggressiveness of this scheme.
  * @wmarks:		Watermarks for automated (in)activation of this scheme.
- * @stat_count:		Total number of regions that this scheme is applied.
- * @stat_sz:		Total size of regions that this scheme is applied.
+ * @stat:		Statistics of this scheme.
  * @list:		List head for siblings.
  *
  * For each aggregation interval, DAMON finds regions which fit in the
@@ -228,8 +241,7 @@ struct damos {
 	enum damos_action action;
 	struct damos_quota quota;
 	struct damos_watermarks wmarks;
-	unsigned long stat_count;
-	unsigned long stat_sz;
+	struct damos_stat stat;
 	struct list_head list;
 };
 
@@ -275,7 +287,8 @@ struct damon_ctx;
  * as an integer in [0, &DAMOS_MAX_SCORE].
  * @apply_scheme is called from @kdamond when a region for user provided
  * DAMON-based operation scheme is found.  It should apply the scheme's action
- * to the region.  This is not used for &DAMON_ARBITRARY_TARGET case.
+ * to the region and return bytes of the region that the action is successfully
+ * applied.  This is not used for &DAMON_ARBITRARY_TARGET case.
  * @target_valid should check whether the target is still valid for the
  * monitoring.  It receives &damon_ctx.arbitrary_target or &struct damon_target
  * pointer depends on &damon_ctx.target_type.
@@ -290,8 +303,9 @@ struct damon_primitive {
 	int (*get_scheme_score)(struct damon_ctx *context,
 			struct damon_target *t, struct damon_region *r,
 			struct damos *scheme);
-	int (*apply_scheme)(struct damon_ctx *context, struct damon_target *t,
-			struct damon_region *r, struct damos *scheme);
+	unsigned long (*apply_scheme)(struct damon_ctx *context,
+			struct damon_target *t, struct damon_region *r,
+			struct damos *scheme);
 	bool (*target_valid)(void *target);
 	void (*cleanup)(struct damon_ctx *context);
 };
