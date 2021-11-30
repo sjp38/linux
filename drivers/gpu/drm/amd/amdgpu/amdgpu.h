@@ -458,7 +458,6 @@ struct amdgpu_flip_work {
 	uint64_t			base;
 	struct drm_pending_vblank_event *event;
 	struct amdgpu_bo		*old_abo;
-	struct dma_fence		*excl;
 	unsigned			shared_count;
 	struct dma_fence		**shared;
 	struct dma_fence_cb		cb;
@@ -1097,6 +1096,9 @@ struct amdgpu_device {
 
 	struct amdgpu_reset_control     *reset_cntl;
 	uint32_t                        ip_versions[HW_ID_MAX][HWIP_MAX_INSTANCE];
+
+	struct mutex                    pstate_profile_ctx_lock;
+	struct amdgpu_ctx               *pstate_profile_ctx;
 };
 
 static inline struct amdgpu_device *drm_to_adev(struct drm_device *ddev)

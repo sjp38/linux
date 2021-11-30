@@ -566,6 +566,7 @@ enum {
 #define HCI_ERROR_INVALID_LL_PARAMS	0x1e
 #define HCI_ERROR_UNSPECIFIED		0x1f
 #define HCI_ERROR_ADVERTISING_TIMEOUT	0x3c
+#define HCI_ERROR_CANCELLED_BY_HOST	0x44
 
 /* Flow control modes */
 #define HCI_FLOW_CTL_MODE_PACKET_BASED	0x00
@@ -1046,8 +1047,8 @@ struct hci_cp_read_stored_link_key {
 } __packed;
 struct hci_rp_read_stored_link_key {
 	__u8     status;
-	__u8     max_keys;
-	__u8     num_keys;
+	__le16   max_keys;
+	__le16   num_keys;
 } __packed;
 
 #define HCI_OP_DELETE_STORED_LINK_KEY	0x0c12
@@ -1057,7 +1058,7 @@ struct hci_cp_delete_stored_link_key {
 } __packed;
 struct hci_rp_delete_stored_link_key {
 	__u8     status;
-	__u8     num_keys;
+	__le16   num_keys;
 } __packed;
 
 #define HCI_MAX_NAME_LENGTH		248
