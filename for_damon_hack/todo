@@ -1,6 +1,7 @@
 TODOs
 =====
 
+- Convert macro functions to static inline functions
 - Writedown and share the future plans
 - Document DAMOS quotas and prioritization
 - Periodically flush TLB[1]
