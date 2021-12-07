@@ -282,6 +282,7 @@ static const char * const btf_kind_str[NR_BTF_KINDS] = {
 	[BTF_KIND_DATASEC]	= "DATASEC",
 	[BTF_KIND_FLOAT]	= "FLOAT",
 	[BTF_KIND_DECL_TAG]	= "DECL_TAG",
+	[BTF_KIND_TYPE_TAG]	= "TYPE_TAG",
 };
 
 const char *btf_type_str(const struct btf_type *t)
@@ -418,6 +419,7 @@ static bool btf_type_is_modifier(const struct btf_type *t)
 	case BTF_KIND_VOLATILE:
 	case BTF_KIND_CONST:
 	case BTF_KIND_RESTRICT:
+	case BTF_KIND_TYPE_TAG:
 		return true;
 	}
 
@@ -1737,6 +1739,7 @@ __btf_resolve_size(const struct btf *btf, const struct btf_type *type,
 		case BTF_KIND_VOLATILE:
 		case BTF_KIND_CONST:
 		case BTF_KIND_RESTRICT:
+		case BTF_KIND_TYPE_TAG:
 			id = type->type;
 			type = btf_type_by_id(btf, type->type);
 			break;
@@ -2345,6 +2348,8 @@ static int btf_ref_type_check_meta(struct btf_verifier_env *env,
 				   const struct btf_type *t,
 				   u32 meta_left)
 {
+	const char *value;
+
 	if (btf_type_vlen(t)) {
 		btf_verifier_log_type(env, t, "vlen != 0");
 		return -EINVAL;
@@ -2360,12 +2365,18 @@ static int btf_ref_type_check_meta(struct btf_verifier_env *env,
 		return -EINVAL;
 	}
 
-	/* typedef type must have a valid name, and other ref types,
+	/* typedef/type_tag type must have a valid name, and other ref types,
 	 * volatile, const, restrict, should have a null name.
 	 */
 	if (BTF_INFO_KIND(t->info) == BTF_KIND_TYPEDEF) {
 		if (!t->name_off ||
 		    !btf_name_valid_identifier(env->btf, t->name_off)) {
+			btf_verifier_log_type(env, t, "Invalid name");
+			return -EINVAL;
+		}
+	} else if (BTF_INFO_KIND(t->info) == BTF_KIND_TYPE_TAG) {
+		value = btf_name_by_offset(env->btf, t->name_off);
+		if (!value || !value[0]) {
 			btf_verifier_log_type(env, t, "Invalid name");
 			return -EINVAL;
 		}
@@ -4059,6 +4070,7 @@ static const struct btf_kind_operations * const kind_ops[NR_BTF_KINDS] = {
 	[BTF_KIND_DATASEC] = &datasec_ops,
 	[BTF_KIND_FLOAT] = &float_ops,
 	[BTF_KIND_DECL_TAG] = &decl_tag_ops,
+	[BTF_KIND_TYPE_TAG] = &modifier_ops,
 };
 
 static s32 btf_check_meta(struct btf_verifier_env *env,
@@ -6342,14 +6354,12 @@ const struct bpf_func_proto bpf_btf_find_by_name_kind_proto = {
 	.arg4_type	= ARG_ANYTHING,
 };
 
-BTF_ID_LIST_GLOBAL_SINGLE(btf_task_struct_ids, struct, task_struct)
+BTF_ID_LIST_GLOBAL(btf_tracing_ids, MAX_BTF_TRACING_TYPE)
+#define BTF_TRACING_TYPE(name, type) BTF_ID(struct, type)
+BTF_TRACING_TYPE_xxx
+#undef BTF_TRACING_TYPE
 
 /* BTF ID set registration API for modules */
-
-struct kfunc_btf_id_list {
-	struct list_head list;
-	struct mutex mutex;
-};
 
 #ifdef CONFIG_DEBUG_INFO_BTF_MODULES
 
@@ -6376,8 +6386,6 @@ bool bpf_check_mod_kfunc_call(struct kfunc_btf_id_list *klist, u32 kfunc_id,
 {
 	struct kfunc_btf_id_set *s;
 
-	if (!owner)
-		return false;
 	mutex_lock(&klist->mutex);
 	list_for_each_entry(s, &klist->list, list) {
 		if (s->owner == owner && btf_id_set_contains(s->set, kfunc_id)) {
@@ -6389,8 +6397,6 @@ bool bpf_check_mod_kfunc_call(struct kfunc_btf_id_list *klist, u32 kfunc_id,
 	return false;
 }
 
-#endif
-
 #define DEFINE_KFUNC_BTF_ID_LIST(name)                                         \
 	struct kfunc_btf_id_list name = { LIST_HEAD_INIT(name.list),           \
 					  __MUTEX_INITIALIZER(name.mutex) };   \
@@ -6398,3 +6404,5 @@ bool bpf_check_mod_kfunc_call(struct kfunc_btf_id_list *klist, u32 kfunc_id,
 
 DEFINE_KFUNC_BTF_ID_LIST(bpf_tcp_ca_kfunc_list);
 DEFINE_KFUNC_BTF_ID_LIST(prog_test_kfunc_list);
+
+#endif
