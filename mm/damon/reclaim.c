@@ -384,7 +384,7 @@ static int __init damon_reclaim_init(void)
 	if (!ctx)
 		return -ENOMEM;
 
-	damon_pa_set_primitives(ctx);
+	damon_pa_set_primitives(ctx, false);
 	ctx->callback.after_aggregation = damon_reclaim_after_aggregation;
 
 	/* 4242 means nothing but fun */
