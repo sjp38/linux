@@ -649,6 +649,7 @@ void damon_va_set_primitives(struct damon_ctx *ctx)
 	ctx->primitive.update = damon_va_update;
 	ctx->primitive.prepare_access_checks = damon_va_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_va_check_accesses;
+	ctx->primitive.flush_cache = NULL;
 	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_va_target_valid;
 	ctx->primitive.cleanup = NULL;

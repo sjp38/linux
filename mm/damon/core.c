@@ -1091,6 +1091,9 @@ static int kdamond_fn(void *data)
 		if (ctx->primitive.check_accesses)
 			max_nr_accesses = ctx->primitive.check_accesses(ctx);
 
+		if (ctx->primitive.flush_cache)
+			ctx->primitive.flush_cache(ctx);
+
 		if (kdamond_aggregate_interval_passed(ctx)) {
 			kdamond_merge_regions(ctx,
 					max_nr_accesses / 10,
