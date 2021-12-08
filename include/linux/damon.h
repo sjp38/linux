@@ -263,6 +263,7 @@ struct damon_ctx;
  * @update:			Update primitive-internal data structures.
  * @prepare_access_checks:	Prepare next access check of target regions.
  * @check_accesses:		Check the accesses to target regions.
+ * @flush_cache:		Flush caches which can disturb access checks.
  * @reset_aggregated:		Reset aggregated accesses monitoring results.
  * @get_scheme_score:		Get the score of a region for a scheme.
  * @apply_scheme:		Apply a DAMON-based operation scheme.
@@ -274,9 +275,11 @@ struct damon_ctx;
  * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread
  * (&damon_ctx.kdamond) calls @init and @prepare_access_checks before starting
  * the monitoring, @update after each &damon_ctx.primitive_update_interval, and
- * @check_accesses, @target_valid and @prepare_access_checks after each
- * &damon_ctx.sample_interval.  Finally, @reset_aggregated is called after each
- * &damon_ctx.aggr_interval.
+ * @check_accesses, @flush_cache, @target_valid and @prepare_access_checks
+ * after each &damon_ctx.sample_interval.  Finally, @reset_aggregated is called
+ * after each &damon_ctx.aggr_interval.  Note that some of the function pointer
+ * members can be NULL if unnecessary for the implementation.  Then, DAMON will
+ * simply skip calling those.
  *
  * @init should initialize primitive-internal data structures.  For example,
  * this could be used to construct proper monitoring target regions and link
@@ -289,6 +292,8 @@ struct damon_ctx;
  * last preparation and update the number of observed accesses of each region.
  * It should also return max number of observed accesses that made as a result
  * of its update.  The value will be used for regions adjustment threshold.
+ * @flush_cache should flush any cached data (e.g., TLB entry) which can
+ * disturb access checks otherwise.
  * @reset_aggregated should reset the access monitoring results that aggregated
  * by @check_accesses.
  * @get_scheme_score should return the priority score of a region for a scheme
@@ -306,6 +311,7 @@ struct damon_primitive {
 	void (*update)(struct damon_ctx *context);
 	void (*prepare_access_checks)(struct damon_ctx *context);
 	unsigned int (*check_accesses)(struct damon_ctx *context);
+	void (*flush_cache)(struct damon_ctx *context);
 	void (*reset_aggregated)(struct damon_ctx *context);
 	int (*get_scheme_score)(struct damon_ctx *context,
 			struct damon_target *t, struct damon_region *r,
