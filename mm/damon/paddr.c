@@ -7,6 +7,7 @@
 
 #define pr_fmt(fmt) "damon-pa: " fmt
 
+#include <asm/tlbflush.h>
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
 #include <linux/pagemap.h>
@@ -208,6 +209,11 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
+static void damon_pa_flush_cache(struct damon_ctx *ctx)
+{
+	flush_tlb_all();
+}
+
 bool damon_pa_target_valid(void *t)
 {
 	return true;
@@ -261,13 +267,16 @@ static int damon_pa_scheme_score(struct damon_ctx *context,
 	return DAMOS_MAX_SCORE;
 }
 
-void damon_pa_set_primitives(struct damon_ctx *ctx)
+void damon_pa_set_primitives(struct damon_ctx *ctx, bool flush_cache)
 {
 	ctx->primitive.init = NULL;
 	ctx->primitive.update = NULL;
 	ctx->primitive.prepare_access_checks = damon_pa_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_pa_check_accesses;
-	ctx->primitive.flush_cache = NULL;
+	if (unlikely(flush_cache))
+		ctx->primitive.flush_cache = damon_pa_flush_cache;
+	else
+		ctx->primitive.flush_cache = NULL;
 	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_pa_target_valid;
 	ctx->primitive.cleanup = NULL;

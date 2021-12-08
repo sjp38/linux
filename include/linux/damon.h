@@ -502,7 +502,7 @@ void damon_va_set_primitives(struct damon_ctx *ctx, bool flush_cache);
 
 #ifdef CONFIG_DAMON_PADDR
 bool damon_pa_target_valid(void *t);
-void damon_pa_set_primitives(struct damon_ctx *ctx);
+void damon_pa_set_primitives(struct damon_ctx *ctx, bool flush_cache);
 #endif	/* CONFIG_DAMON_PADDR */
 
 #endif	/* _DAMON_H */
