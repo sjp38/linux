@@ -497,7 +497,7 @@ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
 
 #ifdef CONFIG_DAMON_VADDR
 bool damon_va_target_valid(void *t);
-void damon_va_set_primitives(struct damon_ctx *ctx);
+void damon_va_set_primitives(struct damon_ctx *ctx, bool flush_cache);
 #endif	/* CONFIG_DAMON_VADDR */
 
 #ifdef CONFIG_DAMON_PADDR

@@ -411,7 +411,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 
 	/* Configure the context for the address space type */
 	if (id_is_pid)
-		damon_va_set_primitives(ctx);
+		damon_va_set_primitives(ctx, false);
 	else
 		damon_pa_set_primitives(ctx);
 
@@ -673,7 +673,7 @@ static struct damon_ctx *dbgfs_new_ctx(void)
 	if (!ctx)
 		return NULL;
 
-	damon_va_set_primitives(ctx);
+	damon_va_set_primitives(ctx, false);
 	ctx->callback.before_terminate = dbgfs_before_terminate;
 	return ctx;
 }
