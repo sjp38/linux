@@ -413,7 +413,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	if (id_is_pid)
 		damon_va_set_primitives(ctx, false);
 	else
-		damon_pa_set_primitives(ctx);
+		damon_pa_set_primitives(ctx, false);
 
 	ret = damon_set_targets(ctx, targets, nr_targets);
 	if (ret) {
