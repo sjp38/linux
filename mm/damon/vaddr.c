@@ -553,6 +553,20 @@ static unsigned int damon_va_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
+static void damon_va_flush_cache(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	struct mm_struct *mm;
+
+	damon_for_each_target(t, ctx) {
+		mm = damon_get_mm(t);
+		if (!mm)
+			continue;
+		flush_tlb_mm(mm);
+		mmput(mm);
+	}
+}
+
 /*
  * Functions for the target validity check and cleanup
  */
@@ -643,13 +657,16 @@ static int damon_va_scheme_score(struct damon_ctx *context,
 	return DAMOS_MAX_SCORE;
 }
 
-void damon_va_set_primitives(struct damon_ctx *ctx)
+void damon_va_set_primitives(struct damon_ctx *ctx, bool flush_cache)
 {
 	ctx->primitive.init = damon_va_init;
 	ctx->primitive.update = damon_va_update;
 	ctx->primitive.prepare_access_checks = damon_va_prepare_access_checks;
 	ctx->primitive.check_accesses = damon_va_check_accesses;
-	ctx->primitive.flush_cache = NULL;
+	if (unlikely(flush_cache))
+		ctx->primitive.flush_cache = damon_va_flush_cache;
+	else
+		ctx->primitive.flush_cache = NULL;
 	ctx->primitive.reset_aggregated = NULL;
 	ctx->primitive.target_valid = damon_va_target_valid;
 	ctx->primitive.cleanup = NULL;
