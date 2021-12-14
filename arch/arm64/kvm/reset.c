@@ -94,6 +94,8 @@ static int kvm_vcpu_finalize_sve(struct kvm_vcpu *vcpu)
 {
 	void *buf;
 	unsigned int vl;
+	size_t reg_sz;
+	int ret;
 
 	vl = vcpu->arch.sve_max_vl;
 
@@ -106,10 +108,17 @@ static int kvm_vcpu_finalize_sve(struct kvm_vcpu *vcpu)
 		    vl > SVE_VL_ARCH_MAX))
 		return -EIO;
 
-	buf = kzalloc(SVE_SIG_REGS_SIZE(sve_vq_from_vl(vl)), GFP_KERNEL_ACCOUNT);
+	reg_sz = vcpu_sve_state_size(vcpu);
+	buf = kzalloc(reg_sz, GFP_KERNEL_ACCOUNT);
 	if (!buf)
 		return -ENOMEM;
 
+	ret = create_hyp_mappings(buf, buf + reg_sz, PAGE_HYP);
+	if (ret) {
+		kfree(buf);
+		return ret;
+	}
+	
 	vcpu->arch.sve_state = buf;
 	vcpu->arch.flags |= KVM_ARM64_VCPU_SVE_FINALIZED;
 	return 0;
@@ -170,7 +179,7 @@ static bool vcpu_allowed_register_width(struct kvm_vcpu *vcpu)
 {
 	struct kvm_vcpu *tmp;
 	bool is32bit;
-	int i;
+	unsigned long i;
 
 	is32bit = vcpu_has_feature(vcpu, KVM_ARM_VCPU_EL1_32BIT);
 	if (!cpus_have_const_cap(ARM64_HAS_32BIT_EL1) && is32bit)
