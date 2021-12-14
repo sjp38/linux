@@ -3292,13 +3292,9 @@ static struct folio *next_uptodate_page(struct folio *folio,
 		/* Has the page moved or been split? */
 		if (unlikely(folio != xas_reload(xas)))
 			goto skip;
-<<<<<<< HEAD
-		if (!trylock_page(page))
-=======
 		if (!folio_test_uptodate(folio) || folio_test_readahead(folio))
 			goto skip;
 		if (!folio_trylock(folio))
->>>>>>> linux-next/akpm-base
 			goto skip;
 		if (folio->mapping != mapping)
 			goto unlock;

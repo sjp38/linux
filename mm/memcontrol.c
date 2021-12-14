@@ -2769,7 +2769,6 @@ retry:
  */
 #define OBJCGS_CLEAR_MASK	(__GFP_DMA | __GFP_RECLAIMABLE | __GFP_ACCOUNT)
 
-<<<<<<< HEAD
 /*
  * Most kmem_cache_alloc() calls are from user context. The irq disable/enable
  * sequence used in this case to access content from object stock is slow.
@@ -2823,12 +2822,8 @@ static inline void mod_objcg_mlstate(struct obj_cgroup *objcg,
 	rcu_read_unlock();
 }
 
-int memcg_alloc_page_obj_cgroups(struct page *page, struct kmem_cache *s,
-				 gfp_t gfp, bool new_page)
-=======
 int memcg_alloc_slab_cgroups(struct slab *slab, struct kmem_cache *s,
 				 gfp_t gfp, bool new_slab)
->>>>>>> linux-next/akpm-base
 {
 	unsigned int objects = objs_per_slab(s, slab);
 	unsigned long memcg_data;

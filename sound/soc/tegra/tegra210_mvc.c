@@ -222,9 +222,6 @@ static int tegra210_mvc_update_mute(struct snd_kcontrol *kcontrol,
 				 mute_val << TEGRA210_MVC_MUTE_SHIFT,
 				 &change);
 
-<<<<<<< HEAD
-	err = 1;
-=======
 	if (change) {
 		regmap_update_bits(mvc->regmap, TEGRA210_MVC_CTRL,
 				   TEGRA210_MVC_PER_CHAN_CTRL_EN_MASK,
@@ -234,7 +231,6 @@ static int tegra210_mvc_update_mute(struct snd_kcontrol *kcontrol,
 				   TEGRA210_MVC_VOLUME_SWITCH_MASK,
 				   TEGRA210_MVC_VOLUME_SWITCH_TRIGGER);
 	}
->>>>>>> linux-next/akpm-base
 
 end:
 	pm_runtime_put(cmpnt->dev);

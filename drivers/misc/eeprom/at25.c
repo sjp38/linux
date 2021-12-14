@@ -420,33 +420,6 @@ static int at25_probe(struct spi_device *spi)
 	struct at25_data	*at25 = NULL;
 	int			err;
 	int			sr;
-<<<<<<< HEAD
-	u8 id[FM25_ID_LEN];
-	u8 sernum[FM25_SN_LEN];
-	int i;
-	const struct of_device_id *match;
-	bool is_fram = 0;
-
-	match = of_match_device(of_match_ptr(at25_of_match), &spi->dev);
-	if (match && !strcmp(match->compatible, "cypress,fm25"))
-		is_fram = 1;
-
-	at25 = devm_kzalloc(&spi->dev, sizeof(struct at25_data), GFP_KERNEL);
-	if (!at25)
-		return -ENOMEM;
-
-	/* Chip description */
-	if (spi->dev.platform_data) {
-		memcpy(&at25->chip, spi->dev.platform_data, sizeof(at25->chip));
-	} else if (!is_fram) {
-		err = at25_fw_to_chip(&spi->dev, &at25->chip);
-		if (err)
-			return err;
-	}
-
-	/* Ping the chip ... the status register is pretty portable,
-	 * unlike probing manufacturer IDs.  We do expect that system
-=======
 	struct spi_eeprom *pdata;
 	bool is_fram;
 
@@ -459,7 +432,6 @@ static int at25_probe(struct spi_device *spi)
 	/*
 	 * Ping the chip ... the status register is pretty portable,
 	 * unlike probing manufacturer IDs. We do expect that system
->>>>>>> linux-next/akpm-base
 	 * firmware didn't write it in the past few milliseconds!
 	 */
 	sr = spi_w8r8(spi, AT25_RDSR);
@@ -472,25 +444,6 @@ static int at25_probe(struct spi_device *spi)
 	at25->spi = spi;
 	spi_set_drvdata(spi, at25);
 
-<<<<<<< HEAD
-	if (is_fram) {
-		/* Get ID of chip */
-		fm25_aux_read(at25, id, FM25_RDID, FM25_ID_LEN);
-		if (id[6] != 0xc2) {
-			dev_err(&spi->dev,
-				"Error: no Cypress FRAM (id %02x)\n", id[6]);
-			return -ENODEV;
-		}
-		/* set size found in ID */
-		if (id[7] < 0x21 || id[7] > 0x26) {
-			dev_err(&spi->dev, "Error: unsupported size (id %02x)\n", id[7]);
-			return -ENODEV;
-		}
-		at25->chip.byte_len = int_pow(2, id[7] - 0x21 + 4) * 1024;
-
-		if (at25->chip.byte_len > 64 * 1024)
-			at25->chip.flags |= EE_ADDR3;
-=======
 	/* Chip description */
 	pdata = dev_get_platdata(&spi->dev);
 	if (pdata) {
@@ -498,7 +451,6 @@ static int at25_probe(struct spi_device *spi)
 	} else {
 		if (is_fram)
 			err = at25_fram_to_chip(&spi->dev, &at25->chip);
->>>>>>> linux-next/akpm-base
 		else
 			err = at25_fw_to_chip(&spi->dev, &at25->chip);
 		if (err)
@@ -537,12 +489,7 @@ static int at25_probe(struct spi_device *spi)
 		return PTR_ERR(at25->nvmem);
 
 	dev_info(&spi->dev, "%d %s %s %s%s, pagesize %u\n",
-<<<<<<< HEAD
-		 (at25->chip.byte_len < 1024) ?
-			at25->chip.byte_len : (at25->chip.byte_len / 1024),
-=======
 		 (at25->chip.byte_len < 1024) ? at25->chip.byte_len : (at25->chip.byte_len / 1024),
->>>>>>> linux-next/akpm-base
 		 (at25->chip.byte_len < 1024) ? "Byte" : "KByte",
 		 at25->chip.name, is_fram ? "fram" : "eeprom",
 		 (at25->chip.flags & EE_READONLY) ? " (readonly)" : "",
