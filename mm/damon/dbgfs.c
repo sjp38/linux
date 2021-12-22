@@ -458,7 +458,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	struct damon_ctx *ctx = file->private_data;
 	bool flush_cache = false;
 	bool id_is_pid = true;
-	char *kbuf;
+	char *kbuf, *kbuf_orig;
 	struct pid **target_pids = NULL;
 	ssize_t nr_targets;
 	ssize_t ret;
@@ -467,6 +467,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
 
+	kbuf_orig = kbuf;
 	if (!strncmp(kbuf, FLUSH_CACHE_PREFIX, min(count,
 					FLUSH_CACHE_PREFIX_LEN)))
 	{
@@ -512,7 +513,7 @@ unlock_out:
 	mutex_unlock(&ctx->kdamond_lock);
 	kfree(target_pids);
 out:
-	kfree(kbuf);
+	kfree(kbuf_orig);
 	return ret;
 }
 
