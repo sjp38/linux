@@ -136,8 +136,7 @@ void free_kthread_struct(struct task_struct *k)
 	struct kthread *kthread;
 
 	/*
-	 * Can be NULL if this kthread was created by kernel_thread()
-	 * or if kmalloc() in kthread() failed.
+	 * Can be NULL if kmalloc() in set_kthread_struct() failed.
 	 */
 	kthread = to_kthread(k);
 	if (!kthread)
@@ -146,6 +145,7 @@ void free_kthread_struct(struct task_struct *k)
 #ifdef CONFIG_BLK_CGROUP
 	WARN_ON_ONCE(kthread->blkcg_css);
 #endif
+	k->set_child_tid = (__force void __user *)NULL;
 	kfree(kthread->full_name);
 	kfree(kthread);
 }
