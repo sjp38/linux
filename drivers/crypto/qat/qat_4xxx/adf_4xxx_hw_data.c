@@ -253,13 +253,8 @@ void adf_init_hw_data_4xxx(struct adf_hw_device_data *hw_data)
 	hw_data->uof_get_ae_mask = uof_get_ae_mask;
 	hw_data->set_msix_rttable = set_msix_default_rttable;
 	hw_data->set_ssm_wdtimer = adf_gen4_set_ssm_wdtimer;
-<<<<<<< HEAD
-	hw_data->enable_pfvf_comms = pfvf_comms_disabled;
-	hw_data->get_vf2pf_sources = get_vf2pf_sources;
-=======
 	hw_data->pfvf_ops.enable_comms = adf_pfvf_comms_disabled;
 	hw_data->pfvf_ops.get_vf2pf_sources = get_vf2pf_sources;
->>>>>>> linux-next/akpm-base
 	hw_data->disable_iov = adf_disable_sriov;
 
 	adf_gen4_init_hw_csr_ops(&hw_data->csr_ops);
