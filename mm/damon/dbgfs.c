@@ -275,6 +275,15 @@ out:
 	return ret;
 }
 
+/* target ids prefix for flushing cache */
+#define FLUSH_CACHE_PREFIX	"flush_cache "
+#define FLUSH_CACHE_PREFIX_LEN	(strlen(FLUSH_CACHE_PREFIX))
+
+static inline bool damon_ctx_flushing_cache(const struct damon_ctx *ctx)
+{
+	return ctx->primitive.flush_cache != NULL;
+}
+
 static inline bool target_has_pid(const struct damon_ctx *ctx)
 {
 	return ctx->primitive.target_valid == damon_va_target_valid;
@@ -286,6 +295,12 @@ static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)
 	int id;
 	int written = 0;
 	int rc;
+
+	if (damon_ctx_flushing_cache(ctx)) {
+		written = scnprintf(buf, len, "%s", FLUSH_CACHE_PREFIX);
+		if (!written)
+			return -ENOMEM;
+	}
 
 	damon_for_each_target(t, ctx) {
 		if (target_has_pid(ctx))
@@ -441,6 +456,7 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 		const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct damon_ctx *ctx = file->private_data;
+	bool flush_cache = false;
 	bool id_is_pid = true;
 	char *kbuf;
 	struct pid **target_pids = NULL;
@@ -450,6 +466,13 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 	kbuf = user_input_str(buf, count, ppos);
 	if (IS_ERR(kbuf))
 		return PTR_ERR(kbuf);
+
+	if (!strncmp(kbuf, FLUSH_CACHE_PREFIX, min(count,
+					FLUSH_CACHE_PREFIX_LEN)))
+	{
+		flush_cache = true;
+		kbuf = &kbuf[FLUSH_CACHE_PREFIX_LEN];
+	}
 
 	if (!strncmp(kbuf, "paddr\n", count)) {
 		id_is_pid = false;
@@ -477,9 +500,9 @@ static ssize_t dbgfs_target_ids_write(struct file *file,
 
 	/* Configure the context for the address space type */
 	if (id_is_pid)
-		damon_va_set_primitives(ctx, false);
+		damon_va_set_primitives(ctx, flush_cache);
 	else
-		damon_pa_set_primitives(ctx, false);
+		damon_pa_set_primitives(ctx, flush_cache);
 
 	ret = dbgfs_set_targets(ctx, nr_targets, target_pids);
 	if (!ret)
