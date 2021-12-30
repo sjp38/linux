@@ -170,8 +170,6 @@ config INTEL_UNCORE_FREQ_CONTROL
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called intel-uncore-frequency.
-<<<<<<< HEAD
-=======
 
 config INTEL_VSEC
 	tristate "Intel Vendor Specific Extended Capabilities Driver"
@@ -183,4 +181,3 @@ config INTEL_VSEC
 
 	  To compile this driver as a module, choose M here: the module will
 	  be called intel_vsec.
->>>>>>> linux-next/akpm-base
