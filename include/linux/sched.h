@@ -528,7 +528,11 @@ struct sched_statistics {
 	u64				nr_wakeups_affine_attempts;
 	u64				nr_wakeups_passive;
 	u64				nr_wakeups_idle;
+
+#ifdef CONFIG_SCHED_CORE
+	u64				core_forceidle_sum;
 #endif
+#endif /* CONFIG_SCHEDSTATS */
 } ____cacheline_aligned;
 
 struct sched_entity {
@@ -992,8 +996,8 @@ struct task_struct {
 	/* CLONE_CHILD_CLEARTID: */
 	int __user			*clear_child_tid;
 
-	/* PF_IO_WORKER */
-	void				*pf_io_worker;
+	/* PF_KTHREAD | PF_IO_WORKER */
+	void				*worker_private;
 
 	u64				utime;
 	u64				stime;
@@ -1344,6 +1348,9 @@ struct task_struct {
 	struct kcsan_ctx		kcsan_ctx;
 #ifdef CONFIG_TRACE_IRQFLAGS
 	struct irqtrace_events		kcsan_save_irqtrace;
+#endif
+#ifdef CONFIG_KCSAN_WEAK_MEMORY
+	int				kcsan_stack_depth;
 #endif
 #endif
 
@@ -1696,6 +1703,7 @@ extern struct pid *cad_pid;
 #define PF_KTHREAD		0x00200000	/* I am a kernel thread */
 #define PF_RANDOMIZE		0x00400000	/* Randomize virtual address space */
 #define PF_SWAPWRITE		0x00800000	/* Allowed to write to swap */
+#define PF_USER_WORKER		0x01000000	/* Kernel thread cloned from userspace thread */
 #define PF_NO_SETAFFINITY	0x04000000	/* Userland is not allowed to meddle with cpus_mask */
 #define PF_MCE_EARLY		0x08000000      /* Early kill for mce process policy */
 #define PF_MEMALLOC_PIN		0x10000000	/* Allocation context constrained to zones which allow long term pinning. */
@@ -2184,6 +2192,15 @@ extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 #endif
 
 #ifdef CONFIG_SMP
+static inline bool owner_on_cpu(struct task_struct *owner)
+{
+	/*
+	 * As lock holder preemption issue, we both skip spinning if
+	 * task is not on cpu or its cpu is preempted
+	 */
+	return READ_ONCE(owner->on_cpu) && !vcpu_is_preempted(task_cpu(owner));
+}
+
 /* Returns effective CPU energy utilization, as seen by the scheduler */
 unsigned long sched_cpu_util(int cpu, unsigned long max);
 #endif /* CONFIG_SMP */

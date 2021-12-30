@@ -31,6 +31,7 @@
 #include <kern_util.h>
 #include <os.h>
 #include <skas.h>
+#include <registers.h>
 #include <linux/time-internal.h>
 
 /*
@@ -157,7 +158,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 		unsigned long arg, struct task_struct * p, unsigned long tls)
 {
 	void (*handler)(void);
-	int kthread = current->flags & (PF_KTHREAD | PF_IO_WORKER);
+	int kthread = current->flags & (PF_KTHREAD | PF_USER_WORKER);
 	int ret = 0;
 
 	p->thread = (struct thread_struct) INIT_THREAD;
@@ -261,11 +262,6 @@ int copy_from_user_proc(void *to, void __user *from, int size)
 int clear_user_proc(void __user *buf, int size)
 {
 	return clear_user(buf, size);
-}
-
-int cpu(void)
-{
-	return current_thread_info()->cpu;
 }
 
 static atomic_t using_sysemu = ATOMIC_INIT(0);

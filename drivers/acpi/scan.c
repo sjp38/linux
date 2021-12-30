@@ -135,12 +135,12 @@ bool acpi_scan_is_offline(struct acpi_device *adev, bool uevent)
 static acpi_status acpi_bus_offline(acpi_handle handle, u32 lvl, void *data,
 				    void **ret_p)
 {
-	struct acpi_device *device = NULL;
+	struct acpi_device *device = acpi_fetch_acpi_dev(handle);
 	struct acpi_device_physical_node *pn;
 	bool second_pass = (bool)data;
 	acpi_status status = AE_OK;
 
-	if (acpi_bus_get_device(handle, &device))
+	if (!device)
 		return AE_OK;
 
 	if (device->handler && !device->handler->hotplug.enabled) {
@@ -180,10 +180,10 @@ static acpi_status acpi_bus_offline(acpi_handle handle, u32 lvl, void *data,
 static acpi_status acpi_bus_online(acpi_handle handle, u32 lvl, void *data,
 				   void **ret_p)
 {
-	struct acpi_device *device = NULL;
+	struct acpi_device *device = acpi_fetch_acpi_dev(handle);
 	struct acpi_device_physical_node *pn;
 
-	if (acpi_bus_get_device(handle, &device))
+	if (!device)
 		return AE_OK;
 
 	mutex_lock(&device->physical_node_lock);
@@ -599,6 +599,19 @@ int acpi_bus_get_device(acpi_handle handle, struct acpi_device **device)
 }
 EXPORT_SYMBOL(acpi_bus_get_device);
 
+/**
+ * acpi_fetch_acpi_dev - Retrieve ACPI device object.
+ * @handle: ACPI handle associated with the requested ACPI device object.
+ *
+ * Return a pointer to the ACPI device object associated with @handle, if
+ * present, or NULL otherwise.
+ */
+struct acpi_device *acpi_fetch_acpi_dev(acpi_handle handle)
+{
+	return handle_to_device(handle, NULL);
+}
+EXPORT_SYMBOL_GPL(acpi_fetch_acpi_dev);
+
 static void get_acpi_device(void *dev)
 {
 	acpi_dev_get(dev);
@@ -797,9 +810,15 @@ static const char * const acpi_ignore_dep_ids[] = {
 	NULL
 };
 
+/* List of HIDs for which we honor deps of matching ACPI devs, when checking _DEP lists. */
+static const char * const acpi_honor_dep_ids[] = {
+	"INT3472", /* Camera sensor PMIC / clk and regulator info */
+	NULL
+};
+
 static struct acpi_device *acpi_bus_get_parent(acpi_handle handle)
 {
-	struct acpi_device *device = NULL;
+	struct acpi_device *device;
 	acpi_status status;
 
 	/*
@@ -814,7 +833,9 @@ static struct acpi_device *acpi_bus_get_parent(acpi_handle handle)
 		status = acpi_get_parent(handle, &handle);
 		if (ACPI_FAILURE(status))
 			return status == AE_NULL_ENTRY ? NULL : acpi_root;
-	} while (acpi_bus_get_device(handle, &device));
+
+		device = acpi_fetch_acpi_dev(handle);
+	} while (!device);
 	return device;
 }
 
@@ -1340,11 +1361,11 @@ static void acpi_set_pnp_ids(acpi_handle handle, struct acpi_device_pnp *pnp,
 		if (info->valid & ACPI_VALID_HID) {
 			acpi_add_id(pnp, info->hardware_id.string);
 			pnp->type.platform_id = 1;
-		}
-		if (info->valid & ACPI_VALID_CID) {
-			cid_list = &info->compatible_id_list;
-			for (i = 0; i < cid_list->count; i++)
-				acpi_add_id(pnp, cid_list->ids[i].string);
+			if (info->valid & ACPI_VALID_CID) {
+				cid_list = &info->compatible_id_list;
+				for (i = 0; i < cid_list->count; i++)
+					acpi_add_id(pnp, cid_list->ids[i].string);
+			}
 		}
 		if (info->valid & ACPI_VALID_ADR) {
 			pnp->bus_address = info->address;
@@ -1762,8 +1783,12 @@ static void acpi_scan_dep_init(struct acpi_device *adev)
 	struct acpi_dep_data *dep;
 
 	list_for_each_entry(dep, &acpi_dep_list, node) {
-		if (dep->consumer == adev->handle)
+		if (dep->consumer == adev->handle) {
+			if (dep->honor_dep)
+				adev->flags.honor_deps = 1;
+
 			adev->dep_unmet++;
+		}
 	}
 }
 
@@ -1967,7 +1992,7 @@ static u32 acpi_scan_check_dep(acpi_handle handle, bool check_dep)
 	for (count = 0, i = 0; i < dep_devices.count; i++) {
 		struct acpi_device_info *info;
 		struct acpi_dep_data *dep;
-		bool skip;
+		bool skip, honor_dep;
 
 		status = acpi_get_object_info(dep_devices.handles[i], &info);
 		if (ACPI_FAILURE(status)) {
@@ -1976,6 +2001,7 @@ static u32 acpi_scan_check_dep(acpi_handle handle, bool check_dep)
 		}
 
 		skip = acpi_info_matches_ids(info, acpi_ignore_dep_ids);
+		honor_dep = acpi_info_matches_ids(info, acpi_honor_dep_ids);
 		kfree(info);
 
 		if (skip)
@@ -1989,6 +2015,7 @@ static u32 acpi_scan_check_dep(acpi_handle handle, bool check_dep)
 
 		dep->supplier = dep_devices.handles[i];
 		dep->consumer = handle;
+		dep->honor_dep = honor_dep;
 
 		mutex_lock(&acpi_dep_list_lock);
 		list_add_tail(&dep->node , &acpi_dep_list);
@@ -2003,11 +2030,10 @@ static bool acpi_bus_scan_second_pass;
 static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 				      struct acpi_device **adev_p)
 {
-	struct acpi_device *device = NULL;
+	struct acpi_device *device = acpi_fetch_acpi_dev(handle);
 	acpi_object_type acpi_type;
 	int type;
 
-	acpi_bus_get_device(handle, &device);
 	if (device)
 		goto out;
 
@@ -2155,8 +2181,8 @@ static void acpi_bus_attach(struct acpi_device *device, bool first_pass)
 		register_dock_dependent_device(device, ejd);
 
 	acpi_bus_get_status(device);
-	/* Skip devices that are not present. */
-	if (!acpi_device_is_present(device)) {
+	/* Skip devices that are not ready for enumeration (e.g. not present) */
+	if (!acpi_dev_ready_for_enumeration(device)) {
 		device->flags.initialized = false;
 		acpi_device_clear_enumerated(device);
 		device->flags.power_manageable = 0;
@@ -2317,6 +2343,23 @@ void acpi_dev_clear_dependencies(struct acpi_device *supplier)
 	acpi_walk_dep_device_list(supplier->handle, acpi_scan_clear_dep, NULL);
 }
 EXPORT_SYMBOL_GPL(acpi_dev_clear_dependencies);
+
+/**
+ * acpi_dev_ready_for_enumeration - Check if the ACPI device is ready for enumeration
+ * @device: Pointer to the &struct acpi_device to check
+ *
+ * Check if the device is present and has no unmet dependencies.
+ *
+ * Return true if the device is ready for enumeratino. Otherwise, return false.
+ */
+bool acpi_dev_ready_for_enumeration(const struct acpi_device *device)
+{
+	if (device->flags.honor_deps && device->dep_unmet)
+		return false;
+
+	return acpi_device_is_present(device);
+}
+EXPORT_SYMBOL_GPL(acpi_dev_ready_for_enumeration);
 
 /**
  * acpi_dev_get_first_consumer_dev - Return ACPI device dependent on @supplier
@@ -2548,8 +2591,8 @@ int __init acpi_scan_init(void)
 	if (result)
 		goto out;
 
-	result = acpi_bus_get_device(ACPI_ROOT_OBJECT, &acpi_root);
-	if (result)
+	acpi_root = acpi_fetch_acpi_dev(ACPI_ROOT_OBJECT);
+	if (!acpi_root)
 		goto out;
 
 	/* Fixed feature devices do not exist on HW-reduced platform */

@@ -99,6 +99,19 @@ bool irq_fpu_usable(void)
 EXPORT_SYMBOL(irq_fpu_usable);
 
 /*
+ * Track AVX512 state use because it is known to slow the max clock
+ * speed of the core.
+ */
+static void update_avx_timestamp(struct fpu *fpu)
+{
+
+#define AVX512_TRACKING_MASK	(XFEATURE_MASK_ZMM_Hi256 | XFEATURE_MASK_Hi16_ZMM)
+
+	if (fpu->fpstate->regs.xsave.header.xfeatures & AVX512_TRACKING_MASK)
+		fpu->avx512_timestamp = jiffies;
+}
+
+/*
  * Save the FPU register state in fpu->fpstate->regs. The register state is
  * preserved.
  *
@@ -116,13 +129,7 @@ void save_fpregs_to_fpstate(struct fpu *fpu)
 {
 	if (likely(use_xsave())) {
 		os_xsave(fpu->fpstate);
-
-		/*
-		 * AVX512 state is tracked here because its use is
-		 * known to slow the max clock speed of the core.
-		 */
-		if (fpu->fpstate->regs.xsave.header.xfeatures & XFEATURE_MASK_AVX512)
-			fpu->avx512_timestamp = jiffies;
+		update_avx_timestamp(fpu);
 		return;
 	}
 
@@ -485,10 +492,10 @@ int fpu_clone(struct task_struct *dst, unsigned long clone_flags)
 	set_tsk_thread_flag(dst, TIF_NEED_FPU_LOAD);
 
 	/*
-	 * No FPU state inheritance for kernel threads and IO
+	 * No FPU state inheritance for kernel threads and user
 	 * worker threads.
 	 */
-	if (dst->flags & (PF_KTHREAD | PF_IO_WORKER)) {
+	if (dst->flags & (PF_KTHREAD | PF_USER_WORKER)) {
 		/* Clear out the minimal state */
 		memcpy(&dst_fpu->fpstate->regs, &init_fpstate.regs,
 		       init_fpstate_copy_size());

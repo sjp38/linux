@@ -52,6 +52,7 @@ struct kthread_create_info
 struct kthread {
 	unsigned long flags;
 	unsigned int cpu;
+	int result;
 	int (*threadfn)(void *);
 	void *data;
 	mm_segment_t oldfs;
@@ -73,7 +74,7 @@ enum KTHREAD_BITS {
 static inline struct kthread *to_kthread(struct task_struct *k)
 {
 	WARN_ON(!(k->flags & PF_KTHREAD));
-	return (__force void *)k->set_child_tid;
+	return k->worker_private;
 }
 
 /*
@@ -81,7 +82,7 @@ static inline struct kthread *to_kthread(struct task_struct *k)
  *
  * Per construction; when:
  *
- *   (p->flags & PF_KTHREAD) && p->set_child_tid
+ *   (p->flags & PF_KTHREAD) && p->worker_private
  *
  * the task is both a kthread and struct kthread is persistent. However
  * PF_KTHREAD on it's own is not, kernel_thread() can exec() (See umh.c and
@@ -286,6 +287,44 @@ void kthread_parkme(void)
 }
 EXPORT_SYMBOL_GPL(kthread_parkme);
 
+/**
+ * kthread_exit - Cause the current kthread return @result to kthread_stop().
+ * @result: The integer value to return to kthread_stop().
+ *
+ * While kthread_exit can be called directly, it exists so that
+ * functions which do some additional work in non-modular code such as
+ * module_put_and_kthread_exit can be implemented.
+ *
+ * Does not return.
+ */
+void __noreturn kthread_exit(long result)
+{
+	struct kthread *kthread = to_kthread(current);
+	kthread->result = result;
+	do_exit(0);
+}
+
+/**
+ * kthread_complete_and_exit - Exit the current kthread.
+ * @comp: Completion to complete
+ * @code: The integer value to return to kthread_stop().
+ *
+ * If present complete @comp and the reuturn code to kthread_stop().
+ *
+ * A kernel thread whose module may be removed after the completion of
+ * @comp can use this function exit safely.
+ *
+ * Does not return.
+ */
+void __noreturn kthread_complete_and_exit(struct completion *comp, long code)
+{
+	if (comp)
+		complete(comp);
+
+	kthread_exit(code);
+}
+EXPORT_SYMBOL(kthread_complete_and_exit);
+
 static int kthread(void *_create)
 {
 	static const struct sched_param param = { .sched_priority = 0 };
@@ -297,27 +336,17 @@ static int kthread(void *_create)
 	struct kthread *self;
 	int ret;
 
-	set_kthread_struct(current);
 	self = to_kthread(current);
 
 	/* If user was SIGKILLed, I release the structure. */
 	done = xchg(&create->done, NULL);
 	if (!done) {
 		kfree(create);
-		do_exit(-EINTR);
-	}
-
-	if (!self) {
-		create->result = ERR_PTR(-ENOMEM);
-		complete(done);
-		do_exit(-ENOMEM);
+		kthread_exit(-EINTR);
 	}
 
 	self->threadfn = threadfn;
 	self->data = data;
-	init_completion(&self->exited);
-	init_completion(&self->parked);
-	current->vfork_done = &self->exited;
 
 	/*
 	 * The new thread inherited kthreadd's priority and CPU mask. Reset
@@ -344,7 +373,7 @@ static int kthread(void *_create)
 		__kthread_parkme(self);
 		ret = threadfn(data);
 	}
-	do_exit(ret);
+	kthread_exit(ret);
 }
 
 /* called from kernel_clone() to get node information for about to be created task */
@@ -656,7 +685,7 @@ EXPORT_SYMBOL_GPL(kthread_park);
  * instead of calling wake_up_process(): the thread will exit without
  * calling threadfn().
  *
- * If threadfn() may call do_exit() itself, the caller must ensure
+ * If threadfn() may call kthread_exit() itself, the caller must ensure
  * task_struct can't go away.
  *
  * Returns the result of threadfn(), or %-EINTR if wake_up_process()
@@ -675,7 +704,7 @@ int kthread_stop(struct task_struct *k)
 	kthread_unpark(k);
 	wake_up_process(k);
 	wait_for_completion(&kthread->exited);
-	ret = k->exit_code;
+	ret = kthread->result;
 	put_task_struct(k);
 
 	trace_sched_kthread_stop_ret(ret);

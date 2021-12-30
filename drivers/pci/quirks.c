@@ -1850,7 +1850,7 @@ static void quirk_huawei_pcie_sva(struct pci_dev *pdev)
 	 * can set it directly.
 	 */
 	if (!pdev->dev.of_node &&
-	    device_add_properties(&pdev->dev, properties))
+	    device_create_managed_software_node(&pdev->dev, properties, NULL))
 		pci_warn(pdev, "could not add stall property");
 }
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_HUAWEI, 0xa250, quirk_huawei_pcie_sva);
@@ -4103,6 +4103,9 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_MARVELL_EXT, 0x9120,
 			 quirk_dma_func1_alias);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_MARVELL_EXT, 0x9123,
 			 quirk_dma_func1_alias);
+/* https://bugzilla.kernel.org/show_bug.cgi?id=42679#c136 */
+DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_MARVELL_EXT, 0x9125,
+			 quirk_dma_func1_alias);
 DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_MARVELL_EXT, 0x9128,
 			 quirk_dma_func1_alias);
 /* https://bugzilla.kernel.org/show_bug.cgi?id=42679#c14 */
@@ -5683,6 +5686,15 @@ SWITCHTEC_QUIRK(0x4268);  /* PAX 68XG4  */
 SWITCHTEC_QUIRK(0x4252);  /* PAX 52XG4  */
 SWITCHTEC_QUIRK(0x4236);  /* PAX 36XG4  */
 SWITCHTEC_QUIRK(0x4228);  /* PAX 28XG4  */
+SWITCHTEC_QUIRK(0x4352);  /* PFXA 52XG4 */
+SWITCHTEC_QUIRK(0x4336);  /* PFXA 36XG4 */
+SWITCHTEC_QUIRK(0x4328);  /* PFXA 28XG4 */
+SWITCHTEC_QUIRK(0x4452);  /* PSXA 52XG4 */
+SWITCHTEC_QUIRK(0x4436);  /* PSXA 36XG4 */
+SWITCHTEC_QUIRK(0x4428);  /* PSXA 28XG4 */
+SWITCHTEC_QUIRK(0x4552);  /* PAXA 52XG4 */
+SWITCHTEC_QUIRK(0x4536);  /* PAXA 36XG4 */
+SWITCHTEC_QUIRK(0x4528);  /* PAXA 28XG4 */
 
 /*
  * The PLX NTB uses devfn proxy IDs to move TLPs between NT endpoints.

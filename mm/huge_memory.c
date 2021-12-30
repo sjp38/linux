@@ -2604,6 +2604,7 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 {
 	struct page *head = compound_head(page);
 	struct deferred_split *ds_queue = get_deferred_split_queue(head);
+	XA_STATE(xas, &head->mapping->i_pages, head->index);
 	struct anon_vma *anon_vma = NULL;
 	struct address_space *mapping = NULL;
 	int extra_pins, ret;
@@ -2642,6 +2643,13 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 			goto out;
 		}
 
+		xas_split_alloc(&xas, head, compound_order(head),
+				mapping_gfp_mask(mapping) & GFP_RECLAIM_MASK);
+		if (xas_error(&xas)) {
+			ret = xas_error(&xas);
+			goto out;
+		}
+
 		anon_vma = NULL;
 		i_mmap_lock_read(mapping);
 
@@ -2671,13 +2679,12 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 	/* block interrupt reentry in xa_lock and spinlock */
 	local_irq_disable();
 	if (mapping) {
-		XA_STATE(xas, &mapping->i_pages, page_index(head));
-
 		/*
 		 * Check if the head page is present in page cache.
 		 * We assume all tail are present too, if head is there.
 		 */
-		xa_lock(&mapping->i_pages);
+		xas_lock(&xas);
+		xas_reset(&xas);
 		if (xas_load(&xas) != head)
 			goto fail;
 	}
@@ -2693,6 +2700,7 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 		if (mapping) {
 			int nr = thp_nr_pages(head);
 
+			xas_split(&xas, head, thp_order(head));
 			if (PageSwapBacked(head)) {
 				__mod_lruvec_page_state(head, NR_SHMEM_THPS,
 							-nr);
@@ -2709,7 +2717,7 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 		spin_unlock(&ds_queue->split_queue_lock);
 fail:
 		if (mapping)
-			xa_unlock(&mapping->i_pages);
+			xas_unlock(&xas);
 		local_irq_enable();
 		remap_page(head, thp_nr_pages(head));
 		ret = -EBUSY;
@@ -2723,6 +2731,8 @@ out_unlock:
 	if (mapping)
 		i_mmap_unlock_read(mapping);
 out:
+	/* Free any memory we didn't use */
+	xas_nomem(&xas, 0);
 	count_vm_event(!ret ? THP_SPLIT_PAGE : THP_SPLIT_PAGE_FAILED);
 	return ret;
 }
