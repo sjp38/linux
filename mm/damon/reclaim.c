@@ -31,6 +31,19 @@ static bool enabled __read_mostly;
 module_param(enabled, bool, 0600);
 
 /*
+ * Make DAMON_RECLAIM read and apply the parameters again, except ``enabled``
+ * and ``monitor_region_{start,end}``.
+ *
+ * Parameters that updated while DAMON_RECLAIM is running are not applied by
+ * default.  Once this parameter is set as ``Y``, DAMON_RECLAIM reads values of
+ * parametrs except ``enabled``, ``monitor_region_start`` and
+ * ``monitor_region_end`` again and directly applies.  After that, this
+ * parameter is set as ``N``.
+ */
+static bool apply_parameters __read_mostly;
+module_param(apply_parameters, bool, 0600);
+
+/*
  * Time threshold for cold memory regions identification in microseconds.
  *
  * If a memory region is not accessed for this or longer time, DAMON_RECLAIM
@@ -290,10 +303,31 @@ static struct damos *damon_reclaim_new_scheme(void)
 	return scheme;
 }
 
+static int damon_reclaim_apply_parameters(void)
+{
+	struct damos *scheme;
+	int err = 0;
+
+	err = damon_set_attrs(ctx, sample_interval, aggr_interval, 0,
+			min_nr_regions, max_nr_regions);
+	if (err)
+		return err;
+
+	/* Will be freed by next 'damon_set_schemes()' below */
+	scheme = damon_reclaim_new_scheme();
+	if (!scheme)
+		return -ENOMEM;
+	err = damon_set_schemes(ctx, &scheme, 1);
+	if (err)
+		damon_destroy_scheme(scheme);
+
+	return err;
+}
+
 static int damon_reclaim_turn(bool on)
 {
 	struct damon_region *region;
-	struct damos *scheme;
+	struct damos *scheme, *next_scheme;
 	int err;
 
 	if (!on) {
@@ -303,8 +337,7 @@ static int damon_reclaim_turn(bool on)
 		return err;
 	}
 
-	err = damon_set_attrs(ctx, sample_interval, aggr_interval, 0,
-			min_nr_regions, max_nr_regions);
+	err = damon_reclaim_apply_parameters();
 	if (err)
 		return err;
 
@@ -316,19 +349,11 @@ static int damon_reclaim_turn(bool on)
 		return -EINVAL;
 	/* DAMON will free this on its own when finish monitoring */
 	region = damon_new_region(monitor_region_start, monitor_region_end);
-	if (!region)
-		return -ENOMEM;
-	damon_add_region(region, target);
-
-	/* Will be freed by 'damon_set_schemes()' below */
-	scheme = damon_reclaim_new_scheme();
-	if (!scheme) {
+	if (!region) {
 		err = -ENOMEM;
-		goto free_region_out;
-	}
-	err = damon_set_schemes(ctx, &scheme, 1);
-	if (err)
 		goto free_scheme_out;
+	}
+	damon_add_region(region, target);
 
 	err = damon_start(&ctx, 1, true);
 	if (!err) {
@@ -337,8 +362,8 @@ static int damon_reclaim_turn(bool on)
 	}
 
 free_scheme_out:
-	damon_destroy_scheme(scheme);
-free_region_out:
+	damon_for_each_scheme_safe(scheme, next_scheme, ctx)
+		damon_destroy_scheme(scheme);
 	damon_destroy_region(region, target);
 	return err;
 }
@@ -375,6 +400,20 @@ static int damon_reclaim_after_aggregation(struct damon_ctx *c)
 		bytes_reclaimed_regions = s->stat.sz_applied;
 		nr_quota_exceeds = s->stat.qt_exceeds;
 	}
+
+	if (apply_parameters) {
+		damon_reclaim_apply_parameters();
+		apply_parameters = false;
+	}
+	return 0;
+}
+
+static int damon_reclaim_after_wmarks_check(struct damon_ctx *c)
+{
+	if (apply_parameters) {
+		damon_reclaim_apply_parameters();
+		apply_parameters = false;
+	}
 	return 0;
 }
 
@@ -387,6 +426,7 @@ static int __init damon_reclaim_init(void)
 	if (damon_select_ops(ctx, DAMON_OPS_PADDR))
 		return -EINVAL;
 
+	ctx->callback.after_wmarks_check = damon_reclaim_after_wmarks_check;
 	ctx->callback.after_aggregation = damon_reclaim_after_aggregation;
 
 	target = damon_new_target();
