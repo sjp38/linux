@@ -8,7 +8,7 @@
 #include <linux/kobject.h>
 #include <linux/slab.h>
 
-struct damon_kobject {
+struct damon_kobj {
 	struct kobject kobj;
 	bool monitor_on;
 };
@@ -16,8 +16,8 @@ struct damon_kobject {
 static ssize_t monitor_on_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	struct damon_kobject *damon_kobj = container_of(kobj,
-			struct damon_kobject, kobj);
+	struct damon_kobj *damon_kobj = container_of(kobj,
+			struct damon_kobj, kobj);
 
 	return sysfs_emit(buf, "%s\n", damon_kobj->monitor_on ? "on" : "off");
 }
@@ -25,8 +25,8 @@ static ssize_t monitor_on_show(struct kobject *kobj,
 static ssize_t monitor_on_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct damon_kobject *damon_kobj = container_of(kobj,
-			struct damon_kobject, kobj);
+	struct damon_kobj *damon_kobj = container_of(kobj,
+			struct damon_kobj, kobj);
 	bool on, err;
 
 	err = kstrtobool(buf, &on);
@@ -42,7 +42,7 @@ static struct kobj_attribute monitor_on_attr = __ATTR(monitor_on, 0600,
 
 static void damon_kobj_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct damon_kobject, kobj));
+	kfree(container_of(kobj, struct damon_kobj, kobj));
 }
 
 static struct attribute *damon_attrs[] = {
@@ -60,7 +60,7 @@ static struct kobj_type damon_ktype = {
 
 static int __init damon_sysfs_init(void)
 {
-	struct damon_kobject *damon_kobj;
+	struct damon_kobj *damon_kobj;
 	int err;
 
 	damon_kobj = kzalloc(sizeof(*damon_kobj), GFP_KERNEL);
