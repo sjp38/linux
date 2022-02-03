@@ -8,45 +8,49 @@
 #include <linux/kobject.h>
 #include <linux/slab.h>
 
-struct damon_kobj {
-	struct kobject kobj;
-	bool monitor_on;
-};
-
-struct kdamonds_kobj {
-	struct kobject kobj;
-	struct kdamond_kobj **kdamond_kobjs;
-	int nr;
-};
+/*
+ * kdamond directory
+ */
 
 struct kdamond_kobj {
 	struct kobject kobj;
 	int pid;
 };
 
-static ssize_t monitor_on_show(struct kobject *kobj,
+static ssize_t kdamond_pid_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	struct damon_kobj *damon_kobj = container_of(kobj,
-			struct damon_kobj, kobj);
-
-	return sysfs_emit(buf, "%s\n", damon_kobj->monitor_on ? "on" : "off");
+	/* TODO: get pid of the kdamond and show */
+	return sysfs_emit(buf, "%d\n", 42);
 }
 
-static ssize_t monitor_on_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static void kdamond_kobj_release(struct kobject *kobj)
 {
-	struct damon_kobj *damon_kobj = container_of(kobj,
-			struct damon_kobj, kobj);
-	bool on, err;
-
-	err = kstrtobool(buf, &on);
-	if (err)
-		return err;
-
-	damon_kobj->monitor_on = on;
-	return count;
+	kfree(container_of(kobj, struct kdamond_kobj, kobj));
 }
+
+static struct kobj_attribute kdamond_pid_attr = __ATTR(pid, 0400,
+		kdamond_pid_show, NULL);
+
+static struct attribute *kdamond_attrs[] = {
+	&kdamond_pid_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(kdamond);
+
+static struct kobj_type kdamond_ktype = {
+	.release = kdamond_kobj_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = kdamond_groups,
+};
+
+/* kdamonds directory */
+
+struct kdamonds_kobj {
+	struct kobject kobj;
+	struct kdamond_kobj **kdamond_kobjs;
+	int nr;
+};
 
 static ssize_t kdamonds_nr_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
@@ -56,8 +60,6 @@ static ssize_t kdamonds_nr_show(struct kobject *kobj,
 
 	return sysfs_emit(buf, "%d\n", kdamonds_kobj->nr);
 }
-
-static struct kobj_type kdamond_ktype;
 
 static ssize_t kdamonds_nr_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
@@ -103,42 +105,13 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t kdamond_pid_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
-{
-	/* TODO: get pid of the kdamond and show */
-	return sysfs_emit(buf, "%d\n", 42);
-}
-
-static struct kobj_attribute monitor_on_attr = __ATTR(monitor_on, 0600,
-		monitor_on_show, monitor_on_store);
-
-static struct kobj_attribute kdamonds_nr_attr = __ATTR(nr, 0600,
-		kdamonds_nr_show, kdamonds_nr_store);
-
-static struct kobj_attribute kdamond_pid_attr = __ATTR(pid, 0400,
-		kdamond_pid_show, NULL);
-
-static void damon_kobj_release(struct kobject *kobj)
-{
-	kfree(container_of(kobj, struct damon_kobj, kobj));
-}
-
 static void kdamonds_kobj_release(struct kobject *kobj)
 {
 	kfree(container_of(kobj, struct kdamonds_kobj, kobj));
 }
 
-static void kdamond_kobj_release(struct kobject *kobj)
-{
-	kfree(container_of(kobj, struct kdamond_kobj, kobj));
-}
-
-static struct attribute *damon_attrs[] = {
-	&monitor_on_attr.attr,
-	NULL,
-};
-ATTRIBUTE_GROUPS(damon);
+static struct kobj_attribute kdamonds_nr_attr = __ATTR(nr, 0600,
+		kdamonds_nr_show, kdamonds_nr_store);
 
 static struct attribute *kdamonds_attrs[] = {
 	&kdamonds_nr_attr.attr,
@@ -146,28 +119,63 @@ static struct attribute *kdamonds_attrs[] = {
 };
 ATTRIBUTE_GROUPS(kdamonds);
 
-static struct attribute *kdamond_attrs[] = {
-	&kdamond_pid_attr.attr,
-	NULL,
-};
-ATTRIBUTE_GROUPS(kdamond);
-
-static struct kobj_type damon_ktype = {
-	.release = damon_kobj_release,
-	.sysfs_ops = &kobj_sysfs_ops,
-	.default_groups = damon_groups,
-};
-
 static struct kobj_type kdamonds_ktype = {
 	.release = kdamonds_kobj_release,
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = kdamonds_groups,
 };
 
-static struct kobj_type kdamond_ktype = {
-	.release = kdamond_kobj_release,
+/*
+ * damon directory (root)
+ */
+
+struct damon_kobj {
+	struct kobject kobj;
+	bool monitor_on;
+};
+
+static ssize_t monitor_on_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_kobj *damon_kobj = container_of(kobj,
+			struct damon_kobj, kobj);
+
+	return sysfs_emit(buf, "%s\n", damon_kobj->monitor_on ? "on" : "off");
+}
+
+static ssize_t monitor_on_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_kobj *damon_kobj = container_of(kobj,
+			struct damon_kobj, kobj);
+	bool on, err;
+
+	err = kstrtobool(buf, &on);
+	if (err)
+		return err;
+
+	damon_kobj->monitor_on = on;
+	return count;
+}
+
+static void damon_kobj_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_kobj, kobj));
+}
+
+static struct kobj_attribute monitor_on_attr = __ATTR(monitor_on, 0600,
+		monitor_on_show, monitor_on_store);
+
+static struct attribute *damon_attrs[] = {
+	&monitor_on_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon);
+
+static struct kobj_type damon_ktype = {
+	.release = damon_kobj_release,
 	.sysfs_ops = &kobj_sysfs_ops,
-	.default_groups = kdamond_groups,
+	.default_groups = damon_groups,
 };
 
 static int __init damon_sysfs_init(void)
