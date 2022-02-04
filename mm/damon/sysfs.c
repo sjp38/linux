@@ -65,14 +65,27 @@ static ssize_t kdamonds_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", kdamonds_kobj->nr);
 }
 
+static void kdamonds_kobj_remove_childs(struct kdamonds_kobj *kdamonds_kobj)
+{
+	struct kdamond_kobj ** kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
+	int i;
+
+	for (i = 0; i < kdamonds_kobj->nr; i++)
+		kobject_put(&kdamond_kobjs[i]->kobj);
+	if (kdamond_kobjs)
+		kfree(kdamond_kobjs);
+	kdamonds_kobj->kdamond_kobjs = NULL;
+	kdamonds_kobj->nr = 0;
+}
+
 static ssize_t kdamonds_nr_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
 			struct kdamonds_kobj, kobj);
-	struct kdamond_kobj *kdamond_kobj;
+	struct kdamond_kobj **kdamond_kobjs, *kdamond_kobj;
 	int nr, err;
-	int i, j;
+	int i;
 
 	err = kstrtoint(buf, 10, &nr);
 	if (err)
@@ -80,38 +93,38 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	for (i = 0; i < kdamonds_kobj->nr; i++)
-		kobject_put(&kdamonds_kobj->kdamond_kobjs[i]->kobj);
-	kdamonds_kobj->nr = 0;
+	kdamonds_kobj_remove_childs(kdamonds_kobj);
 
-	kdamonds_kobj->kdamond_kobjs =
-		kmalloc(sizeof(*kdamonds_kobj->kdamond_kobjs) * nr,
-				GFP_KERNEL);
+	kdamond_kobjs = kmalloc(sizeof(*kdamond_kobjs) * nr, GFP_KERNEL);
+	kdamonds_kobj->kdamond_kobjs = kdamond_kobjs;
 	for (i = 0; i < nr; i++) {
 		kdamond_kobj = kzalloc(sizeof(*kdamond_kobj), GFP_KERNEL);
 		if (!kdamond_kobj) {
-			for (j = 0; j < i; j++)
-				kobject_put(&kdamonds_kobj->kdamond_kobjs[i]->kobj);
+			kdamonds_kobj_remove_childs(kdamonds_kobj);
 			return -ENOMEM;
 		}
 		err = kobject_init_and_add(&kdamond_kobj->kobj, &kdamond_ktype,
 				&kdamonds_kobj->kobj, "%d", i);
 		if (err) {
-			for (j = 0; j < i; j++)
-				kobject_put(&kdamonds_kobj->kdamond_kobjs[i]->kobj);
+			kdamonds_kobj_remove_childs(kdamonds_kobj);
+			kfree(kdamond_kobj);
 			return err;
 		}
 
-		kdamonds_kobj->kdamond_kobjs[i] = kdamond_kobj;
+		kdamond_kobjs[i] = kdamond_kobj;
+		kdamonds_kobj->nr++;
 	}
-	kdamonds_kobj->nr = nr;
 
 	return count;
 }
 
 static void kdamonds_kobj_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct kdamonds_kobj, kobj));
+	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
+			struct kdamonds_kobj, kobj);
+
+	kdamonds_kobj_remove_childs(kdamonds_kobj);
+	kfree(kdamonds_kobj);
 }
 
 static struct kobj_attribute kdamonds_nr_attr = __ATTR(nr, 0600,
