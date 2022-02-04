@@ -9,12 +9,178 @@
 #include <linux/slab.h>
 
 /*
+ * context directory
+ * -----------------
+ */
+
+enum damon_prmtv_set {
+	DAMON_PRMTV_VADDR,
+	DAMON_PRMTV_PADDR,
+};
+
+static const char * const damon_prmtv_set_strs[] = {
+	"vaddr",
+	"paddr",
+};
+
+struct context_kobj {
+	struct kobject kobj;
+	enum damon_prmtv_set prmtv_set;
+};
+
+static ssize_t context_prmtv_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct context_kobj *context_kobj = container_of(kobj,
+			struct context_kobj, kobj);
+
+	return sysfs_emit(buf, "%s\n",
+			damon_prmtv_set_strs[context_kobj->prmtv_set]);
+}
+
+static ssize_t context_prmtv_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct context_kobj *context_kobj = container_of(kobj,
+			struct context_kobj, kobj);
+
+	if (!strncmp(buf, "vaddr\n", count))
+		context_kobj->prmtv_set = DAMON_PRMTV_VADDR;
+	else if (!strncmp(buf, "paddr\n", count))
+		context_kobj->prmtv_set = DAMON_PRMTV_PADDR;
+	else
+		return -EINVAL;
+
+	return count;
+}
+
+static void context_kobj_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct context_kobj, kobj));
+}
+
+static void context_kobj_remove_childs(struct context_kobj *context_kobj)
+{
+	return;
+}
+
+static struct kobj_attribute context_prmtv_attr = __ATTR(prmtv, 0600,
+		context_prmtv_show, context_prmtv_store);
+
+static struct attribute *context_attrs[] = {
+	&context_prmtv_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(context);
+
+static struct kobj_type context_ktype = {
+	.release = context_kobj_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = context_groups,
+};
+
+/*
+ * contexts directory
+ * ------------------
+ */
+
+struct contexts_kobj {
+	struct kobject kobj;
+	struct context_kobj **context_kobjs;
+	int nr;
+};
+
+static ssize_t contexts_nr_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct contexts_kobj *contexts_kobj = container_of(kobj,
+			struct contexts_kobj, kobj);
+
+	return sysfs_emit(buf, "%d\n", contexts_kobj->nr);
+}
+
+static void contexts_kobj_remove_childs(struct contexts_kobj *contexts_kobj)
+{
+	struct context_kobj ** context_kobjs = contexts_kobj->context_kobjs;
+	int i;
+
+	for (i = 0; i < contexts_kobj->nr; i++) {
+		context_kobj_remove_childs(context_kobjs[i]);
+		kobject_put(&context_kobjs[i]->kobj);
+	}
+	kfree(context_kobjs);
+	contexts_kobj->context_kobjs = NULL;
+	contexts_kobj->nr = 0;
+}
+
+static ssize_t contexts_nr_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct contexts_kobj *contexts_kobj = container_of(kobj,
+			struct contexts_kobj, kobj);
+	struct context_kobj **context_kobjs, *context_kobj;
+	int nr, err;
+	int i;
+
+	err = kstrtoint(buf, 10, &nr);
+	if (err)
+		return err;
+	if (nr < 0)
+		return -EINVAL;
+
+	contexts_kobj_remove_childs(contexts_kobj);
+
+	context_kobjs = kmalloc(sizeof(*context_kobjs) * nr, GFP_KERNEL);
+	contexts_kobj->context_kobjs = context_kobjs;
+	for (i = 0; i < nr; i++) {
+		context_kobj = kzalloc(sizeof(*context_kobj), GFP_KERNEL);
+		if (!context_kobj) {
+			contexts_kobj_remove_childs(contexts_kobj);
+			return -ENOMEM;
+		}
+		err = kobject_init_and_add(&context_kobj->kobj, &context_ktype,
+				&contexts_kobj->kobj, "%d", i);
+		if (err) {
+			contexts_kobj_remove_childs(contexts_kobj);
+			kfree(context_kobj);
+			return err;
+		}
+
+		context_kobjs[i] = context_kobj;
+		contexts_kobj->nr++;
+	}
+
+	return count;
+}
+
+static void contexts_kobj_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct contexts_kobj, kobj))
+}
+
+static struct kobj_attribute contexts_nr_attr = __ATTR(nr, 0600,
+		contexts_nr_show, contexts_nr_store);
+
+static struct attribute *contexts_attrs[] = {
+	&contexts_nr_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(contexts);
+
+static struct kobj_type contexts_ktype = {
+	.release = contexts_kobj_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = contexts_groups,
+};
+
+/*
  * kdamond directory
  * -----------------
  */
 
 struct kdamond_kobj {
 	struct kobject kobj;
+	struct contexts_kobj *contexts_kobj;
 	int pid;
 };
 
@@ -28,6 +194,12 @@ static ssize_t kdamond_pid_show(struct kobject *kobj,
 static void kdamond_kobj_release(struct kobject *kobj)
 {
 	kfree(container_of(kobj, struct kdamond_kobj, kobj));
+}
+
+static void kdamond_kobj_remove_childs(struct kdamond_kobj *kdamond_kobj)
+{
+	contexts_kobj_remove_childs(kdamond_kobj->contexts_kobj);
+	kobject_put(&kdamond_kobj->contexts_kobj->kobj);
 }
 
 static struct kobj_attribute kdamond_pid_attr = __ATTR(pid, 0400,
@@ -70,10 +242,11 @@ static void kdamonds_kobj_remove_childs(struct kdamonds_kobj *kdamonds_kobj)
 	struct kdamond_kobj ** kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
 	int i;
 
-	for (i = 0; i < kdamonds_kobj->nr; i++)
+	for (i = 0; i < kdamonds_kobj->nr; i++) {
+		kdamond_kobj_remove_childs(kdamond_kobjs[i]);
 		kobject_put(&kdamond_kobjs[i]->kobj);
-	if (kdamond_kobjs)
-		kfree(kdamond_kobjs);
+	}
+	kfree(kdamond_kobjs);
 	kdamonds_kobj->kdamond_kobjs = NULL;
 	kdamonds_kobj->nr = 0;
 }
@@ -84,6 +257,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
 			struct kdamonds_kobj, kobj);
 	struct kdamond_kobj **kdamond_kobjs, *kdamond_kobj;
+	struct contexts_kobj *contexts_kobj;
 	int nr, err;
 	int i;
 
@@ -94,6 +268,8 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 		return -EINVAL;
 
 	kdamonds_kobj_remove_childs(kdamonds_kobj);
+	if (!nr)
+		return count;
 
 	kdamond_kobjs = kmalloc(sizeof(*kdamond_kobjs) * nr, GFP_KERNEL);
 	kdamonds_kobj->kdamond_kobjs = kdamond_kobjs;
@@ -111,6 +287,21 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 			return err;
 		}
 
+		contexts_kobj = kzalloc(sizeof(*contexts_kobj), GFP_KERNEL);
+		if (!contexts_kobj) {
+			kdamonds_kobj_remove_childs(kdamonds_kobj);
+			return -ENOMEM;
+		}
+		err = kobject_init_and_add(&contexts_kobj->kobj,
+				&contexts_ktype, &kdamond_kobj->kobj,
+				"contexts");
+		if (err) {
+			kdamonds_kobj_remove_childs(kdamonds_kobj);
+			kfree(contexts_kobj);
+			return err;
+		}
+		kdamond_kobj->contexts_kobj = contexts_kobj;
+
 		kdamond_kobjs[i] = kdamond_kobj;
 		kdamonds_kobj->nr++;
 	}
@@ -120,11 +311,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 
 static void kdamonds_kobj_release(struct kobject *kobj)
 {
-	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
-			struct kdamonds_kobj, kobj);
-
-	kdamonds_kobj_remove_childs(kdamonds_kobj);
-	kfree(kdamonds_kobj);
+	kfree(container_of(kobj, struct kdamonds_kobj, kobj));
 }
 
 static struct kobj_attribute kdamonds_nr_attr = __ATTR(nr, 0600,
