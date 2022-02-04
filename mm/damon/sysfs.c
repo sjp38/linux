@@ -19,6 +19,25 @@ struct damon_sysfs_ul_range_kobj {
 	unsigned long max;
 };
 
+static struct damon_sysfs_ul_range_kobj *damon_sysfs_ul_range_create(
+		unsigned long min, unsigned long max)
+{
+	struct damon_sysfs_ul_range_kobj *range = kmalloc(sizeof(*range),
+			GFP_KERNEL);
+
+	if (!range)
+		return range;
+
+	range->min = min;
+	range->max = max;
+	return range;
+}
+
+static void damon_sysfs_ul_range_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_ul_range_kobj, kobj));
+}
+
 static ssize_t damon_sysfs_ul_range_min_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
@@ -69,19 +88,12 @@ static ssize_t damon_sysfs_ul_range_max_store(struct kobject *kobj,
 	return count;
 }
 
-static void damon_sysfs_ul_range_release(struct kobject *kobj)
-{
-	kfree(container_of(kobj, struct damon_sysfs_ul_range_kobj, kobj));
-}
-
 static struct kobj_attribute damon_sysfs_ul_range_min_attr =
-		__ATTR(min, 0600,
-				damon_sysfs_ul_range_min_show,
+		__ATTR(min, 0600, damon_sysfs_ul_range_min_show,
 				damon_sysfs_ul_range_min_store);
 
 static struct kobj_attribute damon_sysfs_ul_range_max_attr =
-		__ATTR(max, 0600,
-				damon_sysfs_ul_range_max_show,
+		__ATTR(max, 0600, damon_sysfs_ul_range_max_show,
 				damon_sysfs_ul_range_max_store);
 
 static struct attribute *damon_sysfs_ul_range_attrs[] = {
@@ -342,7 +354,7 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 			struct contexts_kobj, kobj);
 	struct context_kobj **context_kobjs, *context_kobj;
 	struct damon_attrs_kobj *damon_attrs_kobj;
-	struct damon_sysfs_ul_range_kobj *damon_sysfs_ul_range;
+	struct damon_sysfs_ul_range_kobj *nr_regions;
 	int nr, err;
 	int i;
 
@@ -389,22 +401,21 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 		context_kobj->damon_attrs_kobj = damon_attrs_kobj;
 
 		/* add context/attrs/nr_regions directory */
-		damon_sysfs_ul_range = kzalloc(sizeof(*damon_sysfs_ul_range),
-				GFP_KERNEL);
-		if (!damon_sysfs_ul_range) {
+		nr_regions = damon_sysfs_ul_range_create(10, 1000);
+		if (!nr_regions) {
 			contexts_kobj_remove_childs(contexts_kobj);
 			return -ENOMEM;
 		}
-		err = kobject_init_and_add(&damon_sysfs_ul_range->kobj,
+		err = kobject_init_and_add(&nr_regions->kobj,
 				&damon_sysfs_ul_range_ktype,
 				&damon_attrs_kobj->kobj,
 				"nr_regions");
 		if (err) {
 			contexts_kobj_remove_childs(contexts_kobj);
-			kfree(damon_sysfs_ul_range);
+			kfree(nr_regions);
 			return err;
 		}
-		damon_attrs_kobj->nr_regions = damon_sysfs_ul_range;
+		damon_attrs_kobj->nr_regions = nr_regions;
 
 		context_kobjs[i] = context_kobj;
 		contexts_kobj->nr++;
