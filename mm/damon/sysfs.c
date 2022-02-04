@@ -10,6 +10,7 @@
 
 /*
  * kdamond directory
+ * -----------------
  */
 
 struct kdamond_kobj {
@@ -44,7 +45,10 @@ static struct kobj_type kdamond_ktype = {
 	.default_groups = kdamond_groups,
 };
 
-/* kdamonds directory */
+/*
+ * kdamonds directory
+ * ------------------
+ */
 
 struct kdamonds_kobj {
 	struct kobject kobj;
@@ -127,6 +131,7 @@ static struct kobj_type kdamonds_ktype = {
 
 /*
  * damon directory (root)
+ * ----------------------
  */
 
 struct damon_kobj {
