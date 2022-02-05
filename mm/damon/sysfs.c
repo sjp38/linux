@@ -19,21 +19,6 @@ struct damon_sysfs_ul_range {
 	unsigned long max;
 };
 
-static struct damon_sysfs_ul_range *damon_sysfs_ul_range_create(
-		unsigned long min, unsigned long max)
-{
-	struct damon_sysfs_ul_range *range;
-
-	range = kzalloc(sizeof(*range), GFP_KERNEL);
-	if (!range)
-		return NULL;
-
-	range->min = min;
-	range->max = max;
-
-	return range;
-}
-
 static void damon_sysfs_ul_range_rm_childs(struct damon_sysfs_ul_range *range)
 {
 	return;
@@ -127,35 +112,6 @@ struct damon_sysfs_attrs {
 	unsigned long primitive_update_interval_us;
 	struct damon_sysfs_ul_range *nr_regions;
 };
-
-static int damon_sysfs_attrs_create(struct damon_sysfs_attrs **pattrs)
-{
-	struct damon_sysfs_attrs *attrs;
-	struct damon_sysfs_ul_range *nr_regions;
-	int err;
-
-	attrs = kzalloc(sizeof(*attrs), GFP_KERNEL);
-	if (!attrs)
-		return -ENOMEM;
-
-	nr_regions = damon_sysfs_ul_range_create(10, 1000);
-	if (!nr_regions) {
-		kfree(attrs);
-		return -ENOMEM;
-	}
-
-	err = kobject_init_and_add(&nr_regions->kobj,
-			&damon_sysfs_ul_range_ktype, &attrs->kobj,
-			"nr_regions");
-	if (err) {
-		damon_sysfs_ul_range_rm_childs(nr_regions);
-		kfree(nr_regions);
-		kfree(attrs);
-		return err;
-	}
-	*pattrs = attrs;
-	return err;
-}
 
 static int damon_sysfs_attrs_add_childs(struct damon_sysfs_attrs *attrs)
 {
@@ -316,36 +272,6 @@ struct damon_sysfs_context {
 	struct damon_sysfs_attrs *attrs;
 };
 
-int damon_sysfs_context_create(struct damon_sysfs_context **pcontext)
-{
-	struct damon_sysfs_context *context;
-	struct damon_sysfs_attrs *attrs;
-	int err;
-
-	context = kzalloc(sizeof(*context), GFP_KERNEL);
-	if (!context)
-		return -ENOMEM;
-
-	context->damon_type = DAMON_SYSFS_TYPE_VADDR;
-
-	err = damon_sysfs_attrs_create(&attrs);
-	if (err) {
-		kfree(context);
-		return -ENOMEM;
-	}
-
-	err = kobject_init_and_add(&attrs->kobj, &damon_sysfs_attrs_ktype,
-			&context->kobj, "monitoring_attrs");
-	if (err) {
-		damon_sysfs_attrs_rm_childs(attrs);
-		kfree(attrs);
-		kfree(context);
-		return err;
-	}
-	*pcontext = context;
-	return err;
-}
-
 static int damon_sysfs_context_add_childs(struct damon_sysfs_context *context)
 {
 	struct damon_sysfs_attrs *attrs;
@@ -505,21 +431,6 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 			kfree(context);
 			return err;
 		}
-
-		/*
-		err = damon_sysfs_context_create(&context);
-		if (err) {
-			contexts_kobj_rm_childs(contexts);
-			return err;
-		}
-		err = kobject_init_and_add(&context->kobj, &context_ktype,
-				&contexts->kobj, "%d", i);
-		if (err) {
-			contexts_kobj_rm_childs(contexts);
-			kfree(context);
-			return err;
-		}
-		*/
 
 		contexts_arr[i] = context;
 		contexts->nr++;
