@@ -23,9 +23,8 @@ static struct damon_sysfs_ul_range *damon_sysfs_ul_range_create(
 		unsigned long min, unsigned long max)
 {
 	struct damon_sysfs_ul_range *range;
-	int err;
 
-	range = kmalloc(sizeof(*range), GFP_KERNEL);
+	range = kzalloc(sizeof(*range), GFP_KERNEL);
 	if (!range)
 		return NULL;
 
@@ -35,9 +34,9 @@ static struct damon_sysfs_ul_range *damon_sysfs_ul_range_create(
 	return range;
 }
 
-static void damon_sysfs_ul_range_destroy(struct damon_sysfs_ul_range *range)
+static void damon_sysfs_ul_range_rm_childs(struct damon_sysfs_ul_range *range)
 {
-	kobject_put(&range->kobj);
+	return;
 }
 
 static void damon_sysfs_ul_range_release(struct kobject *kobj)
@@ -121,7 +120,7 @@ static struct kobj_type damon_sysfs_ul_range_ktype = {
  * --------------------------
  */
 
-struct damon_sysfs_attrs_kobj {
+struct damon_sysfs_attrs {
 	struct kobject kobj;
 	unsigned long sample_interval_us;
 	unsigned long aggr_interval_us;
@@ -129,11 +128,66 @@ struct damon_sysfs_attrs_kobj {
 	struct damon_sysfs_ul_range *nr_regions;
 };
 
+static int damon_sysfs_attrs_create(struct damon_sysfs_attrs **pattrs)
+{
+	struct damon_sysfs_attrs *attrs;
+	struct damon_sysfs_ul_range *nr_regions;
+	int err;
+
+	attrs = kzalloc(sizeof(*attrs), GFP_KERNEL);
+	if (!attrs)
+		return -ENOMEM;
+
+	nr_regions = damon_sysfs_ul_range_create(10, 1000);
+	if (!nr_regions) {
+		kfree(attrs);
+		return -ENOMEM;
+	}
+
+	err = kobject_init_and_add(&nr_regions->kobj,
+			&damon_sysfs_ul_range_ktype, &attrs->kobj,
+			"nr_regions");
+	if (err) {
+		damon_sysfs_ul_range_rm_childs(nr_regions);
+		kfree(nr_regions);
+		kfree(attrs);
+		return err;
+	}
+	*pattrs = attrs;
+	return err;
+}
+
+static int damon_sysfs_attrs_add_childs(struct damon_sysfs_attrs *attrs)
+{
+	struct damon_sysfs_ul_range *nr_regions_range;
+	int err;
+
+	nr_regions_range = kzalloc(sizeof(*nr_regions_range), GFP_KERNEL);
+	if (!nr_regions_range)
+		return -ENOMEM;
+
+	err = kobject_init_and_add(&nr_regions_range->kobj,
+			&damon_sysfs_ul_range_ktype, &attrs->kobj,
+			"nr_regions");
+	if (err) {
+		kfree(nr_regions_range);
+		return err;
+	}
+	attrs->nr_regions = nr_regions_range;
+
+	return err;
+}
+
+static void damon_sysfs_attrs_rm_childs(struct damon_sysfs_attrs *attrs)
+{
+	damon_sysfs_ul_range_rm_childs(attrs->nr_regions);
+}
+
 static ssize_t damon_sysfs_attrs_sampling_interval_us_show(
 		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 
 	return sysfs_emit(buf, "%lu\n", attrs->sample_interval_us);
 }
@@ -142,8 +196,8 @@ static ssize_t damon_sysfs_attrs_sampling_interval_us_store(
 		struct kobject *kobj, struct kobj_attribute *attr, const char
 		*buf, size_t count)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 	unsigned long us;
 	int err;
 
@@ -158,8 +212,8 @@ static ssize_t damon_sysfs_attrs_sampling_interval_us_store(
 static ssize_t damon_sysfs_attrs_aggregation_interval_us_show(
 		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 
 	return sysfs_emit(buf, "%lu\n", attrs->aggr_interval_us);
 }
@@ -168,8 +222,8 @@ static ssize_t damon_sysfs_attrs_aggregation_interval_us_store(
 		struct kobject *kobj, struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 	unsigned long us;
 	int err;
 
@@ -184,8 +238,8 @@ static ssize_t damon_sysfs_attrs_aggregation_interval_us_store(
 static ssize_t damon_sysfs_attrs_prmtv_update_interval_us_show(
 		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 
 	return sysfs_emit(buf, "%lu\n", attrs->primitive_update_interval_us);
 }
@@ -194,8 +248,8 @@ static ssize_t damon_sysfs_attrs_prmtv_update_interval_us_store(
 		struct kobject *kobj, struct kobj_attribute *attr,
 		const char *buf, size_t count)
 {
-	struct damon_sysfs_attrs_kobj *attrs = container_of(kobj,
-			struct damon_sysfs_attrs_kobj, kobj);
+	struct damon_sysfs_attrs *attrs = container_of(kobj,
+			struct damon_sysfs_attrs, kobj);
 	unsigned long us;
 	int err;
 
@@ -209,14 +263,7 @@ static ssize_t damon_sysfs_attrs_prmtv_update_interval_us_store(
 
 static void damon_sysfs_attrs_kobj_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct damon_sysfs_attrs_kobj, kobj));
-}
-
-static void damon_sysfs_attrs_kobj_remove_childs(
-		struct damon_sysfs_attrs_kobj *attrs)
-{
-	kobject_put(&attrs->nr_regions->kobj);
-	return;
+	kfree(container_of(kobj, struct damon_sysfs_attrs, kobj));
 }
 
 static struct kobj_attribute damon_sysfs_attrs_sample_interval_us_attr =
@@ -253,9 +300,9 @@ static struct kobj_type damon_sysfs_attrs_ktype = {
  * -----------------
  */
 
-enum damon_prmtv_set {
-	DAMON_PRMTV_VADDR,
-	DAMON_PRMTV_PADDR,
+enum damon_sysfs_damon_type {
+	DAMON_SYSFS_TYPE_VADDR,
+	DAMON_SYSFS_TYPE_PADDR,
 };
 
 static const char * const damon_prmtv_set_strs[] = {
@@ -263,62 +310,121 @@ static const char * const damon_prmtv_set_strs[] = {
 	"paddr",
 };
 
-struct damon_sysfs_context_kobj {
+struct damon_sysfs_context {
 	struct kobject kobj;
-	enum damon_prmtv_set prmtv_set;
-	struct damon_sysfs_attrs_kobj *attrs;
+	enum damon_sysfs_damon_type damon_type;
+	struct damon_sysfs_attrs *attrs;
 };
 
-static ssize_t context_prmtv_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+int damon_sysfs_context_create(struct damon_sysfs_context **pcontext)
 {
-	struct damon_sysfs_context_kobj *context = container_of(kobj,
-			struct damon_sysfs_context_kobj, kobj);
+	struct damon_sysfs_context *context;
+	struct damon_sysfs_attrs *attrs;
+	int err;
 
-	return sysfs_emit(buf, "%s\n",
-			damon_prmtv_set_strs[context->prmtv_set]);
+	context = kzalloc(sizeof(*context), GFP_KERNEL);
+	if (!context)
+		return -ENOMEM;
+
+	context->damon_type = DAMON_SYSFS_TYPE_VADDR;
+
+	err = damon_sysfs_attrs_create(&attrs);
+	if (err) {
+		kfree(context);
+		return -ENOMEM;
+	}
+
+	err = kobject_init_and_add(&attrs->kobj, &damon_sysfs_attrs_ktype,
+			&context->kobj, "monitoring_attrs");
+	if (err) {
+		damon_sysfs_attrs_rm_childs(attrs);
+		kfree(attrs);
+		kfree(context);
+		return err;
+	}
+	*pcontext = context;
+	return err;
 }
 
-static ssize_t context_prmtv_store(struct kobject *kobj,
+static int damon_sysfs_context_add_childs(struct damon_sysfs_context *context)
+{
+	struct damon_sysfs_attrs *attrs;
+	int err;
+
+	attrs = kzalloc(sizeof(*attrs), GFP_KERNEL);
+	if (!attrs)
+		return -ENOMEM;
+
+	err = kobject_init_and_add(&attrs->kobj, &damon_sysfs_attrs_ktype,
+			&context->kobj, "monitoring_attrs");
+	if (err) {
+		kfree(attrs);
+		return err;
+	}
+	context->attrs = attrs;
+
+	err = damon_sysfs_attrs_add_childs(attrs);
+	if (err) {
+		kobject_put(&attrs->kobj);
+		kfree(attrs);
+		return err;
+	}
+
+	return err;
+}
+
+static void damon_sysfs_context_rm_childs(
+		struct damon_sysfs_context *context)
+{
+	damon_sysfs_attrs_rm_childs(context->attrs);
+	kobject_put(&context->attrs->kobj);
+	return;
+}
+
+static ssize_t damon_sysfs_context_type_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_context *context = container_of(kobj,
+			struct damon_sysfs_context, kobj);
+
+	return sysfs_emit(buf, "%s\n",
+			damon_prmtv_set_strs[context->damon_type]);
+}
+
+static ssize_t damon_sysfs_context_type_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct damon_sysfs_context_kobj *context = container_of(kobj,
-			struct damon_sysfs_context_kobj, kobj);
+	struct damon_sysfs_context *context = container_of(kobj,
+			struct damon_sysfs_context, kobj);
 
 	if (!strncmp(buf, "vaddr\n", count))
-		context->prmtv_set = DAMON_PRMTV_VADDR;
+		context->damon_type = DAMON_SYSFS_TYPE_VADDR;
 	else if (!strncmp(buf, "paddr\n", count))
-		context->prmtv_set = DAMON_PRMTV_PADDR;
+		context->damon_type = DAMON_SYSFS_TYPE_PADDR;
 	else
 		return -EINVAL;
 
 	return count;
 }
 
-static void context_kobj_release(struct kobject *kobj)
+static void damon_sysfs_context_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct damon_sysfs_context_kobj, kobj));
+	kfree(container_of(kobj, struct damon_sysfs_context, kobj));
 }
 
-static void context_kobj_remove_childs(
-		struct damon_sysfs_context_kobj *context)
-{
-	damon_sysfs_attrs_kobj_remove_childs(context->attrs);
-	kobject_put(&context->attrs->kobj);
-	return;
-}
+static struct kobj_attribute damon_sysfs_context_type_attr = __ATTR(damon_type,
+		0600, damon_sysfs_context_type_show,
+		damon_sysfs_context_type_store);
 
-static struct kobj_attribute context_prmtv_attr = __ATTR(prmtv, 0600,
-		context_prmtv_show, context_prmtv_store);
 
 static struct attribute *context_attrs[] = {
-	&context_prmtv_attr.attr,
+	&damon_sysfs_context_type_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(context);
 
 static struct kobj_type context_ktype = {
-	.release = context_kobj_release,
+	.release = damon_sysfs_context_release,
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = context_groups,
 };
@@ -328,43 +434,41 @@ static struct kobj_type context_ktype = {
  * ------------------
  */
 
-struct contexts_kobj {
+struct damon_sysfs_contexts {
 	struct kobject kobj;
-	struct damon_sysfs_context_kobj **context_kobjs;
+	struct damon_sysfs_context **contexts_arr;
 	int nr;
 };
 
 static ssize_t contexts_nr_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	struct contexts_kobj *contexts_kobj = container_of(kobj,
-			struct contexts_kobj, kobj);
+	struct damon_sysfs_contexts *contexts = container_of(kobj,
+			struct damon_sysfs_contexts, kobj);
 
-	return sysfs_emit(buf, "%d\n", contexts_kobj->nr);
+	return sysfs_emit(buf, "%d\n", contexts->nr);
 }
 
-static void contexts_kobj_remove_childs(struct contexts_kobj *contexts_kobj)
+static void contexts_kobj_rm_childs(struct damon_sysfs_contexts *contexts)
 {
-	struct damon_sysfs_context_kobj **context_kobjs = contexts_kobj->context_kobjs;
+	struct damon_sysfs_context **contexts_arr = contexts->contexts_arr;
 	int i;
 
-	for (i = 0; i < contexts_kobj->nr; i++) {
-		context_kobj_remove_childs(context_kobjs[i]);
-		kobject_put(&context_kobjs[i]->kobj);
+	for (i = 0; i < contexts->nr; i++) {
+		damon_sysfs_context_rm_childs(contexts_arr[i]);
+		kobject_put(&contexts_arr[i]->kobj);
 	}
-	kfree(context_kobjs);
-	contexts_kobj->context_kobjs = NULL;
-	contexts_kobj->nr = 0;
+	kfree(contexts_arr);
+	contexts->contexts_arr = NULL;
+	contexts->nr = 0;
 }
 
 static ssize_t contexts_nr_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct contexts_kobj *contexts_kobj = container_of(kobj,
-			struct contexts_kobj, kobj);
-	struct damon_sysfs_context_kobj **context_kobjs, *context_kobj;
-	struct damon_sysfs_attrs_kobj *attrs;
-	struct damon_sysfs_ul_range *nr_regions;
+	struct damon_sysfs_contexts *contexts = container_of(kobj,
+			struct damon_sysfs_contexts, kobj);
+	struct damon_sysfs_context **contexts_arr, *context;
 	int nr, err;
 	int i;
 
@@ -374,60 +478,51 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	contexts_kobj_remove_childs(contexts_kobj);
+	contexts_kobj_rm_childs(contexts);
 
-	context_kobjs = kmalloc(sizeof(*context_kobjs) * nr, GFP_KERNEL);
-	contexts_kobj->context_kobjs = context_kobjs;
+	contexts_arr = kmalloc(sizeof(*contexts_arr) * nr, GFP_KERNEL);
+	contexts->contexts_arr = contexts_arr;
 	for (i = 0; i < nr; i++) {
-		/* add context directory */
-		context_kobj = kzalloc(sizeof(*context_kobj), GFP_KERNEL);
-		if (!context_kobj) {
-			contexts_kobj_remove_childs(contexts_kobj);
+		context = kzalloc(sizeof(*context), GFP_KERNEL);
+		if (!context) {
+			contexts_kobj_rm_childs(contexts);
 			return -ENOMEM;
 		}
-		err = kobject_init_and_add(&context_kobj->kobj, &context_ktype,
-				&contexts_kobj->kobj, "%d", i);
+		context->damon_type = DAMON_SYSFS_TYPE_VADDR;
+
+		err = kobject_init_and_add(&context->kobj, &context_ktype,
+				&contexts->kobj, "%d", i);
 		if (err) {
-			contexts_kobj_remove_childs(contexts_kobj);
-			kfree(context_kobj);
+			contexts_kobj_rm_childs(contexts);
+			kfree(context);
 			return err;
 		}
 
-		/* add context/attrs directory */
-		attrs = kzalloc(sizeof(*attrs), GFP_KERNEL);
-		if (!attrs) {
-			contexts_kobj_remove_childs(contexts_kobj);
-			return -ENOMEM;
-		}
-		err = kobject_init_and_add(&attrs->kobj,
-				&damon_sysfs_attrs_ktype, &context_kobj->kobj,
-				"monitoring_attrs");
+		err = damon_sysfs_context_add_childs(context);
 		if (err) {
-			contexts_kobj_remove_childs(contexts_kobj);
-			kfree(attrs);
+			kobject_put(&context->kobj);
+			contexts_kobj_rm_childs(contexts);
+			kfree(context);
 			return err;
 		}
-		context_kobj->attrs = attrs;
 
-		/* add context/attrs/nr_regions directory */
-		nr_regions = damon_sysfs_ul_range_create(10, 1000);
-		if (!nr_regions) {
-			contexts_kobj_remove_childs(contexts_kobj);
-			return -ENOMEM;
-		}
-		err = kobject_init_and_add(&nr_regions->kobj,
-				&damon_sysfs_ul_range_ktype,
-				&attrs->kobj,
-				"nr_regions");
+		/*
+		err = damon_sysfs_context_create(&context);
 		if (err) {
-			contexts_kobj_remove_childs(contexts_kobj);
-			kfree(nr_regions);
+			contexts_kobj_rm_childs(contexts);
 			return err;
 		}
-		attrs->nr_regions = nr_regions;
+		err = kobject_init_and_add(&context->kobj, &context_ktype,
+				&contexts->kobj, "%d", i);
+		if (err) {
+			contexts_kobj_rm_childs(contexts);
+			kfree(context);
+			return err;
+		}
+		*/
 
-		context_kobjs[i] = context_kobj;
-		contexts_kobj->nr++;
+		contexts_arr[i] = context;
+		contexts->nr++;
 	}
 
 	return count;
@@ -435,7 +530,7 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 
 static void contexts_kobj_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct contexts_kobj, kobj));
+	kfree(container_of(kobj, struct damon_sysfs_contexts, kobj));
 }
 
 static struct kobj_attribute contexts_nr_attr = __ATTR(nr, 0600,
@@ -460,7 +555,7 @@ static struct kobj_type contexts_ktype = {
 
 struct kdamond_kobj {
 	struct kobject kobj;
-	struct contexts_kobj *contexts_kobj;
+	struct damon_sysfs_contexts *contexts;
 	int pid;
 };
 
@@ -476,10 +571,10 @@ static void kdamond_kobj_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct kdamond_kobj, kobj));
 }
 
-static void kdamond_kobj_remove_childs(struct kdamond_kobj *kdamond_kobj)
+static void kdamond_kobj_rm_childs(struct kdamond_kobj *kdamond_kobj)
 {
-	contexts_kobj_remove_childs(kdamond_kobj->contexts_kobj);
-	kobject_put(&kdamond_kobj->contexts_kobj->kobj);
+	contexts_kobj_rm_childs(kdamond_kobj->contexts);
+	kobject_put(&kdamond_kobj->contexts->kobj);
 }
 
 static struct kobj_attribute kdamond_pid_attr = __ATTR(pid, 0400,
@@ -517,13 +612,13 @@ static ssize_t kdamonds_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", kdamonds_kobj->nr);
 }
 
-static void kdamonds_kobj_remove_childs(struct kdamonds_kobj *kdamonds_kobj)
+static void kdamonds_kobj_rm_childs(struct kdamonds_kobj *kdamonds_kobj)
 {
 	struct kdamond_kobj ** kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
 	int i;
 
 	for (i = 0; i < kdamonds_kobj->nr; i++) {
-		kdamond_kobj_remove_childs(kdamond_kobjs[i]);
+		kdamond_kobj_rm_childs(kdamond_kobjs[i]);
 		kobject_put(&kdamond_kobjs[i]->kobj);
 	}
 	kfree(kdamond_kobjs);
@@ -537,7 +632,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
 			struct kdamonds_kobj, kobj);
 	struct kdamond_kobj **kdamond_kobjs, *kdamond_kobj;
-	struct contexts_kobj *contexts_kobj;
+	struct damon_sysfs_contexts *contexts;
 	int nr, err;
 	int i;
 
@@ -547,7 +642,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	kdamonds_kobj_remove_childs(kdamonds_kobj);
+	kdamonds_kobj_rm_childs(kdamonds_kobj);
 	if (!nr)
 		return count;
 
@@ -556,31 +651,31 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	for (i = 0; i < nr; i++) {
 		kdamond_kobj = kzalloc(sizeof(*kdamond_kobj), GFP_KERNEL);
 		if (!kdamond_kobj) {
-			kdamonds_kobj_remove_childs(kdamonds_kobj);
+			kdamonds_kobj_rm_childs(kdamonds_kobj);
 			return -ENOMEM;
 		}
 		err = kobject_init_and_add(&kdamond_kobj->kobj, &kdamond_ktype,
 				&kdamonds_kobj->kobj, "%d", i);
 		if (err) {
-			kdamonds_kobj_remove_childs(kdamonds_kobj);
+			kdamonds_kobj_rm_childs(kdamonds_kobj);
 			kfree(kdamond_kobj);
 			return err;
 		}
 
-		contexts_kobj = kzalloc(sizeof(*contexts_kobj), GFP_KERNEL);
-		if (!contexts_kobj) {
-			kdamonds_kobj_remove_childs(kdamonds_kobj);
+		contexts = kzalloc(sizeof(*contexts), GFP_KERNEL);
+		if (!contexts) {
+			kdamonds_kobj_rm_childs(kdamonds_kobj);
 			return -ENOMEM;
 		}
-		err = kobject_init_and_add(&contexts_kobj->kobj,
+		err = kobject_init_and_add(&contexts->kobj,
 				&contexts_ktype, &kdamond_kobj->kobj,
 				"contexts");
 		if (err) {
-			kdamonds_kobj_remove_childs(kdamonds_kobj);
-			kfree(contexts_kobj);
+			kdamonds_kobj_rm_childs(kdamonds_kobj);
+			kfree(contexts);
 			return err;
 		}
-		kdamond_kobj->contexts_kobj = contexts_kobj;
+		kdamond_kobj->contexts = contexts;
 
 		kdamond_kobjs[i] = kdamond_kobj;
 		kdamonds_kobj->nr++;
