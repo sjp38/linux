@@ -9,8 +9,7 @@
 #include <linux/slab.h>
 
 /*
- * unsigned long range
- * -------------------
+ * unsigned long range directory
  */
 
 struct damon_sysfs_ul_range {
@@ -18,11 +17,6 @@ struct damon_sysfs_ul_range {
 	unsigned long min;
 	unsigned long max;
 };
-
-static void damon_sysfs_ul_range_release(struct kobject *kobj)
-{
-	kfree(container_of(kobj, struct damon_sysfs_ul_range, kobj));
-}
 
 static ssize_t damon_sysfs_ul_range_min_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
@@ -74,6 +68,11 @@ static ssize_t damon_sysfs_ul_range_max_store(struct kobject *kobj,
 	return count;
 }
 
+static void damon_sysfs_ul_range_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_ul_range, kobj));
+}
+
 static struct kobj_attribute damon_sysfs_ul_range_min_attr =
 		__ATTR(min, 0600, damon_sysfs_ul_range_min_show,
 				damon_sysfs_ul_range_min_store);
@@ -96,22 +95,153 @@ static struct kobj_type damon_sysfs_ul_range_ktype = {
 };
 
 /*
+ * intervals directory
+ */
+
+struct damon_sysfs_intervals {
+	struct kobject kobj;
+	unsigned long sample_us;
+	unsigned long aggr_us;
+	unsigned long update_us;
+};
+
+static ssize_t damon_sysfs_intervals_sample_us_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+
+	return sysfs_emit(buf, "%lu\n", intervals->sample_us);
+}
+
+static ssize_t damon_sysfs_intervals_sample_us_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+	unsigned long us;
+	int err;
+
+	err = kstrtoul(buf, 10, &us);
+	if (err)
+		return -EINVAL;
+
+	intervals->sample_us = us;
+	return count;
+}
+
+static ssize_t damon_sysfs_intervals_aggr_us_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+
+	return sysfs_emit(buf, "%lu\n", intervals->aggr_us);
+}
+
+static ssize_t damon_sysfs_intervals_aggr_us_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+	unsigned long us;
+	int err;
+
+	err = kstrtoul(buf, 10, &us);
+	if (err)
+		return -EINVAL;
+
+	intervals->aggr_us = us;
+	return count;
+}
+
+static ssize_t damon_sysfs_intervals_update_us_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+
+	return sysfs_emit(buf, "%lu\n", intervals->update_us);
+}
+
+static ssize_t damon_sysfs_intervals_update_us_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_intervals *intervals = container_of(kobj,
+			struct damon_sysfs_intervals, kobj);
+	unsigned long us;
+	int err;
+
+	err = kstrtoul(buf, 10, &us);
+	if (err)
+		return -EINVAL;
+
+	intervals->update_us = us;
+	return count;
+}
+
+static void damon_sysfs_intervals_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_intervals, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_intervals_sample_us_attr =
+		__ATTR(sample_us, 0600,
+				damon_sysfs_intervals_sample_us_show,
+				damon_sysfs_intervals_sample_us_store);
+
+static struct kobj_attribute damon_sysfs_intervals_aggr_us_attr =
+		__ATTR(aggr_us, 0600,
+				damon_sysfs_intervals_aggr_us_show,
+				damon_sysfs_intervals_aggr_us_store);
+
+static struct kobj_attribute damon_sysfs_intervals_update_us_attr =
+		__ATTR(update_us, 0600,
+				damon_sysfs_intervals_update_us_show,
+				damon_sysfs_intervals_update_us_store);
+
+static struct attribute *damon_sysfs_intervals_attrs[] = {
+	&damon_sysfs_intervals_sample_us_attr.attr,
+	&damon_sysfs_intervals_aggr_us_attr.attr,
+	&damon_sysfs_intervals_update_us_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_intervals);
+
+static struct kobj_type damon_sysfs_intervals_ktype = {
+	.release = damon_sysfs_intervals_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_intervals_groups,
+};
+
+/*
  * monitoring_attrs directory
- * --------------------------
  */
 
 struct damon_sysfs_attrs {
 	struct kobject kobj;
-	unsigned long sample_interval_us;
-	unsigned long aggr_interval_us;
-	unsigned long primitive_update_interval_us;
+	struct damon_sysfs_intervals *intervals;
 	struct damon_sysfs_ul_range *nr_regions;
 };
 
-static int damon_sysfs_attrs_add_files(struct damon_sysfs_attrs *attrs)
+static int damon_sysfs_attrs_add_dirs(struct damon_sysfs_attrs *attrs)
 {
+	struct damon_sysfs_intervals *intervals;
 	struct damon_sysfs_ul_range *nr_regions_range;
 	int err;
+
+	intervals = kzalloc(sizeof(*intervals), GFP_KERNEL);
+	if (!intervals)
+		return -ENOMEM;
+
+	err = kobject_init_and_add(&intervals->kobj,
+			&damon_sysfs_intervals_ktype, &attrs->kobj,
+			"intervals");
+	if (err) {
+		kfree(intervals);
+		return err;
+	}
+	attrs->intervals = intervals;
 
 	nr_regions_range = kzalloc(sizeof(*nr_regions_range), GFP_KERNEL);
 	if (!nr_regions_range)
@@ -122,94 +252,18 @@ static int damon_sysfs_attrs_add_files(struct damon_sysfs_attrs *attrs)
 			"nr_regions");
 	if (err) {
 		kfree(nr_regions_range);
+		kobject_put(&intervals->kobj);
 		return err;
 	}
 	attrs->nr_regions = nr_regions_range;
 
-	return err;
+	return 0;
 }
 
-static void damon_sysfs_attrs_rm_files(struct damon_sysfs_attrs *attrs)
+static void damon_sysfs_attrs_rm_dirs(struct damon_sysfs_attrs *attrs)
 {
+	kobject_put(&attrs->intervals->kobj);
 	kobject_put(&attrs->nr_regions->kobj);
-}
-
-static ssize_t damon_sysfs_attrs_sampling_interval_us_show(
-		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-
-	return sysfs_emit(buf, "%lu\n", attrs->sample_interval_us);
-}
-
-static ssize_t damon_sysfs_attrs_sampling_interval_us_store(
-		struct kobject *kobj, struct kobj_attribute *attr, const char
-		*buf, size_t count)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-	unsigned long us;
-	int err;
-
-	err = kstrtoul(buf, 10, &us);
-	if (err)
-		return -EINVAL;
-
-	attrs->sample_interval_us = us;
-	return count;
-}
-
-static ssize_t damon_sysfs_attrs_aggregation_interval_us_show(
-		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-
-	return sysfs_emit(buf, "%lu\n", attrs->aggr_interval_us);
-}
-
-static ssize_t damon_sysfs_attrs_aggregation_interval_us_store(
-		struct kobject *kobj, struct kobj_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-	unsigned long us;
-	int err;
-
-	err = kstrtoul(buf, 10, &us);
-	if (err)
-		return -EINVAL;
-
-	attrs->aggr_interval_us = us;
-	return count;
-}
-
-static ssize_t damon_sysfs_attrs_prmtv_update_interval_us_show(
-		struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-
-	return sysfs_emit(buf, "%lu\n", attrs->primitive_update_interval_us);
-}
-
-static ssize_t damon_sysfs_attrs_prmtv_update_interval_us_store(
-		struct kobject *kobj, struct kobj_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct damon_sysfs_attrs *attrs = container_of(kobj,
-			struct damon_sysfs_attrs, kobj);
-	unsigned long us;
-	int err;
-
-	err = kstrtoul(buf, 10, &us);
-	if (err)
-		return -EINVAL;
-
-	attrs->primitive_update_interval_us = us;
-	return count;
 }
 
 static void damon_sysfs_attrs_kobj_release(struct kobject *kobj)
@@ -217,25 +271,7 @@ static void damon_sysfs_attrs_kobj_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_attrs, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_attrs_sample_interval_us_attr =
-		__ATTR(sample_interval_us, 0600,
-				damon_sysfs_attrs_sampling_interval_us_show,
-				damon_sysfs_attrs_sampling_interval_us_store);
-
-static struct kobj_attribute damon_sysfs_attrs_aggr_interval_us_attr =
-		__ATTR(aggr_interval_us, 0600,
-				damon_sysfs_attrs_aggregation_interval_us_show,
-				damon_sysfs_attrs_aggregation_interval_us_store);
-
-static struct kobj_attribute damon_sysfs_attrs_update_interval_us_attr =
-		__ATTR(update_interval_us, 0600,
-				damon_sysfs_attrs_prmtv_update_interval_us_show,
-				damon_sysfs_attrs_prmtv_update_interval_us_store);
-
 static struct attribute *damon_sysfs_attrs_attrs[] = {
-	&damon_sysfs_attrs_sample_interval_us_attr.attr,
-	&damon_sysfs_attrs_aggr_interval_us_attr.attr,
-	&damon_sysfs_attrs_update_interval_us_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_attrs);
@@ -267,7 +303,7 @@ struct damon_sysfs_context {
 	struct damon_sysfs_attrs *attrs;
 };
 
-static int damon_sysfs_context_add_files(struct damon_sysfs_context *context)
+static int damon_sysfs_context_add_dirs(struct damon_sysfs_context *context)
 {
 	struct damon_sysfs_attrs *attrs;
 	int err;
@@ -284,7 +320,7 @@ static int damon_sysfs_context_add_files(struct damon_sysfs_context *context)
 	}
 	context->attrs = attrs;
 
-	err = damon_sysfs_attrs_add_files(attrs);
+	err = damon_sysfs_attrs_add_dirs(attrs);
 	if (err) {
 		kobject_put(&attrs->kobj);
 		kfree(attrs);
@@ -294,9 +330,9 @@ static int damon_sysfs_context_add_files(struct damon_sysfs_context *context)
 	return err;
 }
 
-static void damon_sysfs_context_rm_files(struct damon_sysfs_context *context)
+static void damon_sysfs_context_rm_dirs(struct damon_sysfs_context *context)
 {
-	damon_sysfs_attrs_rm_files(context->attrs);
+	damon_sysfs_attrs_rm_dirs(context->attrs);
 	kobject_put(&context->attrs->kobj);
 	return;
 }
@@ -369,13 +405,13 @@ static ssize_t contexts_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", contexts->nr);
 }
 
-static void contexts_kobj_rm_files(struct damon_sysfs_contexts *contexts)
+static void contexts_kobj_rm_dirs(struct damon_sysfs_contexts *contexts)
 {
 	struct damon_sysfs_context **contexts_arr = contexts->contexts_arr;
 	int i;
 
 	for (i = 0; i < contexts->nr; i++) {
-		damon_sysfs_context_rm_files(contexts_arr[i]);
+		damon_sysfs_context_rm_dirs(contexts_arr[i]);
 		kobject_put(&contexts_arr[i]->kobj);
 	}
 	kfree(contexts_arr);
@@ -398,14 +434,14 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	contexts_kobj_rm_files(contexts);
+	contexts_kobj_rm_dirs(contexts);
 
 	contexts_arr = kmalloc(sizeof(*contexts_arr) * nr, GFP_KERNEL);
 	contexts->contexts_arr = contexts_arr;
 	for (i = 0; i < nr; i++) {
 		context = kzalloc(sizeof(*context), GFP_KERNEL);
 		if (!context) {
-			contexts_kobj_rm_files(contexts);
+			contexts_kobj_rm_dirs(contexts);
 			return -ENOMEM;
 		}
 		context->damon_type = DAMON_SYSFS_TYPE_VADDR;
@@ -413,15 +449,15 @@ static ssize_t contexts_nr_store(struct kobject *kobj,
 		err = kobject_init_and_add(&context->kobj, &context_ktype,
 				&contexts->kobj, "%d", i);
 		if (err) {
-			contexts_kobj_rm_files(contexts);
+			contexts_kobj_rm_dirs(contexts);
 			kfree(context);
 			return err;
 		}
 
-		err = damon_sysfs_context_add_files(context);
+		err = damon_sysfs_context_add_dirs(context);
 		if (err) {
 			kobject_put(&context->kobj);
-			contexts_kobj_rm_files(contexts);
+			contexts_kobj_rm_dirs(contexts);
 			kfree(context);
 			return err;
 		}
@@ -476,9 +512,9 @@ static void kdamond_kobj_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct kdamond_kobj, kobj));
 }
 
-static void kdamond_kobj_rm_files(struct kdamond_kobj *kdamond_kobj)
+static void kdamond_kobj_rm_dirs(struct kdamond_kobj *kdamond_kobj)
 {
-	contexts_kobj_rm_files(kdamond_kobj->contexts);
+	contexts_kobj_rm_dirs(kdamond_kobj->contexts);
 	kobject_put(&kdamond_kobj->contexts->kobj);
 }
 
@@ -517,13 +553,13 @@ static ssize_t kdamonds_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", kdamonds_kobj->nr);
 }
 
-static void kdamonds_kobj_rm_files(struct kdamonds_kobj *kdamonds_kobj)
+static void kdamonds_kobj_rm_dirs(struct kdamonds_kobj *kdamonds_kobj)
 {
 	struct kdamond_kobj ** kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
 	int i;
 
 	for (i = 0; i < kdamonds_kobj->nr; i++) {
-		kdamond_kobj_rm_files(kdamond_kobjs[i]);
+		kdamond_kobj_rm_dirs(kdamond_kobjs[i]);
 		kobject_put(&kdamond_kobjs[i]->kobj);
 	}
 	kfree(kdamond_kobjs);
@@ -547,7 +583,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	kdamonds_kobj_rm_files(kdamonds_kobj);
+	kdamonds_kobj_rm_dirs(kdamonds_kobj);
 	if (!nr)
 		return count;
 
@@ -556,27 +592,27 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	for (i = 0; i < nr; i++) {
 		kdamond_kobj = kzalloc(sizeof(*kdamond_kobj), GFP_KERNEL);
 		if (!kdamond_kobj) {
-			kdamonds_kobj_rm_files(kdamonds_kobj);
+			kdamonds_kobj_rm_dirs(kdamonds_kobj);
 			return -ENOMEM;
 		}
 		err = kobject_init_and_add(&kdamond_kobj->kobj, &kdamond_ktype,
 				&kdamonds_kobj->kobj, "%d", i);
 		if (err) {
-			kdamonds_kobj_rm_files(kdamonds_kobj);
+			kdamonds_kobj_rm_dirs(kdamonds_kobj);
 			kfree(kdamond_kobj);
 			return err;
 		}
 
 		contexts = kzalloc(sizeof(*contexts), GFP_KERNEL);
 		if (!contexts) {
-			kdamonds_kobj_rm_files(kdamonds_kobj);
+			kdamonds_kobj_rm_dirs(kdamonds_kobj);
 			return -ENOMEM;
 		}
 		err = kobject_init_and_add(&contexts->kobj,
 				&contexts_ktype, &kdamond_kobj->kobj,
 				"contexts");
 		if (err) {
-			kdamonds_kobj_rm_files(kdamonds_kobj);
+			kdamonds_kobj_rm_dirs(kdamonds_kobj);
 			kfree(contexts);
 			return err;
 		}
