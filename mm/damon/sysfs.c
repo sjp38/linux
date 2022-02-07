@@ -493,7 +493,7 @@ static struct attribute *damon_sysfs_contexts_attrs[] = {
 };
 ATTRIBUTE_GROUPS(damon_sysfs_contexts);
 
-static struct kobj_type contexts_ktype = {
+static struct kobj_type damon_sysfs_contexts_ktype = {
 	.release = damon_sysfs_contexts_release,
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = damon_sysfs_contexts_groups,
@@ -501,46 +501,45 @@ static struct kobj_type contexts_ktype = {
 
 /*
  * kdamond directory
- * -----------------
  */
 
-struct kdamond_kobj {
+struct damon_sysfs_kdamond {
 	struct kobject kobj;
 	struct damon_sysfs_contexts *contexts;
 	int pid;
 };
 
-static ssize_t kdamond_pid_show(struct kobject *kobj,
+static void damon_sysfs_kdamond_rm_dirs(struct damon_sysfs_kdamond *kdamond)
+{
+	damon_sysfs_contexts_rm_dirs(kdamond->contexts);
+	kobject_put(&kdamond->contexts->kobj);
+}
+
+static ssize_t damon_sysfs_kdamond_pid_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	/* TODO: get pid of the kdamond and show */
 	return sysfs_emit(buf, "%d\n", 42);
 }
 
-static void kdamond_kobj_release(struct kobject *kobj)
+static void damon_sysfs_kdamond_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct kdamond_kobj, kobj));
+	kfree(container_of(kobj, struct damon_sysfs_kdamond, kobj));
 }
 
-static void kdamond_kobj_rm_dirs(struct kdamond_kobj *kdamond_kobj)
-{
-	damon_sysfs_contexts_rm_dirs(kdamond_kobj->contexts);
-	kobject_put(&kdamond_kobj->contexts->kobj);
-}
+static struct kobj_attribute damon_sysfs_kdamond_pid_attr = __ATTR(pid, 0400,
+		damon_sysfs_kdamond_pid_show, NULL);
 
-static struct kobj_attribute kdamond_pid_attr = __ATTR(pid, 0400,
-		kdamond_pid_show, NULL);
-
-static struct attribute *kdamond_attrs[] = {
-	&kdamond_pid_attr.attr,
+static struct attribute *damon_sysfs_kdamond_attrs[] = {
+	&damon_sysfs_kdamond_pid_attr.attr,
 	NULL,
 };
-ATTRIBUTE_GROUPS(kdamond);
+ATTRIBUTE_GROUPS(damon_sysfs_kdamond);
 
-static struct kobj_type kdamond_ktype = {
-	.release = kdamond_kobj_release,
+static struct kobj_type damon_sysfs_kdamond_ktype = {
+	.release = damon_sysfs_kdamond_release,
 	.sysfs_ops = &kobj_sysfs_ops,
-	.default_groups = kdamond_groups,
+	.default_groups = damon_sysfs_kdamond_groups,
 };
 
 /*
@@ -550,7 +549,7 @@ static struct kobj_type kdamond_ktype = {
 
 struct kdamonds_kobj {
 	struct kobject kobj;
-	struct kdamond_kobj **kdamond_kobjs;
+	struct damon_sysfs_kdamond **kdamond_kobjs;
 	int nr;
 };
 
@@ -565,11 +564,11 @@ static ssize_t kdamonds_nr_show(struct kobject *kobj,
 
 static void kdamonds_kobj_rm_dirs(struct kdamonds_kobj *kdamonds_kobj)
 {
-	struct kdamond_kobj ** kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
+	struct damon_sysfs_kdamond **kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
 	int i;
 
 	for (i = 0; i < kdamonds_kobj->nr; i++) {
-		kdamond_kobj_rm_dirs(kdamond_kobjs[i]);
+		damon_sysfs_kdamond_rm_dirs(kdamond_kobjs[i]);
 		kobject_put(&kdamond_kobjs[i]->kobj);
 	}
 	kfree(kdamond_kobjs);
@@ -582,7 +581,7 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 {
 	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
 			struct kdamonds_kobj, kobj);
-	struct kdamond_kobj **kdamond_kobjs, *kdamond_kobj;
+	struct damon_sysfs_kdamond **kdamond_kobjs, *kdamond_kobj;
 	struct damon_sysfs_contexts *contexts;
 	int nr, err;
 	int i;
@@ -605,7 +604,8 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 			kdamonds_kobj_rm_dirs(kdamonds_kobj);
 			return -ENOMEM;
 		}
-		err = kobject_init_and_add(&kdamond_kobj->kobj, &kdamond_ktype,
+		err = kobject_init_and_add(&kdamond_kobj->kobj,
+				&damon_sysfs_kdamond_ktype,
 				&kdamonds_kobj->kobj, "%d", i);
 		if (err) {
 			kdamonds_kobj_rm_dirs(kdamonds_kobj);
@@ -619,7 +619,8 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 			return -ENOMEM;
 		}
 		err = kobject_init_and_add(&contexts->kobj,
-				&contexts_ktype, &kdamond_kobj->kobj,
+				&damon_sysfs_contexts_ktype,
+				&kdamond_kobj->kobj,
 				"contexts");
 		if (err) {
 			kdamonds_kobj_rm_dirs(kdamonds_kobj);
