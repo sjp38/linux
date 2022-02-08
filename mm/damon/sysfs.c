@@ -440,7 +440,6 @@ static int damon_sysfs_contexts_add_dirs(struct damon_sysfs_contexts *contexts,
 		if (err) {
 			kobject_put(&context->kobj);
 			damon_sysfs_contexts_rm_dirs(contexts);
-			kfree(context);
 			return err;
 		}
 
@@ -509,6 +508,27 @@ struct damon_sysfs_kdamond {
 	int pid;
 };
 
+static int damon_sysfs_kdamond_add_dirs(struct damon_sysfs_kdamond *kdamond)
+{
+	struct damon_sysfs_contexts *contexts;
+	int err;
+
+	contexts = kzalloc(sizeof(*contexts), GFP_KERNEL);
+	if (!contexts)
+		return -ENOMEM;
+
+	err = kobject_init_and_add(&contexts->kobj,
+			&damon_sysfs_contexts_ktype, &kdamond->kobj,
+			"contexts");
+	if (err) {
+		kfree(contexts);
+		return err;
+	}
+	kdamond->contexts = contexts;
+
+	return err;
+}
+
 static void damon_sysfs_kdamond_rm_dirs(struct damon_sysfs_kdamond *kdamond)
 {
 	damon_sysfs_contexts_rm_dirs(kdamond->contexts);
@@ -544,47 +564,88 @@ static struct kobj_type damon_sysfs_kdamond_ktype = {
 
 /*
  * kdamonds directory
- * ------------------
  */
 
-struct kdamonds_kobj {
+struct damon_sysfs_kdamonds {
 	struct kobject kobj;
-	struct damon_sysfs_kdamond **kdamond_kobjs;
+	struct damon_sysfs_kdamond **kdamonds_arr;
 	int nr;
 };
+
+static void damon_sysfs_kdamonds_rm_dirs(struct damon_sysfs_kdamonds *kdamonds)
+{
+	struct damon_sysfs_kdamond **kdamonds_arr = kdamonds->kdamonds_arr;
+	int i;
+
+	for (i = 0; i < kdamonds->nr; i++) {
+		damon_sysfs_kdamond_rm_dirs(kdamonds_arr[i]);
+		kobject_put(&kdamonds_arr[i]->kobj);
+	}
+	kfree(kdamonds_arr);
+	kdamonds->kdamonds_arr = NULL;
+	kdamonds->nr = 0;
+}
+
+static int damon_sysfs_kdamonds_add_dirs(struct damon_sysfs_kdamonds *kdamonds,
+		int nr_kdamonds)
+{
+	struct damon_sysfs_kdamond **kdamonds_arr, *kdamond;
+	int err, i;
+
+	damon_sysfs_kdamonds_rm_dirs(kdamonds);
+	if (!nr_kdamonds)
+		return 0;
+
+	kdamonds_arr = kmalloc(sizeof(*kdamonds_arr) * nr_kdamonds,
+			GFP_KERNEL);
+	if (!kdamonds_arr)
+		return -ENOMEM;
+	kdamonds->kdamonds_arr = kdamonds_arr;
+
+	for (i = 0; i < nr_kdamonds; i++) {
+		kdamond = kzalloc(sizeof(*kdamond), GFP_KERNEL);
+		if (!kdamond) {
+			damon_sysfs_kdamonds_rm_dirs(kdamonds);
+			return -ENOMEM;
+		}
+
+		err = kobject_init_and_add(&kdamond->kobj,
+				&damon_sysfs_kdamond_ktype, &kdamonds->kobj,
+				"%d", i);
+		if (err) {
+			damon_sysfs_kdamonds_rm_dirs(kdamonds);
+			kfree(kdamond);
+			return err;
+		}
+
+		err = damon_sysfs_kdamond_add_dirs(kdamond);
+		if (err) {
+			kobject_put(&kdamond->kobj);
+			damon_sysfs_kdamonds_rm_dirs(kdamonds);
+			return err;
+		}
+
+		kdamonds_arr[i] = kdamond;
+		kdamonds->nr++;
+	}
+	return 0;
+}
 
 static ssize_t kdamonds_nr_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
-			struct kdamonds_kobj, kobj);
+	struct damon_sysfs_kdamonds *kdamonds = container_of(kobj,
+			struct damon_sysfs_kdamonds, kobj);
 
-	return sysfs_emit(buf, "%d\n", kdamonds_kobj->nr);
-}
-
-static void kdamonds_kobj_rm_dirs(struct kdamonds_kobj *kdamonds_kobj)
-{
-	struct damon_sysfs_kdamond **kdamond_kobjs = kdamonds_kobj->kdamond_kobjs;
-	int i;
-
-	for (i = 0; i < kdamonds_kobj->nr; i++) {
-		damon_sysfs_kdamond_rm_dirs(kdamond_kobjs[i]);
-		kobject_put(&kdamond_kobjs[i]->kobj);
-	}
-	kfree(kdamond_kobjs);
-	kdamonds_kobj->kdamond_kobjs = NULL;
-	kdamonds_kobj->nr = 0;
+	return sysfs_emit(buf, "%d\n", kdamonds->nr);
 }
 
 static ssize_t kdamonds_nr_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct kdamonds_kobj *kdamonds_kobj = container_of(kobj,
-			struct kdamonds_kobj, kobj);
-	struct damon_sysfs_kdamond **kdamond_kobjs, *kdamond_kobj;
-	struct damon_sysfs_contexts *contexts;
+	struct damon_sysfs_kdamonds *kdamonds = container_of(kobj,
+			struct damon_sysfs_kdamonds, kobj);
 	int nr, err;
-	int i;
 
 	err = kstrtoint(buf, 10, &nr);
 	if (err)
@@ -592,53 +653,16 @@ static ssize_t kdamonds_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
-	kdamonds_kobj_rm_dirs(kdamonds_kobj);
-	if (!nr)
-		return count;
-
-	kdamond_kobjs = kmalloc(sizeof(*kdamond_kobjs) * nr, GFP_KERNEL);
-	kdamonds_kobj->kdamond_kobjs = kdamond_kobjs;
-	for (i = 0; i < nr; i++) {
-		kdamond_kobj = kzalloc(sizeof(*kdamond_kobj), GFP_KERNEL);
-		if (!kdamond_kobj) {
-			kdamonds_kobj_rm_dirs(kdamonds_kobj);
-			return -ENOMEM;
-		}
-		err = kobject_init_and_add(&kdamond_kobj->kobj,
-				&damon_sysfs_kdamond_ktype,
-				&kdamonds_kobj->kobj, "%d", i);
-		if (err) {
-			kdamonds_kobj_rm_dirs(kdamonds_kobj);
-			kfree(kdamond_kobj);
-			return err;
-		}
-
-		contexts = kzalloc(sizeof(*contexts), GFP_KERNEL);
-		if (!contexts) {
-			kdamonds_kobj_rm_dirs(kdamonds_kobj);
-			return -ENOMEM;
-		}
-		err = kobject_init_and_add(&contexts->kobj,
-				&damon_sysfs_contexts_ktype,
-				&kdamond_kobj->kobj,
-				"contexts");
-		if (err) {
-			kdamonds_kobj_rm_dirs(kdamonds_kobj);
-			kfree(contexts);
-			return err;
-		}
-		kdamond_kobj->contexts = contexts;
-
-		kdamond_kobjs[i] = kdamond_kobj;
-		kdamonds_kobj->nr++;
-	}
+	err = damon_sysfs_kdamonds_add_dirs(kdamonds, nr);
+	if (err)
+		return err;
 
 	return count;
 }
 
 static void kdamonds_kobj_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct kdamonds_kobj, kobj));
+	kfree(container_of(kobj, struct damon_sysfs_kdamonds, kobj));
 }
 
 static struct kobj_attribute kdamonds_nr_attr = __ATTR(nr, 0600,
@@ -713,7 +737,7 @@ static struct kobj_type damon_ktype = {
 static int __init damon_sysfs_init(void)
 {
 	struct damon_kobj *damon_kobj;
-	struct kdamonds_kobj *kdamonds_kobj;
+	struct damon_sysfs_kdamonds *kdamonds;
 	int err;
 
 	damon_kobj = kzalloc(sizeof(*damon_kobj), GFP_KERNEL);
@@ -726,15 +750,15 @@ static int __init damon_sysfs_init(void)
 		return err;
 	}
 
-	kdamonds_kobj = kzalloc(sizeof(*kdamonds_kobj), GFP_KERNEL);
-	if (!kdamonds_kobj) {
+	kdamonds = kzalloc(sizeof(*kdamonds), GFP_KERNEL);
+	if (!kdamonds) {
 		kobject_put(&damon_kobj->kobj);
 		return -ENOMEM;
 	}
-	err = kobject_init_and_add(&kdamonds_kobj->kobj, &kdamonds_ktype,
+	err = kobject_init_and_add(&kdamonds->kobj, &kdamonds_ktype,
 			&damon_kobj->kobj, "kdamonds");
 	if (err) {
-		kobject_put(&kdamonds_kobj->kobj);
+		kobject_put(&kdamonds->kobj);
 		kobject_put(&damon_kobj->kobj);
 		return err;
 	}
