@@ -754,6 +754,7 @@ struct damon_sysfs_context {
 	struct kobject kobj;
 	enum damon_sysfs_damon_type damon_type;
 	struct damon_sysfs_attrs *attrs;
+	struct damon_sysfs_targets *targets;
 };
 
 static struct damon_sysfs_context *damon_sysfs_context_alloc(
@@ -772,6 +773,7 @@ static struct damon_sysfs_context *damon_sysfs_context_alloc(
 static int damon_sysfs_context_add_dirs(struct damon_sysfs_context *context)
 {
 	struct damon_sysfs_attrs *attrs;
+	struct damon_sysfs_targets *targets;
 	int err;
 
 	attrs = damon_sysfs_attrs_alloc();
@@ -792,6 +794,23 @@ static int damon_sysfs_context_add_dirs(struct damon_sysfs_context *context)
 	}
 	context->attrs = attrs;
 
+	targets = damon_sysfs_targets_alloc();
+	if (!targets)
+		goto put_attrs_out;
+
+	err = kobject_init_and_add(&targets->kobj, &damon_sysfs_targets_ktype,
+			&context->kobj, "targets");
+	if (err)
+		goto out;
+	context->targets = targets;
+
+	return err;
+
+out:
+	kfree(targets);
+put_attrs_out:
+	kobject_put(&attrs->kobj);
+	context->attrs = NULL;
 	return err;
 }
 
@@ -799,6 +818,8 @@ static void damon_sysfs_context_rm_dirs(struct damon_sysfs_context *context)
 {
 	damon_sysfs_attrs_rm_dirs(context->attrs);
 	kobject_put(&context->attrs->kobj);
+	damon_sysfs_targets_rm_dirs(context->targets);
+	kobject_put(&context->targets->kobj);
 	return;
 }
 
