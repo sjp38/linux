@@ -527,7 +527,7 @@ static struct attribute *damon_sysfs_context_attrs[] = {
 };
 ATTRIBUTE_GROUPS(damon_sysfs_context);
 
-static struct kobj_type context_ktype = {
+static struct kobj_type damon_sysfs_context_ktype = {
 	.release = damon_sysfs_context_release,
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = damon_sysfs_context_groups,
@@ -585,8 +585,9 @@ static int damon_sysfs_contexts_add_dirs(struct damon_sysfs_contexts *contexts,
 			return -ENOMEM;
 		}
 
-		err = kobject_init_and_add(&context->kobj, &context_ktype,
-				&contexts->kobj, "%d", i);
+		err = kobject_init_and_add(&context->kobj,
+				&damon_sysfs_context_ktype, &contexts->kobj,
+				"%d", i);
 		if (err) {
 			kfree(context);
 			damon_sysfs_contexts_rm_dirs(contexts);
