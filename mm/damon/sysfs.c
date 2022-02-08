@@ -5,6 +5,7 @@
  * Copyright (c) 2022 SeongJae Park <sj@kernel.org>
  */
 
+#include <linux/damon.h>
 #include <linux/kobject.h>
 #include <linux/slab.h>
 
@@ -108,6 +109,61 @@ static struct kobj_type damon_sysfs_ul_range_ktype = {
 	.release = damon_sysfs_ul_range_release,
 	.sysfs_ops = &kobj_sysfs_ops,
 	.default_groups = damon_sysfs_ul_range_groups,
+};
+
+struct damon_sysfs_stats {
+	struct kobject kobj;
+	unsigned long nr_tried;
+	unsigned long sz_tried;
+	unsigned long nr_applied;
+	unsigned long sz_applied;
+	unsigned long qt_exceeds;
+};
+
+struct damon_sysfs_watermarks {
+	struct kobject kobj;
+	enum damos_wmark_metric metric;
+	unsigned long interval_us;
+	unsigned long high;
+	unsigned long mid;
+	unsigned long low;
+};
+
+struct damon_sysfs_prioritization_weights {
+	struct kobject kobj;
+	unsigned int sz;
+	unsigned int nr_accesses;
+	unsigned int age;
+};
+
+struct damon_sysfs_quotas {
+	struct kobject kobj;
+	struct damon_sysfs_prioritization_weights *prioritization_weights;
+	unsigned long ms;
+	unsigned long sz;
+	unsigned long reset_interval;
+};
+
+struct damon_sysfs_target_access_pattern {
+	struct kobject kobj;
+	struct damon_sysfs_ul_range *sz;
+	struct damon_sysfs_ul_range *nr_accesses;
+	struct damon_sysfs_ul_range *age;
+};
+
+struct damon_sysfs_scheme {
+	struct kobject kobj;
+	enum damos_action action;
+	struct damon_sysfs_target_access_pattern *target_access_pattern;
+	struct damon_sysfs_quotas *quotas;
+	struct damon_sysfs_watermarks *watermarks;
+	struct damon_sysfs_stats *stats;
+};
+
+struct damon_sysfs_schemes {
+	struct kobject kobj;
+	struct damon_sysfs_scheme **schemes_arr;
+	int nr_schemes;
 };
 
 /*
