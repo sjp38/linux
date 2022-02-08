@@ -1761,6 +1761,7 @@ struct damon_sysfs_context {
 	enum damon_sysfs_damon_type damon_type;
 	struct damon_sysfs_attrs *attrs;
 	struct damon_sysfs_targets *targets;
+	struct damon_sysfs_schemes *schemes;
 };
 
 static struct damon_sysfs_context *damon_sysfs_context_alloc(
@@ -1780,43 +1781,58 @@ static int damon_sysfs_context_add_dirs(struct damon_sysfs_context *context)
 {
 	struct damon_sysfs_attrs *attrs;
 	struct damon_sysfs_targets *targets;
+	struct damon_sysfs_schemes *schemes;
 	int err;
 
+	/* add monitoring_attrs directory */
 	attrs = damon_sysfs_attrs_alloc();
 	if (!attrs)
 		return -ENOMEM;
-
 	err = kobject_init_and_add(&attrs->kobj, &damon_sysfs_attrs_ktype,
 			&context->kobj, "monitoring_attrs");
 	if (err) {
 		kfree(attrs);
 		return err;
 	}
-
 	err = damon_sysfs_attrs_add_dirs(attrs);
-	if (err) {
-		kobject_put(&attrs->kobj);
-		return err;
-	}
-	context->attrs = attrs;
-
-	targets = damon_sysfs_targets_alloc();
-	if (!targets)
+	if (err)
 		goto put_attrs_out;
 
+	/* add targets directory */
+	targets = damon_sysfs_targets_alloc();
+	if (!targets) {
+		err = -ENOMEM;
+		goto put_attrs_out;
+	}
 	err = kobject_init_and_add(&targets->kobj, &damon_sysfs_targets_ktype,
 			&context->kobj, "targets");
-	if (err)
-		goto out;
-	context->targets = targets;
+	if (err) {
+		kfree(targets);
+		goto put_attrs_out;
+	}
 
+	/* add schemes directory */
+	schemes = damon_sysfs_schemes_alloc();
+	if (!schemes) {
+		err = -ENOMEM;
+		goto out;
+	}
+	err = kobject_init_and_add(&schemes->kobj, &damon_sysfs_schemes_ktype,
+			&context->kobj, "schemes");
+	if (err) {
+		kfree(schemes);
+		goto out;
+	}
+
+	context->attrs = attrs;
+	context->targets = targets;
+	context->schemes = schemes;
 	return err;
 
 out:
-	kfree(targets);
+	kobject_put(&targets->kobj);
 put_attrs_out:
 	kobject_put(&attrs->kobj);
-	context->attrs = NULL;
 	return err;
 }
 
@@ -1826,6 +1842,8 @@ static void damon_sysfs_context_rm_dirs(struct damon_sysfs_context *context)
 	kobject_put(&context->attrs->kobj);
 	damon_sysfs_targets_rm_dirs(context->targets);
 	kobject_put(&context->targets->kobj);
+	damon_sysfs_schemes_rm_dirs(context->schemes);
+	kobject_put(&context->schemes->kobj);
 	return;
 }
 
