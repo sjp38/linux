@@ -208,6 +208,119 @@ static struct kobj_type damon_sysfs_region_ktype = {
 };
 
 /*
+ * init_regions directory
+ */
+
+struct damon_sysfs_regions {
+	struct kobject kobj;
+	struct damon_sysfs_region **regions_arr;
+	int nr_regions;
+};
+
+static struct damon_sysfs_regions *damon_sysfs_regions_alloc(void)
+{
+	return kzalloc(sizeof(struct damon_sysfs_regions), GFP_KERNEL);
+}
+
+static void damon_sysfs_regions_rm_dirs(struct damon_sysfs_regions *regions)
+{
+	struct damon_sysfs_region **regions_arr = regions->regions_arr;
+	int i;
+
+	for (i = 0; i < regions->nr_regions; i++)
+		kobject_put(&regions_arr[i]->kobj);
+	kfree(regions_arr);
+	regions->regions_arr = NULL;
+	regions->nr_regions = 0;
+}
+
+static int damon_sysfs_regions_add_dirs(struct damon_sysfs_regions *regions,
+		int nr_regions)
+{
+	struct damon_sysfs_region **regions_arr, *region;
+	int err, i;
+
+	damon_sysfs_regions_rm_dirs(regions);
+	if (!nr_regions)
+		return 0;
+
+	regions_arr = kmalloc(sizeof(*regions_arr) * nr_regions, GFP_KERNEL);
+	if (!regions_arr)
+		return -ENOMEM;
+	regions->regions_arr = regions_arr;
+
+	for (i = 0; i < nr_regions; i++) {
+		region = damon_sysfs_region_alloc(0, 0);
+		if (!region) {
+			damon_sysfs_regions_rm_dirs(regions);
+			return -ENOMEM;
+		}
+
+		err = kobject_init_and_add(&region->kobj,
+				&damon_sysfs_region_ktype, &regions->kobj,
+				"%d", i);
+		if (err) {
+			kfree(region);
+			damon_sysfs_regions_rm_dirs(regions);
+			return err;
+		}
+
+		regions_arr[i] = region;
+		regions->nr_regions++;
+	}
+	return 0;
+}
+
+static ssize_t damon_sysfs_regions_nr_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_regions *regions = container_of(kobj,
+			struct damon_sysfs_regions, kobj);
+
+	return sysfs_emit(buf, "%d\n", regions->nr_regions);
+}
+
+static ssize_t damon_sysfs_regions_nr_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_regions *regions = container_of(kobj,
+			struct damon_sysfs_regions, kobj);
+	int nr;
+	int err = kstrtoint(buf, 10, &nr);
+
+	if (err)
+		return err;
+	if (nr < 0)
+		return -EINVAL;
+
+	err = damon_sysfs_regions_add_dirs(regions, nr);
+	if (err)
+		return err;
+
+	return count;
+}
+
+static void damon_sysfs_regions_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_regions, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_regions_nr_attr = __ATTR(nr, 0600,
+		damon_sysfs_regions_nr_show, damon_sysfs_regions_nr_store);
+
+static struct attribute *damon_sysfs_regions_attrs[] = {
+	&damon_sysfs_regions_nr_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_regions);
+
+static struct kobj_type damon_sysfs_regions_ktype = {
+	.release = damon_sysfs_regions_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_regions_groups,
+};
+
+/*
  * intervals directory
  */
 
