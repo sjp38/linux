@@ -997,10 +997,127 @@ static struct kobj_type damon_sysfs_scheme_ktype = {
 	.default_groups = damon_sysfs_scheme_groups,
 };
 
+/*
+ * schemes directory
+ */
+
 struct damon_sysfs_schemes {
 	struct kobject kobj;
 	struct damon_sysfs_scheme **schemes_arr;
 	int nr_schemes;
+};
+
+static struct damon_sysfs_schemes *damon_sysfs_schemes_alloc(void)
+{
+	return kzalloc(sizeof(struct damon_sysfs_schemes), GFP_KERNEL);
+}
+
+static void damon_sysfs_schemes_rm_dirs(struct damon_sysfs_schemes *schemes)
+{
+	struct damon_sysfs_scheme **schemes_arr = schemes->schemes_arr;
+	int i;
+
+	for (i = 0; i < schemes->nr_schemes; i++) {
+		damon_sysfs_scheme_rm_dirs(schemes_arr[i]);
+		kobject_put(&schemes_arr[i]->kobj);
+	}
+	kfree(schemes_arr);
+	schemes->schemes_arr = NULL;
+	schemes->nr_schemes = 0;
+}
+
+static int damon_sysfs_schemes_add_dirs(struct damon_sysfs_schemes *schemes,
+		int nr_schemes)
+{
+	struct damon_sysfs_scheme **schemes_arr, *scheme;
+	int err, i;
+
+	damon_sysfs_schemes_rm_dirs(schemes);
+	if (!nr_schemes)
+		return 0;
+
+	schemes_arr = kmalloc(sizeof(*schemes_arr) * nr_schemes,
+			GFP_KERNEL);
+	if (!schemes_arr)
+		return -ENOMEM;
+	schemes->schemes_arr = schemes_arr;
+
+	for (i = 0; i < nr_schemes; i++) {
+		scheme = damon_sysfs_scheme_alloc(DAMOS_STAT);
+		if (!scheme) {
+			damon_sysfs_schemes_rm_dirs(schemes);
+			return -ENOMEM;
+		}
+
+		err = kobject_init_and_add(&scheme->kobj,
+				&damon_sysfs_scheme_ktype, &schemes->kobj,
+				"%d", i);
+		if (err) {
+			damon_sysfs_schemes_rm_dirs(schemes);
+			kfree(scheme);
+			return err;
+		}
+
+		err = damon_sysfs_scheme_add_dirs(scheme);
+		if (err) {
+			kobject_put(&scheme->kobj);
+			damon_sysfs_schemes_rm_dirs(schemes);
+			return err;
+		}
+
+		schemes_arr[i] = scheme;
+		schemes->nr_schemes++;
+	}
+	return 0;
+}
+
+static ssize_t damon_sysfs_schemes_nr_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_schemes *schemes = container_of(kobj,
+			struct damon_sysfs_schemes, kobj);
+
+	return sysfs_emit(buf, "%d\n", schemes->nr_schemes);
+}
+
+static ssize_t damon_sysfs_schemes_nr_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_schemes *schemes = container_of(kobj,
+			struct damon_sysfs_schemes, kobj);
+	int nr, err;
+
+	err = kstrtoint(buf, 10, &nr);
+	if (err)
+		return err;
+	if (nr < 0)
+		return -EINVAL;
+
+	err = damon_sysfs_schemes_add_dirs(schemes, nr);
+	if (err)
+		return err;
+
+	return count;
+}
+
+static void damon_sysfs_schemes_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_schemes, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_schemes_nr_attr = __ATTR(nr, 0600,
+		damon_sysfs_schemes_nr_show, damon_sysfs_schemes_nr_store);
+
+static struct attribute *damon_sysfs_schemes_attrs[] = {
+	&damon_sysfs_schemes_nr_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_schemes);
+
+static struct kobj_type damon_sysfs_schemes_ktype = {
+	.release = damon_sysfs_schemes_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_schemes_groups,
 };
 
 /*
