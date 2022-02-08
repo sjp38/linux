@@ -321,6 +321,88 @@ static struct kobj_type damon_sysfs_regions_ktype = {
 };
 
 /*
+ * target directory
+ */
+
+struct damon_sysfs_target {
+	struct kobject kobj;
+	struct damon_sysfs_regions *regions;
+	int pid;
+};
+
+static struct damon_sysfs_target *damon_sysfs_target_alloc(void)
+{
+	return kzalloc(sizeof(struct damon_sysfs_target), GFP_KERNEL);
+}
+
+static int damon_sysfs_target_add_dirs(struct damon_sysfs_target *target)
+{
+	struct damon_sysfs_regions *regions;
+	int err;
+
+	regions = damon_sysfs_regions_alloc();
+	if (!regions)
+		return -ENOMEM;
+
+	err = kobject_init_and_add(&regions->kobj, &damon_sysfs_regions_ktype,
+			&target->kobj, "regions");
+	if (err) {
+		kfree(regions);
+		return err;
+	}
+	target->regions = regions;
+
+	return err;
+}
+
+static void damon_sysfs_target_rm_dirs(struct damon_sysfs_target *target)
+{
+	damon_sysfs_regions_rm_dirs(target->regions);
+	kobject_put(&target->regions->kobj);
+}
+
+static ssize_t damon_sysfs_target_pid_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_target *target = container_of(kobj,
+			struct damon_sysfs_target, kobj);
+
+	return sysfs_emit(buf, "%d\n", target->pid);
+}
+
+static ssize_t damon_sysfs_target_pid_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_target *target = container_of(kobj,
+			struct damon_sysfs_target, kobj);
+	int err = kstrtoint(buf, 10, &target->pid);
+
+	if (err)
+		return -EINVAL;
+	return count;
+}
+
+static void damon_sysfs_target_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_target, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_target_pid_attr = __ATTR(pid, 0600,
+		damon_sysfs_target_pid_show, damon_sysfs_target_pid_store);
+
+static struct attribute *damon_sysfs_target_attrs[] = {
+	&damon_sysfs_target_pid_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_target);
+
+static struct kobj_type damon_sysfs_target_ktype = {
+	.release = damon_sysfs_target_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_target_groups,
+};
+
+/*
  * intervals directory
  */
 
