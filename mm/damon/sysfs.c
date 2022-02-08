@@ -403,6 +403,128 @@ static struct kobj_type damon_sysfs_target_ktype = {
 };
 
 /*
+ * targets directory
+ */
+
+struct damon_sysfs_targets {
+	struct kobject kobj;
+	struct damon_sysfs_target **targets_arr;
+	int nr_targets;
+};
+
+static struct damon_sysfs_targets *damon_sysfs_targets_alloc(void)
+{
+	return kzalloc(sizeof(struct damon_sysfs_targets), GFP_KERNEL);
+}
+
+static void damon_sysfs_targets_rm_dirs(struct damon_sysfs_targets *targets)
+{
+	struct damon_sysfs_target **targets_arr = targets->targets_arr;
+	int i;
+
+	for (i = 0; i < targets->nr_targets; i++) {
+		damon_sysfs_target_rm_dirs(targets_arr[i]);
+		kobject_put(&targets_arr[i]->kobj);
+	}
+	kfree(targets_arr);
+	targets->targets_arr = NULL;
+	targets->nr_targets = 0;
+}
+
+static int damon_sysfs_targets_add_dirs(struct damon_sysfs_targets *targets,
+		int nr_targets)
+{
+	struct damon_sysfs_target **targets_arr, *target;
+	int err, i;
+
+	damon_sysfs_targets_rm_dirs(targets);
+	if (!nr_targets)
+		return 0;
+
+	targets_arr = kmalloc(sizeof(*targets_arr) * nr_targets, GFP_KERNEL);
+	if (!targets_arr)
+		return -ENOMEM;
+	targets->targets_arr = targets_arr;
+
+	for (i = 0; i < nr_targets; i++) {
+		target = damon_sysfs_target_alloc();
+		if (!target) {
+			damon_sysfs_targets_rm_dirs(targets);
+			return -ENOMEM;
+		}
+
+		err = kobject_init_and_add(&target->kobj,
+				&damon_sysfs_target_ktype, &targets->kobj,
+				"%d", i);
+		if (err) {
+			kfree(target);
+			damon_sysfs_targets_rm_dirs(targets);
+			return err;
+		}
+
+		err = damon_sysfs_target_add_dirs(target);
+		if (err) {
+			kobject_put(&target->kobj);
+			damon_sysfs_targets_rm_dirs(targets);
+			return err;
+		}
+
+		targets_arr[i] = target;
+		targets->nr_targets++;
+	}
+	return 0;
+}
+
+static ssize_t damon_sysfs_targets_nr_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_targets *targets = container_of(kobj,
+			struct damon_sysfs_targets, kobj);
+
+	return sysfs_emit(buf, "%d\n", targets->nr_targets);
+}
+
+static ssize_t damon_sysfs_targets_nr_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_targets *targets = container_of(kobj,
+			struct damon_sysfs_targets, kobj);
+	int nr;
+	int err = kstrtoint(buf, 10, &nr);
+
+	if (err)
+		return err;
+	if (nr < 0)
+		return -EINVAL;
+
+	err = damon_sysfs_targets_add_dirs(targets, nr);
+	if (err)
+		return err;
+
+	return count;
+}
+
+static void damon_sysfs_targets_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_targets, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_targets_nr_attr = __ATTR(nr, 0600,
+		damon_sysfs_targets_nr_show, damon_sysfs_targets_nr_store);
+
+static struct attribute *damon_sysfs_targets_attrs[] = {
+	&damon_sysfs_targets_nr_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_targets);
+
+static struct kobj_type damon_sysfs_targets_ktype = {
+	.release = damon_sysfs_targets_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_targets_groups,
+};
+
+/*
  * intervals directory
  */
 
