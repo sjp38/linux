@@ -111,6 +111,103 @@ static struct kobj_type damon_sysfs_ul_range_ktype = {
 };
 
 /*
+ * init region directory
+ */
+
+struct damon_sysfs_region {
+	struct kobject kobj;
+	unsigned long start;
+	unsigned long end;
+};
+
+static struct damon_sysfs_region *damon_sysfs_region_alloc(
+		unsigned long start,
+		unsigned long end)
+{
+	struct damon_sysfs_region *region = kmalloc(sizeof(*region),
+			GFP_KERNEL);
+
+	if (!region)
+		return NULL;
+	region->kobj = (struct kobject){};
+	region->start = start;
+	region->end = end;
+	return region;
+}
+
+static ssize_t damon_sysfs_region_start_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_region *region = container_of(kobj,
+			struct damon_sysfs_region, kobj);
+
+	return sysfs_emit(buf, "%lu\n", region->start);
+}
+
+static ssize_t damon_sysfs_region_start_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_region *region = container_of(kobj,
+			struct damon_sysfs_region, kobj);
+	unsigned long start;
+	int err = kstrtoul(buf, 10, &start);
+
+	if (err)
+		return -EINVAL;
+	region->start = start;
+	return count;
+}
+
+static ssize_t damon_sysfs_region_end_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_region *region = container_of(kobj,
+			struct damon_sysfs_region, kobj);
+
+	return sysfs_emit(buf, "%lu\n", region->end);
+}
+
+static ssize_t damon_sysfs_region_end_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_region *region = container_of(kobj,
+			struct damon_sysfs_region, kobj);
+	unsigned long end;
+	int err = kstrtoul(buf, 10, &end);
+
+	if (err)
+		return -EINVAL;
+	region->end = end;
+	return count;
+}
+
+static void damon_sysfs_region_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_region, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_region_start_attr =
+		__ATTR(min, 0600, damon_sysfs_region_start_show,
+				damon_sysfs_region_start_store);
+
+static struct kobj_attribute damon_sysfs_region_end_attr =
+		__ATTR(max, 0600, damon_sysfs_region_end_show,
+				damon_sysfs_region_end_store);
+
+static struct attribute *damon_sysfs_region_attrs[] = {
+	&damon_sysfs_region_start_attr.attr,
+	&damon_sysfs_region_end_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_region);
+
+static struct kobj_type damon_sysfs_region_ktype = {
+	.release = damon_sysfs_region_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_region_groups,
+};
+
+/*
  * intervals directory
  */
 
