@@ -187,11 +187,11 @@ static void damon_sysfs_region_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_region_start_attr =
-		__ATTR(min, 0600, damon_sysfs_region_start_show,
+		__ATTR(start, 0600, damon_sysfs_region_start_show,
 				damon_sysfs_region_start_store);
 
 static struct kobj_attribute damon_sysfs_region_end_attr =
-		__ATTR(max, 0600, damon_sysfs_region_end_show,
+		__ATTR(end, 0600, damon_sysfs_region_end_show,
 				damon_sysfs_region_end_store);
 
 static struct attribute *damon_sysfs_region_attrs[] = {
