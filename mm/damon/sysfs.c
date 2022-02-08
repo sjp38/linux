@@ -718,7 +718,11 @@ static struct kobj_type damon_sysfs_quotas_ktype = {
 	.default_groups = damon_sysfs_quotas_groups,
 };
 
-struct damon_sysfs_target_access_pattern {
+/*
+ * access_pattern directory
+ */
+
+struct damon_sysfs_access_pattern {
 	struct kobject kobj;
 	struct damon_sysfs_ul_range *sz;
 	struct damon_sysfs_ul_range *nr_accesses;
@@ -728,7 +732,7 @@ struct damon_sysfs_target_access_pattern {
 struct damon_sysfs_scheme {
 	struct kobject kobj;
 	enum damos_action action;
-	struct damon_sysfs_target_access_pattern *target_access_pattern;
+	struct damon_sysfs_access_pattern *access_pattern;
 	struct damon_sysfs_quotas *quotas;
 	struct damon_sysfs_watermarks *watermarks;
 	struct damon_sysfs_stats *stats;
