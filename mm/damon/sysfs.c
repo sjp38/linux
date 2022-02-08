@@ -306,14 +306,19 @@ static struct damon_sysfs_watermarks *damon_sysfs_watermarks_alloc(
 	return watermarks;
 }
 
-/* TODO: Support string */
+static const char * const damon_sysfs_wmark_metric_strs[] = {
+	"none",
+	"free_mem_rate",
+};
+
 static ssize_t damon_sysfs_watermarks_metric_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
 
-	return sysfs_emit(buf, "%u\n", watermarks->metric);
+	return sysfs_emit(buf, "%s\n",
+			damon_sysfs_wmark_metric_strs[watermarks->metric]);
 }
 
 static ssize_t damon_sysfs_watermarks_metric_store(struct kobject *kobj,
@@ -321,10 +326,14 @@ static ssize_t damon_sysfs_watermarks_metric_store(struct kobject *kobj,
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
-	int err = kstrtouint(buf, 10, &watermarks->metric);
 
-	if (err)
+	if (!strncmp(buf, "none\n", count))
+		watermarks->metric = DAMOS_WMARK_NONE;
+	else if (!strncmp(buf, "free_mem_rate\n", count))
+		watermarks->metric = DAMOS_WMARK_FREE_MEM_RATE;
+	else
 		return -EINVAL;
+
 	return count;
 }
 
