@@ -360,12 +360,10 @@ static ssize_t damon_sysfs_region_start_store(struct kobject *kobj,
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
-	unsigned long start;
-	int err = kstrtoul(buf, 10, &start);
+	int err = kstrtoul(buf, 10, &region->start);
 
 	if (err)
 		return -EINVAL;
-	region->start = start;
 	return count;
 }
 
@@ -383,12 +381,10 @@ static ssize_t damon_sysfs_region_end_store(struct kobject *kobj,
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
-	unsigned long end;
-	int err = kstrtoul(buf, 10, &end);
+	int err = kstrtoul(buf, 10, &region->end);
 
 	if (err)
 		return -EINVAL;
-	region->end = end;
 	return count;
 }
 
