@@ -729,6 +729,87 @@ struct damon_sysfs_access_pattern {
 	struct damon_sysfs_ul_range *age;
 };
 
+static
+struct damon_sysfs_access_pattern *damon_sysfs_access_pattern_alloc(void)
+{
+	struct damon_sysfs_access_pattern *access_pattern =
+		kmalloc(sizeof(*access_pattern), GFP_KERNEL);
+
+	if (!access_pattern)
+		return NULL;
+	access_pattern->kobj = (struct kobject){};
+	return access_pattern;
+}
+
+static int damon_sysfs_access_pattern_add_dirs(
+		struct damon_sysfs_access_pattern *access_pattern)
+{
+	struct damon_sysfs_ul_range *sz, *nr_accesses, *age;
+	int err;
+
+	sz = damon_sysfs_ul_range_alloc(0, 0);
+	if (!sz)
+		return -ENOMEM;
+	err = kobject_init_and_add(&sz->kobj, &damon_sysfs_ul_range_ktype,
+			&access_pattern->kobj, "sz");
+	if (err) {
+		kfree(sz);
+		return err;
+	}
+	access_pattern->sz = sz;
+
+	nr_accesses = damon_sysfs_ul_range_alloc(0, 0);
+	if (!nr_accesses)
+		return -ENOMEM;
+	err = kobject_init_and_add(&nr_accesses->kobj, &damon_sysfs_ul_range_ktype,
+			&access_pattern->kobj, "nr_accesses");
+	if (err) {
+		kfree(nr_accesses);
+		kobject_put(&sz->kobj);
+		return err;
+	}
+	access_pattern->nr_accesses = nr_accesses;
+
+	age = damon_sysfs_ul_range_alloc(0, 0);
+	if (!age)
+		return -ENOMEM;
+	err = kobject_init_and_add(&age->kobj, &damon_sysfs_ul_range_ktype,
+			&access_pattern->kobj, "age");
+	if (err) {
+		kfree(age);
+		kobject_put(&nr_accesses->kobj);
+		kobject_put(&sz->kobj);
+		return err;
+	}
+	access_pattern->age = age;
+
+	return 0;
+}
+
+static void damon_sysfs_access_pattern_rm_dirs(
+		struct damon_sysfs_access_pattern *access_pattern)
+{
+	kobject_put(&access_pattern->sz->kobj);
+	kobject_put(&access_pattern->nr_accesses->kobj);
+	kobject_put(&access_pattern->age->kobj);
+}
+
+static void damon_sysfs_access_pattern_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_access_pattern, kobj));
+}
+
+static struct attribute *damon_sysfs_access_pattern_attrs[] = {
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_access_pattern);
+
+static struct kobj_type damon_sysfs_access_pattern_ktype = {
+	.release = damon_sysfs_access_pattern_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_access_pattern_groups,
+};
+
 struct damon_sysfs_scheme {
 	struct kobject kobj;
 	enum damos_action action;
