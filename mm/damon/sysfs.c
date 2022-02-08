@@ -810,6 +810,10 @@ static struct kobj_type damon_sysfs_access_pattern_ktype = {
 	.default_groups = damon_sysfs_access_pattern_groups,
 };
 
+/*
+ * scheme directory
+ */
+
 struct damon_sysfs_scheme {
 	struct kobject kobj;
 	enum damos_action action;
@@ -817,6 +821,180 @@ struct damon_sysfs_scheme {
 	struct damon_sysfs_quotas *quotas;
 	struct damon_sysfs_watermarks *watermarks;
 	struct damon_sysfs_stats *stats;
+};
+
+static const char * const damon_sysfs_damos_action_strs[] = {
+	"willneed",
+	"cold",
+	"pageout",
+	"hugepage",
+	"nohugepage",
+	"stat",
+};
+
+static struct damon_sysfs_scheme *damon_sysfs_scheme_alloc(
+		enum damos_action action)
+{
+	struct damon_sysfs_scheme *scheme = kmalloc(sizeof(*scheme),
+				GFP_KERNEL);
+
+	if (!scheme)
+		return NULL;
+	scheme->kobj = (struct kobject){};
+	scheme->action = action;
+	return scheme;
+}
+
+static int damon_sysfs_scheme_add_dirs(struct damon_sysfs_scheme *scheme)
+{
+	struct damon_sysfs_access_pattern *access_pattern;
+	struct damon_sysfs_quotas *quotas;
+	struct damon_sysfs_watermarks *watermarks;
+	struct damon_sysfs_stats *stats;
+	int err;
+
+	/* add access_pattern */
+	access_pattern = damon_sysfs_access_pattern_alloc();
+	if (!access_pattern)
+		return -ENOMEM;
+	err = kobject_init_and_add(&access_pattern->kobj,
+			&damon_sysfs_access_pattern_ktype, &scheme->kobj,
+			"access_pattern");
+	if (err) {
+		kfree(access_pattern);
+		return err;
+	}
+	err = damon_sysfs_access_pattern_add_dirs(access_pattern);
+	if (err) {
+		kobject_put(&access_pattern->kobj);
+		return err;
+	}
+
+	/* add quotas */
+	quotas = damon_sysfs_quotas_alloc();
+	if (!quotas) {
+		kobject_put(&access_pattern->kobj);
+		return -ENOMEM;
+	}
+	err = kobject_init_and_add(&quotas->kobj, &damon_sysfs_quotas_ktype,
+			&scheme->kobj, "quotas");
+	if (err) {
+		kfree(quotas);
+		goto put_access_pattern_out;
+	}
+	err = damon_sysfs_quotas_add_dirs(quotas);
+	if (err)
+		goto put_quotas_out;
+
+	/* add watermarks */
+	watermarks = damon_sysfs_watermarks_alloc(DAMOS_WMARK_NONE, 0, 0, 0,
+			0);
+	if (!watermarks) {
+		err = -ENOMEM;
+		goto put_quotas_out;
+	}
+	err = kobject_init_and_add(&watermarks->kobj,
+			&damon_sysfs_watermarks_ktype, &scheme->kobj,
+			"watermarks");
+	if (err) {
+		kfree(watermarks);
+		goto put_quotas_out;
+	}
+
+	/* add stats */
+	stats = damon_sysfs_stats_alloc();
+	if (!stats) {
+		err = -ENOMEM;
+		goto out;
+	}
+	err = kobject_init_and_add(&stats->kobj, &damon_sysfs_stats_ktype,
+			&scheme->kobj, "stats");
+	if (err) {
+		kfree(stats);
+		goto out;
+	}
+
+	scheme->access_pattern = access_pattern;
+	scheme->quotas = quotas;
+	scheme->watermarks = watermarks;
+	scheme->stats = stats;
+
+	return err;
+
+out:
+	kobject_put(&watermarks->kobj);
+put_quotas_out:
+	kobject_put(&quotas->kobj);
+put_access_pattern_out:
+	kobject_put(&access_pattern->kobj);
+	return err;
+}
+
+static void damon_sysfs_scheme_rm_dirs(struct damon_sysfs_scheme *scheme)
+{
+	damon_sysfs_access_pattern_rm_dirs(scheme->access_pattern);
+	kobject_put(&scheme->access_pattern->kobj);
+	damon_sysfs_quotas_rm_dirs(scheme->quotas);
+	kobject_put(&scheme->quotas->kobj);
+	kobject_put(&scheme->watermarks->kobj);
+	kobject_put(&scheme->stats->kobj);
+	return;
+}
+
+static ssize_t damon_sysfs_scheme_action_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_scheme *scheme = container_of(kobj,
+			struct damon_sysfs_scheme, kobj);
+
+	return sysfs_emit(buf, "%s\n",
+			damon_sysfs_damos_action_strs[scheme->action]);
+}
+
+static ssize_t damon_sysfs_scheme_action_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_scheme *scheme = container_of(kobj,
+			struct damon_sysfs_scheme, kobj);
+
+	if (!strncmp(buf, "willneed\n", count))
+		scheme->action = DAMOS_WILLNEED;
+	else if (!strncmp(buf, "cold\n", count))
+		scheme->action = DAMOS_COLD;
+	else if (!strncmp(buf, "pageout\n", count))
+		scheme->action = DAMOS_PAGEOUT;
+	else if (!strncmp(buf, "hugepage\n", count))
+		scheme->action = DAMOS_HUGEPAGE;
+	else if (!strncmp(buf, "nohugepage\n", count))
+		scheme->action = DAMOS_NOHUGEPAGE;
+	else if (!strncmp(buf, "stat\n", count))
+		scheme->action = DAMOS_STAT;
+	else
+		return -EINVAL;
+
+	return count;
+}
+
+static void damon_sysfs_scheme_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_scheme, kobj));
+}
+
+static struct kobj_attribute damon_sysfs_scheme_action_attr = __ATTR(
+		action, 0600, damon_sysfs_scheme_action_show,
+		damon_sysfs_scheme_action_store);
+
+
+static struct attribute *damon_sysfs_scheme_attrs[] = {
+	&damon_sysfs_scheme_action_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_scheme);
+
+static struct kobj_type damon_sysfs_scheme_ktype = {
+	.release = damon_sysfs_scheme_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_scheme_groups,
 };
 
 struct damon_sysfs_schemes {
