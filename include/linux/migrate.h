@@ -162,9 +162,14 @@ struct migrate_vma {
 	unsigned long		flags;
 };
 
+#ifdef CONFIG_DEVICE_PRIVATE
+
 int migrate_vma_setup(struct migrate_vma *args);
 void migrate_vma_pages(struct migrate_vma *migrate);
 void migrate_vma_finalize(struct migrate_vma *migrate);
+
+#endif /* CONFIG_DEVICE_PRIVATE */
+
 int next_demotion_node(int node);
 
 #else /* CONFIG_MIGRATION disabled: */
