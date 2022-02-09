@@ -673,6 +673,7 @@ config ARM64_WORKAROUND_TRBE_OVERWRITE_FILL_MODE
 
 config ARM64_ERRATUM_2051678
 	bool "Cortex-A510: 2051678: disable Hardware Update of the page table dirty bit"
+	default y
 	help
 	  This options adds the workaround for ARM Cortex-A510 erratum ARM64_ERRATUM_2051678.
 	  Affected Coretex-A510 might not respect the ordering rules for
@@ -807,7 +808,7 @@ config ARM64_ERRATUM_2224489
 
 config ARM64_ERRATUM_2064142
 	bool "Cortex-A510: 2064142: workaround TRBE register writes while disabled"
-	depends on COMPILE_TEST # Until the CoreSight TRBE driver changes are in
+	depends on CORESIGHT_TRBE
 	default y
 	help
 	  This option adds the workaround for ARM Cortex-A510 erratum 2064142.
@@ -825,7 +826,7 @@ config ARM64_ERRATUM_2064142
 
 config ARM64_ERRATUM_2038923
 	bool "Cortex-A510: 2038923: workaround TRBE corruption with enable"
-	depends on COMPILE_TEST # Until the CoreSight TRBE driver changes are in
+	depends on CORESIGHT_TRBE
 	default y
 	help
 	  This option adds the workaround for ARM Cortex-A510 erratum 2038923.
@@ -848,7 +849,7 @@ config ARM64_ERRATUM_2038923
 
 config ARM64_ERRATUM_1902691
 	bool "Cortex-A510: 1902691: workaround TRBE trace corruption"
-	depends on COMPILE_TEST # Until the CoreSight TRBE driver changes are in
+	depends on CORESIGHT_TRBE
 	default y
 	help
 	  This option adds the workaround for ARM Cortex-A510 erratum 1902691.
