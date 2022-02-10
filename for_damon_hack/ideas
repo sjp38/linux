@@ -90,3 +90,11 @@ file for one value.  For example,
 User can add contexts my 'mkdir <context name>' from damon/.
 Then, target_ids, kdamond_pid, attrs/, init_regions/, and schemes/ would
 automatically populated.
+
+Adding more layers could be helpful.
+
+damon/admin/...
+     /kernel_subsys/reclaim/autopilot/
+                           /manual/
+                   /thp/
+                   /integrated/
