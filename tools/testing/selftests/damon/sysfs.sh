@@ -246,13 +246,11 @@ test_contexts()
 	ensure_write_succ  "$contexts_dir/nr" "1" "valid input"
 	test_context "$contexts_dir/0"
 
-	ensure_write_succ  "$contexts_dir/nr" "2" "valid input"
+	ensure_write_fail "$contexts_dir/nr" "2" "only 0/1 are supported"
 	test_context "$contexts_dir/0"
-	test_context "$contexts_dir/1"
 
 	ensure_write_succ "$contexts_dir/nr" "0" "valid input"
 	ensure_dir "$contexts_dir/0" "not_exist"
-	ensure_dir "$contexts_dir/1" "not_exist"
 }
 
 test_kdamond()
