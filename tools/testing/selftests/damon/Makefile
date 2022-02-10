@@ -11,4 +11,6 @@ TEST_PROGS += debugfs_empty_targets.sh debugfs_huge_count_read_write.sh
 TEST_PROGS += dbgfs_target_ids_read_before_terminate_race.sh
 TEST_PROGS += dbgfs_target_ids_pid_leak.sh
 
+TEST_PROGS += sysfs.sh
+
 include ../lib.mk
