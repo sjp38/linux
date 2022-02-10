@@ -7,7 +7,12 @@
 
 #include <linux/damon.h>
 #include <linux/kobject.h>
+#include <linux/pid.h>
 #include <linux/slab.h>
+
+static struct damon_ctx **damon_sysfs_ctxs;
+static int damon_sysfs_nr_ctxs;
+static DEFINE_MUTEX(damon_sysfs_lock);
 
 /*
  * unsigned long range directory
@@ -1093,7 +1098,9 @@ static ssize_t damon_sysfs_schemes_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
+	mutex_lock(&damon_sysfs_lock);
 	err = damon_sysfs_schemes_add_dirs(schemes, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
@@ -1299,7 +1306,9 @@ static ssize_t damon_sysfs_regions_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
+	mutex_lock(&damon_sysfs_lock);
 	err = damon_sysfs_regions_add_dirs(regions, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
@@ -1503,7 +1512,9 @@ static ssize_t damon_sysfs_targets_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
+	mutex_lock(&damon_sysfs_lock);
 	err = damon_sysfs_targets_add_dirs(targets, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
@@ -1991,7 +2002,9 @@ static ssize_t damon_sysfs_contexts_nr_store(struct kobject *kobj,
 	if (nr < 0 || 1 < nr)
 		return -EINVAL;
 
+	mutex_lock(&damon_sysfs_lock);
 	err = damon_sysfs_contexts_add_dirs(contexts, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
@@ -2183,7 +2196,9 @@ static ssize_t damon_sysfs_kdamonds_nr_store(struct kobject *kobj,
 	if (nr < 0)
 		return -EINVAL;
 
+	mutex_lock(&damon_sysfs_lock);
 	err = damon_sysfs_kdamonds_add_dirs(kdamonds, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
@@ -2217,7 +2232,6 @@ static struct kobj_type damon_sysfs_kdamonds_ktype = {
 struct damon_sysfs_damon {
 	struct kobject kobj;
 	struct damon_sysfs_kdamonds *kdamonds;
-	bool monitor_on;
 };
 
 static struct damon_sysfs_damon *damon_sysfs_damon_alloc(void)
@@ -2245,28 +2259,150 @@ static int damon_sysfs_damon_add_dirs(struct damon_sysfs_damon *damon)
 	return err;
 }
 
-static ssize_t damon_sysfs_damon_monitor_on_show(struct kobject *kobj,
+static ssize_t damon_sysfs_damon_state_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	struct damon_sysfs_damon *damon = container_of(kobj,
-			struct damon_sysfs_damon, kobj);
-
-	return sysfs_emit(buf, "%s\n", damon->monitor_on ? "on" : "off");
+	return sysfs_emit(buf, "%d kdamonds running\n",
+			damon_nr_running_ctxs());
 }
 
-static ssize_t damon_sysfs_damon_monitor_on_store(struct kobject *kobj,
+static void damon_sysfs_destroy_targets(struct damon_ctx *ctx, bool use_pid)
+{
+	struct damon_target *t, *next;
+
+	damon_for_each_target_safe(t, next, ctx) {
+		if (use_pid)
+			put_pid(t->pid);
+		damon_destroy_target(t);
+	}
+}
+
+static int damon_sysfs_set_targets(struct damon_ctx *ctx,
+		struct damon_sysfs_context *sysfs_ctx)
+{
+	struct damon_sysfs_targets *targets = sysfs_ctx->targets;
+	bool use_pid = sysfs_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR;
+	int i;
+
+	for (i = 0; i < targets->nr_targets; i++) {
+		struct damon_target *t;
+
+		t = damon_new_target();
+		if (!t) {
+			damon_sysfs_destroy_targets(ctx, use_pid);
+			return -ENOMEM;
+		}
+		if (use_pid) {
+			t->pid = find_get_pid(targets->targets_arr[i]->pid);
+			if (!t->pid) {
+				damon_sysfs_destroy_targets(ctx, use_pid);
+				return -EINVAL;
+			}
+		}
+		damon_add_target(ctx, t);
+	}
+	return 0;
+}
+
+static struct damon_ctx *damon_sysfs_build_ctx(
+		struct damon_sysfs_context *sys_ctx)
+{
+	struct damon_ctx *ctx = damon_new_ctx();
+	struct damon_sysfs_attrs *sys_attrs = sys_ctx->attrs;
+	struct damon_sysfs_ul_range *sys_nr_regions = sys_attrs->nr_regions;
+	struct damon_sysfs_intervals *sys_intervals = sys_attrs->intervals;
+	bool use_pid = sys_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR;
+	int err;
+
+	if (!ctx)
+		return ERR_PTR(-ENOMEM);
+	err = damon_set_attrs(ctx, sys_intervals->sample_us,
+			sys_intervals->aggr_us, sys_intervals->update_us,
+			sys_nr_regions->min, sys_nr_regions->max);
+	if (err)
+		return ERR_PTR(err);
+	err = damon_sysfs_set_targets(ctx, sys_ctx);
+	if (err)
+		return ERR_PTR(err);
+	if (use_pid)
+		damon_va_set_primitives(ctx);
+	return ctx;
+}
+
+static struct damon_ctx **damon_sysfs_build_ctxs(
+		struct damon_sysfs_kdamonds *kdamonds, int *nr_ctxs)
+{
+	struct damon_ctx **ctxs = kmalloc_array(kdamonds->nr, sizeof(*ctxs),
+			GFP_KERNEL);
+	int i;
+
+	*nr_ctxs = 0;
+
+	if (!ctxs)
+		return ERR_PTR(-ENOMEM);
+
+	for (i = 0; i < kdamonds->nr; i++) {
+		struct damon_ctx *ctx;
+		int j;
+
+		if (kdamonds->kdamonds_arr[i]->contexts->nr == 0)
+			continue;
+
+		ctx = damon_sysfs_build_ctx(
+			kdamonds->kdamonds_arr[i]->contexts->contexts_arr[0]);
+		if (IS_ERR(ctx)) {
+			for (j = 0; j < *nr_ctxs; j++)
+				damon_destroy_ctx(ctxs[j]);
+			kfree(ctxs);
+			*nr_ctxs = 0;
+			return ERR_PTR(PTR_ERR(ctx));
+		}
+		ctxs[(*nr_ctxs)++] = ctx;
+	}
+	return ctxs;
+}
+
+static ssize_t damon_sysfs_damon_state_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_damon *damon = container_of(kobj,
 			struct damon_sysfs_damon, kobj);
-	bool on, err;
+	struct damon_ctx **ctxs;
+	int nr_ctxs, i;
+	ssize_t ret;
 
-	err = kstrtobool(buf, &on);
-	if (err)
-		return err;
-
-	damon->monitor_on = on;
-	return count;
+	mutex_lock(&damon_sysfs_lock);
+	if (!strncmp(buf, "start\n", count)) {
+		ctxs = damon_sysfs_build_ctxs(damon->kdamonds, &nr_ctxs);
+		if (IS_ERR(ctxs)) {
+			ret = PTR_ERR(ctxs);
+			goto out;
+		}
+		ret = damon_start(ctxs, nr_ctxs);
+		if (ret) {
+			for (i = 0; i < nr_ctxs; i++)
+				damon_destroy_ctx(ctxs[i]);
+			goto out;
+		}
+		damon_sysfs_ctxs = ctxs;
+		damon_sysfs_nr_ctxs = nr_ctxs;
+	} else if (!strncmp(buf, "stop\n", count)) {
+		ret = damon_stop(damon_sysfs_ctxs, damon_sysfs_nr_ctxs);
+		if (ret) {
+			goto out;
+		}
+		for (i = 0; i < damon_sysfs_nr_ctxs; i++)
+			damon_destroy_ctx(damon_sysfs_ctxs[i]);
+		damon_sysfs_nr_ctxs = 0;
+		damon_sysfs_ctxs = NULL;
+	} else {
+		ret = -EINVAL;
+	}
+out:
+	mutex_unlock(&damon_sysfs_lock);
+	if (!ret)
+		ret = count;
+	return ret;
 }
 
 static void damon_sysfs_damon_release(struct kobject *kobj)
@@ -2274,12 +2410,12 @@ static void damon_sysfs_damon_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_damon, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_damon_monitor_on_attr =
-	__ATTR(monitor_on, 0600, damon_sysfs_damon_monitor_on_show,
-		damon_sysfs_damon_monitor_on_store);
+static struct kobj_attribute damon_sysfs_damon_state_attr =
+	__ATTR(state, 0600, damon_sysfs_damon_state_show,
+		damon_sysfs_damon_state_store);
 
 static struct attribute *damon_sysfs_damon_attrs[] = {
-	&damon_sysfs_damon_monitor_on_attr.attr,
+	&damon_sysfs_damon_state_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_damon);
