@@ -72,11 +72,49 @@ ensure_file()
 	fi
 }
 
+test_schemes()
+{
+	echo
+}
+
+test_targets()
+{
+	echo
+}
+
+test_ranges()
+{
+	ranges_dir=$1
+	ensure_dir "$ranges_dir" "exist"
+	ensure_file "$ranges_dir/min" "exist" 600
+	ensure_file "$ranges_dir/max" "exist" 600
+}
+
+test_intervals()
+{
+	intervals_dir=$1
+	ensure_dir "$intervals_dir" "exist"
+	ensure_file "$intervals_dir/aggr_us" "exist" "600"
+	ensure_file "$intervals_dir/sample_us" "exist" "600"
+	ensure_file "$intervals_dir/update_us" "exist" "600"
+}
+
+test_monitoring_attrs()
+{
+	monitoring_attrs_dir=$1
+	ensure_dir "$monitoring_attrs_dir" "exist"
+	test_intervals "$monitoring_attrs_dir/intervals"
+	test_ranges "$monitoring_attrs_dir/nr_regions"
+}
+
 test_context()
 {
 	context_dir=$1
 	ensure_dir "$context_dir" "exist"
 	ensure_file "$context_dir/damon_type" "exist" 600
+	test_monitoring_attrs "$context_dir/monitoring_attrs"
+	test_targets "$contexts_dir/targets"
+	test_schemes "$contexts_dir/schemes"
 }
 
 test_contexts()
