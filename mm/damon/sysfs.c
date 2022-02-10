@@ -240,23 +240,23 @@ static void damon_sysfs_stats_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_stats_nr_tried_attr =
-		__ATTR(nr_tried, 0600, damon_sysfs_stats_nr_tried_show,
+		__ATTR(nr_tried, 0400, damon_sysfs_stats_nr_tried_show,
 				damon_sysfs_stats_nr_tried_store);
 
 static struct kobj_attribute damon_sysfs_stats_sz_tried_attr =
-		__ATTR(sz_tried, 0600, damon_sysfs_stats_sz_tried_show,
+		__ATTR(sz_tried, 0400, damon_sysfs_stats_sz_tried_show,
 				damon_sysfs_stats_sz_tried_store);
 
 static struct kobj_attribute damon_sysfs_stats_nr_applied_attr =
-		__ATTR(nr_applied, 0600, damon_sysfs_stats_nr_applied_show,
+		__ATTR(nr_applied, 0400, damon_sysfs_stats_nr_applied_show,
 				damon_sysfs_stats_nr_applied_store);
 
 static struct kobj_attribute damon_sysfs_stats_sz_applied_attr =
-		__ATTR(sz_applied, 0600, damon_sysfs_stats_sz_applied_show,
+		__ATTR(sz_applied, 0400, damon_sysfs_stats_sz_applied_show,
 				damon_sysfs_stats_sz_applied_store);
 
 static struct kobj_attribute damon_sysfs_stats_qt_exceeds_attr =
-		__ATTR(qt_exceeds, 0600, damon_sysfs_stats_qt_exceeds_show,
+		__ATTR(qt_exceeds, 0400, damon_sysfs_stats_qt_exceeds_show,
 				damon_sysfs_stats_qt_exceeds_store);
 
 static struct attribute *damon_sysfs_stats_attrs[] = {
