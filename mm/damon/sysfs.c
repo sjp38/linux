@@ -1988,7 +1988,7 @@ static ssize_t damon_sysfs_contexts_nr_store(struct kobject *kobj,
 	err = kstrtoint(buf, 10, &nr);
 	if (err)
 		return err;
-	if (nr < 0)
+	if (nr < 0 || 1 < nr)
 		return -EINVAL;
 
 	err = damon_sysfs_contexts_add_dirs(contexts, nr);
