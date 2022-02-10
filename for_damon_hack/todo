@@ -1,6 +1,11 @@
 TODOs
 =====
 
+- Refactor monitoring_primitives
+  - Rename to damon_ops
+  - Make it registered to DAMON core
+  - This will help supporting CONFIG_VADDR && !CONFIG_PADDR like situation.
+
 - Implement reliable DAMON interface via sysfs (allow online params update)
   - Basic directory hierarchy is done
   - TODO: Link to DAMON API, so that it really works
