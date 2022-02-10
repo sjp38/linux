@@ -72,22 +72,142 @@ ensure_file()
 	fi
 }
 
+test_range()
+{
+	range_dir=$1
+	ensure_dir "$range_dir" "exist"
+	ensure_file "$range_dir/min" "exist" 600
+	ensure_file "$range_dir/max" "exist" 600
+}
+
+test_stats()
+{
+	stats_dir=$1
+	ensure_dir "$stats_dir" "exist"
+	for f in nr_tried sz_tried nr_applied sz_applied qt_exceeds
+	do
+		ensure_file "$stats_dir/$f" "exist" "400"
+	done
+}
+
+test_watermarks()
+{
+	watermarks_dir=$1
+	ensure_dir "$watermarks_dir" "exist"
+	ensure_file "$watermarks_dir/metric" "exist" "600"
+	ensure_file "$watermarks_dir/interval_us" "exist" "600"
+	ensure_file "$watermarks_dir/high" "exist" "600"
+	ensure_file "$watermarks_dir/mid" "exist" "600"
+	ensure_file "$watermarks_dir/low" "exist" "600"
+}
+
+test_weights()
+{
+	weights_dir=$1
+	ensure_dir "$weights_dir" "exist"
+	ensure_file "$weights_dir/sz" "exist" "600"
+	ensure_file "$weights_dir/nr_accesses" "exist" "600"
+	ensure_file "$weights_dir/age" "exist" "600"
+}
+
+test_quotas()
+{
+	quotas_dir=$1
+	ensure_dir "$quotas_dir" "exist"
+	ensure_file "$quotas_dir/ms" "exist" 600
+	ensure_file "$quotas_dir/sz" "exist" 600
+	ensure_file "$quotas_dir/reset_interval_ms" "exist" 600
+	test_weights "$quotas_dir/weights"
+}
+
+test_access_pattern()
+{
+	access_pattern_dir=$1
+	ensure_dir "$access_pattern_dir" "exist"
+	test_range "$access_pattern_dir/age"
+	test_range "$access_pattern_dir/nr_accesses"
+	test_range "$access_pattern_dir/sz"
+}
+
+test_scheme()
+{
+	scheme_dir=$1
+	ensure_dir "$scheme_dir" "exist"
+	ensure_file "$scheme_dir/action" "exist" "600"
+	test_access_pattern "$scheme_dir/access_pattern"
+	test_quotas "$scheme_dir/quotas"
+	test_watermarks "$scheme_dir/watermarks"
+	test_stats "$scheme_dir/stats"
+}
+
 test_schemes()
 {
-	echo
+	schemes_dir=$1
+	ensure_dir "$schemes_dir" "exist"
+	ensure_file "$schemes_dir/nr" "exist" 600
+
+	ensure_write_succ  "$schemes_dir/nr" "1" "valid input"
+	test_scheme "$schemes_dir/0"
+
+	ensure_write_succ  "$schemes_dir/nr" "2" "valid input"
+	test_scheme "$schemes_dir/0"
+	test_scheme "$schemes_dir/1"
+
+	ensure_write_succ "$schemes_dir/nr" "0" "valid input"
+	ensure_dir "$schemes_dir/0" "not_exist"
+	ensure_dir "$schemes_dir/1" "not_exist"
+}
+
+test_region()
+{
+	region_dir=$1
+	ensure_dir "$region_dir" "exist"
+	ensure_file "$region_dir/start" "exist" 600
+	ensure_file "$region_dir/end" "exist" 600
+}
+
+test_regions()
+{
+	regions_dir=$1
+	ensure_dir "$regions_dir" "exist"
+	ensure_file "$regions_dir/nr" "exist" 600
+
+	ensure_write_succ  "$regions_dir/nr" "1" "valid input"
+	test_region "$regions_dir/0"
+
+	ensure_write_succ  "$regions_dir/nr" "2" "valid input"
+	test_region "$regions_dir/0"
+	test_region "$regions_dir/1"
+
+	ensure_write_succ "$regions_dir/nr" "0" "valid input"
+	ensure_dir "$regions_dir/0" "not_exist"
+	ensure_dir "$regions_dir/1" "not_exist"
+}
+
+test_target()
+{
+	target_dir=$1
+	ensure_dir "$target_dir" "exist"
+	ensure_file "$target_dir/pid" "exist" "600"
+	test_regions "$target_dir/regions"
 }
 
 test_targets()
 {
-	echo
-}
+	targets_dir=$1
+	ensure_dir "$targets_dir" "exist"
+	ensure_file "$targets_dir/nr" "exist" 600
 
-test_ranges()
-{
-	ranges_dir=$1
-	ensure_dir "$ranges_dir" "exist"
-	ensure_file "$ranges_dir/min" "exist" 600
-	ensure_file "$ranges_dir/max" "exist" 600
+	ensure_write_succ  "$targets_dir/nr" "1" "valid input"
+	test_target "$targets_dir/0"
+
+	ensure_write_succ  "$targets_dir/nr" "2" "valid input"
+	test_target "$targets_dir/0"
+	test_target "$targets_dir/1"
+
+	ensure_write_succ "$targets_dir/nr" "0" "valid input"
+	ensure_dir "$targets_dir/0" "not_exist"
+	ensure_dir "$targets_dir/1" "not_exist"
 }
 
 test_intervals()
@@ -104,7 +224,7 @@ test_monitoring_attrs()
 	monitoring_attrs_dir=$1
 	ensure_dir "$monitoring_attrs_dir" "exist"
 	test_intervals "$monitoring_attrs_dir/intervals"
-	test_ranges "$monitoring_attrs_dir/nr_regions"
+	test_range "$monitoring_attrs_dir/nr_regions"
 }
 
 test_context()
@@ -113,8 +233,8 @@ test_context()
 	ensure_dir "$context_dir" "exist"
 	ensure_file "$context_dir/damon_type" "exist" 600
 	test_monitoring_attrs "$context_dir/monitoring_attrs"
-	test_targets "$contexts_dir/targets"
-	test_schemes "$contexts_dir/schemes"
+	test_targets "$context_dir/targets"
+	test_schemes "$context_dir/schemes"
 }
 
 test_contexts()
