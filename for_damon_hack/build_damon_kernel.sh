@@ -15,6 +15,7 @@ echo 'CONFIG_DAMON_VADDR=y' >> $outdir/.config
 echo 'CONFIG_DAMON_PADDR=y' >> $outdir/.config
 echo 'CONFIG_DAMON_PGIDLE=y' >> $outdir/.config
 echo 'CONFIG_DAMON_VADDR_KUNIT_TEST=y' >> $outdir/.config
+echo 'CONFIG_DAMON_SYSFS=y' >> $outdir/.config
 echo 'CONFIG_DAMON_DBGFS=y' >> $outdir/.config
 echo 'CONFIG_DAMON_DBGFS_KUNIT_TEST=y' >> $outdir/.config
 echo 'CONFIG_DAMON_RECLAIM=y' >> $outdir/.config
