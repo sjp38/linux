@@ -4,6 +4,34 @@
 # Kselftest frmework requirement - SKIP code is 4.
 ksft_skip=4
 
+ensure_write_succ()
+{
+	file=$1
+	content=$2
+	reason=$3
+
+	if ! echo "$content" > "$file"
+	then
+		echo "writing $content to $file failed"
+		echo "expected success because $reason"
+		exit 1
+	fi
+}
+
+ensure_write_fail()
+{
+	file=$1
+	content=$2
+	reason=$3
+
+	if echo "$content" > "$file"
+	then
+		echo "writing $content to $file succeed ($fail_reason)"
+		echo "expected failure because $reason"
+		exit 1
+	fi
+}
+
 ensure_dir()
 {
 	dir=$1
@@ -44,67 +72,69 @@ ensure_file()
 	fi
 }
 
+test_context()
+{
+	context_dir=$1
+	ensure_dir "$context_dir" "exist"
+	ensure_file "$context_dir/damon_type" "exist" 600
+}
+
+test_contexts()
+{
+	contexts_dir=$1
+	ensure_dir "$contexts_dir" "exist"
+	ensure_file "$contexts_dir/nr" "exist" 600
+
+	ensure_write_succ  "$contexts_dir/nr" "1" "valid input"
+	test_context "$contexts_dir/0"
+
+	ensure_write_succ  "$contexts_dir/nr" "2" "valid input"
+	test_context "$contexts_dir/0"
+	test_context "$contexts_dir/1"
+
+	ensure_write_succ "$contexts_dir/nr" "0" "valid input"
+	ensure_dir "$contexts_dir/0" "not_exist"
+	ensure_dir "$contexts_dir/1" "not_exist"
+}
+
 test_kdamond()
 {
 	kdamond_dir=$1
-
 	ensure_dir "$kdamond_dir" "exist"
-	if ! pushd "$dir"
-	then
-		echo "pushd $dir failed"
-		exit 1
-	fi
-
-	ensure_dir "contexts" "exist"
-	ensure_file "pid" "exist" 400
-
-	popd
+	ensure_file "$kdamond_dir/pid" "exist" 400
+	test_contexts "$kdamond_dir/contexts"
 }
 
 test_kdamonds()
 {
-	local damon_sysfs=$1
+	kdamonds_dir=$1
+	ensure_dir "$kdamonds_dir" "exist"
 
-	if ! pushd "$damon_sysfs"
+	ensure_file "$kdamonds_dir/nr" "exist" "600"
+
+	ensure_write_succ  "$kdamonds_dir/nr" "1" "valid input"
+	test_kdamond "$kdamonds_dir/0"
+
+	ensure_write_succ  "$kdamonds_dir/nr" "2" "valid input"
+	test_kdamond "$kdamonds_dir/0"
+	test_kdamond "$kdamonds_dir/1"
+
+	ensure_write_succ "$kdamonds_dir/nr" "0" "valid input"
+	ensure_dir "$kdamonds_dir/0" "not_exist"
+	ensure_dir "$kdamonds_dir/1" "not_exist"
+}
+
+test_damon_sysfs()
+{
+	damon_sysfs=$1
+	if [ ! -d "$damon_sysfs" ]
 	then
-		echo "pushd $damon_sysfs failed"
-		exit 1
+		echo "$damon_sysfs not found"
+		exit $ksft_skip
 	fi
 
-	ensure_dir "kdamonds" "exist"
-	ensure_file "kdamonds/nr" "exist" "600"
-	ensure_file "monitor_on" "exist" "600"
-
-	if ! echo 2 > kdamonds/nr
-	then
-		echo "writing 2 to kdamonds/nr failed"
-		exit 1
-	fi
-
-	test_kdamond "kdamonds/0"
-	test_kdamond "kdamonds/1"
-
-	if ! echo 3 > kdamonds/nr
-	then
-		echo "writing 3 to kdamonds/nr failed"
-		exit 1
-	fi
-
-	test_kdamond "kdamonds/0"
-	test_kdamond "kdamonds/1"
-	test_kdamond "kdamonds/2"
-
-	if ! echo 0 > kdamonds/nr
-	then
-		echo "writing 0 to kdamonds/nr failed"
-		exit 1
-	fi
-
-	ensure_dir "kdamonds/0" "not_exist"
-	ensure_dir "kdamonds/1" "not_exist"
-	ensure_dir "kdamonds/2" "not_exist"
-
-	popd
+	ensure_file "$damon_sysfs/monitor_on" "exist" "600"
+	test_kdamonds "$damon_sysfs/kdamonds"
 }
 
 check_dependencies()
@@ -114,15 +144,7 @@ check_dependencies()
 		echo "Run as root"
 		exit $ksft_skip
 	fi
-
-	if [ ! -d "$damon_sysfs" ]
-	then
-		echo "$damon_sysfs not found"
-		exit $ksft_skip
-	fi
 }
 
-damon_sysfs=/sys/kernel/mm/damon
-
 check_dependencies
-test_kdamonds "$damon_sysfs"
+test_damon_sysfs "/sys/kernel/mm/damon"
