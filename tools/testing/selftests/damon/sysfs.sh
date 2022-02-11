@@ -303,4 +303,4 @@ check_dependencies()
 }
 
 check_dependencies
-test_damon_sysfs "/sys/kernel/mm/damon"
+test_damon_sysfs "/sys/kernel/mm/damon/admin"
