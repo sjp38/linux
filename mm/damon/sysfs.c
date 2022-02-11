@@ -2262,8 +2262,10 @@ static int damon_sysfs_damon_add_dirs(struct damon_sysfs_damon *damon)
 static ssize_t damon_sysfs_damon_state_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d kdamonds running\n",
-			damon_nr_running_ctxs());
+	int nr_running_ctxs = damon_nr_running_ctxs();
+
+	return sysfs_emit(buf, "%s # %d kdamonds running\n",
+			nr_running_ctxs ? "on" : "off", nr_running_ctxs);
 }
 
 static void damon_sysfs_destroy_targets(struct damon_ctx *ctx, bool use_pid)
