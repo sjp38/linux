@@ -56,7 +56,7 @@ static ssize_t damon_sysfs_ul_range_min_store(struct kobject *kobj,
 	unsigned long min;
 	int err;
 
-	err = kstrtoul(buf, 10, &min);
+	err = kstrtoul(buf, 0, &min);
 	if (err)
 		return -EINVAL;
 
@@ -81,7 +81,7 @@ static ssize_t damon_sysfs_ul_range_max_store(struct kobject *kobj,
 	unsigned long max;
 	int err;
 
-	err = kstrtoul(buf, 10, &max);
+	err = kstrtoul(buf, 0, &max);
 	if (err)
 		return -EINVAL;
 
@@ -147,7 +147,7 @@ static ssize_t damon_sysfs_stats_nr_tried_store(struct kobject *kobj,
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 10, &stats->nr_tried);
+	int err = kstrtoul(buf, 0, &stats->nr_tried);
 
 	if (err)
 		return -EINVAL;
@@ -168,7 +168,7 @@ static ssize_t damon_sysfs_stats_sz_tried_store(struct kobject *kobj,
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 10, &stats->sz_tried);
+	int err = kstrtoul(buf, 0, &stats->sz_tried);
 
 	if (err)
 		return -EINVAL;
@@ -189,7 +189,7 @@ static ssize_t damon_sysfs_stats_nr_applied_store(struct kobject *kobj,
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 10, &stats->nr_applied);
+	int err = kstrtoul(buf, 0, &stats->nr_applied);
 
 	if (err)
 		return -EINVAL;
@@ -210,7 +210,7 @@ static ssize_t damon_sysfs_stats_sz_applied_store(struct kobject *kobj,
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 10, &stats->sz_applied);
+	int err = kstrtoul(buf, 0, &stats->sz_applied);
 
 	if (err)
 		return -EINVAL;
@@ -231,7 +231,7 @@ static ssize_t damon_sysfs_stats_qt_exceeds_store(struct kobject *kobj,
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 10, &stats->qt_exceeds);
+	int err = kstrtoul(buf, 0, &stats->qt_exceeds);
 
 	if (err)
 		return -EINVAL;
@@ -355,7 +355,7 @@ static ssize_t damon_sysfs_watermarks_interval_us_store(struct kobject *kobj,
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
-	int err = kstrtoul(buf, 10, &watermarks->interval_us);
+	int err = kstrtoul(buf, 0, &watermarks->interval_us);
 
 	if (err)
 		return -EINVAL;
@@ -376,7 +376,7 @@ static ssize_t damon_sysfs_watermarks_high_store(struct kobject *kobj,
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
-	int err = kstrtoul(buf, 10, &watermarks->high);
+	int err = kstrtoul(buf, 0, &watermarks->high);
 
 	if (err)
 		return -EINVAL;
@@ -397,7 +397,7 @@ static ssize_t damon_sysfs_watermarks_mid_store(struct kobject *kobj,
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
-	int err = kstrtoul(buf, 10, &watermarks->mid);
+	int err = kstrtoul(buf, 0, &watermarks->mid);
 
 	if (err)
 		return -EINVAL;
@@ -418,7 +418,7 @@ static ssize_t damon_sysfs_watermarks_low_store(struct kobject *kobj,
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
-	int err = kstrtoul(buf, 10, &watermarks->low);
+	int err = kstrtoul(buf, 0, &watermarks->low);
 
 	if (err)
 		return -EINVAL;
@@ -507,7 +507,7 @@ static ssize_t damon_sysfs_weights_sz_store(struct kobject *kobj,
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
 			struct damon_sysfs_weights, kobj);
-	int err = kstrtouint(buf, 10, &weights->sz);
+	int err = kstrtouint(buf, 0, &weights->sz);
 
 	if (err)
 		return -EINVAL;
@@ -528,7 +528,7 @@ static ssize_t damon_sysfs_weights_nr_accesses_store(struct kobject *kobj,
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
 			struct damon_sysfs_weights, kobj);
-	int err = kstrtouint(buf, 10, &weights->nr_accesses);
+	int err = kstrtouint(buf, 0, &weights->nr_accesses);
 
 	if (err)
 		return -EINVAL;
@@ -549,7 +549,7 @@ static ssize_t damon_sysfs_weights_age_store(struct kobject *kobj,
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
 			struct damon_sysfs_weights, kobj);
-	int err = kstrtouint(buf, 10, &weights->age);
+	int err = kstrtouint(buf, 0, &weights->age);
 
 	if (err)
 		return -EINVAL;
@@ -643,7 +643,7 @@ static ssize_t damon_sysfs_quotas_ms_store(struct kobject *kobj,
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
-	int err = kstrtoul(buf, 10, &quotas->ms);
+	int err = kstrtoul(buf, 0, &quotas->ms);
 
 	if (err)
 		return -EINVAL;
@@ -664,7 +664,7 @@ static ssize_t damon_sysfs_quotas_sz_store(struct kobject *kobj,
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
-	int err = kstrtoul(buf, 10, &quotas->sz);
+	int err = kstrtoul(buf, 0, &quotas->sz);
 
 	if (err)
 		return -EINVAL;
@@ -685,7 +685,7 @@ static ssize_t damon_sysfs_quotas_reset_interval_ms_store(struct kobject *kobj,
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
-	int err = kstrtoul(buf, 10, &quotas->reset_interval_ms);
+	int err = kstrtoul(buf, 0, &quotas->reset_interval_ms);
 
 	if (err)
 		return -EINVAL;
@@ -1091,13 +1091,14 @@ static ssize_t damon_sysfs_schemes_nr_store(struct kobject *kobj,
 			struct damon_sysfs_schemes, kobj);
 	int nr, err;
 
-	err = kstrtoint(buf, 10, &nr);
+	err = kstrtoint(buf, 0, &nr);
 	if (err)
 		return err;
 	if (nr < 0)
 		return -EINVAL;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	err = damon_sysfs_schemes_add_dirs(schemes, nr);
 	mutex_unlock(&damon_sysfs_lock);
 	if (err)
@@ -1165,7 +1166,7 @@ static ssize_t damon_sysfs_region_start_store(struct kobject *kobj,
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
-	int err = kstrtoul(buf, 10, &region->start);
+	int err = kstrtoul(buf, 0, &region->start);
 
 	if (err)
 		return -EINVAL;
@@ -1186,7 +1187,7 @@ static ssize_t damon_sysfs_region_end_store(struct kobject *kobj,
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
-	int err = kstrtoul(buf, 10, &region->end);
+	int err = kstrtoul(buf, 0, &region->end);
 
 	if (err)
 		return -EINVAL;
@@ -1298,14 +1299,15 @@ static ssize_t damon_sysfs_regions_nr_store(struct kobject *kobj,
 	struct damon_sysfs_regions *regions = container_of(kobj,
 			struct damon_sysfs_regions, kobj);
 	int nr;
-	int err = kstrtoint(buf, 10, &nr);
+	int err = kstrtoint(buf, 0, &nr);
 
 	if (err)
 		return err;
 	if (nr < 0)
 		return -EINVAL;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	err = damon_sysfs_regions_add_dirs(regions, nr);
 	mutex_unlock(&damon_sysfs_lock);
 	if (err)
@@ -1389,7 +1391,7 @@ static ssize_t damon_sysfs_target_pid_store(struct kobject *kobj,
 {
 	struct damon_sysfs_target *target = container_of(kobj,
 			struct damon_sysfs_target, kobj);
-	int err = kstrtoint(buf, 10, &target->pid);
+	int err = kstrtoint(buf, 0, &target->pid);
 
 	if (err)
 		return -EINVAL;
@@ -1504,14 +1506,15 @@ static ssize_t damon_sysfs_targets_nr_store(struct kobject *kobj,
 	struct damon_sysfs_targets *targets = container_of(kobj,
 			struct damon_sysfs_targets, kobj);
 	int nr;
-	int err = kstrtoint(buf, 10, &nr);
+	int err = kstrtoint(buf, 0, &nr);
 
 	if (err)
 		return err;
 	if (nr < 0)
 		return -EINVAL;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	err = damon_sysfs_targets_add_dirs(targets, nr);
 	mutex_unlock(&damon_sysfs_lock);
 	if (err)
@@ -1583,7 +1586,7 @@ static ssize_t damon_sysfs_intervals_sample_us_store(struct kobject *kobj,
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
 			struct damon_sysfs_intervals, kobj);
 	unsigned long us;
-	int err = kstrtoul(buf, 10, &us);
+	int err = kstrtoul(buf, 0, &us);
 
 	if (err)
 		return -EINVAL;
@@ -1607,7 +1610,7 @@ static ssize_t damon_sysfs_intervals_aggr_us_store(struct kobject *kobj,
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
 			struct damon_sysfs_intervals, kobj);
 	unsigned long us;
-	int err = kstrtoul(buf, 10, &us);
+	int err = kstrtoul(buf, 0, &us);
 
 	if (err)
 		return -EINVAL;
@@ -1631,7 +1634,7 @@ static ssize_t damon_sysfs_intervals_update_us_store(struct kobject *kobj,
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
 			struct damon_sysfs_intervals, kobj);
 	unsigned long us;
-	int err = kstrtoul(buf, 10, &us);
+	int err = kstrtoul(buf, 0, &us);
 
 	if (err)
 		return -EINVAL;
@@ -1995,13 +1998,14 @@ static ssize_t damon_sysfs_contexts_nr_store(struct kobject *kobj,
 			struct damon_sysfs_contexts, kobj);
 	int nr, err;
 
-	err = kstrtoint(buf, 10, &nr);
+	err = kstrtoint(buf, 0, &nr);
 	if (err)
 		return err;
 	if (nr < 0 || 1 < nr)
 		return -EINVAL;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	err = damon_sysfs_contexts_add_dirs(contexts, nr);
 	mutex_unlock(&damon_sysfs_lock);
 	if (err)
@@ -2191,7 +2195,8 @@ static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
 	struct damon_ctx *ctx;
 	ssize_t ret;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	if (!strncmp(buf, "on\n", count)) {
 		if (kdamond->damon_ctx &&
 				damon_sysfs_ctx_running(kdamond->damon_ctx)) {
@@ -2247,7 +2252,8 @@ static ssize_t damon_sysfs_kdamond_pid_show(struct kobject *kobj,
 	struct damon_ctx *ctx;
 	int pid;
 
-	mutex_lock(&damon_sysfs_lock);
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	ctx = kdamond->damon_ctx;
 	if (!ctx) {
 		pid = -1;
@@ -2335,17 +2341,13 @@ int damon_sysfs_nr_running_ctxs(struct damon_sysfs_kdamond **kdamonds,
 	for (i = 0; i < nr_kdamonds; i++) {
 		struct damon_ctx *ctx;
 
-		mutex_lock(&damon_sysfs_lock);
 		ctx = kdamonds[i]->damon_ctx;
-		if (!ctx) {
-			mutex_unlock(&damon_sysfs_lock);
+		if (!ctx)
 			continue;
-		}
 		mutex_lock(&ctx->kdamond_lock);
 		if (ctx->kdamond)
 			nr_running_ctxs++;
 		mutex_unlock(&ctx->kdamond_lock);
-		mutex_unlock(&damon_sysfs_lock);
 	}
 	return nr_running_ctxs;
 }
@@ -2414,13 +2416,16 @@ static ssize_t damon_sysfs_kdamonds_nr_store(struct kobject *kobj,
 			struct damon_sysfs_kdamonds, kobj);
 	int nr, err;
 
-	err = kstrtoint(buf, 10, &nr);
+	err = kstrtoint(buf, 0, &nr);
 	if (err)
 		return err;
 	if (nr < 0)
 		return -EINVAL;
 
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return -EBUSY;
 	err = damon_sysfs_kdamonds_add_dirs(kdamonds, nr);
+	mutex_unlock(&damon_sysfs_lock);
 	if (err)
 		return err;
 
