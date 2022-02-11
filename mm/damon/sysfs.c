@@ -2304,6 +2304,26 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 	return 0;
 }
 
+static inline bool target_has_pid(const struct damon_ctx *ctx)
+{
+	return ctx->primitive.target_valid == damon_va_target_valid;
+}
+
+static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
+{
+	struct damon_target *t, *next;
+
+	if (!target_has_pid(ctx))
+		return;
+
+	mutex_lock(&ctx->kdamond_lock);
+	damon_for_each_target_safe(t, next, ctx) {
+		put_pid(t->pid);
+		damon_destroy_target(t);
+	}
+	mutex_unlock(&ctx->kdamond_lock);
+}
+
 static struct damon_ctx *damon_sysfs_build_ctx(
 		struct damon_sysfs_context *sys_ctx)
 {
@@ -2326,6 +2346,7 @@ static struct damon_ctx *damon_sysfs_build_ctx(
 		return ERR_PTR(err);
 	if (use_pid)
 		damon_va_set_primitives(ctx);
+	ctx->callback.before_terminate = damon_sysfs_before_terminate;
 	return ctx;
 }
 
@@ -2373,6 +2394,15 @@ static ssize_t damon_sysfs_damon_state_store(struct kobject *kobj,
 
 	mutex_lock(&damon_sysfs_lock);
 	if (!strncmp(buf, "start\n", count)) {
+		if (damoa_nr_running_ctxs()) {
+			ret = -EBUSY;
+			goto out;
+		}
+		for (i = 0; i < damon_sysfs_nr_ctxs; i++)
+			damon_destroy_ctx(damon_sysfs_ctxs[i]);
+		damon_sysfs_ctxs = NULL;
+		damon_sysfs_nr_ctxs = 0;
+
 		ctxs = damon_sysfs_build_ctxs(damon->kdamonds, &nr_ctxs);
 		if (IS_ERR(ctxs)) {
 			ret = PTR_ERR(ctxs);
