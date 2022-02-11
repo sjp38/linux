@@ -2453,20 +2453,20 @@ static struct kobj_type damon_sysfs_kdamonds_ktype = {
 };
 
 /*
- * damon directory (root)
+ * damon user interface directory
  */
 
-struct damon_sysfs_damon {
+struct damon_sysfs_ui_dir {
 	struct kobject kobj;
 	struct damon_sysfs_kdamonds *kdamonds;
 };
 
-static struct damon_sysfs_damon *damon_sysfs_damon_alloc(void)
+static struct damon_sysfs_ui_dir *damon_sysfs_ui_dir_alloc(void)
 {
-	return kzalloc(sizeof(struct damon_sysfs_damon), GFP_KERNEL);
+	return kzalloc(sizeof(struct damon_sysfs_ui_dir), GFP_KERNEL);
 }
 
-static int damon_sysfs_damon_add_dirs(struct damon_sysfs_damon *damon)
+static int damon_sysfs_ui_dir_add_dirs(struct damon_sysfs_ui_dir *ui_dir)
 {
 	struct damon_sysfs_kdamonds *kdamonds;
 	int err;
@@ -2476,50 +2476,59 @@ static int damon_sysfs_damon_add_dirs(struct damon_sysfs_damon *damon)
 		return -ENOMEM;
 
 	err = kobject_init_and_add(&kdamonds->kobj,
-			&damon_sysfs_kdamonds_ktype, &damon->kobj,
+			&damon_sysfs_kdamonds_ktype, &ui_dir->kobj,
 			"kdamonds");
 	if (err) {
 		kfree(kdamonds);
 		return err;
 	}
-	damon->kdamonds = kdamonds;
+	ui_dir->kdamonds = kdamonds;
 	return err;
 }
 
-static void damon_sysfs_damon_release(struct kobject *kobj)
+static void damon_sysfs_ui_dir_release(struct kobject *kobj)
 {
-	kfree(container_of(kobj, struct damon_sysfs_damon, kobj));
+	kfree(container_of(kobj, struct damon_sysfs_ui_dir, kobj));
 }
 
-static struct attribute *damon_sysfs_damon_attrs[] = {
+static struct attribute *damon_sysfs_ui_dir_attrs[] = {
 	NULL,
 };
-ATTRIBUTE_GROUPS(damon_sysfs_damon);
+ATTRIBUTE_GROUPS(damon_sysfs_ui_dir);
 
-static struct kobj_type damon_sysfs_damon_ktype = {
-	.release = damon_sysfs_damon_release,
+static struct kobj_type damon_sysfs_ui_dir_ktype = {
+	.release = damon_sysfs_ui_dir_release,
 	.sysfs_ops = &kobj_sysfs_ops,
-	.default_groups = damon_sysfs_damon_groups,
+	.default_groups = damon_sysfs_ui_dir_groups,
 };
 
 static int __init damon_sysfs_init(void)
 {
-	struct damon_sysfs_damon *damon;
+	struct kobject *damon_sysfs_root;
+	struct damon_sysfs_ui_dir *admin;
 	int err;
 
-	damon = damon_sysfs_damon_alloc();
-	if (!damon)
+	damon_sysfs_root = kobject_create_and_add("damon", mm_kobj);
+	if (!damon_sysfs_root)
 		return -ENOMEM;
-	err = kobject_init_and_add(&damon->kobj, &damon_sysfs_damon_ktype,
-			mm_kobj, "damon");
+
+	admin = damon_sysfs_ui_dir_alloc();
+	if (!admin) {
+		kobject_put(damon_sysfs_root);
+		return -ENOMEM;
+	}
+	err = kobject_init_and_add(&admin->kobj, &damon_sysfs_ui_dir_ktype,
+			damon_sysfs_root, "admin");
 	if (err) {
-		kfree(damon);
+		kobject_put(&admin->kobj);
+		kobject_put(damon_sysfs_root);
 		return err;
 	}
 
-	err = damon_sysfs_damon_add_dirs(damon);
+	err = damon_sysfs_ui_dir_add_dirs(admin);
 	if (err) {
-		kobject_put(&damon->kobj);
+		kobject_put(&admin->kobj);
+		kobject_put(damon_sysfs_root);
 		return err;
 	}
 
