@@ -32,8 +32,7 @@ In a glance, the files hierarchy of the sysfs interface is as below.
     │ kdamonds
     │ │ nr
     │ │ 0/
-    │ │ │ state
-    │ │ │ pid
+    │ │ │ state,pid
     │ │ │ contexts
     │ │ │ │ nr
     │ │ │ │ 0/
