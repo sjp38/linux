@@ -2395,15 +2395,15 @@ static ssize_t damon_sysfs_damon_state_store(struct kobject *kobj,
 	ssize_t ret;
 
 	mutex_lock(&damon_sysfs_lock);
-	if (!strncmp(buf, "start\n", count)) {
-		if (damoa_nr_running_ctxs()) {
+	if (!strncmp(buf, "on\n", count)) {
+		if (damon_nr_running_ctxs()) {
 			ret = -EBUSY;
 			goto out;
 		}
 		for (i = 0; i < damon_sysfs_nr_ctxs; i++)
 			damon_destroy_ctx(damon_sysfs_ctxs[i]);
-		damon_sysfs_ctxs = NULL;
 		damon_sysfs_nr_ctxs = 0;
+		damon_sysfs_ctxs = NULL;
 
 		ctxs = damon_sysfs_build_ctxs(damon->kdamonds, &nr_ctxs);
 		if (IS_ERR(ctxs)) {
@@ -2418,7 +2418,7 @@ static ssize_t damon_sysfs_damon_state_store(struct kobject *kobj,
 		}
 		damon_sysfs_ctxs = ctxs;
 		damon_sysfs_nr_ctxs = nr_ctxs;
-	} else if (!strncmp(buf, "stop\n", count)) {
+	} else if (!strncmp(buf, "off\n", count)) {
 		ret = damon_stop(damon_sysfs_ctxs, damon_sysfs_nr_ctxs);
 		if (ret) {
 			goto out;
