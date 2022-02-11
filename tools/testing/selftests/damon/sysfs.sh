@@ -257,6 +257,7 @@ test_kdamond()
 {
 	kdamond_dir=$1
 	ensure_dir "$kdamond_dir" "exist"
+	ensure_file "$kdamond_dir/state" "exist" "600"
 	ensure_file "$kdamond_dir/pid" "exist" 400
 	test_contexts "$kdamond_dir/contexts"
 }
@@ -289,7 +290,6 @@ test_damon_sysfs()
 		exit $ksft_skip
 	fi
 
-	ensure_file "$damon_sysfs/monitor_on" "exist" "600"
 	test_kdamonds "$damon_sysfs/kdamonds"
 }
 
