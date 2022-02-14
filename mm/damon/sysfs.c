@@ -1759,26 +1759,21 @@ static struct kobj_type damon_sysfs_attrs_ktype = {
  * context directory
  */
 
-enum damon_sysfs_damon_type {
-	DAMON_SYSFS_TYPE_VADDR,
-	DAMON_SYSFS_TYPE_PADDR,
-};
-
-static const char * const damon_prmtv_set_strs[] = {
-	"vaddr",
-	"paddr",
+static const char * const damon_sysfs_ops_strs[] = {
+	"vaddr\n",
+	"paddr\n",
 };
 
 struct damon_sysfs_context {
 	struct kobject kobj;
-	enum damon_sysfs_damon_type damon_type;
+	enum damon_ops_id ops_id;
 	struct damon_sysfs_attrs *attrs;
 	struct damon_sysfs_targets *targets;
 	struct damon_sysfs_schemes *schemes;
 };
 
 static struct damon_sysfs_context *damon_sysfs_context_alloc(
-		enum damon_sysfs_damon_type damon_type)
+		enum damon_ops_id ops_id)
 {
 	struct damon_sysfs_context *context = kmalloc(sizeof(*context),
 				GFP_KERNEL);
@@ -1786,7 +1781,7 @@ static struct damon_sysfs_context *damon_sysfs_context_alloc(
 	if (!context)
 		return NULL;
 	context->kobj = (struct kobject){};
-	context->damon_type = damon_type;
+	context->ops_id = ops_id;
 	return context;
 }
 
@@ -1860,26 +1855,25 @@ static void damon_sysfs_context_rm_dirs(struct damon_sysfs_context *context)
 	return;
 }
 
-static ssize_t damon_sysfs_context_type_show(struct kobject *kobj,
+static ssize_t damon_sysfs_context_operations_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_context *context = container_of(kobj,
 			struct damon_sysfs_context, kobj);
 
-	return sysfs_emit(buf, "%s\n",
-			damon_prmtv_set_strs[context->damon_type]);
+	return sysfs_emit(buf, "%s", damon_sysfs_ops_strs[context->ops_id]);
 }
 
-static ssize_t damon_sysfs_context_type_store(struct kobject *kobj,
+static ssize_t damon_sysfs_context_operations_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_context *context = container_of(kobj,
 			struct damon_sysfs_context, kobj);
 
-	if (!strncmp(buf, "vaddr\n", count))
-		context->damon_type = DAMON_SYSFS_TYPE_VADDR;
-	else if (!strncmp(buf, "paddr\n", count))
-		context->damon_type = DAMON_SYSFS_TYPE_PADDR;
+	if (!strncmp(buf, damon_sysfs_ops_strs[DAMON_OPS_VADDR], count))
+		context->ops_id = DAMON_OPS_VADDR;
+	else if (!strncmp(buf, damon_sysfs_ops_strs[DAMON_OPS_PADDR], count))
+		context->ops_id = DAMON_OPS_PADDR;
 	else
 		return -EINVAL;
 
@@ -1891,9 +1885,9 @@ static void damon_sysfs_context_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_context, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_context_type_attr = __ATTR(damon_type,
+static struct kobj_attribute damon_sysfs_context_type_attr = __ATTR(operations,
 		0600, damon_sysfs_context_type_show,
-		damon_sysfs_context_type_store);
+		damon_sysfs_context_operations_store);
 
 
 static struct attribute *damon_sysfs_context_attrs[] = {
@@ -1954,7 +1948,7 @@ static int damon_sysfs_contexts_add_dirs(struct damon_sysfs_contexts *contexts,
 	contexts->contexts_arr = contexts_arr;
 
 	for (i = 0; i < nr_contexts; i++) {
-		context = damon_sysfs_context_alloc(DAMON_SYSFS_TYPE_VADDR);
+		context = damon_sysfs_context_alloc(DAMON_OPS_VADDR);
 		if (!context) {
 			damon_sysfs_contexts_rm_dirs(contexts);
 			return -ENOMEM;
@@ -2118,7 +2112,7 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 		struct damon_sysfs_context *sysfs_ctx)
 {
 	struct damon_sysfs_targets *targets = sysfs_ctx->targets;
-	bool use_pid = sysfs_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR;
+	bool use_pid = sysfs_ctx->ops_id == DAMON_OPS_VADDR;
 	int i;
 
 	for (i = 0; i < targets->nr_targets; i++) {
@@ -2168,18 +2162,12 @@ static struct damon_ctx *damon_sysfs_build_ctx(
 	struct damon_sysfs_attrs *sys_attrs = sys_ctx->attrs;
 	struct damon_sysfs_ul_range *sys_nr_regions = sys_attrs->nr_regions;
 	struct damon_sysfs_intervals *sys_intervals = sys_attrs->intervals;
-	enum damon_ops_id ops_id;
-	bool use_pid = sys_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR;
 	int err;
 
 	if (!ctx)
 		return ERR_PTR(-ENOMEM);
 
-	if (sys_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR)
-		ops_id = DAMON_OPS_VADDR;
-	else
-		ops_id = DAMON_OPS_PADDR;
-	err = damon_select_ops(ctx, ops_id);
+	err = damon_select_ops(ctx, sys_ctx->ops_id);
 	if (err)
 		goto out;
 
