@@ -25,6 +25,59 @@
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 static bool running_exclusive_ctxs;
+static struct damon_operations *damon_registered_ops;
+static int damon_nr_registered_ops;
+
+/**
+ * damon_register_ops - Register a monitoring operations set to DAMON.
+ * @ops:	monitoring operations to register.
+ *
+ * This function allows monitoring operations implementations to register
+ * themselves to DAMON, so that the users can select the operations with valid
+ * &enum damon_ops_id later without have to depend on each implementations.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_register_ops(struct damon_operations *ops)
+{
+	mutex_lock(&damon_lock);
+	damon_registered_ops = krealloc(damon_registered_ops,
+			sizeof(*damon_registered_ops) *
+			(damon_nr_registered_ops + 1), GFP_KERNEL);
+	if (!damon_registered_ops) {
+		mutex_unlock(&damon_lock);
+		return -ENOMEM;
+	}
+	damon_registered_ops[damon_nr_registered_ops++] = *ops;
+	mutex_unlock(&damon_lock);
+	return 0;
+}
+
+/**
+ * damon_select_ops - Select a monitoring operations to use with the context.
+ * @ctx:	monitoring context to use the operations.
+ * @id:		id of the registered monitoring operations to select.
+ *
+ * This function finds monitoring operations having @id id and registered to
+ * DAMON via damon_register_ops() and make @ctx to use it.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_select_ops(struct damon_ctx *ctx, enum damon_ops_id id)
+{
+	int i, err = -EINVAL;
+
+	mutex_lock(&damon_lock);
+	for (i = 0; i < damon_nr_registered_ops; i++) {
+		if (damon_registered_ops[i].id == id) {
+			ctx->ops = damon_registered_ops[i];
+			err = 0;
+			break;
+		}
+	}
+	mutex_unlock(&damon_lock);
+	return err;
+}
 
 /*
  * Construct a damon_region struct
