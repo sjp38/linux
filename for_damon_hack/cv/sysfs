@@ -38,7 +38,7 @@ In a glance, the files hierarchy of the sysfs interface is as below.
     │ │ │ │ 0/
     │ │ │ │ │ damon_type
     │ │ │ │ │ monitoring_attrs/
-    │ │ │ │ │ │ intervals/sampling,aggr,update
+    │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ targets/
     │ │ │ │ │ │ nr
