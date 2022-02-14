@@ -2218,7 +2218,7 @@ static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
 			ret = PTR_ERR(ctx);
 			goto out;
 		}
-		ret = damon_start_exclusive(&ctx, 1);
+		ret = damon_start(ctx);
 		if (ret) {
 			damon_destroy_ctx(ctx);
 			goto out;
@@ -2229,7 +2229,7 @@ static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
 			ret = -EINVAL;
 			goto out;
 		}
-		ret = damon_stop_exclusive(&kdamond->damon_ctx, 1);
+		ret = damon_stop(kdamond->damon_ctx);
 		/*
 		 * kdamond->damon_ctx will be freed in next on, or
 		 * kdamonds_nr_store()
