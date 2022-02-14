@@ -1886,7 +1886,7 @@ static void damon_sysfs_context_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_context_type_attr = __ATTR(operations,
-		0600, damon_sysfs_context_type_show,
+		0600, damon_sysfs_context_operations_show,
 		damon_sysfs_context_operations_store);
 
 
@@ -2097,12 +2097,12 @@ static ssize_t damon_sysfs_kdamond_state_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%s\n", running ? "on" : "off");
 }
 
-static void damon_sysfs_destroy_targets(struct damon_ctx *ctx, bool use_pid)
+static void damon_sysfs_destroy_targets(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next;
 
 	damon_for_each_target_safe(t, next, ctx) {
-		if (use_pid)
+		if (ctx->ops.id == DAMON_OPS_VADDR)
 			put_pid(t->pid);
 		damon_destroy_target(t);
 	}
@@ -2112,7 +2112,6 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 		struct damon_sysfs_context *sysfs_ctx)
 {
 	struct damon_sysfs_targets *targets = sysfs_ctx->targets;
-	bool use_pid = sysfs_ctx->ops_id == DAMON_OPS_VADDR;
 	int i;
 
 	for (i = 0; i < targets->nr_targets; i++) {
@@ -2120,13 +2119,13 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 
 		t = damon_new_target();
 		if (!t) {
-			damon_sysfs_destroy_targets(ctx, use_pid);
+			damon_sysfs_destroy_targets(ctx);
 			return -ENOMEM;
 		}
-		if (use_pid) {
+		if (ctx->ops.id == DAMON_OPS_VADDR) {
 			t->pid = find_get_pid(targets->targets_arr[i]->pid);
 			if (!t->pid) {
-				damon_sysfs_destroy_targets(ctx, use_pid);
+				damon_sysfs_destroy_targets(ctx);
 				return -EINVAL;
 			}
 		}
