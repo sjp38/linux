@@ -2143,7 +2143,7 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 
 static inline bool target_has_pid(const struct damon_ctx *ctx)
 {
-	return ctx->ops.target_valid == damon_va_target_valid;
+	return ctx->ops.id == DAMON_OPS_VADDR;
 }
 
 static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
@@ -2168,23 +2168,35 @@ static struct damon_ctx *damon_sysfs_build_ctx(
 	struct damon_sysfs_attrs *sys_attrs = sys_ctx->attrs;
 	struct damon_sysfs_ul_range *sys_nr_regions = sys_attrs->nr_regions;
 	struct damon_sysfs_intervals *sys_intervals = sys_attrs->intervals;
+	enum damon_ops_id ops_id;
 	bool use_pid = sys_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR;
 	int err;
 
 	if (!ctx)
 		return ERR_PTR(-ENOMEM);
+
+	if (sys_ctx->damon_type == DAMON_SYSFS_TYPE_VADDR)
+		ops_id = DAMON_OPS_VADDR;
+	else
+		ops_id = DAMON_OPS_PADDR;
+	err = damon_select_ops(ctx, ops_id);
+	if (err)
+		goto out;
+
 	err = damon_set_attrs(ctx, sys_intervals->sample_us,
 			sys_intervals->aggr_us, sys_intervals->update_us,
 			sys_nr_regions->min, sys_nr_regions->max);
 	if (err)
-		return ERR_PTR(err);
+		goto out;
 	err = damon_sysfs_set_targets(ctx, sys_ctx);
 	if (err)
-		return ERR_PTR(err);
-	if (use_pid)
-		damon_va_set_operations(ctx);
+		goto out;
 	ctx->callback.before_terminate = damon_sysfs_before_terminate;
 	return ctx;
+
+out:
+	damon_destroy_ctx(ctx);
+	return ERR_PTR(err);
 }
 
 static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
