@@ -2143,7 +2143,7 @@ static int damon_sysfs_set_targets(struct damon_ctx *ctx,
 
 static inline bool target_has_pid(const struct damon_ctx *ctx)
 {
-	return ctx->primitive.target_valid == damon_va_target_valid;
+	return ctx->ops.target_valid == damon_va_target_valid;
 }
 
 static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
@@ -2182,7 +2182,7 @@ static struct damon_ctx *damon_sysfs_build_ctx(
 	if (err)
 		return ERR_PTR(err);
 	if (use_pid)
-		damon_va_set_primitives(ctx);
+		damon_va_set_operations(ctx);
 	ctx->callback.before_terminate = damon_sysfs_before_terminate;
 	return ctx;
 }
