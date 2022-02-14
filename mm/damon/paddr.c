@@ -273,3 +273,25 @@ void damon_pa_set_operations(struct damon_ctx *ctx)
 	ctx->ops.apply_scheme = damon_pa_apply_scheme;
 	ctx->ops.get_scheme_score = damon_pa_scheme_score;
 }
+
+static int __init damon_pa_initcall(void)
+{
+	struct damon_operations pa_ops = {
+		.id = DAMON_OPS_PADDR,
+		.init = NULL,
+		.update = NULL,
+		.prepare_access_checks = damon_pa_prepare_access_checks,
+		.check_accesses = damon_pa_check_accesses,
+		.reset_aggregated = NULL,
+		.target_valid = damon_pa_target_valid,
+		.cleanup = NULL,
+		.apply_scheme = damon_pa_apply_scheme,
+		.get_scheme_score = damon_pa_scheme_score,
+	};
+
+	damon_register_ops(&pa_ops);
+	return 0;
+};
+
+subsys_initcall(damon_pa_initcall);
+
