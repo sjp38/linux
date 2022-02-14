@@ -331,7 +331,7 @@ static int damon_reclaim_turn(bool on)
 	int err;
 
 	if (!on) {
-		err = damon_stop(&ctx, 1);
+		err = damon_stop_exclusive(&ctx, 1);
 		if (!err)
 			kdamond_pid = -1;
 		return err;
@@ -355,7 +355,7 @@ static int damon_reclaim_turn(bool on)
 	}
 	damon_add_region(region, target);
 
-	err = damon_start(&ctx, 1);
+	err = damon_start_exclusive(&ctx, 1);
 	if (!err) {
 		kdamond_pid = ctx->kdamond->pid;
 		return 0;

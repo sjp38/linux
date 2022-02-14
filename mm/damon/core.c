@@ -24,6 +24,7 @@
 
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
+static bool running_exclusive_ctxs;
 
 /*
  * Construct a damon_region struct
@@ -394,19 +395,42 @@ static int __damon_start(struct damon_ctx *ctx)
 }
 
 /**
- * damon_start() - Starts the monitorings for a given group of contexts.
- * @ctxs:	an array of the pointers for contexts to start monitoring
- * @nr_ctxs:	size of @ctxs
- *
- * This function starts a group of monitoring threads for a group of monitoring
- * contexts.  One thread per each context is created and run in parallel.  The
- * caller should handle synchronization between the threads by itself.  If a
- * group of threads that created by other 'damon_start()' call is currently
- * running, this function does nothing but returns -EBUSY.
+ * damon_start() - Starts monitoring with given context.
+ * @ctx:	monitoring context
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_start(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_start(struct damon_ctx *ctx)
+{
+	int err;
+
+	mutex_lock(&damon_lock);
+	if (running_exclusive_ctxs)
+		goto out;
+	err = __damon_start(ctx);
+	if (!err)
+		nr_running_ctxs++;
+out:
+	mutex_unlock(&damon_lock);
+	return err;
+}
+
+/**
+ * damon_start_exclusive() - Starts the monitorings for a given exclusive group
+ *			     of contexts.
+ * @ctxs:	an array of the pointers for contexts to start monitoring
+ * @nr_ctxs:	size of @ctxs
+ *
+ * This function starts a group of monitoring threads for a group of exclusive
+ * monitoring contexts.  One thread per each context is created and run in
+ * parallel.  The caller should handle synchronization between the threads by
+ * itself.  If a group of threads that created by other
+ * 'damon_start_exclusive()' call is currently running, this function does
+ * nothing but returns -EBUSY.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_start_exclusive(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i;
 	int err = 0;
@@ -422,19 +446,20 @@ int damon_start(struct damon_ctx **ctxs, int nr_ctxs)
 		if (err)
 			break;
 		nr_running_ctxs++;
+		running_exclusive_ctxs = true;
 	}
 	mutex_unlock(&damon_lock);
 
 	return err;
 }
 
-/*
- * __damon_stop() - Stops monitoring of given context.
+/**
+ * damon_stop() - Stops monitoring of a given context.
  * @ctx:	monitoring context
  *
  * Return: 0 on success, negative error code otherwise.
  */
-static int __damon_stop(struct damon_ctx *ctx)
+int damon_stop(struct damon_ctx *ctx)
 {
 	struct task_struct *tsk;
 
@@ -453,22 +478,26 @@ static int __damon_stop(struct damon_ctx *ctx)
 }
 
 /**
- * damon_stop() - Stops the monitorings for a given group of contexts.
+ * damon_stop_exclusive() - Stops the monitorings for a given exclusive group
+ *			    of contexts.
  * @ctxs:	an array of the pointers for contexts to stop monitoring
  * @nr_ctxs:	size of @ctxs
  *
  * Return: 0 on success, negative error code otherwise.
  */
-int damon_stop(struct damon_ctx **ctxs, int nr_ctxs)
+int damon_stop_exclusive(struct damon_ctx **ctxs, int nr_ctxs)
 {
 	int i, err = 0;
 
 	for (i = 0; i < nr_ctxs; i++) {
 		/* nr_running_ctxs is decremented in kdamond_fn */
-		err = __damon_stop(ctxs[i]);
+		err = damon_stop(ctxs[i]);
 		if (err)
 			return err;
 	}
+	mutex_lock(&damon_lock);
+	running_exclusive_ctxs = false;
+	mutex_unlock(&damon_lock);
 
 	return err;
 }
