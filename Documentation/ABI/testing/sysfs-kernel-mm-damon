@@ -1,0 +1,276 @@
+what:		/sys/kernel/mm/damon/
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Interface for Data Access MONitoring (DAMON).
+		See Documentation/admin-guide/mm/damon/index.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Interface for privileged users of DAMON.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/nr_kdamonds
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Writing a number to this file creates the number of kdamond
+		directories under the kdamonds/ directory.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/state
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the current state of the kdamond.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/pid
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the pid of the kdamond.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/nr_contexts
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Writing a number to this file creates the number of DAMON
+		context directories under the contexts/ directory.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/operations
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the monitoring operations set to
+		use for the context.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/monitoring_attrs/intervals/sample_us
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the sampling interval for the
+		context in micro-seconds.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/monitoring_attrs/intervals/aggr_us
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the aggregation interval for the
+		context in micro-seconds.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/monitoring_attrs/intervals/update_us
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the update interval for the
+		context in micro-seconds.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/monitoring_attrs/nr_regions/min
+
+WDate:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the minimum number of monitoring
+		regions for the context.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/monitoring_attrs/nr_regions/max
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the maximum number of monitoring
+		regions for the context.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/targets/nr_targets
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Writing a number to this file creates the number of monitoring
+		target directories under the targets/ directory.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/targets/<T>/pid_target
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the pid of the target process if
+		the context is for virtual address spaces monitoring.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/targets/<T>/regions/nr_regions
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Writing a number to this file creates the number of monitoring
+		region directories under the regions/ directory.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/targets/<T>/regions/<R>/start
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the start address of the
+		monitoring region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/targets/<T>/regions/<R>/end
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the end address of the monitoring
+		region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/nr_schemes
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Writing a number to this file creates the number of DAMON-based
+		operation scheme directories under the schemes/ directory.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/action
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the action of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/sz/min
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the mimimum size of the scheme's
+		target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/sz/max
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the maximum size of the scheme's
+		target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/nr_accesses/min
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the mimimum 'nr_accesses' of the
+		scheme's target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/nr_accesses/max
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the maximum 'nr_accesses' of the
+		scheme's target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/age/min
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the mimimum 'age' of the scheme's
+		target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/access_pattern/age/max
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the mimimum 'age' of the scheme's
+		target region.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/ms
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the time quota of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/bytes
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the size quota of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/reset_interval_ms
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the quota charge reset interval.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/weights/sz_permil
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the under-quota regions
+		prioritization weight for 'nr_accesses'.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/weights/nr_accesses_permil
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the under-quota regions
+		prioritization weight for 'nr_accesses'.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/quotas/weights/age_permil
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the under-quota regions
+		prioritization weight for 'age'.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/watermarks/metric
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the metric of the watermarks for
+		the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/watermarks/interval_us
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the metric check interval of the
+		watermarks for the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/watermarks/high
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the high watermark of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/watermarks/mid
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the mid watermark of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/watermarks/low
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for setting and getting the low watermark of the scheme.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/stats/nr_tried
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the number of regions that the action of the
+		scheme has tried.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/stats/sz_tried
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the total size of regions that the action of
+		the scheme has tried.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/stats/nr_applied
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the number of regions that the action of the
+		scheme has successfully applied.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/stats/sz_applied
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the total size of regions that the action of
+		the scheme has successfully applied.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
+
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/schemes/<S>/stats/qt_exceeds
+Date:		Feb 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	File for getting the number of the exceed events of the
+		scheme's quota.
+		See Documentation/admin-guide/mm/damon/usage.rst for details.
