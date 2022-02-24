@@ -39,8 +39,8 @@ static struct damon_sysfs_ul_range *damon_sysfs_ul_range_alloc(
 	return range;
 }
 
-static ssize_t damon_sysfs_ul_range_min_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t min_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_ul_range *range = container_of(kobj,
 			struct damon_sysfs_ul_range, kobj);
@@ -48,8 +48,8 @@ static ssize_t damon_sysfs_ul_range_min_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", range->min);
 }
 
-static ssize_t damon_sysfs_ul_range_min_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t min_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_ul_range *range = container_of(kobj,
 			struct damon_sysfs_ul_range, kobj);
@@ -64,8 +64,8 @@ static ssize_t damon_sysfs_ul_range_min_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_ul_range_max_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t max_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_ul_range *range = container_of(kobj,
 			struct damon_sysfs_ul_range, kobj);
@@ -73,8 +73,8 @@ static ssize_t damon_sysfs_ul_range_max_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", range->max);
 }
 
-static ssize_t damon_sysfs_ul_range_max_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t max_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_ul_range *range = container_of(kobj,
 			struct damon_sysfs_ul_range, kobj);
@@ -95,12 +95,10 @@ static void damon_sysfs_ul_range_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_ul_range_min_attr =
-		__ATTR(min, 0600, damon_sysfs_ul_range_min_show,
-				damon_sysfs_ul_range_min_store);
+		__ATTR_RW_MODE(min, 0600);
 
 static struct kobj_attribute damon_sysfs_ul_range_max_attr =
-		__ATTR(max, 0600, damon_sysfs_ul_range_max_show,
-				damon_sysfs_ul_range_max_store);
+		__ATTR_RW_MODE(max, 0600);
 
 static struct attribute *damon_sysfs_ul_range_attrs[] = {
 	&damon_sysfs_ul_range_min_attr.attr,
@@ -133,8 +131,8 @@ static struct damon_sysfs_stats *damon_sysfs_stats_alloc(void)
 	return kzalloc(sizeof(struct damon_sysfs_stats), GFP_KERNEL);
 }
 
-static ssize_t damon_sysfs_stats_nr_tried_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t nr_tried_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
@@ -142,20 +140,8 @@ static ssize_t damon_sysfs_stats_nr_tried_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", stats->nr_tried);
 }
 
-static ssize_t damon_sysfs_stats_nr_tried_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_stats *stats = container_of(kobj,
-			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 0, &stats->nr_tried);
-
-	if (err)
-		return -EINVAL;
-	return count;
-}
-
-static ssize_t damon_sysfs_stats_sz_tried_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t sz_tried_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
 			struct damon_sysfs_stats, kobj);
@@ -163,19 +149,7 @@ static ssize_t damon_sysfs_stats_sz_tried_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", stats->sz_tried);
 }
 
-static ssize_t damon_sysfs_stats_sz_tried_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_stats *stats = container_of(kobj,
-			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 0, &stats->sz_tried);
-
-	if (err)
-		return -EINVAL;
-	return count;
-}
-
-static ssize_t damon_sysfs_stats_nr_applied_show(struct kobject *kobj,
+static ssize_t nr_applied_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
@@ -184,19 +158,7 @@ static ssize_t damon_sysfs_stats_nr_applied_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", stats->nr_applied);
 }
 
-static ssize_t damon_sysfs_stats_nr_applied_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_stats *stats = container_of(kobj,
-			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 0, &stats->nr_applied);
-
-	if (err)
-		return -EINVAL;
-	return count;
-}
-
-static ssize_t damon_sysfs_stats_sz_applied_show(struct kobject *kobj,
+static ssize_t sz_applied_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
@@ -205,19 +167,7 @@ static ssize_t damon_sysfs_stats_sz_applied_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", stats->sz_applied);
 }
 
-static ssize_t damon_sysfs_stats_sz_applied_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_stats *stats = container_of(kobj,
-			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 0, &stats->sz_applied);
-
-	if (err)
-		return -EINVAL;
-	return count;
-}
-
-static ssize_t damon_sysfs_stats_qt_exceeds_show(struct kobject *kobj,
+static ssize_t qt_exceeds_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_stats *stats = container_of(kobj,
@@ -226,42 +176,25 @@ static ssize_t damon_sysfs_stats_qt_exceeds_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", stats->qt_exceeds);
 }
 
-static ssize_t damon_sysfs_stats_qt_exceeds_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_stats *stats = container_of(kobj,
-			struct damon_sysfs_stats, kobj);
-	int err = kstrtoul(buf, 0, &stats->qt_exceeds);
-
-	if (err)
-		return -EINVAL;
-	return count;
-}
-
 static void damon_sysfs_stats_release(struct kobject *kobj)
 {
 	kfree(container_of(kobj, struct damon_sysfs_stats, kobj));
 }
 
 static struct kobj_attribute damon_sysfs_stats_nr_tried_attr =
-		__ATTR(nr_tried, 0400, damon_sysfs_stats_nr_tried_show,
-				damon_sysfs_stats_nr_tried_store);
+		__ATTR_RO_MODE(nr_tried, 0400);
 
 static struct kobj_attribute damon_sysfs_stats_sz_tried_attr =
-		__ATTR(sz_tried, 0400, damon_sysfs_stats_sz_tried_show,
-				damon_sysfs_stats_sz_tried_store);
+		__ATTR_RO_MODE(sz_tried, 0400);
 
 static struct kobj_attribute damon_sysfs_stats_nr_applied_attr =
-		__ATTR(nr_applied, 0400, damon_sysfs_stats_nr_applied_show,
-				damon_sysfs_stats_nr_applied_store);
+		__ATTR_RO_MODE(nr_applied, 0400);
 
 static struct kobj_attribute damon_sysfs_stats_sz_applied_attr =
-		__ATTR(sz_applied, 0400, damon_sysfs_stats_sz_applied_show,
-				damon_sysfs_stats_sz_applied_store);
+		__ATTR_RO_MODE(sz_applied, 0400);
 
 static struct kobj_attribute damon_sysfs_stats_qt_exceeds_attr =
-		__ATTR(qt_exceeds, 0400, damon_sysfs_stats_qt_exceeds_show,
-				damon_sysfs_stats_qt_exceeds_store);
+		__ATTR_RO_MODE(qt_exceeds, 0400);
 
 static struct attribute *damon_sysfs_stats_attrs[] = {
 	&damon_sysfs_stats_nr_tried_attr.attr,
@@ -316,8 +249,8 @@ static const char * const damon_sysfs_wmark_metric_strs[] = {
 	"free_mem_rate",
 };
 
-static ssize_t damon_sysfs_watermarks_metric_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t metric_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
@@ -326,8 +259,8 @@ static ssize_t damon_sysfs_watermarks_metric_show(struct kobject *kobj,
 			damon_sysfs_wmark_metric_strs[watermarks->metric]);
 }
 
-static ssize_t damon_sysfs_watermarks_metric_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t metric_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
 			struct damon_sysfs_watermarks, kobj);
@@ -342,7 +275,7 @@ static ssize_t damon_sysfs_watermarks_metric_store(struct kobject *kobj,
 	return -EINVAL;
 }
 
-static ssize_t damon_sysfs_watermarks_interval_us_show(struct kobject *kobj,
+static ssize_t interval_us_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -351,7 +284,7 @@ static ssize_t damon_sysfs_watermarks_interval_us_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", watermarks->interval_us);
 }
 
-static ssize_t damon_sysfs_watermarks_interval_us_store(struct kobject *kobj,
+static ssize_t interval_us_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -363,7 +296,7 @@ static ssize_t damon_sysfs_watermarks_interval_us_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_watermarks_high_show(struct kobject *kobj,
+static ssize_t high_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -372,7 +305,7 @@ static ssize_t damon_sysfs_watermarks_high_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", watermarks->high);
 }
 
-static ssize_t damon_sysfs_watermarks_high_store(struct kobject *kobj,
+static ssize_t high_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -384,7 +317,7 @@ static ssize_t damon_sysfs_watermarks_high_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_watermarks_mid_show(struct kobject *kobj,
+static ssize_t mid_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -393,7 +326,7 @@ static ssize_t damon_sysfs_watermarks_mid_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", watermarks->mid);
 }
 
-static ssize_t damon_sysfs_watermarks_mid_store(struct kobject *kobj,
+static ssize_t mid_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -405,7 +338,7 @@ static ssize_t damon_sysfs_watermarks_mid_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_watermarks_low_show(struct kobject *kobj,
+static ssize_t low_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -414,7 +347,7 @@ static ssize_t damon_sysfs_watermarks_low_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", watermarks->low);
 }
 
-static ssize_t damon_sysfs_watermarks_low_store(struct kobject *kobj,
+static ssize_t low_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_watermarks *watermarks = container_of(kobj,
@@ -432,25 +365,19 @@ static void damon_sysfs_watermarks_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_watermarks_metric_attr =
-		__ATTR(metric, 0600, damon_sysfs_watermarks_metric_show,
-				damon_sysfs_watermarks_metric_store);
+		__ATTR_RW_MODE(metric, 0600);
 
 static struct kobj_attribute damon_sysfs_watermarks_interval_us_attr =
-		__ATTR(interval_us, 0600,
-				damon_sysfs_watermarks_interval_us_show,
-				damon_sysfs_watermarks_interval_us_store);
+		__ATTR_RW_MODE(interval_us, 0600);
 
 static struct kobj_attribute damon_sysfs_watermarks_high_attr =
-		__ATTR(high, 0600, damon_sysfs_watermarks_high_show,
-				damon_sysfs_watermarks_high_store);
+		__ATTR_RW_MODE(high, 0600);
 
 static struct kobj_attribute damon_sysfs_watermarks_mid_attr =
-		__ATTR(mid, 0600, damon_sysfs_watermarks_mid_show,
-				damon_sysfs_watermarks_mid_store);
+		__ATTR_RW_MODE(mid, 0600);
 
 static struct kobj_attribute damon_sysfs_watermarks_low_attr =
-		__ATTR(low, 0600, damon_sysfs_watermarks_low_show,
-				damon_sysfs_watermarks_low_store);
+		__ATTR_RW_MODE(low, 0600);
 
 static struct attribute *damon_sysfs_watermarks_attrs[] = {
 	&damon_sysfs_watermarks_metric_attr.attr,
