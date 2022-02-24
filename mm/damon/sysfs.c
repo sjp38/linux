@@ -899,8 +899,8 @@ static void damon_sysfs_scheme_rm_dirs(struct damon_sysfs_scheme *scheme)
 	kobject_put(&scheme->stats->kobj);
 }
 
-static ssize_t damon_sysfs_scheme_action_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t action_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_scheme *scheme = container_of(kobj,
 			struct damon_sysfs_scheme, kobj);
@@ -909,8 +909,8 @@ static ssize_t damon_sysfs_scheme_action_show(struct kobject *kobj,
 			damon_sysfs_damos_action_strs[scheme->action]);
 }
 
-static ssize_t damon_sysfs_scheme_action_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t action_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_scheme *scheme = container_of(kobj,
 			struct damon_sysfs_scheme, kobj);
@@ -930,10 +930,8 @@ static void damon_sysfs_scheme_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_scheme, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_scheme_action_attr = __ATTR(
-		action, 0600, damon_sysfs_scheme_action_show,
-		damon_sysfs_scheme_action_store);
-
+static struct kobj_attribute damon_sysfs_scheme_action_attr =
+		__ATTR_RW_MODE(action, 0600);
 
 static struct attribute *damon_sysfs_scheme_attrs[] = {
 	&damon_sysfs_scheme_action_attr.attr,
@@ -1019,7 +1017,7 @@ out:
 	return err;
 }
 
-static ssize_t damon_sysfs_schemes_nr_show(struct kobject *kobj,
+static ssize_t nr_schemes_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_schemes *schemes = container_of(kobj,
@@ -1028,7 +1026,7 @@ static ssize_t damon_sysfs_schemes_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", schemes->nr);
 }
 
-static ssize_t damon_sysfs_schemes_nr_store(struct kobject *kobj,
+static ssize_t nr_schemes_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_schemes *schemes = container_of(kobj,
@@ -1054,8 +1052,8 @@ static void damon_sysfs_schemes_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_schemes, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_schemes_nr_attr = __ATTR(nr, 0600,
-		damon_sysfs_schemes_nr_show, damon_sysfs_schemes_nr_store);
+static struct kobj_attribute damon_sysfs_schemes_nr_attr =
+		__ATTR_RW_MODE(nr_schemes, 0600);
 
 static struct attribute *damon_sysfs_schemes_attrs[] = {
 	&damon_sysfs_schemes_nr_attr.attr,
@@ -1094,8 +1092,8 @@ static struct damon_sysfs_region *damon_sysfs_region_alloc(
 	return region;
 }
 
-static ssize_t damon_sysfs_region_start_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t start_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
@@ -1103,8 +1101,8 @@ static ssize_t damon_sysfs_region_start_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", region->start);
 }
 
-static ssize_t damon_sysfs_region_start_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t start_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
@@ -1115,8 +1113,8 @@ static ssize_t damon_sysfs_region_start_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_region_end_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t end_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
@@ -1124,8 +1122,8 @@ static ssize_t damon_sysfs_region_end_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", region->end);
 }
 
-static ssize_t damon_sysfs_region_end_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t end_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_region *region = container_of(kobj,
 			struct damon_sysfs_region, kobj);
@@ -1142,12 +1140,10 @@ static void damon_sysfs_region_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_region_start_attr =
-		__ATTR(start, 0600, damon_sysfs_region_start_show,
-				damon_sysfs_region_start_store);
+		__ATTR_RW_MODE(start, 0600);
 
 static struct kobj_attribute damon_sysfs_region_end_attr =
-		__ATTR(end, 0600, damon_sysfs_region_end_show,
-				damon_sysfs_region_end_store);
+		__ATTR_RW_MODE(end, 0600);
 
 static struct attribute *damon_sysfs_region_attrs[] = {
 	&damon_sysfs_region_start_attr.attr,
@@ -1227,7 +1223,7 @@ static int damon_sysfs_regions_add_dirs(struct damon_sysfs_regions *regions,
 	return 0;
 }
 
-static ssize_t damon_sysfs_regions_nr_show(struct kobject *kobj,
+static ssize_t nr_regions_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_regions *regions = container_of(kobj,
@@ -1236,7 +1232,7 @@ static ssize_t damon_sysfs_regions_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", regions->nr);
 }
 
-static ssize_t damon_sysfs_regions_nr_store(struct kobject *kobj,
+static ssize_t nr_regions_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_regions *regions = container_of(kobj,
@@ -1263,8 +1259,8 @@ static void damon_sysfs_regions_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_regions, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_regions_nr_attr = __ATTR(nr, 0600,
-		damon_sysfs_regions_nr_show, damon_sysfs_regions_nr_store);
+static struct kobj_attribute damon_sysfs_regions_nr_attr =
+		__ATTR_RW_MODE(nr_regions, 0600);
 
 static struct attribute *damon_sysfs_regions_attrs[] = {
 	&damon_sysfs_regions_nr_attr.attr,
@@ -1316,7 +1312,7 @@ static void damon_sysfs_target_rm_dirs(struct damon_sysfs_target *target)
 	kobject_put(&target->regions->kobj);
 }
 
-static ssize_t damon_sysfs_target_pid_show(struct kobject *kobj,
+static ssize_t pid_target_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_target *target = container_of(kobj,
@@ -1325,7 +1321,7 @@ static ssize_t damon_sysfs_target_pid_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", target->pid);
 }
 
-static ssize_t damon_sysfs_target_pid_store(struct kobject *kobj,
+static ssize_t pid_target_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_target *target = container_of(kobj,
@@ -1342,8 +1338,8 @@ static void damon_sysfs_target_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_target, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_target_pid_attr = __ATTR(pid, 0600,
-		damon_sysfs_target_pid_show, damon_sysfs_target_pid_store);
+static struct kobj_attribute damon_sysfs_target_pid_attr =
+		__ATTR_RW_MODE(pid_target, 0600);
 
 static struct attribute *damon_sysfs_target_attrs[] = {
 	&damon_sysfs_target_pid_attr.attr,
@@ -1430,7 +1426,7 @@ out:
 	return err;
 }
 
-static ssize_t damon_sysfs_targets_nr_show(struct kobject *kobj,
+static ssize_t nr_targets_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_targets *targets = container_of(kobj,
@@ -1439,7 +1435,7 @@ static ssize_t damon_sysfs_targets_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", targets->nr);
 }
 
-static ssize_t damon_sysfs_targets_nr_store(struct kobject *kobj,
+static ssize_t nr_targets_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_targets *targets = container_of(kobj,
@@ -1466,8 +1462,8 @@ static void damon_sysfs_targets_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_targets, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_targets_nr_attr = __ATTR(nr, 0600,
-		damon_sysfs_targets_nr_show, damon_sysfs_targets_nr_store);
+static struct kobj_attribute damon_sysfs_targets_nr_attr =
+		__ATTR_RW_MODE(nr_targets, 0600);
 
 static struct attribute *damon_sysfs_targets_attrs[] = {
 	&damon_sysfs_targets_nr_attr.attr,
@@ -1509,7 +1505,7 @@ static struct damon_sysfs_intervals *damon_sysfs_intervals_alloc(
 	return intervals;
 }
 
-static ssize_t damon_sysfs_intervals_sample_us_show(struct kobject *kobj,
+static ssize_t sample_us_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
@@ -1518,7 +1514,7 @@ static ssize_t damon_sysfs_intervals_sample_us_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", intervals->sample_us);
 }
 
-static ssize_t damon_sysfs_intervals_sample_us_store(struct kobject *kobj,
+static ssize_t sample_us_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
@@ -1533,8 +1529,8 @@ static ssize_t damon_sysfs_intervals_sample_us_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_intervals_aggr_us_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t aggr_us_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
 			struct damon_sysfs_intervals, kobj);
@@ -1542,8 +1538,8 @@ static ssize_t damon_sysfs_intervals_aggr_us_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", intervals->aggr_us);
 }
 
-static ssize_t damon_sysfs_intervals_aggr_us_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t aggr_us_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
 			struct damon_sysfs_intervals, kobj);
@@ -1557,7 +1553,7 @@ static ssize_t damon_sysfs_intervals_aggr_us_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_intervals_update_us_show(struct kobject *kobj,
+static ssize_t update_us_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
@@ -1566,7 +1562,7 @@ static ssize_t damon_sysfs_intervals_update_us_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", intervals->update_us);
 }
 
-static ssize_t damon_sysfs_intervals_update_us_store(struct kobject *kobj,
+static ssize_t update_us_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_intervals *intervals = container_of(kobj,
@@ -1587,19 +1583,13 @@ static void damon_sysfs_intervals_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_intervals_sample_us_attr =
-		__ATTR(sample_us, 0600,
-				damon_sysfs_intervals_sample_us_show,
-				damon_sysfs_intervals_sample_us_store);
+		__ATTR_RW_MODE(sample_us, 0600);
 
 static struct kobj_attribute damon_sysfs_intervals_aggr_us_attr =
-		__ATTR(aggr_us, 0600,
-				damon_sysfs_intervals_aggr_us_show,
-				damon_sysfs_intervals_aggr_us_store);
+		__ATTR_RW_MODE(aggr_us, 0600);
 
 static struct kobj_attribute damon_sysfs_intervals_update_us_attr =
-		__ATTR(update_us, 0600,
-				damon_sysfs_intervals_update_us_show,
-				damon_sysfs_intervals_update_us_store);
+		__ATTR_RW_MODE(update_us, 0600);
 
 static struct attribute *damon_sysfs_intervals_attrs[] = {
 	&damon_sysfs_intervals_sample_us_attr.attr,
@@ -1818,7 +1808,7 @@ static void damon_sysfs_context_rm_dirs(struct damon_sysfs_context *context)
 	kobject_put(&context->schemes->kobj);
 }
 
-static ssize_t damon_sysfs_context_operations_show(struct kobject *kobj,
+static ssize_t operations_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_context *context = container_of(kobj,
@@ -1827,7 +1817,7 @@ static ssize_t damon_sysfs_context_operations_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%s\n", damon_sysfs_ops_strs[context->ops_id]);
 }
 
-static ssize_t damon_sysfs_context_operations_store(struct kobject *kobj,
+static ssize_t operations_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_context *context = container_of(kobj,
@@ -1848,9 +1838,8 @@ static void damon_sysfs_context_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_context, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_context_operations_attr = __ATTR(
-		operations, 0600, damon_sysfs_context_operations_show,
-		damon_sysfs_context_operations_store);
+static struct kobj_attribute damon_sysfs_context_operations_attr =
+		__ATTR_RW_MODE(operations, 0600);
 
 static struct attribute *damon_sysfs_context_attrs[] = {
 	&damon_sysfs_context_operations_attr.attr,
@@ -1937,7 +1926,7 @@ out:
 	return err;
 }
 
-static ssize_t damon_sysfs_contexts_nr_show(struct kobject *kobj,
+static ssize_t nr_contexts_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_contexts *contexts = container_of(kobj,
@@ -1946,7 +1935,7 @@ static ssize_t damon_sysfs_contexts_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", contexts->nr);
 }
 
-static ssize_t damon_sysfs_contexts_nr_store(struct kobject *kobj,
+static ssize_t nr_contexts_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_contexts *contexts = container_of(kobj,
@@ -1975,8 +1964,8 @@ static void damon_sysfs_contexts_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_contexts, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_contexts_nr_attr = __ATTR(nr, 0600,
-		damon_sysfs_contexts_nr_show, damon_sysfs_contexts_nr_store);
+static struct kobj_attribute damon_sysfs_contexts_nr_attr
+		= __ATTR_RW_MODE(nr_contexts, 0600);
 
 static struct attribute *damon_sysfs_contexts_attrs[] = {
 	&damon_sysfs_contexts_nr_attr.attr,
@@ -2042,8 +2031,8 @@ static bool damon_sysfs_ctx_running(struct damon_ctx *ctx)
 	return running;
 }
 
-static ssize_t damon_sysfs_kdamond_state_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_kdamond *kdamond = container_of(kobj,
 			struct damon_sysfs_kdamond, kobj);
@@ -2298,8 +2287,8 @@ static int damon_sysfs_update_schemes_stats(struct damon_sysfs_kdamond *kdamond)
 	return 0;
 }
 
-static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_kdamond *kdamond = container_of(kobj,
 			struct damon_sysfs_kdamond, kobj);
@@ -2321,7 +2310,7 @@ static ssize_t damon_sysfs_kdamond_state_store(struct kobject *kobj,
 	return ret;
 }
 
-static ssize_t damon_sysfs_kdamond_pid_show(struct kobject *kobj,
+static ssize_t pid_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_kdamond *kdamond = container_of(kobj,
@@ -2358,11 +2347,10 @@ static void damon_sysfs_kdamond_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_kdamond_state_attr =
-	__ATTR(state, 0600, damon_sysfs_kdamond_state_show,
-		damon_sysfs_kdamond_state_store);
+		__ATTR_RW_MODE(state, 0600);
 
-static struct kobj_attribute damon_sysfs_kdamond_pid_attr = __ATTR(pid, 0400,
-		damon_sysfs_kdamond_pid_show, NULL);
+static struct kobj_attribute damon_sysfs_kdamond_pid_attr =
+		__ATTR_RO_MODE(pid, 0400);
 
 static struct attribute *damon_sysfs_kdamond_attrs[] = {
 	&damon_sysfs_kdamond_state_attr.attr,
@@ -2472,7 +2460,7 @@ out:
 	return err;
 }
 
-static ssize_t damon_sysfs_kdamonds_nr_show(struct kobject *kobj,
+static ssize_t nr_kdamonds_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_kdamonds *kdamonds = container_of(kobj,
@@ -2481,7 +2469,7 @@ static ssize_t damon_sysfs_kdamonds_nr_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%d\n", kdamonds->nr);
 }
 
-static ssize_t damon_sysfs_kdamonds_nr_store(struct kobject *kobj,
+static ssize_t nr_kdamonds_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_kdamonds *kdamonds = container_of(kobj,
@@ -2509,8 +2497,8 @@ static void damon_sysfs_kdamonds_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_kdamonds, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_kdamonds_nr_attr = __ATTR(nr, 0600,
-		damon_sysfs_kdamonds_nr_show, damon_sysfs_kdamonds_nr_store);
+static struct kobj_attribute damon_sysfs_kdamonds_nr_attr =
+		__ATTR_RW_MODE(nr_kdamonds, 0600);
 
 static struct attribute *damon_sysfs_kdamonds_attrs[] = {
 	&damon_sysfs_kdamonds_nr_attr.attr,
