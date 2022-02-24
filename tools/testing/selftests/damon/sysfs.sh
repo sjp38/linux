@@ -105,9 +105,9 @@ test_weights()
 {
 	weights_dir=$1
 	ensure_dir "$weights_dir" "exist"
-	ensure_file "$weights_dir/sz" "exist" "600"
-	ensure_file "$weights_dir/nr_accesses" "exist" "600"
-	ensure_file "$weights_dir/age" "exist" "600"
+	ensure_file "$weights_dir/sz_permil" "exist" "600"
+	ensure_file "$weights_dir/nr_accesses_permil" "exist" "600"
+	ensure_file "$weights_dir/age_permil" "exist" "600"
 }
 
 test_quotas()
@@ -115,7 +115,7 @@ test_quotas()
 	quotas_dir=$1
 	ensure_dir "$quotas_dir" "exist"
 	ensure_file "$quotas_dir/ms" "exist" 600
-	ensure_file "$quotas_dir/sz" "exist" 600
+	ensure_file "$quotas_dir/bytes" "exist" 600
 	ensure_file "$quotas_dir/reset_interval_ms" "exist" 600
 	test_weights "$quotas_dir/weights"
 }
