@@ -56,7 +56,8 @@ struct dp_aux_backlight {
 /* Helpers for DP link training */
 static u8 dp_link_status(const u8 link_status[DP_LINK_STATUS_SIZE], int r)
 {
-	return link_status[r - DP_LANE0_1_STATUS];
+//	return link_status[r - DP_LANE0_1_STATUS];
+	return 0;
 }
 
 static u8 dp_get_lane_status(const u8 link_status[DP_LINK_STATUS_SIZE],
