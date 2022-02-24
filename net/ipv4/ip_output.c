@@ -179,7 +179,7 @@ int ip_build_and_send_pkt(struct sk_buff *skb, const struct sock *sk,
 
 	if (opt && opt->opt.optlen) {
 		iph->ihl += opt->opt.optlen>>2;
-		ip_options_build(skb, &opt->opt, daddr, rt, 0);
+		ip_options_build(skb, &opt->opt, daddr, rt);
 	}
 
 	skb->priority = sk->sk_priority;
@@ -519,7 +519,7 @@ packet_routed:
 
 	if (inet_opt && inet_opt->opt.optlen) {
 		iph->ihl += inet_opt->opt.optlen >> 2;
-		ip_options_build(skb, &inet_opt->opt, inet->inet_daddr, rt, 0);
+		ip_options_build(skb, &inet_opt->opt, inet->inet_daddr, rt);
 	}
 
 	ip_select_ident_segs(net, skb, sk,
@@ -991,7 +991,7 @@ static int __ip_append_data(struct sock *sk,
 
 	if (cork->tx_flags & SKBTX_ANY_SW_TSTAMP &&
 	    sk->sk_tsflags & SOF_TIMESTAMPING_OPT_ID)
-		tskey = sk->sk_tskey++;
+		tskey = atomic_inc_return(&sk->sk_tskey) - 1;
 
 	hh_len = LL_RESERVED_SPACE(rt->dst.dev);
 
@@ -1541,7 +1541,7 @@ struct sk_buff *__ip_make_skb(struct sock *sk,
 
 	if (opt) {
 		iph->ihl += opt->optlen >> 2;
-		ip_options_build(skb, opt, cork->addr, rt, 0);
+		ip_options_build(skb, opt, cork->addr, rt);
 	}
 
 	skb->priority = (cork->tos != -1) ? cork->priority: sk->sk_priority;

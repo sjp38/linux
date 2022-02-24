@@ -1067,6 +1067,7 @@ struct lock_manager_operations {
 	int (*lm_change)(struct file_lock *, int, struct list_head *);
 	void (*lm_setup)(struct file_lock *, void **);
 	bool (*lm_breaker_owns_lease)(struct file_lock *);
+	bool (*lm_lock_expired)(struct file_lock *cfl);
 };
 
 struct lock_manager {
@@ -1738,6 +1739,11 @@ static inline bool __sb_start_write_trylock(struct super_block *sb, int level)
 #define __sb_writers_release(sb, lev)	\
 	percpu_rwsem_release(&(sb)->s_writers.rw_sem[(lev)-1], 1, _THIS_IP_)
 
+static inline void __sb_assert_write_started(struct super_block *sb, int level)
+{
+	lockdep_assert_held_read(sb->s_writers.rw_sem + level - 1);
+}
+
 /**
  * sb_end_write - drop write access to a superblock
  * @sb: the super we wrote to
@@ -1803,6 +1809,11 @@ static inline bool sb_start_write_trylock(struct super_block *sb)
 	return __sb_start_write_trylock(sb, SB_FREEZE_WRITE);
 }
 
+static inline void sb_assert_write_started(struct super_block *sb)
+{
+	__sb_assert_write_started(sb, SB_FREEZE_WRITE);
+}
+
 /**
  * sb_start_pagefault - get write access to a superblock from a page fault
  * @sb: the super we write to
@@ -1827,6 +1838,11 @@ static inline void sb_start_pagefault(struct super_block *sb)
 	__sb_start_write(sb, SB_FREEZE_PAGEFAULT);
 }
 
+static inline void sb_assert_pagefault_started(struct super_block *sb)
+{
+	__sb_assert_write_started(sb, SB_FREEZE_PAGEFAULT);
+}
+
 /**
  * sb_start_intwrite - get write access to a superblock for internal fs purposes
  * @sb: the super we write to
@@ -1848,6 +1864,11 @@ static inline void sb_start_intwrite(struct super_block *sb)
 static inline bool sb_start_intwrite_trylock(struct super_block *sb)
 {
 	return __sb_start_write_trylock(sb, SB_FREEZE_FS);
+}
+
+static inline void sb_assert_intwrite_started(struct super_block *sb)
+{
+	__sb_assert_write_started(sb, SB_FREEZE_FS);
 }
 
 bool inode_owner_or_capable(struct user_namespace *mnt_userns,
@@ -2752,54 +2773,6 @@ extern void init_special_inode(struct inode *, umode_t, dev_t);
 extern void make_bad_inode(struct inode *);
 extern bool is_bad_inode(struct inode *);
 
-unsigned long invalidate_mapping_pages(struct address_space *mapping,
-					pgoff_t start, pgoff_t end);
-
-void invalidate_mapping_pagevec(struct address_space *mapping,
-				pgoff_t start, pgoff_t end,
-				unsigned long *nr_pagevec);
-
-static inline void invalidate_remote_inode(struct inode *inode)
-{
-	if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ||
-	    S_ISLNK(inode->i_mode))
-		invalidate_mapping_pages(inode->i_mapping, 0, -1);
-}
-extern int invalidate_inode_pages2(struct address_space *mapping);
-extern int invalidate_inode_pages2_range(struct address_space *mapping,
-					 pgoff_t start, pgoff_t end);
-extern int write_inode_now(struct inode *, int);
-extern int filemap_fdatawrite(struct address_space *);
-extern int filemap_flush(struct address_space *);
-extern int filemap_fdatawait_keep_errors(struct address_space *mapping);
-extern int filemap_fdatawait_range(struct address_space *, loff_t lstart,
-				   loff_t lend);
-extern int filemap_fdatawait_range_keep_errors(struct address_space *mapping,
-		loff_t start_byte, loff_t end_byte);
-
-static inline int filemap_fdatawait(struct address_space *mapping)
-{
-	return filemap_fdatawait_range(mapping, 0, LLONG_MAX);
-}
-
-extern bool filemap_range_has_page(struct address_space *, loff_t lstart,
-				  loff_t lend);
-extern int filemap_write_and_wait_range(struct address_space *mapping,
-				        loff_t lstart, loff_t lend);
-extern int __filemap_fdatawrite_range(struct address_space *mapping,
-				loff_t start, loff_t end, int sync_mode);
-extern int filemap_fdatawrite_range(struct address_space *mapping,
-				loff_t start, loff_t end);
-extern int filemap_check_errors(struct address_space *mapping);
-extern void __filemap_set_wb_err(struct address_space *mapping, int err);
-int filemap_fdatawrite_wbc(struct address_space *mapping,
-			   struct writeback_control *wbc);
-
-static inline int filemap_write_and_wait(struct address_space *mapping)
-{
-	return filemap_write_and_wait_range(mapping, 0, LLONG_MAX);
-}
-
 extern int __must_check file_fdatawait_range(struct file *file, loff_t lstart,
 						loff_t lend);
 extern int __must_check file_check_and_advance_wb_err(struct file *file);
@@ -2809,67 +2782,6 @@ extern int __must_check file_write_and_wait_range(struct file *file,
 static inline int file_write_and_wait(struct file *file)
 {
 	return file_write_and_wait_range(file, 0, LLONG_MAX);
-}
-
-/**
- * filemap_set_wb_err - set a writeback error on an address_space
- * @mapping: mapping in which to set writeback error
- * @err: error to be set in mapping
- *
- * When writeback fails in some way, we must record that error so that
- * userspace can be informed when fsync and the like are called.  We endeavor
- * to report errors on any file that was open at the time of the error.  Some
- * internal callers also need to know when writeback errors have occurred.
- *
- * When a writeback error occurs, most filesystems will want to call
- * filemap_set_wb_err to record the error in the mapping so that it will be
- * automatically reported whenever fsync is called on the file.
- */
-static inline void filemap_set_wb_err(struct address_space *mapping, int err)
-{
-	/* Fastpath for common case of no error */
-	if (unlikely(err))
-		__filemap_set_wb_err(mapping, err);
-}
-
-/**
- * filemap_check_wb_err - has an error occurred since the mark was sampled?
- * @mapping: mapping to check for writeback errors
- * @since: previously-sampled errseq_t
- *
- * Grab the errseq_t value from the mapping, and see if it has changed "since"
- * the given value was sampled.
- *
- * If it has then report the latest error set, otherwise return 0.
- */
-static inline int filemap_check_wb_err(struct address_space *mapping,
-					errseq_t since)
-{
-	return errseq_check(&mapping->wb_err, since);
-}
-
-/**
- * filemap_sample_wb_err - sample the current errseq_t to test for later errors
- * @mapping: mapping to be sampled
- *
- * Writeback errors are always reported relative to a particular sample point
- * in the past. This function provides those sample points.
- */
-static inline errseq_t filemap_sample_wb_err(struct address_space *mapping)
-{
-	return errseq_sample(&mapping->wb_err);
-}
-
-/**
- * file_sample_sb_err - sample the current errseq_t to test for later errors
- * @file: file pointer to be sampled
- *
- * Grab the most current superblock-level errseq_t value for the given
- * struct file.
- */
-static inline errseq_t file_sample_sb_err(struct file *file)
-{
-	return errseq_sample(&file->f_path.dentry->d_sb->s_wb_err);
 }
 
 extern int vfs_fsync_range(struct file *file, loff_t start, loff_t end,
@@ -3136,6 +3048,7 @@ extern int sb_min_blocksize(struct super_block *, int);
 extern int generic_file_mmap(struct file *, struct vm_area_struct *);
 extern int generic_file_readonly_mmap(struct file *, struct vm_area_struct *);
 extern ssize_t generic_write_checks(struct kiocb *, struct iov_iter *);
+int generic_write_checks_count(struct kiocb *iocb, loff_t *count);
 extern int generic_write_check_limits(struct file *file, loff_t pos,
 		loff_t *count);
 extern int generic_file_rw_checks(struct file *file_in, struct file *file_out);
@@ -3179,6 +3092,7 @@ extern loff_t fixed_size_llseek(struct file *file, loff_t offset,
 		int whence, loff_t size);
 extern loff_t no_seek_end_llseek_size(struct file *, loff_t, int, loff_t);
 extern loff_t no_seek_end_llseek(struct file *, loff_t, int);
+int rw_verify_area(int, struct file *, const loff_t *, size_t);
 extern int generic_file_open(struct inode * inode, struct file * filp);
 extern int nonseekable_open(struct inode * inode, struct file * filp);
 extern int stream_open(struct inode * inode, struct file * filp);
@@ -3613,16 +3527,5 @@ extern int vfs_fadvise(struct file *file, loff_t offset, loff_t len,
 		       int advice);
 extern int generic_fadvise(struct file *file, loff_t offset, loff_t len,
 			   int advice);
-
-/*
- * Flush file data before changing attributes.  Caller must hold any locks
- * required to prevent further writes to this file until we're done setting
- * flags.
- */
-static inline int inode_drain_writes(struct inode *inode)
-{
-	inode_dio_wait(inode);
-	return filemap_write_and_wait(inode->i_mapping);
-}
 
 #endif /* _LINUX_FS_H */

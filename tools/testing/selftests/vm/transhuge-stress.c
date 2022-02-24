@@ -60,6 +60,8 @@ int main(int argc, char **argv)
 	size_t ram, len;
 	void *ptr, *p;
 	struct timespec a, b;
+	int i = 0;
+	char *name = NULL;
 	double s;
 	uint8_t *map;
 	size_t map_len;
@@ -69,13 +71,23 @@ int main(int argc, char **argv)
 		ram = SIZE_MAX / 4;
 	else
 		ram *= sysconf(_SC_PAGESIZE);
+	len = ram;
 
-	if (argc == 1)
-		len = ram;
-	else if (!strcmp(argv[1], "-h"))
-		errx(1, "usage: %s [size in MiB]", argv[0]);
-	else
-		len = atoll(argv[1]) << 20;
+	while (++i < argc) {
+		if (!strcmp(argv[i], "-h"))
+			errx(1, "usage: %s [size in MiB]", argv[0]);
+		else if (!strcmp(argv[i], "-f"))
+			name = argv[++i];
+		else
+			len = atoll(argv[i]) << 20;
+	}
+
+	if (name) {
+		backing_fd = open(name, O_RDWR);
+		if (backing_fd == -1)
+			errx(2, "open %s", name);
+		mmap_flags = MAP_SHARED;
+	}
 
 	warnx("allocate %zd transhuge pages, using %zd MiB virtual memory"
 	      " and %zd MiB of ram", len >> HPAGE_SHIFT, len >> 20,
@@ -86,8 +98,7 @@ int main(int argc, char **argv)
 		err(2, "open pagemap");
 
 	len -= len % HPAGE_SIZE;
-	ptr = mmap(NULL, len + HPAGE_SIZE, PROT_READ | PROT_WRITE,
-			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
+	ptr = mmap(NULL, len + HPAGE_SIZE, PROT_RW, mmap_flags, backing_fd, 0);
 	if (ptr == MAP_FAILED)
 		err(2, "initial mmap");
 	ptr += HPAGE_SIZE - (uintptr_t)ptr % HPAGE_SIZE;

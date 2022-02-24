@@ -356,7 +356,7 @@ __nfp_tun_add_route_to_cache(struct list_head *route_list,
 			return 0;
 		}
 
-	entry = kmalloc(sizeof(*entry) + add_len, GFP_ATOMIC);
+	entry = kmalloc(struct_size(entry, ip_add, add_len), GFP_ATOMIC);
 	if (!entry) {
 		spin_unlock_bh(list_lock);
 		return -ENOMEM;
@@ -922,8 +922,8 @@ nfp_tunnel_add_shared_mac(struct nfp_app *app, struct net_device *netdev,
 			  int port, bool mod)
 {
 	struct nfp_flower_priv *priv = app->priv;
-	int ida_idx = NFP_MAX_MAC_INDEX, err;
 	struct nfp_tun_offloaded_mac *entry;
+	int ida_idx = -1, err;
 	u16 nfp_mac_idx = 0;
 
 	entry = nfp_tunnel_lookup_offloaded_macs(app, netdev->dev_addr);
@@ -997,7 +997,7 @@ err_remove_hash:
 err_free_entry:
 	kfree(entry);
 err_free_ida:
-	if (ida_idx != NFP_MAX_MAC_INDEX)
+	if (ida_idx != -1)
 		ida_simple_remove(&priv->tun.mac_off_ids, ida_idx);
 
 	return err;

@@ -74,7 +74,7 @@ int do_linkat(int olddfd, struct filename *old, int newdfd,
  * namespace.c
  */
 extern struct vfsmount *lookup_mnt(const struct path *);
-extern int finish_automount(struct vfsmount *, struct path *);
+extern int finish_automount(struct vfsmount *, const struct path *);
 
 extern int sb_prepare_remount_readonly(struct super_block *);
 
@@ -156,11 +156,6 @@ extern struct dentry * d_alloc_pseudo(struct super_block *, const struct qstr *)
 extern char *simple_dname(struct dentry *, char *, int);
 extern void dput_to_list(struct dentry *, struct list_head *);
 extern void shrink_dentry_list(struct list_head *);
-
-/*
- * read_write.c
- */
-extern int rw_verify_area(int, struct file *, const loff_t *, size_t);
 
 /*
  * pipe.c
