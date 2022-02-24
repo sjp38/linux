@@ -421,7 +421,7 @@ static struct damon_sysfs_weights *damon_sysfs_weights_alloc(unsigned int sz,
 	return weights;
 }
 
-static ssize_t damon_sysfs_weights_sz_show(struct kobject *kobj,
+static ssize_t sz_permil_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -430,7 +430,7 @@ static ssize_t damon_sysfs_weights_sz_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%u\n", weights->sz);
 }
 
-static ssize_t damon_sysfs_weights_sz_store(struct kobject *kobj,
+static ssize_t sz_permil_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -442,7 +442,7 @@ static ssize_t damon_sysfs_weights_sz_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_weights_nr_accesses_show(struct kobject *kobj,
+static ssize_t nr_accesses_permil_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -451,7 +451,7 @@ static ssize_t damon_sysfs_weights_nr_accesses_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%u\n", weights->nr_accesses);
 }
 
-static ssize_t damon_sysfs_weights_nr_accesses_store(struct kobject *kobj,
+static ssize_t nr_accesses_permil_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -463,7 +463,7 @@ static ssize_t damon_sysfs_weights_nr_accesses_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_weights_age_show(struct kobject *kobj,
+static ssize_t age_permil_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -472,7 +472,7 @@ static ssize_t damon_sysfs_weights_age_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%u\n", weights->age);
 }
 
-static ssize_t damon_sysfs_weights_age_store(struct kobject *kobj,
+static ssize_t age_permil_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_weights *weights = container_of(kobj,
@@ -490,16 +490,13 @@ static void damon_sysfs_weights_release(struct kobject *kobj)
 }
 
 static struct kobj_attribute damon_sysfs_weights_sz_attr =
-		__ATTR(sz, 0600, damon_sysfs_weights_sz_show,
-				damon_sysfs_weights_sz_store);
+		__ATTR_RW_MODE(sz_permil, 0600);
 
 static struct kobj_attribute damon_sysfs_weights_nr_accesses_attr =
-		__ATTR(nr_accesses, 0600, damon_sysfs_weights_nr_accesses_show,
-				damon_sysfs_weights_nr_accesses_store);
+		__ATTR_RW_MODE(nr_accesses_permil, 0600);
 
 static struct kobj_attribute damon_sysfs_weights_age_attr =
-		__ATTR(age, 0600, damon_sysfs_weights_age_show,
-				damon_sysfs_weights_age_store);
+		__ATTR_RW_MODE(age_permil, 0600);
 
 static struct attribute *damon_sysfs_weights_attrs[] = {
 	&damon_sysfs_weights_sz_attr.attr,
@@ -555,8 +552,8 @@ static void damon_sysfs_quotas_rm_dirs(struct damon_sysfs_quotas *quotas)
 	kobject_put(&quotas->weights->kobj);
 }
 
-static ssize_t damon_sysfs_quotas_ms_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t ms_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
@@ -564,8 +561,8 @@ static ssize_t damon_sysfs_quotas_ms_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", quotas->ms);
 }
 
-static ssize_t damon_sysfs_quotas_ms_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t ms_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
@@ -576,8 +573,8 @@ static ssize_t damon_sysfs_quotas_ms_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_quotas_sz_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t bytes_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
 			struct damon_sysfs_quotas, kobj);
@@ -585,7 +582,7 @@ static ssize_t damon_sysfs_quotas_sz_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", quotas->sz);
 }
 
-static ssize_t damon_sysfs_quotas_sz_store(struct kobject *kobj,
+static ssize_t bytes_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
@@ -597,7 +594,7 @@ static ssize_t damon_sysfs_quotas_sz_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t damon_sysfs_quotas_reset_interval_ms_show(struct kobject *kobj,
+static ssize_t reset_interval_ms_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
@@ -606,7 +603,7 @@ static ssize_t damon_sysfs_quotas_reset_interval_ms_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", quotas->reset_interval_ms);
 }
 
-static ssize_t damon_sysfs_quotas_reset_interval_ms_store(struct kobject *kobj,
+static ssize_t reset_interval_ms_store(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	struct damon_sysfs_quotas *quotas = container_of(kobj,
@@ -623,16 +620,14 @@ static void damon_sysfs_quotas_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_quotas, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_quotas_ms_attr = __ATTR(ms, 0600,
-		damon_sysfs_quotas_ms_show, damon_sysfs_quotas_ms_store);
+static struct kobj_attribute damon_sysfs_quotas_ms_attr =
+		__ATTR_RW_MODE(ms, 0600);
 
-static struct kobj_attribute damon_sysfs_quotas_sz_attr = __ATTR(sz, 0600,
-		damon_sysfs_quotas_sz_show, damon_sysfs_quotas_sz_store);
+static struct kobj_attribute damon_sysfs_quotas_sz_attr =
+		__ATTR_RW_MODE(bytes, 0600);
 
 static struct kobj_attribute damon_sysfs_quotas_reset_interval_ms_attr =
-		__ATTR(reset_interval_ms, 0600,
-			damon_sysfs_quotas_reset_interval_ms_show,
-			damon_sysfs_quotas_reset_interval_ms_store);
+		__ATTR_RW_MODE(reset_interval_ms, 0600);
 
 static struct attribute *damon_sysfs_quotas_attrs[] = {
 	&damon_sysfs_quotas_ms_attr.attr,
