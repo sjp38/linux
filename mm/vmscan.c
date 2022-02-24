@@ -1575,7 +1575,7 @@ retry:
 		 */
 		mapping = page_mapping(page);
 		if (writeback && PageReclaim(page))
-			stat->nr_congested++;
+			stat->nr_congested += nr_pages;
 
 		/*
 		 * If a page at the tail of the LRU is under writeback, there
@@ -1724,9 +1724,9 @@ retry:
 				/* Adding to swap updated mapping */
 				mapping = page_mapping(page);
 			}
-		} else if (unlikely(PageTransHuge(page))) {
-			/* Split file/lazyfree THP */
-			if (split_huge_page_to_list(page, page_list))
+		} else if (PageSwapBacked(page) && PageTransHuge(page)) {
+			/* Split shmem THP */
+			if (split_folio_to_list(folio, page_list))
 				goto keep_locked;
 		}
 
