@@ -65,20 +65,20 @@ directory is having ``/`` suffix, and files in each directory are separated by
 comma (","). ::
 
     /sys/kernel/mm/damon/admin
-    │ kdamonds/nr
+    │ kdamonds/nr_kdamonds
     │ │ 0/state,pid
-    │ │ │ contexts/nr
+    │ │ │ contexts/nr_contexts
     │ │ │ │ 0/operations
     │ │ │ │ │ monitoring_attrs/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ nr_regions/min,max
-    │ │ │ │ │ targets/nr
-    │ │ │ │ │ │ 0/pid
-    │ │ │ │ │ │ │ regions/nr
+    │ │ │ │ │ targets/nr_targets
+    │ │ │ │ │ │ 0/pid_target
+    │ │ │ │ │ │ │ regions/nr_regions
     │ │ │ │ │ │ │ │ 0/start,end
     │ │ │ │ │ │ │ │ ...
     │ │ │ │ │ │ ...
-    │ │ │ │ │ schemes/nr
+    │ │ │ │ │ schemes/nr_schemes
     │ │ │ │ │ │ 0/action
     │ │ │ │ │ │ │ access_pattern/
     │ │ │ │ │ │ │ │ sz/min,max
