@@ -144,16 +144,16 @@ test_schemes()
 {
 	schemes_dir=$1
 	ensure_dir "$schemes_dir" "exist"
-	ensure_file "$schemes_dir/nr" "exist" 600
+	ensure_file "$schemes_dir/nr_schemes" "exist" 600
 
-	ensure_write_succ  "$schemes_dir/nr" "1" "valid input"
+	ensure_write_succ  "$schemes_dir/nr_schemes" "1" "valid input"
 	test_scheme "$schemes_dir/0"
 
-	ensure_write_succ  "$schemes_dir/nr" "2" "valid input"
+	ensure_write_succ  "$schemes_dir/nr_schemes" "2" "valid input"
 	test_scheme "$schemes_dir/0"
 	test_scheme "$schemes_dir/1"
 
-	ensure_write_succ "$schemes_dir/nr" "0" "valid input"
+	ensure_write_succ "$schemes_dir/nr_schemes" "0" "valid input"
 	ensure_dir "$schemes_dir/0" "not_exist"
 	ensure_dir "$schemes_dir/1" "not_exist"
 }
@@ -170,16 +170,16 @@ test_regions()
 {
 	regions_dir=$1
 	ensure_dir "$regions_dir" "exist"
-	ensure_file "$regions_dir/nr" "exist" 600
+	ensure_file "$regions_dir/nr_regions" "exist" 600
 
-	ensure_write_succ  "$regions_dir/nr" "1" "valid input"
+	ensure_write_succ  "$regions_dir/nr_regions" "1" "valid input"
 	test_region "$regions_dir/0"
 
-	ensure_write_succ  "$regions_dir/nr" "2" "valid input"
+	ensure_write_succ  "$regions_dir/nr_regions" "2" "valid input"
 	test_region "$regions_dir/0"
 	test_region "$regions_dir/1"
 
-	ensure_write_succ "$regions_dir/nr" "0" "valid input"
+	ensure_write_succ "$regions_dir/nr_regions" "0" "valid input"
 	ensure_dir "$regions_dir/0" "not_exist"
 	ensure_dir "$regions_dir/1" "not_exist"
 }
@@ -188,7 +188,7 @@ test_target()
 {
 	target_dir=$1
 	ensure_dir "$target_dir" "exist"
-	ensure_file "$target_dir/pid" "exist" "600"
+	ensure_file "$target_dir/pid_target" "exist" "600"
 	test_regions "$target_dir/regions"
 }
 
@@ -196,16 +196,16 @@ test_targets()
 {
 	targets_dir=$1
 	ensure_dir "$targets_dir" "exist"
-	ensure_file "$targets_dir/nr" "exist" 600
+	ensure_file "$targets_dir/nr_targets" "exist" 600
 
-	ensure_write_succ  "$targets_dir/nr" "1" "valid input"
+	ensure_write_succ  "$targets_dir/nr_targets" "1" "valid input"
 	test_target "$targets_dir/0"
 
-	ensure_write_succ  "$targets_dir/nr" "2" "valid input"
+	ensure_write_succ  "$targets_dir/nr_targets" "2" "valid input"
 	test_target "$targets_dir/0"
 	test_target "$targets_dir/1"
 
-	ensure_write_succ "$targets_dir/nr" "0" "valid input"
+	ensure_write_succ "$targets_dir/nr_targets" "0" "valid input"
 	ensure_dir "$targets_dir/0" "not_exist"
 	ensure_dir "$targets_dir/1" "not_exist"
 }
@@ -241,15 +241,15 @@ test_contexts()
 {
 	contexts_dir=$1
 	ensure_dir "$contexts_dir" "exist"
-	ensure_file "$contexts_dir/nr" "exist" 600
+	ensure_file "$contexts_dir/nr_contexts" "exist" 600
 
-	ensure_write_succ  "$contexts_dir/nr" "1" "valid input"
+	ensure_write_succ  "$contexts_dir/nr_contexts" "1" "valid input"
 	test_context "$contexts_dir/0"
 
-	ensure_write_fail "$contexts_dir/nr" "2" "only 0/1 are supported"
+	ensure_write_fail "$contexts_dir/nr_contexts" "2" "only 0/1 are supported"
 	test_context "$contexts_dir/0"
 
-	ensure_write_succ "$contexts_dir/nr" "0" "valid input"
+	ensure_write_succ "$contexts_dir/nr_contexts" "0" "valid input"
 	ensure_dir "$contexts_dir/0" "not_exist"
 }
 
@@ -267,16 +267,16 @@ test_kdamonds()
 	kdamonds_dir=$1
 	ensure_dir "$kdamonds_dir" "exist"
 
-	ensure_file "$kdamonds_dir/nr" "exist" "600"
+	ensure_file "$kdamonds_dir/nr_kdamonds" "exist" "600"
 
-	ensure_write_succ  "$kdamonds_dir/nr" "1" "valid input"
+	ensure_write_succ  "$kdamonds_dir/nr_kdamonds" "1" "valid input"
 	test_kdamond "$kdamonds_dir/0"
 
-	ensure_write_succ  "$kdamonds_dir/nr" "2" "valid input"
+	ensure_write_succ  "$kdamonds_dir/nr_kdamonds" "2" "valid input"
 	test_kdamond "$kdamonds_dir/0"
 	test_kdamond "$kdamonds_dir/1"
 
-	ensure_write_succ "$kdamonds_dir/nr" "0" "valid input"
+	ensure_write_succ "$kdamonds_dir/nr_kdamonds" "0" "valid input"
 	ensure_dir "$kdamonds_dir/0" "not_exist"
 	ensure_dir "$kdamonds_dir/1" "not_exist"
 }
