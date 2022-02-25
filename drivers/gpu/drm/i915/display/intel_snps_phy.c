@@ -34,13 +34,8 @@ void intel_snps_phy_wait_for_calibration(struct drm_i915_private *i915)
 
 		if (intel_de_wait_for_clear(i915, DG2_PHY_MISC(phy),
 					    DG2_PHY_DP_TX_ACK_MASK, 25))
-<<<<<<< HEAD
-			DRM_ERROR("SNPS PHY %c failed to calibrate after 25ms.\n",
-				  phy_name(phy));
-=======
 			drm_err(&i915->drm, "SNPS PHY %c failed to calibrate after 25ms.\n",
 				phy_name(phy));
->>>>>>> linux-next/akpm-base
 	}
 }
 

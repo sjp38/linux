@@ -1141,10 +1141,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_XSAVE2 208
 #define KVM_CAP_SYS_ATTRIBUTES 209
 #define KVM_CAP_PPC_AIL_MODE_3 210
-<<<<<<< HEAD
-=======
 #define KVM_CAP_S390_MEM_OP_EXTENSION 211
->>>>>>> linux-next/akpm-base
 
 #ifdef KVM_CAP_IRQ_ROUTING
 

@@ -1302,18 +1302,6 @@ signal_address_tests()
 
 	# signal addresses race test
 	reset
-<<<<<<< HEAD
-	ip netns exec $ns1 ./pm_nl_ctl limits 4 4
-	ip netns exec $ns2 ./pm_nl_ctl limits 4 4
-	ip netns exec $ns1 ./pm_nl_ctl add 10.0.1.1 flags signal
-	ip netns exec $ns1 ./pm_nl_ctl add 10.0.2.1 flags signal
-	ip netns exec $ns1 ./pm_nl_ctl add 10.0.3.1 flags signal
-	ip netns exec $ns1 ./pm_nl_ctl add 10.0.4.1 flags signal
-	ip netns exec $ns2 ./pm_nl_ctl add 10.0.1.2 flags signal
-	ip netns exec $ns2 ./pm_nl_ctl add 10.0.2.2 flags signal
-	ip netns exec $ns2 ./pm_nl_ctl add 10.0.3.2 flags signal
-	ip netns exec $ns2 ./pm_nl_ctl add 10.0.4.2 flags signal
-=======
 
 	pm_nl_set_limits $ns1 4 4
 	pm_nl_set_limits $ns2 4 4
@@ -1325,7 +1313,6 @@ signal_address_tests()
 	pm_nl_add_endpoint $ns2 10.0.2.2 flags signal
 	pm_nl_add_endpoint $ns2 10.0.3.2 flags signal
 	pm_nl_add_endpoint $ns2 10.0.4.2 flags signal
->>>>>>> linux-next/akpm-base
 
 	# the peer could possibly miss some addr notification, allow retransmission
 	ip netns exec $ns1 sysctl -q net.mptcp.add_addr_timeout=1

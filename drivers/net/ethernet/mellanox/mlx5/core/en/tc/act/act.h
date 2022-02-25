@@ -17,21 +17,14 @@ struct mlx5e_tc_act_parse_state {
 	struct mlx5e_tc_flow *flow;
 	struct netlink_ext_ack *extack;
 	bool ct_clear;
-<<<<<<< HEAD
-=======
 	u32 actions;
 	bool ct;
->>>>>>> linux-next/akpm-base
 	bool encap;
 	bool decap;
 	bool mpls_push;
 	bool ptype_host;
 	const struct ip_tunnel_info *tun_info;
 	struct mlx5e_mpls_info mpls_info;
-<<<<<<< HEAD
-	struct pedit_headers_action hdrs[__PEDIT_CMD_MAX];
-=======
->>>>>>> linux-next/akpm-base
 	int ifindexes[MLX5_MAX_FLOW_FWD_VPORTS];
 	int if_count;
 	struct mlx5_tc_ct_priv *ct_priv;

@@ -4248,10 +4248,7 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 	case KVM_CAP_VCPU_ATTRIBUTES:
 	case KVM_CAP_SYS_ATTRIBUTES:
 	case KVM_CAP_ENABLE_CAP:
-<<<<<<< HEAD
-=======
 	case KVM_CAP_VAPIC:
->>>>>>> linux-next/akpm-base
 		r = 1;
 		break;
 	case KVM_CAP_EXIT_HYPERCALL:
