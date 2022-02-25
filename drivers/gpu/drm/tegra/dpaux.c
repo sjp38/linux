@@ -18,8 +18,13 @@
 #include <linux/reset.h>
 #include <linux/workqueue.h>
 
+<<<<<<< HEAD
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_dp_aux_bus.h>
+=======
+#include <drm/dp/drm_dp_helper.h>
+#include <drm/dp/drm_dp_aux_bus.h>
+>>>>>>> linux-next/akpm-base
 #include <drm/drm_panel.h>
 
 #include "dp.h"

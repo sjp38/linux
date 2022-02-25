@@ -34,6 +34,7 @@ Library functionality that is used throughout the kernel.
    kref
    assoc_array
    xarray
+   maple_tree
    idr
    circular-buffers
    rbtree
@@ -43,6 +44,14 @@ Library functionality that is used throughout the kernel.
    this_cpu_ops
    timekeeping
    errseq
+
+Low level entry and exit
+========================
+
+.. toctree::
+   :maxdepth: 1
+
+   entry
 
 Concurrency primitives
 ======================
