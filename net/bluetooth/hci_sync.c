@@ -382,6 +382,9 @@ int hci_cmd_sync_queue(struct hci_dev *hdev, hci_cmd_sync_work_func_t func,
 {
 	struct hci_cmd_sync_work_entry *entry;
 
+	if (hci_dev_test_flag(hdev, HCI_UNREGISTER))
+		return -ENODEV;
+
 	entry = kmalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return -ENOMEM;
@@ -1841,6 +1844,7 @@ static u8 hci_update_accept_list_sync(struct hci_dev *hdev)
 	struct bdaddr_list *b, *t;
 	u8 num_entries = 0;
 	bool pend_conn, pend_report;
+	u8 filter_policy;
 	int err;
 
 	/* Pause advertising if resolving list can be used as controllers are
@@ -1927,6 +1931,8 @@ static u8 hci_update_accept_list_sync(struct hci_dev *hdev)
 		err = -EINVAL;
 
 done:
+	filter_policy = err ? 0x00 : 0x01;
+
 	/* Enable address resolution when LL Privacy is enabled. */
 	err = hci_le_set_addr_resolution_enable_sync(hdev, 0x01);
 	if (err)
@@ -1937,7 +1943,7 @@ done:
 		hci_resume_advertising_sync(hdev);
 
 	/* Select filter policy to use accept list */
-	return err ? 0x00 : 0x01;
+	return filter_policy;
 }
 
 /* Returns true if an le connection is in the scanning state */
@@ -3262,10 +3268,10 @@ static int hci_le_set_event_mask_sync(struct hci_dev *hdev)
 	if (hdev->le_features[0] & HCI_LE_DATA_LEN_EXT)
 		events[0] |= 0x40;	/* LE Data Length Change */
 
-	/* If the controller supports LL Privacy feature, enable
-	 * the corresponding event.
+	/* If the controller supports LL Privacy feature or LE Extended Adv,
+	 * enable the corresponding event.
 	 */
-	if (hdev->le_features[0] & HCI_LE_LL_PRIVACY)
+	if (use_enhanced_conn_complete(hdev))
 		events[1] |= 0x02;	/* LE Enhanced Connection Complete */
 
 	/* If the controller supports Extended Scanner Filter
@@ -4106,9 +4112,9 @@ int hci_dev_close_sync(struct hci_dev *hdev)
 	hci_inquiry_cache_flush(hdev);
 	hci_pend_le_actions_clear(hdev);
 	hci_conn_hash_flush(hdev);
-	hci_dev_unlock(hdev);
-
+	/* Prevent data races on hdev->smp_data or hdev->smp_bredr_data */
 	smp_unregister(hdev);
+	hci_dev_unlock(hdev);
 
 	hci_sock_dev_event(hdev, HCI_DEV_DOWN);
 
@@ -4422,7 +4428,7 @@ static int hci_disconnect_all_sync(struct hci_dev *hdev, u8 reason)
 			return err;
 	}
 
-	return err;
+	return 0;
 }
 
 /* This function perform power off HCI command sequence as follows:
@@ -5140,8 +5146,8 @@ static void set_ext_conn_params(struct hci_conn *conn,
 	p->max_ce_len = cpu_to_le16(0x0000);
 }
 
-int hci_le_ext_create_conn_sync(struct hci_dev *hdev, struct hci_conn *conn,
-				u8 own_addr_type)
+static int hci_le_ext_create_conn_sync(struct hci_dev *hdev,
+				       struct hci_conn *conn, u8 own_addr_type)
 {
 	struct hci_cp_le_ext_create_conn *cp;
 	struct hci_cp_le_ext_conn_param *p;
@@ -5185,7 +5191,7 @@ int hci_le_ext_create_conn_sync(struct hci_dev *hdev, struct hci_conn *conn,
 	return __hci_cmd_sync_status_sk(hdev, HCI_OP_LE_EXT_CREATE_CONN,
 					plen, data,
 					HCI_EV_LE_ENHANCED_CONN_COMPLETE,
-					HCI_CMD_TIMEOUT, NULL);
+					conn->conn_timeout, NULL);
 }
 
 int hci_le_create_conn_sync(struct hci_dev *hdev, struct hci_conn *conn)
@@ -5270,9 +5276,18 @@ int hci_le_create_conn_sync(struct hci_dev *hdev, struct hci_conn *conn)
 	cp.min_ce_len = cpu_to_le16(0x0000);
 	cp.max_ce_len = cpu_to_le16(0x0000);
 
+	/* BLUETOOTH CORE SPECIFICATION Version 5.3 | Vol 4, Part E page 2261:
+	 *
+	 * If this event is unmasked and the HCI_LE_Connection_Complete event
+	 * is unmasked, only the HCI_LE_Enhanced_Connection_Complete event is
+	 * sent when a new connection has been created.
+	 */
 	err = __hci_cmd_sync_status_sk(hdev, HCI_OP_LE_CREATE_CONN,
-				       sizeof(cp), &cp, HCI_EV_LE_CONN_COMPLETE,
-				       HCI_CMD_TIMEOUT, NULL);
+				       sizeof(cp), &cp,
+				       use_enhanced_conn_complete(hdev) ?
+				       HCI_EV_LE_ENHANCED_CONN_COMPLETE :
+				       HCI_EV_LE_CONN_COMPLETE,
+				       conn->conn_timeout, NULL);
 
 done:
 	/* Re-enable advertising after the connection attempt is finished. */
