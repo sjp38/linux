@@ -3,9 +3,14 @@
  * Copyright © 2021 Intel Corporation
  */
 
+#include <drm/drm_cache.h>
+
 #include "i915_drv.h"
+#include "i915_reg.h"
 #include "intel_guc_slpc.h"
+#include "intel_mchbar_regs.h"
 #include "gt/intel_gt.h"
+#include "gt/intel_gt_regs.h"
 
 static inline struct intel_guc *slpc_to_guc(struct intel_guc_slpc *slpc)
 {
@@ -110,7 +115,7 @@ static int guc_action_slpc_unset_param(struct intel_guc *guc, u8 id)
 {
 	u32 request[] = {
 		GUC_ACTION_HOST2GUC_PC_SLPC_REQUEST,
-		SLPC_EVENT(SLPC_EVENT_PARAMETER_UNSET, 2),
+		SLPC_EVENT(SLPC_EVENT_PARAMETER_UNSET, 1),
 		id,
 	};
 

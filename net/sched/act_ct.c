@@ -57,12 +57,6 @@ static const struct rhashtable_params zones_params = {
 	.automatic_shrinking = true,
 };
 
-static struct nf_ct_ext_type act_ct_extend __read_mostly = {
-	.len		= sizeof(struct nf_conn_act_ct_ext),
-	.align		= __alignof__(struct nf_conn_act_ct_ext),
-	.id		= NF_CT_EXT_ACT_CT,
-};
-
 static struct flow_action_entry *
 tcf_ct_flow_table_flow_action_get_next(struct flow_action *flow_action)
 {
@@ -361,6 +355,13 @@ static void tcf_ct_flow_table_put(struct tcf_ct_params *params)
 	}
 }
 
+static void tcf_ct_flow_tc_ifidx(struct flow_offload *entry,
+				 struct nf_conn_act_ct_ext *act_ct_ext, u8 dir)
+{
+	entry->tuplehash[dir].tuple.xmit_type = FLOW_OFFLOAD_XMIT_TC;
+	entry->tuplehash[dir].tuple.tc.iifidx = act_ct_ext->ifindex[dir];
+}
+
 static void tcf_ct_flow_table_add(struct tcf_ct_flow_table *ct_ft,
 				  struct nf_conn *ct,
 				  bool tcp)
@@ -385,10 +386,8 @@ static void tcf_ct_flow_table_add(struct tcf_ct_flow_table *ct_ft,
 
 	act_ct_ext = nf_conn_act_ct_ext_find(ct);
 	if (act_ct_ext) {
-		entry->tuplehash[FLOW_OFFLOAD_DIR_ORIGINAL].tuple.iifidx =
-			act_ct_ext->ifindex[IP_CT_DIR_ORIGINAL];
-		entry->tuplehash[FLOW_OFFLOAD_DIR_REPLY].tuple.iifidx =
-			act_ct_ext->ifindex[IP_CT_DIR_REPLY];
+		tcf_ct_flow_tc_ifidx(entry, act_ct_ext, FLOW_OFFLOAD_DIR_ORIGINAL);
+		tcf_ct_flow_tc_ifidx(entry, act_ct_ext, FLOW_OFFLOAD_DIR_REPLY);
 	}
 
 	err = flow_offload_add(&ct_ft->nf_ft, entry);
@@ -1603,16 +1602,10 @@ static int __init ct_init_module(void)
 	if (err)
 		goto err_register;
 
-	err = nf_ct_extend_register(&act_ct_extend);
-	if (err)
-		goto err_register_extend;
-
 	static_branch_inc(&tcf_frag_xmit_count);
 
 	return 0;
 
-err_register_extend:
-	tcf_unregister_action(&act_ct_ops, &ct_net_ops);
 err_register:
 	tcf_ct_flow_tables_uninit();
 err_tbl_init:
@@ -1623,7 +1616,6 @@ err_tbl_init:
 static void __exit ct_cleanup_module(void)
 {
 	static_branch_dec(&tcf_frag_xmit_count);
-	nf_ct_extend_unregister(&act_ct_extend);
 	tcf_unregister_action(&act_ct_ops, &ct_net_ops);
 	tcf_ct_flow_tables_uninit();
 	destroy_workqueue(act_ct_wq);
