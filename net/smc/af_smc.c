@@ -3294,25 +3294,19 @@ static int __init smc_init(void)
 	if (rc) {
 		pr_err("%s: tcp_ulp_register fails with %d\n", __func__, rc);
 		goto out_ib;
-<<<<<<< HEAD
-=======
 	}
 
 	rc = smc_sysctl_init();
 	if (rc) {
 		pr_err("%s: sysctl_init fails with %d\n", __func__, rc);
 		goto out_ulp;
->>>>>>> linux-next/akpm-base
 	}
 
 	static_branch_enable(&tcp_have_smc);
 	return 0;
 
-<<<<<<< HEAD
-=======
 out_ulp:
 	tcp_unregister_ulp(&smc_ulp_ops);
->>>>>>> linux-next/akpm-base
 out_ib:
 	smc_ib_unregister_client();
 out_sock:

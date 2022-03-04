@@ -2077,11 +2077,7 @@ static void dcbnl_flush_dev(struct net_device *dev)
 {
 	struct dcb_app_type *itr, *tmp;
 
-<<<<<<< HEAD
-	spin_lock_bh(&dcb_lock);
-=======
 	spin_lock(&dcb_lock);
->>>>>>> linux-next/akpm-base
 
 	list_for_each_entry_safe(itr, tmp, &dcb_app_list, list) {
 		if (itr->ifindex == dev->ifindex) {
@@ -2090,11 +2086,7 @@ static void dcbnl_flush_dev(struct net_device *dev)
 		}
 	}
 
-<<<<<<< HEAD
-	spin_unlock_bh(&dcb_lock);
-=======
 	spin_unlock(&dcb_lock);
->>>>>>> linux-next/akpm-base
 }
 
 static int dcbnl_netdevice_event(struct notifier_block *nb,
