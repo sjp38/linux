@@ -472,7 +472,6 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 		 */
 		*new = data_race(*orig);
 		INIT_LIST_HEAD(&new->anon_vma_chain);
-		new->vm_next = new->vm_prev = NULL;
 		dup_anon_vma_name(orig, new);
 	}
 	return new;
