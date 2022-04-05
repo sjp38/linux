@@ -35,6 +35,7 @@ config KPROBES
 	depends on MODULES
 	depends on HAVE_KPROBES
 	select KALLSYMS
+	select TASKS_RCU if PREEMPTION
 	help
 	  Kprobes allows you to trap at almost any kernel address and
 	  execute a callback function.  register_kprobe() establishes
@@ -343,6 +344,12 @@ config HAVE_RSEQ
 	help
 	  This symbol should be selected by an architecture if it
 	  supports an implementation of restartable sequences.
+
+config HAVE_RUST
+	bool
+	help
+	  This symbol should be selected by an architecture if it
+	  supports Rust.
 
 config HAVE_FUNCTION_ARG_ACCESS_API
 	bool
@@ -887,6 +894,12 @@ config MODULES_USE_ELF_REL
 	help
 	  Modules only use ELF REL relocations.  Modules with ELF RELA
 	  relocations will give an error.
+
+config ARCH_WANTS_MODULES_DATA_IN_VMALLOC
+	bool
+	help
+	  For architectures like powerpc/32 which have constraints on module
+	  allocation and need to allocate module data outside of module area.
 
 config HAVE_IRQ_EXIT_ON_IRQ_STACK
 	bool
