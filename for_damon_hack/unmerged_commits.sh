@@ -25,7 +25,7 @@ do
 	dev_subject=$(git show "$dev_commit" --pretty=%s --quiet)
 	dev_subject=$(echo "$dev_subject" | awk '{print tolower($0)}')
 
-	if echo "$maintainer_subjects" | grep "$dev_subject\n" --quiet
+	if echo "$maintainer_subjects" | grep "$dev_subject" --quiet
 	then
 		continue
 	fi
