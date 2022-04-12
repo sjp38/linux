@@ -753,8 +753,19 @@ static int __init damon_va_initcall(void)
 		.apply_scheme = damon_va_apply_scheme,
 		.get_scheme_score = damon_va_scheme_score,
 	};
+	/* ops for fixed ranges of virtual address spaces */
+	struct damon_operations ops_fr = ops;
+	int err;
 
-	return damon_register_ops(&ops);
+	/* Don't set the monitoring target regions for the entire mapping */
+	ops_fr.id = DAMON_OPS_FVADDR;
+	ops_fr.init = NULL;
+	ops_fr.update = NULL;
+
+	err = damon_register_ops(&ops);
+	if (err)
+		return err;
+	return damon_register_ops(&ops_fr);
 };
 
 subsys_initcall(damon_va_initcall);
