@@ -2061,6 +2061,8 @@ enum damon_sysfs_cmd {
 	DAMON_SYSFS_CMD_ON,
 	/* @DAMON_SYSFS_CMD_OFF: Turn the kdamond off. */
 	DAMON_SYSFS_CMD_OFF,
+	/* @DAMON_SYSFS_CMD_COMMIT: Update kdamond inputs. */
+	DAMON_SYSFS_CMD_COMMIT,
 	/*
 	 * @DAMON_SYSFS_CMD_UPDATE_SCHEMES_STATS: Update scheme stats sysfs
 	 * files.
@@ -2076,6 +2078,7 @@ enum damon_sysfs_cmd {
 static const char * const damon_sysfs_cmd_strs[] = {
 	"on",
 	"off",
+	"commit",
 	"update_schemes_stats",
 };
 
@@ -2294,6 +2297,45 @@ static int damon_sysfs_upd_schemes_stats(struct damon_sysfs_kdamond *kdamond)
 	return 0;
 }
 
+static inline bool damon_sysfs_kdamond_running(
+		struct damon_sysfs_kdamond *kdamond)
+{
+	return kdamond->damon_ctx &&
+		damon_sysfs_ctx_running(kdamond->damon_ctx);
+}
+
+/*
+ * damon_sysfs_commit_input() - Commit user inputs to a running kdamond.
+ * @kdamond:	The kobject wrapper for the associated kdamond.
+ *
+ * If the sysfs input is wrong, the kdamond will be terminated.
+ */
+static int damon_sysfs_commit_input(struct damon_sysfs_kdamond *kdamond)
+{
+	struct damon_ctx *ctx = kdamond->damon_ctx;
+	struct damon_sysfs_context *sys_ctx;
+	int err = 0;
+
+	if (!damon_sysfs_kdamond_running(kdamond))
+		return -EINVAL;
+	/* TODO: Support multiple contexts per kdamond */
+	if (kdamond->contexts->nr != 1)
+		return -EINVAL;
+
+	sys_ctx = kdamond->contexts->contexts_arr[0];
+
+	err = damon_select_ops(ctx, sys_ctx->ops_id);
+	if (err)
+		return err;
+	err = damon_sysfs_set_attrs(ctx, sys_ctx->attrs);
+	if (err)
+		return err;
+	err = damon_sysfs_set_schemes(ctx, sys_ctx->schemes);
+	if (err)
+		return err;
+	return err;
+}
+
 /*
  * damon_sysfs_cmd_request_callback() - DAMON callback for handling requests.
  * @c:	The DAMON context of the callback.
@@ -2315,6 +2357,9 @@ static int damon_sysfs_cmd_request_callback(struct damon_ctx *c)
 	switch (damon_sysfs_cmd_request.cmd) {
 	case DAMON_SYSFS_CMD_UPDATE_SCHEMES_STATS:
 		err = damon_sysfs_upd_schemes_stats(kdamond);
+		break;
+	case DAMON_SYSFS_CMD_COMMIT:
+		err = damon_sysfs_commit_input(kdamond);
 		break;
 	default:
 		break;
@@ -2398,13 +2443,6 @@ static int damon_sysfs_turn_damon_off(struct damon_sysfs_kdamond *kdamond)
 	 * DAMON, we free kdamond->damon_ctx in next
 	 * damon_sysfs_turn_damon_on(), or kdamonds_nr_store()
 	 */
-}
-
-static inline bool damon_sysfs_kdamond_running(
-		struct damon_sysfs_kdamond *kdamond)
-{
-	return kdamond->damon_ctx &&
-		damon_sysfs_ctx_running(kdamond->damon_ctx);
 }
 
 /*
