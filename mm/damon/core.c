@@ -187,8 +187,10 @@ static bool damon_intersect(struct damon_region *r,
  *
  * This function adjusts regions of a monitoring target to fit in specific
  * ranges.
+ *
+ * Return: 0 if success, or negative error code otherwise.
  */
-void damon_adjust_region_ranges(struct damon_target *t,
+int damon_adjust_region_ranges(struct damon_target *t,
 		struct damon_addr_range *ranges, unsigned int nr_ranges)
 {
 	struct damon_region *r, *next;
@@ -227,7 +229,7 @@ void damon_adjust_region_ranges(struct damon_target *t,
 						DAMON_MIN_REGION),
 					ALIGN(range->end, DAMON_MIN_REGION));
 			if (!newr)
-				continue;
+				return -ENOMEM;
 			damon_insert_region(newr, damon_prev_region(r), r, t);
 		} else {
 			first->ar.start = ALIGN_DOWN(range->start,
@@ -235,6 +237,7 @@ void damon_adjust_region_ranges(struct damon_target *t,
 			last->ar.end = ALIGN(range->end, DAMON_MIN_REGION);
 		}
 	}
+	return 0;
 }
 
 struct damos *damon_new_scheme(
