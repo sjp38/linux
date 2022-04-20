@@ -23,7 +23,9 @@ Date:		Mar 2022
 Contact:	SeongJae Park <sj@kernel.org>
 Description:	Writing 'on' or 'off' to this file makes the kdamond starts or
 		stops, respectively.  Reading the file returns the keywords
-		based on the current status.  Writing 'update_schemes_stats' to
+		based on the current status.  Writing 'commit' to this file
+		makes the kdamond reads the user inputs on the sysfs files
+		other than 'state' again.  Writing 'update_schemes_stats' to
 		the file updates contents of schemes stats files of the
 		kdamond.
 
