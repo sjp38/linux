@@ -328,8 +328,7 @@ static int damon_reclaim_apply_parameters(void)
 		return -EINVAL;
 	addr_range.start = monitor_region_start;
 	addr_range.end = monitor_region_end;
-	damon_adjust_region_ranges(target, &addr_range, 1);
-	return err;
+	return damon_adjust_region_ranges(target, &addr_range, 1);
 }
 
 static int damon_reclaim_turn(bool on)
