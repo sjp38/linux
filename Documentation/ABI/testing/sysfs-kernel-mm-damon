@@ -50,6 +50,7 @@ What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/contexts/<C>/operations
 Date:		Mar 2022
 Contact:	SeongJae Park <sj@kernel.org>
 Description:	Writing a keyword for a monitoring operations set ('vaddr' for
+		virtual address spaces monitoring, 'fvaddr' for fixed ranges of
 		virtual address spaces monitoring, and 'paddr' for the physical
 		address space monitoring) to this file makes the context to use
 		the operations set.  Reading the file returns the keyword for
