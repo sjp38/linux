@@ -25,6 +25,7 @@ typedef __u16 __sum16;
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/param.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <linux/bpf.h>
@@ -37,7 +38,6 @@ typedef __u16 __sum16;
 #include <bpf/bpf_endian.h>
 #include "trace_helpers.h"
 #include "testing_helpers.h"
-#include "flow_dissector_load.h"
 
 enum verbosity {
 	VERBOSE_NONE,
@@ -46,14 +46,20 @@ enum verbosity {
 	VERBOSE_SUPER,
 };
 
-struct str_set {
-	const char **strs;
+struct test_filter {
+	char *name;
+	char **subtests;
+	int subtest_cnt;
+};
+
+struct test_filter_set {
+	struct test_filter *tests;
 	int cnt;
 };
 
 struct test_selector {
-	struct str_set whitelist;
-	struct str_set blacklist;
+	struct test_filter_set whitelist;
+	struct test_filter_set blacklist;
 	bool *num_set;
 	int num_set_len;
 };
@@ -332,6 +338,8 @@ int trigger_module_test_write(int write_sz);
 #define SYS_NANOSLEEP_KPROBE_NAME "__x64_sys_nanosleep"
 #elif defined(__s390x__)
 #define SYS_NANOSLEEP_KPROBE_NAME "__s390x_sys_nanosleep"
+#elif defined(__aarch64__)
+#define SYS_NANOSLEEP_KPROBE_NAME "__arm64_sys_nanosleep"
 #else
 #define SYS_NANOSLEEP_KPROBE_NAME "sys_nanosleep"
 #endif

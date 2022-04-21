@@ -353,7 +353,6 @@ config GPIO_IOP
 
 config GPIO_IXP4XX
 	bool "Intel IXP4xx GPIO"
-	depends on ARM # For <asm/mach-types.h>
 	depends on ARCH_IXP4XX
 	select GPIO_GENERIC
 	select GPIOLIB_IRQCHIP
@@ -480,6 +479,14 @@ config GPIO_PL061
 	select GPIOLIB_IRQCHIP
 	help
 	  Say yes here to support the PrimeCell PL061 GPIO device.
+
+config GPIO_PL061_RUST
+	tristate "PrimeCell PL061 GPIO support written in Rust"
+	depends on ARM_AMBA && RUST
+	select IRQ_DOMAIN
+	select GPIOLIB_IRQCHIP
+	help
+	  Say yes here to support the PrimeCell PL061 GPIO device
 
 config GPIO_PMIC_EIC_SPRD
 	tristate "Spreadtrum PMIC EIC support"

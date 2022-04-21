@@ -22,6 +22,8 @@
  *
  */
 
+#include <linux/string_helpers.h>
+
 #include <drm/drm_print.h>
 #include <drm/i915_pciids.h>
 
@@ -29,6 +31,7 @@
 #include "display/intel_de.h"
 #include "intel_device_info.h"
 #include "i915_drv.h"
+#include "i915_utils.h"
 
 #define PLATFORM_NAME(x) [INTEL_##x] = #x
 static const char * const platform_names[] = {
@@ -110,11 +113,11 @@ void intel_device_info_print_static(const struct intel_device_info *info,
 	drm_printf(p, "ppgtt-type: %d\n", info->ppgtt_type);
 	drm_printf(p, "dma_mask_size: %u\n", info->dma_mask_size);
 
-#define PRINT_FLAG(name) drm_printf(p, "%s: %s\n", #name, yesno(info->name))
+#define PRINT_FLAG(name) drm_printf(p, "%s: %s\n", #name, str_yes_no(info->name))
 	DEV_INFO_FOR_EACH_FLAG(PRINT_FLAG);
 #undef PRINT_FLAG
 
-#define PRINT_FLAG(name) drm_printf(p, "%s: %s\n", #name, yesno(info->display.name))
+#define PRINT_FLAG(name) drm_printf(p, "%s: %s\n", #name, str_yes_no(info->display.name))
 	DEV_INFO_DISPLAY_FOR_EACH_FLAG(PRINT_FLAG);
 #undef PRINT_FLAG
 }
@@ -178,8 +181,9 @@ static const u16 subplatform_n_ids[] = {
 	INTEL_ADLN_IDS(0),
 };
 
-static const u16 subplatform_rpls_ids[] = {
+static const u16 subplatform_rpl_ids[] = {
 	INTEL_RPLS_IDS(0),
+	INTEL_RPLP_IDS(0),
 };
 
 static bool find_devid(u16 id, const u16 *p, unsigned int num)
@@ -224,9 +228,9 @@ void intel_device_info_subplatform_init(struct drm_i915_private *i915)
 	} else if (find_devid(devid, subplatform_n_ids,
 				ARRAY_SIZE(subplatform_n_ids))) {
 		mask = BIT(INTEL_SUBPLATFORM_N);
-	} else if (find_devid(devid, subplatform_rpls_ids,
-			      ARRAY_SIZE(subplatform_rpls_ids))) {
-		mask = BIT(INTEL_SUBPLATFORM_RPL_S);
+	} else if (find_devid(devid, subplatform_rpl_ids,
+			      ARRAY_SIZE(subplatform_rpl_ids))) {
+		mask = BIT(INTEL_SUBPLATFORM_RPL);
 	}
 
 	GEM_BUG_ON(mask & ~INTEL_SUBPLATFORM_MASK);
@@ -366,7 +370,7 @@ void intel_device_info_runtime_init(struct drm_i915_private *dev_priv)
 			info->display.has_dsc = 0;
 	}
 
-	if (GRAPHICS_VER(dev_priv) == 6 && intel_vtd_active(dev_priv)) {
+	if (GRAPHICS_VER(dev_priv) == 6 && i915_vtd_active(dev_priv)) {
 		drm_info(&dev_priv->drm,
 			 "Disabling ppGTT for VT-d support\n");
 		info->ppgtt_type = INTEL_PPGTT_NONE;
@@ -388,6 +392,6 @@ void intel_driver_caps_print(const struct intel_driver_caps *caps,
 			     struct drm_printer *p)
 {
 	drm_printf(p, "Has logical contexts? %s\n",
-		   yesno(caps->has_logical_contexts));
+		   str_yes_no(caps->has_logical_contexts));
 	drm_printf(p, "scheduler: %x\n", caps->scheduler);
 }

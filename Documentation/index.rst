@@ -82,6 +82,7 @@ merged much easier.
    maintainer/index
    fault-injection/index
    livepatch/index
+   rust/index
 
 
 Kernel API documentation
@@ -137,7 +138,6 @@ needed).
    misc-devices/index
    scheduler/index
    mhi/index
-   tty/index
    peci/index
 
 Architecture-agnostic documentation
