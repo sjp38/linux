@@ -41,7 +41,6 @@
 #include "wr.h"
 #include "restrack.h"
 #include "counters.h"
-#include <linux/mlx5/accel.h>
 #include <rdma/uverbs_std_types.h>
 #include <rdma/uverbs_ioctl.h>
 #include <rdma/mlx5_user_ioctl_verbs.h>
@@ -855,13 +854,13 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 					   IB_DEVICE_MEM_WINDOW_TYPE_2B;
 		props->max_mw = 1 << MLX5_CAP_GEN(mdev, log_max_mkey);
 		/* We support 'Gappy' memory registration too */
-		props->device_cap_flags |= IB_DEVICE_SG_GAPS_REG;
+		props->kernel_cap_flags |= IBK_SG_GAPS_REG;
 	}
 	/* IB_WR_REG_MR always requires changing the entity size with UMR */
 	if (!MLX5_CAP_GEN(dev->mdev, umr_modify_entity_size_disabled))
 		props->device_cap_flags |= IB_DEVICE_MEM_MGT_EXTENSIONS;
 	if (MLX5_CAP_GEN(mdev, sho)) {
-		props->device_cap_flags |= IB_DEVICE_INTEGRITY_HANDOVER;
+		props->kernel_cap_flags |= IBK_INTEGRITY_HANDOVER;
 		/* At this stage no support for signature handover */
 		props->sig_prot_cap = IB_PROT_T10DIF_TYPE_1 |
 				      IB_PROT_T10DIF_TYPE_2 |
@@ -870,7 +869,7 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 				       IB_GUARD_T10DIF_CSUM;
 	}
 	if (MLX5_CAP_GEN(mdev, block_lb_mc))
-		props->device_cap_flags |= IB_DEVICE_BLOCK_MULTICAST_LOOPBACK;
+		props->kernel_cap_flags |= IBK_BLOCK_MULTICAST_LOOPBACK;
 
 	if (MLX5_CAP_GEN(dev->mdev, eth_net_offloads) && raw_support) {
 		if (MLX5_CAP_ETH(mdev, csum_cap)) {
@@ -906,10 +905,6 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 						MLX5_RX_HASH_SRC_PORT_UDP |
 						MLX5_RX_HASH_DST_PORT_UDP |
 						MLX5_RX_HASH_INNER;
-			if (mlx5_accel_ipsec_device_caps(dev->mdev) &
-			    MLX5_ACCEL_IPSEC_CAP_DEVICE)
-				resp.rss_caps.rx_hash_fields_mask |=
-					MLX5_RX_HASH_IPSEC_SPI;
 			resp.response_length += sizeof(resp.rss_caps);
 		}
 	} else {
@@ -921,7 +916,7 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 
 	if (MLX5_CAP_GEN(mdev, ipoib_basic_offloads)) {
 		props->device_cap_flags |= IB_DEVICE_UD_IP_CSUM;
-		props->device_cap_flags |= IB_DEVICE_UD_TSO;
+		props->kernel_cap_flags |= IBK_UD_TSO;
 	}
 
 	if (MLX5_CAP_GEN(dev->mdev, rq_delay_drop) &&
@@ -997,7 +992,7 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 
 	if (IS_ENABLED(CONFIG_INFINIBAND_ON_DEMAND_PAGING)) {
 		if (dev->odp_caps.general_caps & IB_ODP_SUPPORT)
-			props->device_cap_flags |= IB_DEVICE_ON_DEMAND_PAGING;
+			props->kernel_cap_flags |= IBK_ON_DEMAND_PAGING;
 		props->odp_caps = dev->odp_caps;
 		if (!uhw) {
 			/* ODP for kernel QPs is not implemented for receive
@@ -1018,11 +1013,8 @@ static int mlx5_ib_query_device(struct ib_device *ibdev,
 		}
 	}
 
-	if (MLX5_CAP_GEN(mdev, cd))
-		props->device_cap_flags |= IB_DEVICE_CROSS_CHANNEL;
-
 	if (mlx5_core_is_vf(mdev))
-		props->device_cap_flags |= IB_DEVICE_VIRTUAL_FUNCTION;
+		props->kernel_cap_flags |= IBK_VIRTUAL_FUNCTION;
 
 	if (mlx5_ib_port_link_layer(ibdev, 1) ==
 	    IB_LINK_LAYER_ETHERNET && raw_support) {
@@ -1791,23 +1783,6 @@ static int set_ucontext_resp(struct ib_ucontext *uctx,
 	resp->num_uars_per_page = MLX5_CAP_GEN(dev->mdev, uar_4k) ?
 					MLX5_CAP_GEN(dev->mdev,
 						     num_of_uars_per_page) : 1;
-
-	if (mlx5_accel_ipsec_device_caps(dev->mdev) &
-				MLX5_ACCEL_IPSEC_CAP_DEVICE) {
-		if (mlx5_get_flow_namespace(dev->mdev,
-				MLX5_FLOW_NAMESPACE_EGRESS))
-			resp->flow_action_flags |= MLX5_USER_ALLOC_UCONTEXT_FLOW_ACTION_FLAGS_ESP_AES_GCM;
-		if (mlx5_accel_ipsec_device_caps(dev->mdev) &
-				MLX5_ACCEL_IPSEC_CAP_REQUIRED_METADATA)
-			resp->flow_action_flags |= MLX5_USER_ALLOC_UCONTEXT_FLOW_ACTION_FLAGS_ESP_AES_GCM_REQ_METADATA;
-		if (MLX5_CAP_FLOWTABLE(dev->mdev, flow_table_properties_nic_receive.ft_field_support.outer_esp_spi))
-			resp->flow_action_flags |= MLX5_USER_ALLOC_UCONTEXT_FLOW_ACTION_FLAGS_ESP_AES_GCM_SPI_STEERING;
-		if (mlx5_accel_ipsec_device_caps(dev->mdev) &
-				MLX5_ACCEL_IPSEC_CAP_TX_IV_IS_ESN)
-			resp->flow_action_flags |= MLX5_USER_ALLOC_UCONTEXT_FLOW_ACTION_FLAGS_ESP_AES_GCM_TX_IV_IS_ESN;
-		/* MLX5_USER_ALLOC_UCONTEXT_FLOW_ACTION_FLAGS_ESP_AES_GCM_FULL_OFFLOAD is currently always 0 */
-	}
-
 	resp->tot_bfregs = bfregi->lib_uar_dyn ? 0 :
 			bfregi->total_num_bfregs - bfregi->num_dyn_bfregs;
 	resp->num_ports = dev->num_ports;
@@ -3605,13 +3580,6 @@ DECLARE_UVERBS_NAMED_OBJECT(MLX5_IB_OBJECT_UAR,
 			    &UVERBS_METHOD(MLX5_IB_METHOD_UAR_OBJ_DESTROY));
 
 ADD_UVERBS_ATTRIBUTES_SIMPLE(
-	mlx5_ib_flow_action,
-	UVERBS_OBJECT_FLOW_ACTION,
-	UVERBS_METHOD_FLOW_ACTION_ESP_CREATE,
-	UVERBS_ATTR_FLAGS_IN(MLX5_IB_ATTR_CREATE_FLOW_ACTION_FLAGS,
-			     enum mlx5_ib_uapi_flow_action_flags));
-
-ADD_UVERBS_ATTRIBUTES_SIMPLE(
 	mlx5_ib_query_context,
 	UVERBS_OBJECT_DEVICE,
 	UVERBS_METHOD_QUERY_CONTEXT,
@@ -3628,8 +3596,6 @@ static const struct uapi_definition mlx5_ib_defs[] = {
 	UAPI_DEF_CHAIN(mlx5_ib_std_types_defs),
 	UAPI_DEF_CHAIN(mlx5_ib_dm_defs),
 
-	UAPI_DEF_CHAIN_OBJ_TREE(UVERBS_OBJECT_FLOW_ACTION,
-				&mlx5_ib_flow_action),
 	UAPI_DEF_CHAIN_OBJ_TREE(UVERBS_OBJECT_DEVICE, &mlx5_ib_query_context),
 	UAPI_DEF_CHAIN_OBJ_TREE_NAMED(MLX5_IB_OBJECT_VAR,
 				UAPI_DEF_IS_OBJ_SUPPORTED(var_is_supported)),
