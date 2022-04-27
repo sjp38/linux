@@ -96,7 +96,11 @@ int radeon_sync_resv(struct radeon_device *rdev,
 	struct dma_fence *f;
 	int r = 0;
 
+<<<<<<< HEAD
 	dma_resv_for_each_fence(&cursor, resv, !shared, f) {
+=======
+	dma_resv_for_each_fence(&cursor, resv, dma_resv_usage_rw(shared), f) {
+>>>>>>> linux-next/akpm-base
 		fence = to_radeon_fence(f);
 		if (fence && fence->rdev == rdev)
 			radeon_sync_fence(sync, fence);
