@@ -2944,11 +2944,7 @@ static int io_do_iopoll(struct io_ring_ctx *ctx, bool force_nonspin)
 		nr_events++;
 		if (unlikely(req->flags & REQ_F_CQE_SKIP))
 			continue;
-<<<<<<< HEAD
-		__io_fill_cqe_req(req, req->result, io_put_kbuf(req, 0));
-=======
 		__io_fill_cqe_req(req, req->cqe.res, io_put_kbuf(req, 0));
->>>>>>> linux-next/akpm-base
 	}
 
 	if (unlikely(!nr_events))
@@ -3967,11 +3963,7 @@ static int io_read(struct io_kiocb *req, unsigned int issue_flags)
 		kfree(iovec);
 		return ret;
 	}
-<<<<<<< HEAD
-	req->result = iov_iter_count(&s->iter);
-=======
 	req->cqe.res = iov_iter_count(&s->iter);
->>>>>>> linux-next/akpm-base
 
 	if (force_nonblock) {
 		/* If the file doesn't support async, just async punt */
@@ -4099,11 +4091,7 @@ static int io_write(struct io_kiocb *req, unsigned int issue_flags)
 		kfree(iovec);
 		return ret;
 	}
-<<<<<<< HEAD
-	req->result = iov_iter_count(&s->iter);
-=======
 	req->cqe.res = iov_iter_count(&s->iter);
->>>>>>> linux-next/akpm-base
 
 	if (force_nonblock) {
 		/* If the file doesn't support async, just async punt */

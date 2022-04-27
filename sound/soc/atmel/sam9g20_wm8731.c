@@ -127,13 +127,8 @@ static int at91sam9g20ek_audio_probe(struct platform_device *pdev)
 
 	ret = atmel_ssc_set_audio(0);
 	if (ret) {
-<<<<<<< HEAD
-		dev_err(&pdev->dev, "ssc channel is not valid\n");
-		return -EINVAL;
-=======
 		dev_err(&pdev->dev, "ssc channel is not valid: %d\n", ret);
 		return ret;
->>>>>>> linux-next/akpm-base
 	}
 
 	card->dev = &pdev->dev;
