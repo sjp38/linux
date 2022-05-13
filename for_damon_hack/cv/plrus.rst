@@ -77,43 +77,49 @@ variant kernels and measured the runtime of each workload.
 For the artificial memory pressure, I set memory.limit_in_bytes to 75% of the
 running workload's peak RSS, wait 3 seconds, remove the pressure by setting it
 to 200% of the running workload's peak RSS, wait 30 seconds, and repeat the
-procedure until the workload finishes[1].  The tests are automated[2].
+procedure until the workload finishes[1].  I use zram based swap device.  The
+tests are automated[2].
 
 I repeat the tests five times and calculate average runtime of the five
 measurements.  The results are as below:
 
-    runtime_secs            orig    mprs    mprs_overhead_percent plrus   plrus_overhead_percent
-    parsec3/blackscholes    139.35  139.68  0.24                  140.37  0.74
-    parsec3/bodytrack       124.67  127.26  2.08                  128.31  2.92
-    parsec3/canneal         207.61  400.95  93.12                 355.23  71.10
-    parsec3/dedup           18.30   18.84   2.94                  19.30   5.47
-    parsec3/facesim         350.42  353.69  0.93                  349.14  -0.36
-    parsec3/fluidanimate    338.57  337.16  -0.42                 342.18  1.07
-    parsec3/freqmine        434.39  435.67  0.30                  436.49  0.48
-    parsec3/raytrace        182.24  186.18  2.16                  189.08  3.75
-    parsec3/streamcluster   634.49  2993.27 371.76                2576.04 306.00
-    parsec3/swaptions       221.68  221.84  0.07                  221.97  0.13
-    parsec3/vips            87.82   103.01  17.30                 103.18  17.48
-    parsec3/x264            108.92  132.82  21.93                 128.22  17.71
-    splash2x/barnes         130.30  135.87  4.27                  138.52  6.31
-    splash2x/fft            62.09   98.33   58.37                 99.85   60.82
-    splash2x/lu_cb          132.15  135.49  2.53                  135.22  2.32
-    splash2x/lu_ncb         149.89  154.92  3.36                  155.26  3.59
-    splash2x/ocean_cp       80.04   108.20  35.18                 113.85  42.24
-    splash2x/ocean_ncp      163.70  217.40  32.81                 231.09  41.17
-    splash2x/radiosity      142.32  143.13  0.57                  144.50  1.53
-    splash2x/radix          50.28   78.21   55.55                 85.96   70.98
-    splash2x/raytrace       133.75  134.21  0.34                  136.21  1.84
-    splash2x/volrend        120.39  121.72  1.10                  120.87  0.40
-    splash2x/water_nsquared 373.37  388.31  4.00                  398.72  6.79
-    splash2x/water_spatial  133.81  143.73  7.42                  144.00  7.61
-    average                 188.36  304.58  61.70                 287.23  52.49
+    runtime_secs            orig    mprs    plrus   plrus/mprs
+    parsec3/blackscholes    139.35  139.68  140.37  1.00
+    parsec3/bodytrack       124.67  127.26  128.31  1.01
+    parsec3/canneal         207.61  400.95  355.23  0.89
+    parsec3/dedup           18.30   18.84   19.30   1.02
+    parsec3/facesim         350.42  353.69  349.14  0.99
+    parsec3/fluidanimate    338.57  337.16  342.18  1.01
+    parsec3/freqmine        434.39  435.67  436.49  1.00
+    parsec3/raytrace        182.24  186.18  189.08  1.02
+    parsec3/streamcluster   634.49  2993.27 2576.04 0.86
+    parsec3/swaptions       221.68  221.84  221.97  1.00
+    parsec3/vips            87.82   103.01  103.18  1.00
+    parsec3/x264            108.92  132.82  128.22  0.97
+    splash2x/barnes         130.30  135.87  138.52  1.02
+    splash2x/fft            62.09   98.33   99.85   1.02
+    splash2x/lu_cb          132.15  135.49  135.22  1.00
+    splash2x/lu_ncb         149.89  154.92  155.26  1.00
+    splash2x/ocean_cp       80.04   108.20  113.85  1.05
+    splash2x/ocean_ncp      163.70  217.40  231.09  1.06
+    splash2x/radiosity      142.32  143.13  144.50  1.01
+    splash2x/radix          50.28   78.21   85.96   1.10
+    splash2x/raytrace       133.75  134.21  136.21  1.01
+    splash2x/volrend        120.39  121.72  120.87  0.99
+    splash2x/water_nsquared 373.37  388.31  398.72  1.03
+    splash2x/water_spatial  133.81  143.73  144.00  1.00
+    total                   4520.54 7309.87 6893.55 0.94
+    average                 188.36  304.58  287.23  0.94
 
-On average, 'plrus' achieves 5% speedup under memory pressure.  For the two
-best cases (parsec3/canneal and parsec3/streamcluster), 'plrus' achieves 11%
-and 13.93% speedup under memory pressure.  Given that the scheme is not highly
-tuned, applied to entire system memory, and uses only up to 4% single CPU time,
-the improvement could be helpful for some cases.
+The second, third, and fourth cells shows the runtime of each workload under
+the configs in seconds, and the fifth cell shows the plrus runtime divided by
+mprs runtime.
+
+On average, 'plrus' achieves about 6% speedup under memory pressure.  For the
+two best cases (parsec3/canneal and parsec3/streamcluster), 'plrus' achieves
+about 11% and 14% speedup under memory pressure.  Please note that the scheme
+is not tuned for each workload, applied to entire system memory, and uses only
+up to 4% single CPU time.
 
 [1] https://github.com/awslabs/damon-tests/blob/next/perf/runners/back/0009_memcg_pressure.sh
 [2] https://github.com/awslabs/damon-tests/tree/next/perf
