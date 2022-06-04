@@ -15,3 +15,4 @@ optimize those.
    guide
    usage
    reclaim
+   lru_sort
