@@ -1,0 +1,6 @@
+damon/for-v5.4.y tree
+=====================
+
+The purpose of this tree was to be used for providing stable version of DAMON
+kernel source code that based on v5.4.y.  As of 2022-09-03, this tree has
+_deprecated_.
