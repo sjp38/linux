@@ -1,5 +1,0 @@
-#!/bin/bash
-# description: data access monitoring
-# args: [report type] [option]...
-
-perf script -s "$PERF_EXEC_PATH"/scripts/python/damon.py $@
