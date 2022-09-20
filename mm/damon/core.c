@@ -851,7 +851,6 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 		if (!damos_valid_target(c, t, r, s))
 			continue;
 
-		/* Apply the scheme */
 		damos_apply_scheme(c, t, r, s);
 	}
 }
