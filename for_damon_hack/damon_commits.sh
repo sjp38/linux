@@ -6,6 +6,7 @@ pr_usage()
 	echo
 	echo "OPTION"
 	echo "  --reverse	Print in reverse"
+	echo "  --stable	Print stable commits only"
 	echo "	--cherry-pick	Cherry-pick the commits"
 	echo "  --hash-only	Print hash only"
 	echo "  --title-only	Print title only"
@@ -25,6 +26,7 @@ then
 fi
 
 reverse="false"
+stable="false"
 cherry_pick="false"
 hash_only="false"
 title_only="false"
@@ -34,6 +36,11 @@ do
 	case $1 in
 	"--reverse")
 		reverse="true"
+		shift 1
+		continue
+		;;
+	"--stable")
+		stable="true"
 		shift 1
 		continue
 		;;
@@ -88,22 +95,38 @@ then
 	exit 0
 fi
 
-log_command="git log $revision_range"
+pretty_option=""
 if [ "$hash_only" = "true" ]
 then
-	log_command+=" --pretty=%h"
+	pretty_option=" --pretty=%h"
 elif [ "$title_only" = "true" ]
 then
-	log_command+=" --pretty=%s"
+	pretty_option=" --pretty=%s"
 else
-	log_command+=" --oneline"
+	pretty_option=" --oneline"
 fi
 
+reverse_option=""
 if [ "$reverse" = "true" ]
 then
-	log_command+=" --reverse"
+	reverse_option=" --reverse"
 fi
 
+if [ "$stable" = "true" ]
+then
+	for commit in $(git log --pretty=%H $reverse_option $revision_range \
+		-- $damon_files)
+	do
+		if git show $commit --pretty=%b | grep "^Cc: " | \
+			grep --quiet "stable"
+		then
+			git log -n 1 $pretty_option $commit
+		fi
+	done
+	exit 0
+fi
+
+log_command="git log $revision_range $pretty_option $reverse_option"
 log_command+=" -- $damon_files"
 
 eval $log_command
