@@ -18,8 +18,6 @@ By Priorities
 - Export monitoring results in sysfs
   ('Efficient Monitoring Results Collection' of https://lore.kernel.org/damon/20220602002935.62334-1-sj@kernel.org/)
 
---- aims to do above before the v6.1-rc4 release ---
-
 - Unify DAMON_RECLAIM and DAMON_PLRUS
 
 - Multiple contexts per kdamond
