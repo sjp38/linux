@@ -66,7 +66,7 @@ comma (","). ::
 
     /sys/kernel/mm/damon/admin
     │ kdamonds/nr_kdamonds
-    │ │ 0/state,pid
+    │ │ 0/avail_state_input,state,pid
     │ │ │ contexts/nr_contexts
     │ │ │ │ 0/avail_operations,operations
     │ │ │ │ │ monitoring_attrs/
@@ -119,8 +119,11 @@ kdamond.
 kdamonds/<N>/
 -------------
 
-In each kdamond directory, two files (``state`` and ``pid``) and one directory
-(``contexts``) exist.
+In each kdamond directory, three files (``avail_state_inputs``, ``state`` and
+``pid``) and one directory (``contexts``) exist.
+
+Reading ``avail_state_inputs`` show keywords that can be written to ``state``
+file.  Writing any text other than the keywords to ``state`` file will fail.
 
 Reading ``state`` returns ``on`` if the kdamond is currently running, or
 ``off`` if it is not running.  Writing ``on`` or ``off`` makes the kdamond be
