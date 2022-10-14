@@ -1044,6 +1044,19 @@ struct damon_sysfs_cmd_request {
 /* Current DAMON callback request.  Protected by damon_sysfs_lock. */
 static struct damon_sysfs_cmd_request damon_sysfs_cmd_request;
 
+static ssize_t avail_state_inputs_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	enum damon_sysfs_cmd cmd;
+	int len = 0;
+
+	for (cmd = 0; cmd < NR_DAMON_SYSFS_CMDS; cmd++) {
+		len += sysfs_emit_at(buf, len, "%s\n",
+				damon_sysfs_cmd_strs[cmd]);
+	}
+	return len;
+}
+
 static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
@@ -1551,6 +1564,9 @@ static void damon_sysfs_kdamond_release(struct kobject *kobj)
 	kfree(kdamond);
 }
 
+static struct kobj_attribute damon_sysfs_kdamond_avail_state_inputs_attr =
+		__ATTR_RO_MODE(avail_state_inputs, 0400);
+
 static struct kobj_attribute damon_sysfs_kdamond_state_attr =
 		__ATTR_RW_MODE(state, 0600);
 
@@ -1558,6 +1574,7 @@ static struct kobj_attribute damon_sysfs_kdamond_pid_attr =
 		__ATTR_RO_MODE(pid, 0400);
 
 static struct attribute *damon_sysfs_kdamond_attrs[] = {
+	&damon_sysfs_kdamond_avail_state_inputs_attr.attr,
 	&damon_sysfs_kdamond_state_attr.attr,
 	&damon_sysfs_kdamond_pid_attr.attr,
 	NULL,
