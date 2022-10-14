@@ -18,6 +18,13 @@ Description:	Writing a number 'N' to this file creates the number of
 		directories for controlling each DAMON worker thread (kdamond)
 		named '0' to 'N-1' under the kdamonds/ directory.
 
+What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/avail_state_inputs
+Date:		Oct 2022
+Contact:	SeongJae Park <sj@kernel.org>
+Description:	Reading this file returns keywords that can be written to the
+		``state`` file in the same directory.  Writing a keyword other
+		than this to the file will fail.
+
 What:		/sys/kernel/mm/damon/admin/kdamonds/<K>/state
 Date:		Mar 2022
 Contact:	SeongJae Park <sj@kernel.org>
