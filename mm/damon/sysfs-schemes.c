@@ -1262,3 +1262,20 @@ int damon_sysfs_schemes_update_regions_stop(struct damon_ctx *ctx)
 	damon_sysfs_schemes_region_idx = 0;
 	return 0;
 }
+
+int damon_sysfs_schemes_clear_regions(
+		struct damon_sysfs_schemes *sysfs_schemes,
+		struct damon_ctx *ctx)
+{
+	struct damos *scheme;
+	int schemes_idx = 0;
+
+	damon_for_each_scheme(scheme, ctx) {
+		struct damon_sysfs_scheme *sysfs_scheme;
+
+		sysfs_scheme = sysfs_schemes->schemes_arr[schemes_idx++];
+		damon_sysfs_scheme_regions_rm_dirs(
+				sysfs_scheme->tried_regions);
+	}
+	return 0;
+}

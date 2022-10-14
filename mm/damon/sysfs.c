@@ -1001,6 +1001,9 @@ enum damon_sysfs_cmd {
 	DAMON_SYSFS_CMD_UPDATE_SCHEMES_STATS,
 	/* @DAMON_SYSFS_CMD_UPDATE_SCHEMES_REGIONS: Update scheme regions */
 	DAMON_SYSFS_CMD_UPDATE_SCHEMES_REGIONS,
+	/* @DAMON_SYSFS_CMD_CLEAR_SCHEMES_REGIONS: Clear scheme regions */
+	DAMON_SYSFS_CMD_CLEAR_SCHEMES_REGIONS,
+
 	/*
 	 * @NR_DAMON_SYSFS_CMDS: Total number of DAMON sysfs commands.
 	 */
@@ -1014,6 +1017,7 @@ static const char * const damon_sysfs_cmd_strs[] = {
 	"commit",
 	"update_schemes_stats",
 	"update_schemes_regions",
+	"clear_schemes_regions",
 };
 
 /*
@@ -1259,6 +1263,17 @@ static int damon_sysfs_upd_schemes_regions_stop(
 	return damon_sysfs_schemes_update_regions_stop(ctx);
 }
 
+static int damon_sysfs_clear_schemes_regions(
+		struct damon_sysfs_kdamond *kdamond)
+{
+	struct damon_ctx *ctx = kdamond->damon_ctx;
+
+	if (!ctx)
+		return -EINVAL;
+	return damon_sysfs_schemes_clear_regions(
+			kdamond->contexts->contexts_arr[0]->schemes, ctx);
+}
+
 static inline bool damon_sysfs_kdamond_running(
 		struct damon_sysfs_kdamond *kdamond)
 {
@@ -1339,6 +1354,9 @@ static int damon_sysfs_cmd_request_callback(struct damon_ctx *c)
 			err = damon_sysfs_upd_schemes_regions_stop(kdamond);
 			damon_sysfs_schemes_regions_updating = false;
 		}
+		break;
+	case DAMON_SYSFS_CMD_CLEAR_SCHEMES_REGIONS:
+		err = damon_sysfs_clear_schemes_regions(kdamond);
 		break;
 	default:
 		break;
