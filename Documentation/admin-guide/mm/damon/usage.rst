@@ -84,6 +84,8 @@ comma (","). ::
     │ │ │ │ │ │ │ │ sz/min,max
     │ │ │ │ │ │ │ │ nr_accesses/min,max
     │ │ │ │ │ │ │ │ age/min,max
+    │ │ │ │ │ │ │ filters/nr_filters
+    │ │ │ │ │ │ │ │ 0/allow_deny,target,id,start,end
     │ │ │ │ │ │ │ quotas/ms,bytes,reset_interval_ms
     │ │ │ │ │ │ │ │ weights/sz_permil,nr_accesses_permil,age_permil
     │ │ │ │ │ │ │ watermarks/metric,interval_us,high,mid,low
@@ -267,9 +269,9 @@ to ``N-1``.  Each directory represents each DAMON-based operation scheme.
 schemes/<N>/
 ------------
 
-In each scheme directory, five directories (``access_pattern``, ``quotas``,
-``watermarks``, ``stats``, and ``tried_regions``) and one file (``action``)
-exist.
+In each scheme directory, five directories (``access_pattern``, ``filters``,
+``quotas``, ``watermarks``, ``stats``, and ``tried_regions``) and one file
+(``action``) exist.
 
 The ``action`` file is for setting and getting what action you want to apply to
 memory regions having specific access pattern of the interest.  The keywords
@@ -297,6 +299,17 @@ Under the ``access_pattern`` directory, three directories (``sz``,
 exist.  You can set and get the access pattern for the given scheme by writing
 to and reading from the ``min`` and ``max`` files under ``sz``,
 ``nr_accesses``, and ``age`` directories, respectively.
+
+schemes/<N>/filters/
+--------------------
+
+Users could know special processes, cgroups, or address ranges that the scheme
+should or not be applied.  For example, if a user has special latency critical
+processes, the user wouldn't want the memory of the processes be bothered by
+DAMOS, e.g., ``pageout``, even if it shows the access pattern.
+
+For such a case, users can set non-access pattern driven filters.
+
 
 schemes/<N>/quotas/
 -------------------
