@@ -202,7 +202,7 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
-static unsigned long damon_pa_pageout(struct damon_region *r)
+static unsigned long damon_pa_pageout(struct damon_region *r, struct damos *s)
 {
 	unsigned long addr, applied;
 	LIST_HEAD(page_list);
@@ -211,6 +211,9 @@ static unsigned long damon_pa_pageout(struct damon_region *r)
 		struct page *page = damon_get_page(PHYS_PFN(addr));
 
 		if (!page)
+			continue;
+
+		if (s->filter.type == DAMOS_FILTER_ANON && PageAnon(page))
 			continue;
 
 		ClearPageReferenced(page);
@@ -267,7 +270,7 @@ static unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
 {
 	switch (scheme->action) {
 	case DAMOS_PAGEOUT:
-		return damon_pa_pageout(r);
+		return damon_pa_pageout(r, scheme);
 	case DAMOS_LRU_PRIO:
 		return damon_pa_mark_accessed(r);
 	case DAMOS_LRU_DEPRIO:
