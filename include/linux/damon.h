@@ -8,6 +8,7 @@
 #ifndef _DAMON_H_
 #define _DAMON_H_
 
+#include <linux/memcontrol.h>
 #include <linux/mutex.h>
 #include <linux/time64.h>
 #include <linux/types.h>
@@ -218,10 +219,18 @@ struct damos_stat {
 enum damos_filter_type {
 	DAMOS_FILTER_NONE,
 	DAMOS_FILTER_ANON,
+#ifdef CONFIG_MEMCG
+	DAMOS_FILTER_MEMCG,
+#endif
 };
 
 struct damos_filter {
 	enum damos_filter_type type;
+	union {
+#ifdef CONFIG_MEMCG
+		struct mem_cgroup_id memcg_id;
+#endif
+	};
 };
 
 /**
