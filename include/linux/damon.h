@@ -215,6 +215,15 @@ struct damos_stat {
 	unsigned long qt_exceeds;
 };
 
+enum damos_filter_type {
+	DAMOS_FILTER_NONE,
+	DAMOS_FILTER_ANON,
+};
+
+struct damos_filter {
+	enum damos_filter_type type;
+};
+
 /**
  * struct damos_access_pattern - Target access pattern of the given scheme.
  * @min_sz_region:	Minimum size of target regions.
@@ -260,6 +269,7 @@ struct damos_access_pattern {
  */
 struct damos {
 	struct damos_access_pattern pattern;
+	struct damos_filter filter;
 	enum damos_action action;
 	struct damos_quota quota;
 	struct damos_watermarks wmarks;
