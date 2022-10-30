@@ -54,10 +54,10 @@ memory.  'prec' is for physical memory monitroing and recording.  It monitors
 and 'prcl' are for measurement of DAMON monitoring accuracy.
 
 'ethp' and 'prcl' are simple DAMON-based operation schemes developed for
-proof of concepts of DAMON.  'ethp' reduces memory space waste of THP by using
-DAMON for the decision of promotions and demotion for huge pages, while 'prcl'
-is as similar as the original work.  For example, those can be implemented as
-below::
+proof of concepts of DAMON.  'ethp' reduces memory space waste of THP [1]_,
+[2]_ by using DAMON for the decision of promotions and demotion for huge pages,
+while 'prcl' is as similar as the original work.  For example, those can be
+implemented as below::
 
     # format: <min/max size> <min/max frequency (0-100)> <min/max age> <action>
     # ethp: Use huge pages if a region shows >=5% access rate, use regular
