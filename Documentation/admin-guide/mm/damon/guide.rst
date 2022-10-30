@@ -120,7 +120,7 @@ A research work [1]_ using the ``mlock()`` achieved up to 2.55x performance
 speedup.
 
 Let's see another realistic example access pattern for this kind of
-optimizations.  This `page
+optimizations.  This `another page
 <https://damonitor.github.io/doc/html/v17/admin-guide/mm/damon/guide.html#program-modification>`_
 shows the visualized access patterns of streamcluster workload in PARSEC3
 benchmark suite.  We can easily identify the 100 MiB sized hot object.
