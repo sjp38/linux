@@ -1086,6 +1086,10 @@ static int __init damon_dbgfs_init(void)
 {
 	int rc = -ENOMEM;
 
+	pr_warn_once("DAMON debugfs interface is deprecated.  "
+		     "Please report your usecase to damon@lists.linux.dev and "
+		     "linux-mm@kvack.org if you depend on this.\n");
+
 	mutex_lock(&damon_dbgfs_lock);
 	dbgfs_ctxs = kmalloc(sizeof(*dbgfs_ctxs), GFP_KERNEL);
 	if (!dbgfs_ctxs)
