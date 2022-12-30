@@ -1290,7 +1290,7 @@ static int ceph_netfs_check_write_begin(struct file *file, loff_t pos, unsigned 
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	struct ceph_snap_context *snapc;
 
-	snapc = ceph_find_incompatible(folio_page(*foliop, 0));
+	snapc = ceph_find_incompatible(folio_headpage(*foliop));
 	if (snapc) {
 		int r;
 
