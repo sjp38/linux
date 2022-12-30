@@ -1373,7 +1373,7 @@ static struct slab *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 	/* Make the flag visible before any changes to folio->mapping */
 	smp_wmb();
 	/* Record if ALLOC_NO_WATERMARKS was set when allocating the slab */
-	if (sk_memalloc_socks() && page_is_pfmemalloc(folio_page(folio, 0)))
+	if (sk_memalloc_socks() && page_is_pfmemalloc(folio_headpage(folio)))
 		slab_set_pfmemalloc(slab);
 
 	return slab;
@@ -1389,7 +1389,7 @@ static void kmem_freepages(struct kmem_cache *cachep, struct slab *slab)
 
 	BUG_ON(!folio_test_slab(folio));
 	__slab_clear_pfmemalloc(slab);
-	page_mapcount_reset(folio_page(folio, 0));
+	page_mapcount_reset(folio_headpage(folio));
 	folio->mapping = NULL;
 	/* Make the mapping reset visible before clearing the flag */
 	smp_wmb();
@@ -1398,7 +1398,7 @@ static void kmem_freepages(struct kmem_cache *cachep, struct slab *slab)
 	if (current->reclaim_state)
 		current->reclaim_state->reclaimed_slab += 1 << order;
 	unaccount_slab(slab, order, cachep);
-	__free_pages(folio_page(folio, 0), order);
+	__free_pages(folio_headpage(folio), order);
 }
 
 static void kmem_rcu_free(struct rcu_head *head)

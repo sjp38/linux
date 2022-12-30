@@ -1859,7 +1859,7 @@ static inline struct slab *alloc_slab_page(gfp_t flags, int node,
 	__folio_set_slab(folio);
 	/* Make the flag visible before any changes to folio->mapping */
 	smp_wmb();
-	if (page_is_pfmemalloc(folio_page(folio, 0)))
+	if (page_is_pfmemalloc(folio_headpage(folio)))
 		slab_set_pfmemalloc(slab);
 
 	return slab;
@@ -2066,7 +2066,7 @@ static void __free_slab(struct kmem_cache *s, struct slab *slab)
 	if (current->reclaim_state)
 		current->reclaim_state->reclaimed_slab += pages;
 	unaccount_slab(slab, order, s);
-	__free_pages(folio_page(folio, 0), order);
+	__free_pages(folio_headpage(folio), order);
 }
 
 static void rcu_free_slab(struct rcu_head *h)

@@ -940,9 +940,9 @@ void free_large_kmalloc(struct folio *folio, void *object)
 	kasan_kfree_large(object);
 	kmsan_kfree_large(object);
 
-	mod_lruvec_page_state(folio_page(folio, 0), NR_SLAB_UNRECLAIMABLE_B,
+	mod_lruvec_page_state(folio_headpage(folio), NR_SLAB_UNRECLAIMABLE_B,
 			      -(PAGE_SIZE << order));
-	__free_pages(folio_page(folio, 0), order);
+	__free_pages(folio_headpage(folio), order);
 }
 
 static void *__kmalloc_large_node(size_t size, gfp_t flags, int node);
