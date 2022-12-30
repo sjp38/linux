@@ -285,6 +285,14 @@ static inline unsigned long _compound_head(const struct page *page)
  */
 #define folio_page(folio, n)	nth_page(&(folio)->page, n)
 
+/**
+ * folio_headpage - Return the head page from a folio.
+ * @folio: The pointer to the folio.
+ *
+ * Return: The head page of the folio, or NULL if the folio is NULL.
+ */
+#define folio_headpage(folio)	(&(folio)->page)
+
 static __always_inline int PageTail(struct page *page)
 {
 	return READ_ONCE(page->compound_head) & 1 || page_is_fake_head(page);
