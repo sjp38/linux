@@ -411,6 +411,7 @@ contruction||construction
 contry||country
 conuntry||country
 convertion||conversion
+covert||convert
 convertor||converter
 convienient||convenient
 convinient||convenient
@@ -670,6 +671,7 @@ fimrware||firmware
 fimware||firmware
 firmare||firmware
 firmaware||firmware
+firtly||firstly
 firware||firmware
 firwmare||firmware
 finanize||finalize
