@@ -32,3 +32,4 @@ operations with no code but simple configurations.
    design
    eval
    api
+   maintainer-profile
