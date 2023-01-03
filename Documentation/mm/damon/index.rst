@@ -29,7 +29,6 @@ operations with no code but simple configurations.
 .. toctree::
    :maxdepth: 2
 
-   faq
    design
    eval
    api
