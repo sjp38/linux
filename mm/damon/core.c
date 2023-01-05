@@ -494,6 +494,84 @@ void damon_destroy_ctx(struct damon_ctx *ctx)
 	kfree(ctx);
 }
 
+static unsigned int damon_age_for_new_attrs(unsigned int age,
+		struct damon_attrs *old_attrs, struct damon_attrs *new_attrs)
+{
+	if (!new_attrs->aggr_interval)
+		return age;
+	return age * old_attrs->aggr_interval / new_attrs->aggr_interval;
+}
+
+/* convert nr_accesses to access ratio in bp */
+static unsigned int damon_nr_accesses_to_accesses_bp(
+		unsigned int nr_accesses, struct damon_attrs *attrs)
+{
+	unsigned int max_nr_accesses;
+
+	if (!attrs->sample_interval)
+		return nr_accesses * 10000;
+
+	max_nr_accesses =
+		attrs->aggr_interval / attrs->sample_interval;
+	if (!max_nr_accesses)
+		max_nr_accesses = 1;
+
+	return nr_accesses * 10000 / max_nr_accesses;
+}
+
+/* convert access ratio in bp to nr_accesses */
+static unsigned int damon_accesses_bp_to_nr_accesses(
+		unsigned int accesses_bp, struct damon_attrs *attrs)
+{
+	unsigned int max_nr_accesses;
+
+	if (!attrs->sample_interval)
+		return accesses_bp / 10000;
+
+	max_nr_accesses =
+		attrs->aggr_interval / attrs->sample_interval;
+	if (!max_nr_accesses)
+		max_nr_accesses = 1;
+
+	return accesses_bp * max_nr_accesses / 10000;
+}
+
+static unsigned int damon_nr_accesses_for_new_attrs(unsigned int nr_accesses,
+		struct damon_attrs *old_attrs, struct damon_attrs *new_attrs)
+{
+	return damon_accesses_bp_to_nr_accesses(
+			damon_nr_accesses_to_accesses_bp(
+				nr_accesses, old_attrs),
+			new_attrs);
+}
+
+static void damon_update_monitoring_result(struct damon_region *r,
+		struct damon_attrs *old_attrs, struct damon_attrs *new_attrs)
+{
+	r->nr_accesses = damon_nr_accesses_for_new_attrs(r->nr_accesses,
+			old_attrs, new_attrs);
+	r->age = damon_age_for_new_attrs(r->age, old_attrs, new_attrs);
+}
+
+/*
+ * region->nr_accesses is the number of samples in the last aggregation
+ * interval that shown access to the region, and region->age is the number of
+ * aggregation intervals that its access pattern didn't change severely.  For
+ * the reason, the two fields depend on current damon_attrs.  This function
+ * updates every region's ->nr_accesses and ->age for new damon_attrs.
+ */
+static void damon_update_monitoring_results(struct damon_ctx *ctx,
+		struct damon_attrs *new_attrs)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+
+	damon_for_each_target(t, ctx)
+		damon_for_each_region(r, t)
+			damon_update_monitoring_result(r,
+					&ctx->attrs, new_attrs);
+}
+
 /**
  * damon_set_attrs() - Set attributes for the monitoring.
  * @ctx:		monitoring context
@@ -511,6 +589,7 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 	if (attrs->min_nr_regions > attrs->max_nr_regions)
 		return -EINVAL;
 
+	damon_update_monitoring_results(ctx, attrs);
 	ctx->attrs = *attrs;
 	return 0;
 }
