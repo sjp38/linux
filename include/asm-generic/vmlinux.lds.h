@@ -896,7 +896,7 @@
  * Otherwise, the type of .notes section would become PROGBITS instead of NOTES.
  */
 #define NOTES								\
-	/DISCARD/ : { *(.note.GNU-stack) }				\
+	.note.GNU-stack : { *(.note.GNU-stack) }			\
 	.notes : AT(ADDR(.notes) - LOAD_OFFSET) {			\
 		BOUNDED_SECTION_BY(.note.*, _notes)			\
 	} NOTES_HEADERS							\
