@@ -173,3 +173,218 @@ monitoring operations to check dynamic changes including memory mapping changes
 and applies it to monitoring operations-related data structures such as the
 abstracted monitoring target memory area only for each of a user-specified time
 interval (``update interval``).
+
+
+Access-aware Schemes
+====================
+
+The reason why users want to use DAMON would be utilizing the monitoring
+results for data access-aware system operations.  For example,
+
+    page out memory regions that are not accessed for more than 10 minutes
+
+or
+
+    use THP for memory regions that are larger than 2 MiB and showing a high
+    access frequency for more than 2 seconds.
+
+One of the simplest implementations of such schemes would be a sort of
+profiling-guided optimization.  That is, profile data access patterns of the
+workload or system using DAMON, and then make some system operation changes.
+The changes could be made by invoking system calls like ``madvise()``, using
+system tuning knobs like ``sysctl``, or adding or removing devices, such as
+DRAM.  Both offline and online approaches would be available.
+
+Such approaches could impose unnecessary redundancy and inefficiency, though.
+The monitoring and finding regions of the interest could be redundant if the
+type of the interests is somewhat common.  Communicating the information
+including monitoring results and management actions request between kernel and
+user spaces could be inefficient.
+
+Such redundancy and inefficiencies can be mitigated by offloading the works to
+DAMON.  For that, DAMO provides a feature called DAMON-based Operation Schemes
+(DAMOS).  The feature asks users to specify their desired schemes at a high
+level.  Then, DAMOS runs DAMON, finds regions having the access pattern of the
+interest from the monitoring results, and applies the scheme-requested system
+operation actions to the regions.
+
+Operation Action
+----------------
+
+DAMOS users should describe what action they want to apply to the regions of
+their interest.  Then, DAMOS applies the action to the memory regions, as soon
+as found.  The DAMOS-supporting operation actions include hinting khugepaged to
+collapse or split the regions to/from hugepages, paging out those, marking as
+active or inactive, and doing nothing but count statistics of the found
+regions.
+
+The implementation of each action is in the DAMON operations set layer, because
+it normally depends on the monitoring target address space.  Hence, different
+monitoring operations implementation sets support different lists of the
+actions.
+
+To avoid repeatedly applying an action to a region due to its old access
+pattern, DAMOS resets the age of regions when an action is applied to.  In
+other words, DAMOS considers a region where an action is applied as a new one.
+
+
+Target Access Pattern
+---------------------
+
+DAMOS users can specify to what regions they have interests by specifying the
+access patterns of the regions.  The pattern is constructed with the DAMON's
+monitoring results providing information, specifically the size, the access
+frequency (``nr_accesses``), and the age.  The age of each region means the
+amount of time that the region has maintained current size and the access
+frequency.  Users can describe their access pattern of interest by setting
+minimum and maximum values of the three characteristics.  If a region is having
+all the three characteristics in the ranges, DAMOS classifies it as one of the
+regions that the scheme is having the interest in.
+
+
+
+Quotas
+------
+
+The access pattern should be carefully set.  Otherwise, the scheme could incur
+a high overhead coming from becoming unexpectedly aggressive.  For example, if
+a huge memory region having the access pattern of interest is found, applying
+the requested action to all pages of the huge region could incur unacceptable
+overhead.  Controlling it with only the access pattern can require quite a lot
+of expertise and experiences, especially when the access pattern of the system
+can dynamically and unexpectedly change.
+
+For such cases, DAMOS lets users set safety guards for each scheme, namely time
+and size quotas.  Using the two quotas, users can specify an upper-limit of
+time that DAMOS can use for applying the action, and/or a maximum bytes of
+memory regions that the action can be applied within a user-specified time
+duration, respectively.  In other words, users can control the upper-bound
+overhead of their DAMOS schemes by setting the quotas.
+
+
+Prioritization
+~~~~~~~~~~~~~~
+
+One followup question of the quotas feature would be, to which memory regions
+DAMOS will apply the action under the limit.  To make a good decision for the
+case, DAMOS calculates priority scores for the regions of the scheme-specified
+access pattern.  Then, it further finds to what priority score regions the
+action can be applied without breaking the limit, and applies the action to
+regions of the safe cores.
+
+The prioritization mechanism should be different for each action.  For example,
+less frequently and less recently accessed (colder) memory regions would need
+to be prioritized for page out scheme action.  In contrast, the colder regions
+would need to be deprioritized for huge page collapse scheme action.  Hence,
+the prioritization mechanisms for each action are implemented in each DAMON
+operations set, together with the actions.
+
+Though the implementation is up to the DAMON operations set, it could normally
+be expected to use parts of, or all of the access pattern of the regions.  Some
+users would want the mechanisms to be personalized for their specific case.
+For example, some users would want the mechanism to prioritize access frequency
+(``nr_accesses``) more than the recency (``age``).  DAMOS allows users to
+specify the weight of each access pattern characteristic for the case, and
+passes the information to the prioritization mechanism in the underlying
+operations set.  Nevertheless, how and even whether the weight will be
+respected are up to the underlying prioritization mechanism implementation.
+
+
+Watermarks
+----------
+
+DAMON-based operation schemes wouldn't be needed always.  For example, when a
+sufficient amount of free memory is guaranteed, a scheme for proactive
+reclamation might not be needed.  To avoid any unnecessary overhead coming from
+DAMON and DAMOS schemes, the user would need to manually monitor some system
+status metrics such as free memory or memory fragmentation ratio, and turn
+DAMON and DAMOS schemes on or off.
+
+To make it automated, DAMOS provides a watermarks-based automatic activation
+feature.  It allows the users to configure the metric of their interest, and
+three watermark values.  If the value of the metric becomes higher than the
+high watermark or lower than the low watermark, the scheme is deactivated.  If
+the metric becomes lower than the mid watermark, the scheme is activated.  If a
+DAMON context is running with one or more schemes and all schemes are
+deactivated by the watermarks, the monitoring is also deactivated.  In this
+case, the DAMON worker thread incurs only nearly zero overhead, because it does
+nothing but just the watermarks checks.
+
+
+Filters
+-------
+
+In some situations, users could have special information that kernel cannot
+know, including the future access patterns or some special requirements for
+some types of memory of programs or systems if they wrote or configured those
+themselves, or have good profiling results.  In this case, users could want to
+control DAMOS schemes using not only the access pattern but also the additional
+special information.  For example, some users would have slow swap devices with
+fast storage devices for file systems, and know a list of latency-critical
+processes.  In such cases, the users may want to avoid their DAMOS schemes
+reclaiming anonymous pages of latency-critical processes.
+
+To help such cases, DAMOS provides a feature called DAMOS filters.  The feature
+allows users to set an arbitrary number of filters for each scheme.  Each
+filter specifies the type of memory on which the filter should operate for, and
+whether the scheme's behavior should not apply to that type of memory
+(filter-out) or to all types of memory except that type (filter-in).  Based on
+the type of the filter, additional arguments can be required.  For example,
+memory cgroup type filters request users to specify the memory cgroup file path
+of their interest.
+
+As of this writing, anonymous page type and memory cgroup type are supported by
+the filters feature.  Hence, users can apply specific schemes to only anonymous
+pages, non-anonymous pages, pages of specific cgroups, all pages but those of
+specific cgroups, and any combination of those.
+
+
+User Kernel Components
+======================
+
+Because DAMON is a framework in the kernel, its direct users are other kernel
+components such as subsystems and modules.  For those, DAMON provides an API,
+namely ``include/linux/damon.h``.  Please refer to the API :doc:`document
+</mm/damon/api>` for details of the interface.
+
+
+General Purpose User ABI
+------------------------
+
+DAMON user interface modules, namely 'DAMON sysfs interface' and 'DAMON debugfs
+interface' are DAMON API user kernel modules that provide DAMON ABIs to the
+user-space.  Please note that DAMON debugfs is deprecated.
+
+Like many other ABIs, the modules create files on sysfs and debugfs, allow
+users to specify their requests to and get the answers from DAMON by writing to
+and reading from the files.  As a response to such user-space users' IOs, DAMON
+user interface modules control DAMON as requested using the DAMON API, and
+return the results to the user-space.  The ABIs exposed by the DAMON user
+interface modules are far from human-friendly interfaces, because those are
+designed for being used by user space tool programs, rather than human beings'
+fingers.  Human users are encouraged to use such user space tool.  One such
+Python-written user space tool is available at Github
+(https://github.com/awslabs/damo) and Pypi
+(https://pypistats.org/packages/damo).
+
+Please refer to the ABI :doc:`document </admin-guide/mm/damon/usage>` for
+details of the interfaces.
+
+
+Special-Purpose Access-aware Kernel Modules
+-------------------------------------------
+
+DAMON sysfs/debugfs user interfaces are for full control of all DAMON features
+in runtime.  For system-wide boot time DAMON utilization for specific purposes,
+e.g., proactive reclamation or LRU lists balancing, the interfaces could be
+unnecessarily complicated because those require setting unnecessarily many
+configurations for the simple purpose, and restricted because those support
+only runtime manipulation.
+
+To support such specific purpose usages of DAMON with only essential simple
+user interface, yet more DAMON API user kernel modules are implemented.  The
+simpler interface can be provided via module parameters, which can also be set
+at boot time via kernel command line.  Currently, two modules for proactive
+reclamation and LRU lists manipulation are provided.  For more detail, read the
+usage documents for the modules (:doc:`/admin-guide/mm/damon/reclaim` and
+:doc:`/admin-guide/mm/damon/lru_sort`).
