@@ -4,6 +4,45 @@
 Design
 ======
 
+
+Layers of DAMON
+===============
+
+Core
+----
+
+Monitoring Operations
+---------------------
+
+In-kernel DAMON Framework Users
+-------------------------------
+
+vaddr: Virtaul Address Sapces Monitoring Operations
+===================================================
+
+paddr: Physical Address Space Monitoring Operations
+===================================================
+
+Access-aware Adjustive Accuracy-Overhead Tradeoff
+=================================================
+
+DAMOS: DAMon-based Operation Schemes
+====================================
+
+Quotas
+------
+
+Prioritization
+--------------
+
+Watermarks
+----------
+
+Filters
+-------
+
+
+
 Configurable Layers
 ===================
 
