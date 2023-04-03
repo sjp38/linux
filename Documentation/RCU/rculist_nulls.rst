@@ -191,7 +191,7 @@ scan the list again without harm.
   obj = kmem_cache_alloc(cachep);
   lock_chain(); // typically a spin_lock()
   obj->key = key;
-  atomic_set_release(&obj->refcnt, 1); // key before refcnt
+  atomic_set(&obj->refcnt, 1);
   /*
    * insert obj in RCU way (readers might be traversing chain)
    */
