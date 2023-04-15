@@ -56,6 +56,10 @@ but a version with an additional memory barrier (smp_rmb())
          pos && ({ next = pos->next; smp_rmb(); prefetch(next); 1; }) &&
          ({ obj = hlist_entry(pos, typeof(*obj), member); 1; });
          pos = rcu_dereference(next))
+      if (hash(obj->key) != hash(key)) { // in another chain
+        pos = rcu_dereference((head)->first);
+        continue;
+      }
       if (obj->key == key)
         return obj;
     return NULL;
