@@ -213,3 +213,101 @@ monitoring operations to check dynamic changes including memory mapping changes
 and applies it to monitoring operations-related data structures such as the
 abstracted monitoring target memory area only for each of a user-specified time
 interval (``update interval``).
+
+
+DAMOS: DAMON-based Operation Schemes
+====================================
+
+In many cases, users may use DAMON for simple data access aware memory
+management optimizations such as applying an operation scheme to a memory
+region of a specific size having a specific access frequency for a specific
+time.  For example, "page out a memory region larger than 100 MiB but having a
+low access frequency more than 10 minutes", or "Use THP for a memory region
+larger than 2 MiB having a high access frequency for more than 2 seconds".
+
+Most simple form of the solution would be doing offline data access pattern
+profiling using DAMON and modifying the application source code or system
+configuration based on the profiling results.  Or, developing a daemon
+constructed with two modules (one for access monitoring and the other for
+applying memory management actions via mlock(), madvise(), sysctl, etc) is
+imaginable.
+
+To avoid users spending their time for implementation of such simple data
+access monitoring-based operation schemes, DAMON provides a feature called
+DAMON-based Operation Schemes (DAMOS).  Using the feature, users can simply
+specify their desired schemes.  Then, DAMOS turns on DAMON, find regions having
+the scheme-specified access pattern from the DAMON's monitoring results, and
+applies the scheme-specified memory operation action to the found regions.
+
+Target Access Pattern
+---------------------
+
+Users should first specify the access characteristics of the regions that they
+are interested in.  The characteristics can be specified as minimum and maximum
+sizes, the access frequencies, and ages of the regions.  The age of regions
+means the amount of time that the region has maintained current size and the
+access frequency.
+
+Memory Management Action
+------------------------
+
+Users should also specify the memory operation action of the scheme, which
+DAMOS will apply to the memory regions of the access pattern, as soon as found.
+The DAMOS-supporting operation actions include hinting khugepaged to collapse
+or split the found region to/from hugepages, paging out it, or adjust priority
+under next memory pressure.
+
+The implementation of each action is in the DAMON monitoring operations set
+layer.  Hence, different monitoring operations implementation set provides
+different list of the actions.
+
+Quotas
+------
+
+With the target access pattern and the memory management action, most access
+aware memory management schemes can be effectively implemented.  However, it
+requires the access pattern to be very carefully set to avoid unexpected
+aggressiveness of the scheme.  In detail, if huge memory regions having the
+data access pattern of interest are found, applying the requested action to all
+of the regions could incur significant overhead.  Controlling it with only the
+access pattern is not easy, especially when the access pattern of the system
+can dynamically change.
+
+For such cases, DAMOS let users to set time/size quotas for each scheme.  Using
+this, the users can specify up to how much time can be used for applying the
+action, and/or up to how much memory regions the action can be applied within a
+user-specified time duration.  By setting the quotas, users can avoid the
+unexpected overhead under unexpectable dynamic access patterns.
+
+
+Prioritization
+--------------
+
+A followup question of the quotas feature is, to which memory regions should
+the action applied within the limit.  Under the limit, DAMOS prioritize each
+action of the specified access pattern, and apply the action to higher priority
+regions first.  The prioritization mechanism should be different for each
+action, so the prioritization mechanisms for each action are implemented by the
+DAMON monitoring operations set, together with the actions.
+
+The normal prioritization mechanisms will use the access pattern, so DAMOS
+allows users to set the weight of the access pattern elements, namely the size,
+the access frequency and the age of the region.  This means users could manage
+memory using not only recency but also frequency.
+
+Watermarks
+----------
+
+Though DAMON is lightweight, someone would want to remove even the cold
+pages monitoring overhead when it is unnecessary.  Currently, it should
+manually turned on and off by clients, but some clients would simply
+want to turn it on and off based on some metrics like free memory ratio
+or memory fragmentation.  For such cases, this patchset implements a
+watermarks-based automatic activation feature.  It allows the clients
+configure the metric of their interest, and three watermarks of the
+metric.  If the metric is higher than the high watermark or lower than
+the low watermark, the scheme is deactivated.  If the metric is lower
+than the mid watermark but higher than the low watermark, the scheme is
+activated.
+
+
