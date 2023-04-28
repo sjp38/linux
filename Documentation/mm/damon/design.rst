@@ -5,44 +5,6 @@ Design
 ======
 
 
-Layers of DAMON
-===============
-
-Core
-----
-
-Monitoring Operations
----------------------
-
-In-kernel DAMON Framework Users
--------------------------------
-
-vaddr: Virtaul Address Sapces Monitoring Operations
-===================================================
-
-paddr: Physical Address Space Monitoring Operations
-===================================================
-
-Access-aware Adjustive Accuracy-Overhead Tradeoff
-=================================================
-
-DAMOS: DAMon-based Operation Schemes
-====================================
-
-Quotas
-------
-
-Prioritization
---------------
-
-Watermarks
-----------
-
-Filters
--------
-
-
-
 Configurable Layers
 ===================
 
@@ -281,7 +243,7 @@ unexpected overhead under unexpectable dynamic access patterns.
 
 
 Prioritization
---------------
+~~~~~~~~~~~~~~
 
 A followup question of the quotas feature is, to which memory regions should
 the action applied within the limit.  Under the limit, DAMOS prioritize each
@@ -295,19 +257,53 @@ allows users to set the weight of the access pattern elements, namely the size,
 the access frequency and the age of the region.  This means users could manage
 memory using not only recency but also frequency.
 
+
 Watermarks
 ----------
 
-Though DAMON is lightweight, someone would want to remove even the cold
-pages monitoring overhead when it is unnecessary.  Currently, it should
-manually turned on and off by clients, but some clients would simply
-want to turn it on and off based on some metrics like free memory ratio
-or memory fragmentation.  For such cases, this patchset implements a
-watermarks-based automatic activation feature.  It allows the clients
-configure the metric of their interest, and three watermarks of the
-metric.  If the metric is higher than the high watermark or lower than
-the low watermark, the scheme is deactivated.  If the metric is lower
-than the mid watermark but higher than the low watermark, the scheme is
+In some cases, for example, when sufficient amount of free memory is confirmed,
+given DAMON-based operation scheme wouldn't be needed.  To minimize the
+overhead of the scheme and monitoring, though DAMON's upper-bound monitoring
+overhead can be controlled, the user should manually check the system status by
+monitotring specific metrics such as free memory or memory fragementation
+ratio, and turn on or off DAMON.
+
+To make it automated, DAMOS provides a watermarks-based automatic activation
+feature.  It allows the users configure the metric of their interest, and three
+watermarks of the metric.  If the metric is higher than the high watermark or
+lower than the low watermark, the scheme is deactivated.  If the metric is
+lower than the mid watermark but higher than the low watermark, the scheme is
 activated.
 
 
+Filters
+-------
+
+DAMOS let users do system operations in a data access pattern oriented way.
+The data access pattern, which is extracted by DAMON, is somewhat accurate more
+than what user space could know in many cases.  However, in some situation,
+users could know something more than the kernel about the pattern or some
+special requirements for some types of memory or processes.  For example, some
+users would have slow swap devices and knows latency-ciritical processes and
+therefore want to use DAMON-based proactive reclamation (DAMON_RECLAIM) for
+only non-anonymous pages of non-latency-critical processes.
+
+For such restriction, users could exclude the memory regions from the initial
+monitoring regions and use non-dynamic monitoring regions update monitoring
+operations set such as fvaddr and paddr.  They could also adjust the DAMOS
+target access pattern.  For dynamically changing memory layout and access
+pattern, such schemes would not easy to efficiently use.
+
+To help the case, DAMOS provides a feature, namely DAMOS filters, which can be
+used to avoid the DAMOS actions be applied to specific types of memory.  Users
+can set arbitrary number of multiple filters to each scheme.  Each filter
+specifies the type of the memory to apply the filter, and whether the filter
+should be applied to exclude the memory of the type, or the type but all other
+types.  Based on the type, additional arguments can also be specified.  For
+example, memory cgroup type filter require user to specify the memory cgroup
+file path.
+
+As of this writing, anonymous page type and memory cgroup type are supported by
+the filter feature.  For example, users can apply specific scheme to only
+anonymous pages, non-anonymous pages, pages of specific cgroups, all pages but
+those of specific cgroups, and any combination of those.
