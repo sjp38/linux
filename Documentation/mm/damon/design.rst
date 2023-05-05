@@ -89,8 +89,8 @@ conflict with the reclaim logic using ``PG_idle`` and ``PG_young`` page flags,
 as Idle page tracking does.
 
 
-Address Space Independent Core Mechanisms
-=========================================
+Monitoring Core Logics
+======================
 
 Below four sections describe each of the DAMON core mechanisms and the five
 monitoring attributes, ``sampling interval``, ``aggregation interval``,
