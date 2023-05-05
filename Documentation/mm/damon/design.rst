@@ -26,8 +26,8 @@ Also, if some architectures or devices supporting special optimized access
 check primitives, those will be easily configurable.
 
 
-Reference Implementations of Address Space Specific Monitoring Operations
-=========================================================================
+Operations Set Layer
+====================
 
 The monitoring operations are defined in two parts:
 
