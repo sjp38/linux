@@ -3865,6 +3865,7 @@ ssize_t generic_perform_write(struct kiocb *iocb, struct iov_iter *i)
 	long status = 0;
 	ssize_t written = 0;
 
+	current->backing_dev_info = inode_to_bdi(mapping->host);
 	do {
 		struct page *page;
 		unsigned long offset;	/* Offset into pagecache page */
@@ -3929,6 +3930,7 @@ again:
 
 		balance_dirty_pages_ratelimited(mapping);
 	} while (iov_iter_count(i));
+	current->backing_dev_info = NULL;
 
 	if (!written)
 		return status;
