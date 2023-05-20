@@ -4,6 +4,77 @@
 Design
 ======
 
+Overall Architecture
+====================
+
+Operations Set
+==============
+
+vaddr
+-----
+
+paddr
+-----
+
+Core Logic
+==========
+
+Monitoring
+----------
+
+Access Frequency Monitoring
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Region-based Sampling
+~~~~~~~~~~~~~~~~~~~~~
+
+Adaptive Regions Adjustment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Operation Schemes
+-----------------
+
+Operation Action
+~~~~~~~~~~~~~~~~
+
+Target Access Pattern
+~~~~~~~~~~~~~~~~~~~~~
+
+Quotas
+~~~~~~
+
+Watermarks
+~~~~~~~~~~
+
+Filters
+~~~~~~~
+
+Modules
+=======
+
+General-purpose
+---------------
+
+Sysfs User Interface
+~~~~~~~~~~~~~~~~~~~~
+
+Debugfs User Interface
+~~~~~~~~~~~~~~~~~~~~~~
+
+Special-purpose
+---------------
+
+DAMON_RECLAIM
+~~~~~~~~~~~~~
+
+DAMON_LRU_SORT
+~~~~~~~~~~~~~~
+
+User-space Tools
+================
+
+
+
 Configurable Layers
 ===================
 
@@ -175,102 +246,95 @@ abstracted monitoring target memory area only for each of a user-specified time
 interval (``update interval``).
 
 
-Access-aware Schemes
-====================
+Operation Schemes
+=================
 
-The reason why users want to use DAMON would be utilizing the monitoring
-results for data access-aware system operations.  For example,
+One common purpose of data access monitoring is access-aware efficient system
+operation.  For example,
 
-    page out memory regions that are not accessed for more than 10 minutes
+    page out memory regions that are not accessed for more than two minutes
 
 or
 
     use THP for memory regions that are larger than 2 MiB and showing a high
-    access frequency for more than 2 seconds.
+    access frequency for more than one minute.
 
-One of the simplest implementations of such schemes would be a sort of
-profiling-guided optimization.  That is, profile data access patterns of the
-workload or system using DAMON, and then make some system operation changes.
-The changes could be made by invoking system calls like ``madvise()``, using
-system tuning knobs like ``sysctl``, or adding or removing devices, such as
-DRAM.  Both offline and online approaches would be available.
+One of the straightforward approaches for such schemes would be
+profiling-guided optimizations.  That is, profiling data access patterns of the
+workloads or the system using DAMON, finding memory regions of special
+characteristics from the profiling results, and making some system operation
+changes to the regions.  The changes could be made by modifying the program,
+providing advice to the operating system, or reconfiguring the hardware.  Both
+offline and online approaches could be available.
 
-Such approaches could impose unnecessary redundancy and inefficiency, though.
-The monitoring and finding regions of the interest could be redundant if the
-type of the interests is somewhat common.  Communicating the information
-including monitoring results and management actions request between kernel and
-user spaces could be inefficient.
+Some of such approaches, particularly providing advice to the kernel at
+runtime, could impose unnecessary redundancy and inefficiency, though.  The
+monitoring and finding regions of the interest could be redundant if the type
+of the interests is somewhat common.  Exchanging the information including
+monitoring results and operation advice between kernel and user spaces could
+be inefficient.
 
-Such redundancy and inefficiencies can be mitigated by offloading the works to
-DAMON.  For that, DAMO provides a feature called DAMON-based Operation Schemes
-(DAMOS).  The feature asks users to specify their desired schemes at a high
-level.  Then, DAMOS runs DAMON, finds regions having the access pattern of the
-interest from the monitoring results, and applies the scheme-requested system
+Such redundancy and inefficiencies can be reduced by offloading the works to
+DAMON.  For that, DAMON provides a feature called Data Access Monitoring-based
+Operation Schemes (DAMOS).  It allows users to specify their desired schemes at
+a high level.  Then, DAMOS runs DAMON, finds regions having the access pattern
+of the interest from the monitoring results, and applies the user-desired
 operation actions to the regions.
 
 Operation Action
 ----------------
 
-DAMOS users should describe what action they want to apply to the regions of
-their interest.  Then, DAMOS applies the action to the memory regions, as soon
-as found.  The DAMOS-supporting operation actions include hinting khugepaged to
-collapse or split the regions to/from hugepages, paging out those, marking as
-active or inactive, and doing nothing but count statistics of the found
-regions.
+The action that the users desire to apply to the regions of their interest.
+For example, paging out, prioritizing for next reclamation victim selection,
+advising khugepaged to collapse or split, or doing nothing but collecting
+statistics of the regions could be such action.
 
-The implementation of each action is in the DAMON operations set layer, because
-it normally depends on the monitoring target address space.  Hence, different
-monitoring operations implementation sets support different lists of the
-actions.
+The list of supported actions are defined in DAMOS, but implementation of each
+action is in the DAMON operations set layer, because the implementation
+normally depends on the monitoring target address space.  For example, the code
+for paging specific virtual address ranges out would be different from that for
+physical address ranges.  And the monitoring operations implementation sets are
+not mandated to support all actions of the list.  Hence, availability of
+specific DAMOS action depends on what operations set is selected to be used
+together.
 
-To avoid repeatedly applying an action to a region due to its old access
-pattern, DAMOS resets the age of regions when an action is applied to.  In
-other words, DAMOS considers a region where an action is applied as a new one.
-
+Applying an action to a region is considered as changing the region's
+characteristics.  Hence, DAMOS resets the age of regions when an action is
+applied to those.
 
 Target Access Pattern
 ---------------------
 
-DAMOS users can specify to what regions they have interests by specifying the
-access patterns of the regions.  The pattern is constructed with the DAMON's
-monitoring results providing information, specifically the size, the access
-frequency (``nr_accesses``), and the age.  The age of each region means the
-amount of time that the region has maintained current size and the access
-frequency.  Users can describe their access pattern of interest by setting
-minimum and maximum values of the three characteristics.  If a region is having
-all the three characteristics in the ranges, DAMOS classifies it as one of the
-regions that the scheme is having the interest in.
-
-
+The access pattern of the schemes' interest.  The patterns are constructed with
+the properties that DAMON's monitoring results provide, specifically the size,
+the access frequency, and the age.  Users can describe their access pattern of
+interest by setting minimum and maximum values of the three properties.  If the
+three properties of a region are in the ranges, DAMOS classifies it as one of
+the regions that the scheme is having the interest in.
 
 Quotas
 ------
 
-The access pattern should be carefully set.  Otherwise, the scheme could incur
-a high overhead coming from becoming unexpectedly aggressive.  For example, if
-a huge memory region having the access pattern of interest is found, applying
-the requested action to all pages of the huge region could incur unacceptable
-overhead.  Controlling it with only the access pattern can require quite a lot
-of expertise and experiences, especially when the access pattern of the system
-can dynamically and unexpectedly change.
+DAMOS could incur high overhead if the target access pattern is not properly
+tuned.  For example, if a huge memory region having the access pattern of
+interest is found, applying the scheme's action to all pages of the huge region
+could result in unacceptable overhead.  Such access pattern tuning could be
+challenging, especially if the access patterns are highly dynamic.
 
-For such cases, DAMOS lets users set safety guards for each scheme, namely time
-and size quotas.  Using the two quotas, users can specify an upper-limit of
-time that DAMOS can use for applying the action, and/or a maximum bytes of
-memory regions that the action can be applied within a user-specified time
-duration, respectively.  In other words, users can control the upper-bound
-overhead of their DAMOS schemes by setting the quotas.
-
+To prevent such unexpected overhead, DAMOS provides an upper-bound overhead
+control feature called quotas.  It lets users specify an upper-limit of time
+that DAMOS can use for applying the action, and/or a maximum bytes of memory
+regions that the action can be applied within a user-specified time duration,
+respectively.
 
 Prioritization
 ~~~~~~~~~~~~~~
 
 One followup question of the quotas feature would be, to which memory regions
-DAMOS will apply the action under the limit.  To make a good decision for the
-case, DAMOS calculates priority scores for the regions of the scheme-specified
-access pattern.  Then, it further finds to what priority score regions the
-action can be applied without breaking the limit, and applies the action to
-regions of the safe cores.
+DAMOS will apply the action under the limit.  To make a decision better than a
+random selection, DAMOS calculates priority scores for each region having the
+target access pattern.  Then, it applies the action to regions having a high
+priority while not breaking the limit.
 
 The prioritization mechanism should be different for each action.  For example,
 less frequently and less recently accessed (colder) memory regions would need
@@ -279,59 +343,54 @@ would need to be deprioritized for huge page collapse scheme action.  Hence,
 the prioritization mechanisms for each action are implemented in each DAMON
 operations set, together with the actions.
 
-Though the implementation is up to the DAMON operations set, it could normally
-be expected to use parts of, or all of the access pattern of the regions.  Some
-users would want the mechanisms to be personalized for their specific case.
-For example, some users would want the mechanism to prioritize access frequency
-(``nr_accesses``) more than the recency (``age``).  DAMOS allows users to
-specify the weight of each access pattern characteristic for the case, and
-passes the information to the prioritization mechanism in the underlying
-operations set.  Nevertheless, how and even whether the weight will be
-respected are up to the underlying prioritization mechanism implementation.
-
+Though the implementation is up to the DAMON operations set, it could be common
+to calculate the priority using parts of, or all of the access pattern
+properties of the regions.  Some users would want the mechanisms to be
+personalized for their specific case.  For example, some users would want the
+mechanism to prioritize access frequency (``nr_accesses``) more than the
+recency (``age``).  DAMOS allows users to specify the weight of each access
+pattern property for the case, and passes the information to the prioritization
+mechanism in the underlying operations set.  Nevertheless, how and even whether
+the weight will be respected are up to the underlying prioritization mechanism
+implementation.
 
 Watermarks
 ----------
 
-DAMON-based operation schemes wouldn't be needed always.  For example, when a
+Users may want DAMOS to run only under certain situations.  For example, when a
 sufficient amount of free memory is guaranteed, a scheme for proactive
-reclamation might not be needed.  To avoid any unnecessary overhead coming from
-DAMON and DAMOS schemes, the user would need to manually monitor some system
-status metrics such as free memory or memory fragmentation ratio, and turn
-DAMON and DAMOS schemes on or off.
+reclamation might not be needed.  To avoid DAMON and DAMOS unnecessarily
+consuming system resources in such cases, the user would need to manually
+monitor some metrics such as free memory, and turn DAMON and DAMOS on or off.
 
-To make it automated, DAMOS provides a watermarks-based automatic activation
-feature.  It allows the users to configure the metric of their interest, and
-three watermark values.  If the value of the metric becomes higher than the
-high watermark or lower than the low watermark, the scheme is deactivated.  If
-the metric becomes lower than the mid watermark, the scheme is activated.  If a
-DAMON context is running with one or more schemes and all schemes are
-deactivated by the watermarks, the monitoring is also deactivated.  In this
-case, the DAMON worker thread incurs only nearly zero overhead, because it does
-nothing but just the watermarks checks.
-
+DAMOS allows users to offload such manual monitoring and controlling by
+providing a watermarks-based automatic activation feature.  It allows the users
+to configure the metric of their interest, and three watermark values.  If the
+value of the metric becomes higher than the high watermark or lower than the
+low watermark, the scheme is deactivated.  If the metric becomes lower than the
+mid watermark, the scheme is activated.  If all schemes are deactivated by the
+watermarks, the monitoring is also deactivated.  In this case, the DAMON worker
+thread only periodically checks the watermarks and therefore incurs nearly zero
+overhead.
 
 Filters
 -------
 
-In some situations, users could have special information that kernel cannot
-know, including the future access patterns or some special requirements for
-some types of memory of programs or systems if they wrote or configured those
-themselves, or have good profiling results.  In this case, users could want to
-control DAMOS schemes using not only the access pattern but also the additional
-special information.  For example, some users would have slow swap devices with
-fast storage devices for file systems, and know a list of latency-critical
-processes.  In such cases, the users may want to avoid their DAMOS schemes
-reclaiming anonymous pages of latency-critical processes.
+If users are running self-written programs or having good profiling tools, they
+could know something more than kernel, such as future access patterns or some
+special requirements for specific types of memory.  For example, some users may
+know their program's performance is sensitive for anonymous pages, and/or have
+a list of latency-critical processes.
 
-To help such cases, DAMOS provides a feature called DAMOS filters.  The feature
-allows users to set an arbitrary number of filters for each scheme.  Each
-filter specifies the type of memory on which the filter should operate for, and
-whether the scheme's behavior should not apply to that type of memory
-(filter-out) or to all types of memory except that type (filter-in).  Based on
-the type of the filter, additional arguments can be required.  For example,
-memory cgroup type filters request users to specify the memory cgroup file path
-of their interest.
+To let users optimize DAMOS schemes with such special knowledge, DAMOS
+provides a feature called DAMOS filters.  The feature allows users to set an
+arbitrary number of filters for each scheme.  Each filter specifies the type of
+target memory, and whether the filter should exclude memory of the target type
+(filter-out), or all types of memory except the target type (filter-in).
+
+Additional arguments can be required for some of the filter target types.  For
+example, memory cgroup filter type asks users to specify the file path of the
+memory cgroup for the filter.
 
 As of this writing, anonymous page type and memory cgroup type are supported by
 the filters feature.  Hence, users can apply specific schemes to only anonymous
