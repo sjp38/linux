@@ -1519,7 +1519,8 @@ void __ref free_area_init_core_hotplug(struct pglist_data *pgdat)
 		memset(p, 0, sizeof(*p));
 	}
 
-	/* When memory is hot-added, all the memory is in offline state. So
+	/*
+	 * When memory is hot-added, all the memory is in offline state. So
 	 * clear all zones' present_pages and managed_pages because they will
 	 * be updated in online_pages() and offline_pages().
 	 */
