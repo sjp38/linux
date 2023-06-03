@@ -22,7 +22,7 @@
 #include <linux/userfaultfd.h>
 
 #include "../kselftest.h"
-#include "vm_util.h"
+#include "uffd-common.h"
 
 #define KiB 1024u
 #define MiB (1024 * KiB)

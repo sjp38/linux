@@ -110,8 +110,11 @@ include ../lib.mk
 
 $(TEST_GEN_PROGS): vm_util.c
 
-$(OUTPUT)/uffd-stress: uffd-common.c
-$(OUTPUT)/uffd-unit-tests: uffd-common.c
+$(OUTPUT)/uffd-stress:          uffd-common.c
+$(OUTPUT)/uffd-unit-tests:      uffd-common.c
+$(OUTPUT)/hugepage-mremap:      uffd-common.c
+$(OUTPUT)/write_to_hugetlbfs:   uffd-common.c
+$(OUTPUT)/ksm_functional_tests: uffd-common.c
 
 ifeq ($(MACHINE),x86_64)
 BINARIES_32 := $(patsubst %,$(OUTPUT)/%,$(BINARIES_32))
