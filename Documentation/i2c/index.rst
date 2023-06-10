@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-===================
-I2C/SMBus Subsystem
-===================
+=========
+I2C/SMBus
+=========
 
 Introduction
 ============
