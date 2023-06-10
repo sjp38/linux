@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-============================================
-Assorted Miscellaneous Devices Documentation
-============================================
+==============================
+Assorted Miscellaneous Devices
+==============================
 
 This documentation contains information for assorted devices that do not
 fit into other categories.

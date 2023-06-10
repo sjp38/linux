@@ -1,6 +1,6 @@
-======================
-Security Documentation
-======================
+========
+Security
+========
 
 .. toctree::
    :maxdepth: 1

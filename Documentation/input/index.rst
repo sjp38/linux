@@ -1,6 +1,6 @@
-===================
-Input Documentation
-===================
+=====
+Input
+=====
 
 Contents:
 

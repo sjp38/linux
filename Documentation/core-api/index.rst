@@ -1,6 +1,6 @@
-======================
-Core API Documentation
-======================
+========
+Core API
+========
 
 This is the beginning of a manual for core kernel APIs.  The conversion
 (and writing!) of documents for this manual is much appreciated!

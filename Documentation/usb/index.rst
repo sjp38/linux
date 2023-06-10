@@ -1,6 +1,6 @@
-===========
-USB support
-===========
+===
+USB
+===
 
 .. toctree::
     :maxdepth: 1

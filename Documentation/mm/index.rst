@@ -1,6 +1,6 @@
-===============================
-Memory Management Documentation
-===============================
+=================
+Memory Management
+=================
 
 Memory Management Guide
 =======================

@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-=================
-PCI Bus Subsystem
-=================
+=======
+PCI Bus
+=======
 
 .. toctree::
    :maxdepth: 2
