@@ -1,6 +1,6 @@
-=================
-BPF Documentation
-=================
+===
+BPF
+===
 
 This directory contains documentation for the BPF (Berkeley Packet
 Filter) facility, with a focus on the extended BPF version (eBPF).

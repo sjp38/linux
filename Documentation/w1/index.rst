@@ -1,8 +1,8 @@
 .. SPDX-License-Identifier: GPL-2.0
 
-================
-1-Wire Subsystem
-================
+======
+1-Wire
+======
 
 .. toctree::
    :maxdepth: 1
