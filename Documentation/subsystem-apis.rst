@@ -15,45 +15,45 @@ needed).
 .. toctree::
    :maxdepth: 1
 
-   driver-api/index
-   core-api/index
-   locking/index
+   w1/index
    accounting/index
+   misc-devices/index
    block/index
+   bpf/index
    cdrom/index
+   accel/index
+   core-api/index
    cpu-freq/index
+   crypto/index
+   driver-api/index
    fb/index
+   filesystems/index
    fpga/index
+   gpu/index
    hid/index
+   hwmon/index
    i2c/index
    iio/index
-   isdn/index
    infiniband/index
+   input/index
+   isdn/index
    leds/index
+   locking/index
+   mhi/index
+   mm/index
    netlabel/index
    networking/index
+   PCI/index
    pcmcia/index
+   peci/index
    power/index
+   scheduler/index
+   scsi/index
+   security/index
+   spi/index
+   sound/index
    target/index
    timers/index
-   spi/index
-   w1/index
-   watchdog/index
-   virt/index
-   input/index
-   hwmon/index
-   gpu/index
-   accel/index
-   security/index
-   sound/index
-   crypto/index
-   filesystems/index
-   mm/index
-   bpf/index
    usb/index
-   PCI/index
-   scsi/index
-   misc-devices/index
-   scheduler/index
-   mhi/index
-   peci/index
+   virt/index
+   watchdog/index
