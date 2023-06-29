@@ -117,7 +117,7 @@ struct damon_sysfs_scheme_regions {
 	struct kobject kobj;
 	struct list_head regions_list;
 	int nr_regions;
-	unsigned long sz_regions_sum;
+	unsigned long total_sz_regions;
 };
 
 static struct damon_sysfs_scheme_regions *
@@ -129,17 +129,17 @@ damon_sysfs_scheme_regions_alloc(void)
 	regions->kobj = (struct kobject){};
 	INIT_LIST_HEAD(&regions->regions_list);
 	regions->nr_regions = 0;
-	regions->sz_regions_sum = 0;
+	regions->total_sz_regions = 0;
 	return regions;
 }
 
-static ssize_t sz_regions_sum_show(struct kobject *kobj,
+static ssize_t total_sz_regions_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_scheme_regions *regions = container_of(kobj,
 			struct damon_sysfs_scheme_regions, kobj);
 
-	return sysfs_emit(buf, "%lu\n", regions->sz_regions_sum);
+	return sysfs_emit(buf, "%lu\n", regions->total_sz_regions);
 }
 
 static void damon_sysfs_scheme_regions_rm_dirs(
@@ -159,11 +159,11 @@ static void damon_sysfs_scheme_regions_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_scheme_regions, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_scheme_regions_sz_regions_sum_attr =
-		__ATTR_RO_MODE(sz_regions_sum, 0400);
+static struct kobj_attribute damon_sysfs_scheme_regions_total_sz_regions_attr =
+		__ATTR_RO_MODE(total_sz_regions, 0400);
 
 static struct attribute *damon_sysfs_scheme_regions_attrs[] = {
-	&damon_sysfs_scheme_regions_sz_regions_sum_attr.attr,
+	&damon_sysfs_scheme_regions_total_sz_regions_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_scheme_regions);
@@ -1663,7 +1663,7 @@ static int damon_sysfs_before_damos_apply(struct damon_ctx *ctx,
 		return 0;
 
 	sysfs_regions = sysfs_schemes->schemes_arr[schemes_idx]->tried_regions;
-	sysfs_regions->sz_regions_sum += r->ar.end - r->ar.start;
+	sysfs_regions->total_sz_regions += r->ar.end - r->ar.start;
 	region = damon_sysfs_scheme_region_alloc(r);
 	list_add_tail(&region->list, &sysfs_regions->regions_list);
 	sysfs_regions->nr_regions++;
@@ -1694,7 +1694,7 @@ int damon_sysfs_schemes_clear_regions(
 		sysfs_scheme = sysfs_schemes->schemes_arr[schemes_idx++];
 		damon_sysfs_scheme_regions_rm_dirs(
 				sysfs_scheme->tried_regions);
-		sysfs_scheme->tried_regions->sz_regions_sum = 0;
+		sysfs_scheme->tried_regions->total_sz_regions = 0;
 	}
 	return 0;
 }
