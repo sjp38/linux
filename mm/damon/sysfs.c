@@ -1206,12 +1206,18 @@ static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next;
 	struct damon_sysfs_kdamond *kdamond;
+	bool waiting_update_regions_stop_call = true;
 
 	/* damon_sysfs_schemes_update_regions_stop() might not yet called */
 	kdamond = damon_sysfs_cmd_request.kdamond;
-	if (kdamond && damon_sysfs_cmd_request.cmd ==
-			DAMON_SYSFS_CMD_UPDATE_SCHEMES_TRIED_REGIONS &&
-			ctx == kdamond->damon_ctx) {
+	if (!kdamond)
+		waiting_update_regions_stop_call = false;
+	else if (ctx != kdamond->damon_ctx)
+		waiting_update_regions_stop_call = false;
+	else if (damon_sysfs_cmd_request.cmd !=
+			DAMON_SYSFS_CMD_UPDATE_SCHEMES_TRIED_REGIONS)
+		waiting_update_regions_stop_call = false;
+	if (waiting_update_regions_stop_call) {
 		damon_sysfs_schemes_update_regions_stop(ctx);
 		mutex_unlock(&damon_sysfs_lock);
 	}
