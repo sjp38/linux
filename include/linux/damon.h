@@ -44,6 +44,10 @@ struct damon_addr_range {
  * @list:		List head for siblings.
  * @age:		Age of this region.
  *
+ * @nr_accesses is reset to zero for every &damon_attrs->aggr_interval and
+ * increased for every &damon_attrs->sample_interval if an access to the region
+ * during the last interval is found.
+ *
  * @age is initially zero, increased for each aggregation interval, and reset
  * to zero again if the access frequency is significantly changed.  If two
  * regions are merged into a new region, both @nr_accesses and @age of the new
