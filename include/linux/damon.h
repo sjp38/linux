@@ -40,6 +40,7 @@ struct damon_addr_range {
  * @ar:			The address range of the region.
  * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
+ * @moving_accesses_bp:	Moving sum of checked accesses in basis point (0.01%).
  * @list:		List head for siblings.
  * @age:		Age of this region.
  *
@@ -48,6 +49,15 @@ struct damon_addr_range {
  * during the last sampling interval is found.  The update of this field should
  * not be done with direct access but with the helper function,
  * damon_update_region_access_rate().
+ *
+ * @moving_accesses_bp is another representation of @nr_accesses in basis point
+ * (1 in 10,000).  Unlike @nr_accesses, this field is not reset to zero but
+ * updated for every &damon_attrs->sample_interval in a manner similar to
+ * moving sum.  By the algorithm, this value becomes @nr_accesses * 10000 for
+ * every &struct damon_attrs->aggr_interval.  This can be used when the access
+ * monitoring result need to be collected before next
+ * &struct damon_attrs->aggr_interval is passed, probably due to the
+ * aggregation interval is too huge to wait.
  *
  * @age is initially zero, increased for each aggregation interval, and reset
  * to zero again if the access frequency is significantly changed.  If two
@@ -58,6 +68,7 @@ struct damon_region {
 	struct damon_addr_range ar;
 	unsigned long sampling_addr;
 	unsigned int nr_accesses;
+	unsigned int moving_accesses_bp;
 	struct list_head list;
 
 	unsigned int age;
