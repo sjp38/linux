@@ -274,6 +274,54 @@ int damon_set_regions(struct damon_target *t, struct damon_addr_range *ranges,
 	return 0;
 }
 
+/*
+ * damon_pseudo_moving_average_add() - Return pseudo-moving average value.
+ * @mvavg:	Current value of the pseudo moving average.
+ * @delta:	New value that will be added to the pseudo moving average/
+ * @len_widnow:	The length of the window of the moving average.
+ *
+ * Moving average is good for handling noise, but the cost of keeping the past
+ * window values can be high for arbitrary window size.  This function
+ * implements lightweight pseudo moving average function, which doesn't keep
+ * the past window values, but assumes the there was no noise in the past.
+ *
+ * Return: Pseudo-moving average after getting the @delta.
+ */
+static unsigned int damon_pseudo_moving_average_add(unsigned int mvavg,
+		unsigned int delta, unsigned int len_window)
+{
+	return mvavg - mvavg / len_window + delta;
+}
+
+/**
+ * damon_record_access_to_region() - Apply access finding for a region.
+ * @region:	The DAMON region to update its access frequency.
+ * @accessed:	Whether the region has accessed.
+ * @attrs:	The monitoring attributes.
+ *
+ * Apply found access or idleness to a region by updating the access rate
+ * fields of the region.  Normally called by underlying operations set to apply
+ * each of their access check results to a each region.
+ */
+void damon_record_access_to_region(struct damon_region *region, bool accessed,
+		struct damon_attrs *attrs)
+{
+	unsigned int len_window = 1;
+
+	/*
+	 * sample_interval can be zero, but cannot be larger than
+	 * aggr_interval, owing to validation of damon_set_attrs().
+	 */
+	if (attrs->sample_interval)
+		len_window = attrs->aggr_interval / attrs->sample_interval;
+	region->moving_accesses_bp = damon_pseudo_moving_average_add(
+			region->moving_accesses_bp,
+			accessed ? 10000 / len_window : 0,
+			len_window);
+
+	region->nr_accesses += accessed ? 1 : 0;
+}
+
 struct damos_filter *damos_new_filter(enum damos_filter_type type,
 		bool matching)
 {
