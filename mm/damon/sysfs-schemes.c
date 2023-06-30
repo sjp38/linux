@@ -17,6 +17,7 @@ struct damon_sysfs_scheme_region {
 	struct kobject kobj;
 	struct damon_addr_range ar;
 	unsigned int nr_accesses;
+	unsigned int moving_accesses_bp;
 	unsigned int age;
 	struct list_head list;
 };
@@ -32,6 +33,7 @@ static struct damon_sysfs_scheme_region *damon_sysfs_scheme_region_alloc(
 	sysfs_region->kobj = (struct kobject){};
 	sysfs_region->ar = region->ar;
 	sysfs_region->nr_accesses = region->nr_accesses;
+	sysfs_region->moving_accesses_bp = region->moving_accesses_bp;
 	sysfs_region->age = region->age;
 	INIT_LIST_HEAD(&sysfs_region->list);
 	return sysfs_region;
@@ -64,6 +66,15 @@ static ssize_t nr_accesses_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%u\n", region->nr_accesses);
 }
 
+static ssize_t accesses_bp_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_scheme_region *region = container_of(kobj,
+			struct damon_sysfs_scheme_region, kobj);
+
+	return sysfs_emit(buf, "%u\n", region->moving_accesses_bp);
+}
+
 static ssize_t age_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
@@ -91,6 +102,9 @@ static struct kobj_attribute damon_sysfs_scheme_region_end_attr =
 static struct kobj_attribute damon_sysfs_scheme_region_nr_accesses_attr =
 		__ATTR_RO_MODE(nr_accesses, 0400);
 
+static struct kobj_attribute damon_sysfs_scheme_region_accesses_bp_attr =
+		__ATTR_RO_MODE(accesses_bp, 0400);
+
 static struct kobj_attribute damon_sysfs_scheme_region_age_attr =
 		__ATTR_RO_MODE(age, 0400);
 
@@ -98,6 +112,7 @@ static struct attribute *damon_sysfs_scheme_region_attrs[] = {
 	&damon_sysfs_scheme_region_start_attr.attr,
 	&damon_sysfs_scheme_region_end_attr.attr,
 	&damon_sysfs_scheme_region_nr_accesses_attr.attr,
+	&damon_sysfs_scheme_region_accesses_bp_attr.attr,
 	&damon_sysfs_scheme_region_age_attr.attr,
 	NULL,
 };
