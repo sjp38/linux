@@ -134,6 +134,7 @@ struct damon_region *damon_new_region(unsigned long start, unsigned long end)
 	region->ar.start = start;
 	region->ar.end = end;
 	region->nr_accesses = 0;
+	region->moving_accesses_bp = 0;
 	INIT_LIST_HEAD(&region->list);
 
 	region->age = 0;
@@ -791,6 +792,7 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 		damon_for_each_region(r, t) {
 			trace_damon_aggregated(ti, r, damon_nr_regions(t));
 			r->last_nr_accesses = r->nr_accesses;
+			r->moving_accesses_bp = r->nr_accesses * 10000;
 			r->nr_accesses = 0;
 		}
 		ti++;
@@ -1154,6 +1156,7 @@ static void damon_merge_two_regions(struct damon_target *t,
 
 	l->nr_accesses = (l->nr_accesses * sz_l + r->nr_accesses * sz_r) /
 			(sz_l + sz_r);
+	l->moving_accesses_bp = l->nr_accesses * 10000;
 	l->age = (l->age * sz_l + r->age * sz_r) / (sz_l + sz_r);
 	l->ar.end = r->ar.end;
 
@@ -1239,6 +1242,7 @@ static void damon_split_region_at(struct damon_target *t,
 
 	new->age = r->age;
 	new->last_nr_accesses = r->last_nr_accesses;
+	new->moving_accesses_bp = r->last_nr_accesses * 10000;
 
 	damon_insert_region(new, r, damon_next_region(r), t);
 }
