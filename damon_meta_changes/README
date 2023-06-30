@@ -1,0 +1,6 @@
+This is a directory for having fake changes that required to only make valid
+commits.
+
+To avoid conflict, add a unique file to this directory.  E.g.,
+
+$ mktemp damon_meta_changes/XXXXXXXX
