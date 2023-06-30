@@ -631,6 +631,33 @@ void damon_destroy_region(struct damon_region *r, struct damon_target *t);
 int damon_set_regions(struct damon_target *t, struct damon_addr_range *ranges,
 		unsigned int nr_ranges);
 
+/*
+ * damon_moving_average() - Calculate a pseudo-moving average value.
+ * @mvavg:	Current value of the pseudo moving average.
+ * @new_value:	New value that will be added to the pseudo moving average.
+ * @len_widnow:	The length of the window of the moving average.
+ *
+ * Moving average is good for handling noise, but the cost of keeping the past
+ * window values can be high for arbitrary window size.  This function
+ * implements a lightweight pseudo moving average function that doesn't keep
+ * the past window values.
+ *
+ * It simply assumes there was no noise in the past.  For example, if the
+ * window length is 10 and current moving average value is 5, the last 10
+ * values for the last window could be vary, e.g., 0, 10, 0, 10, 0, 10, 0, 10,
+ * 0, 10.  This function simply assumes it got value 5 for each of the last ten
+ * times.  Based on the assumption, when the next value is measured, it drops
+ * 5/10 from the average value and add the new value divided by the window
+ * length to get the updated pseduo-moving average.
+ *
+ * Return: Pseudo-moving average after getting the @new_value.
+ */
+static unsigned int damon_moving_average_add(unsigned int mvavg,
+		unsigned int new_value, unsigned int len_window)
+{
+	return mvavg - mvavg / len_window + new_value / len_window;
+}
+
 /**
  * damon_update_region_access_rate() - Update the access rate of a region.
  * @region:    The DAMON region to update for its access check result.
@@ -642,8 +669,19 @@ int damon_set_regions(struct damon_target *t, struct damon_addr_range *ranges,
  * Usually this will be called by &damon_operations->check_accesses callback.
  */
 static inline void damon_update_region_access_rate(struct damon_region *r,
-		bool accessed)
+		bool accessed, struct damon_attrs *attrs)
 {
+	unsigned int len_window = 1;
+
+	/*
+	 * sample_interval can be zero, but cannot be larger than
+	 * aggr_interval, owing to validation of damon_set_attrs().
+	 */
+	if (attrs->sample_interval)
+		len_window = attrs->aggr_interval / attrs->sample_interval;
+	r->moving_accesses_bp = damon_moving_average_add(r->moving_accesses_bp,
+			accessed ? 10000 : 0, len_window);
+
 	if (accessed)
 		r->nr_accesses++;
 }
