@@ -40,6 +40,7 @@ struct damon_addr_range {
  * @ar:			The address range of the region.
  * @sampling_addr:	Address of the sample for the next access check.
  * @nr_accesses:	Access frequency of this region.
+ * @moving_accesses_bp:	Moving average of nr_accesses in basis point (0.01%).
  * @list:		List head for siblings.
  * @age:		Age of this region.
  *
@@ -52,6 +53,7 @@ struct damon_region {
 	struct damon_addr_range ar;
 	unsigned long sampling_addr;
 	unsigned int nr_accesses;
+	unsigned int moving_accesses_bp;
 	struct list_head list;
 
 	unsigned int age;
