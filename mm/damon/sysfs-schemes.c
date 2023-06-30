@@ -117,7 +117,7 @@ struct damon_sysfs_scheme_regions {
 	struct kobject kobj;
 	struct list_head regions_list;
 	int nr_regions;
-	unsigned long total_sz_regions;
+	unsigned long total_bytes;
 };
 
 static struct damon_sysfs_scheme_regions *
@@ -129,17 +129,17 @@ damon_sysfs_scheme_regions_alloc(void)
 	regions->kobj = (struct kobject){};
 	INIT_LIST_HEAD(&regions->regions_list);
 	regions->nr_regions = 0;
-	regions->total_sz_regions = 0;
+	regions->total_bytes = 0;
 	return regions;
 }
 
-static ssize_t total_sz_regions_show(struct kobject *kobj,
+static ssize_t total_bytes_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct damon_sysfs_scheme_regions *regions = container_of(kobj,
 			struct damon_sysfs_scheme_regions, kobj);
 
-	return sysfs_emit(buf, "%lu\n", regions->total_sz_regions);
+	return sysfs_emit(buf, "%lu\n", regions->total_bytes);
 }
 
 static void damon_sysfs_scheme_regions_rm_dirs(
@@ -159,11 +159,11 @@ static void damon_sysfs_scheme_regions_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damon_sysfs_scheme_regions, kobj));
 }
 
-static struct kobj_attribute damon_sysfs_scheme_regions_total_sz_regions_attr =
-		__ATTR_RO_MODE(total_sz_regions, 0400);
+static struct kobj_attribute damon_sysfs_scheme_regions_total_bytes_attr =
+		__ATTR_RO_MODE(total_bytes, 0400);
 
 static struct attribute *damon_sysfs_scheme_regions_attrs[] = {
-	&damon_sysfs_scheme_regions_total_sz_regions_attr.attr,
+	&damon_sysfs_scheme_regions_total_bytes_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_scheme_regions);
@@ -1635,7 +1635,7 @@ void damon_sysfs_schemes_update_stats(
  */
 static struct damon_sysfs_schemes *damon_sysfs_schemes_for_damos_callback;
 static int damon_sysfs_schemes_region_idx;
-static bool damos_regions_upd_total_sz_only;
+static bool damos_regions_upd_total_bytes_only;
 
 /*
  * DAMON callback that called before damos apply.  While this callback is
@@ -1664,8 +1664,8 @@ static int damon_sysfs_before_damos_apply(struct damon_ctx *ctx,
 		return 0;
 
 	sysfs_regions = sysfs_schemes->schemes_arr[schemes_idx]->tried_regions;
-	sysfs_regions->total_sz_regions += r->ar.end - r->ar.start;
-	if (damos_regions_upd_total_sz_only)
+	sysfs_regions->total_bytes += r->ar.end - r->ar.start;
+	if (damos_regions_upd_total_bytes_only)
 		return 0;
 
 	region = damon_sysfs_scheme_region_alloc(r);
@@ -1698,7 +1698,7 @@ int damon_sysfs_schemes_clear_regions(
 		sysfs_scheme = sysfs_schemes->schemes_arr[schemes_idx++];
 		damon_sysfs_scheme_regions_rm_dirs(
 				sysfs_scheme->tried_regions);
-		sysfs_scheme->tried_regions->total_sz_regions = 0;
+		sysfs_scheme->tried_regions->total_bytes = 0;
 	}
 	return 0;
 }
@@ -1706,11 +1706,11 @@ int damon_sysfs_schemes_clear_regions(
 /* Called from damon_sysfs_cmd_request_callback under damon_sysfs_lock */
 int damon_sysfs_schemes_update_regions_start(
 		struct damon_sysfs_schemes *sysfs_schemes,
-		struct damon_ctx *ctx, bool total_sz_only)
+		struct damon_ctx *ctx, bool total_bytes_only)
 {
 	damon_sysfs_schemes_clear_regions(sysfs_schemes, ctx);
 	damon_sysfs_schemes_for_damos_callback = sysfs_schemes;
-	damos_regions_upd_total_sz_only = total_sz_only;
+	damos_regions_upd_total_bytes_only = total_bytes_only;
 	ctx->callback.before_damos_apply = damon_sysfs_before_damos_apply;
 	return 0;
 }
