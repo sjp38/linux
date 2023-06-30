@@ -48,6 +48,12 @@ struct damon_addr_range {
  * increased for every &damon_attrs->sample_interval if an access to the region
  * during the last interval is found.
  *
+ * @moving_accesses_bp is another representation of @nr_accesses in basis point
+ * (1 in 10,000).  Unlike @nr_accesses, this field is not reset to zero but
+ * updated for every &damon_attrs->sample_interval in a manner similar to
+ * moving average.  This can be useful if &damon_attrs->aggr_interval is quite
+ * huge but the access monitoring result need to be quickly collected.
+ *
  * @age is initially zero, increased for each aggregation interval, and reset
  * to zero again if the access frequency is significantly changed.  If two
  * regions are merged into a new region, both @nr_accesses and @age of the new
