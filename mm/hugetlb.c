@@ -7177,6 +7177,16 @@ int get_huge_page_for_hwpoison(unsigned long pfn, int flags,
 	return ret;
 }
 
+bool is_raw_hwp_subpage(struct folio *folio, struct page *subpage)
+{
+	bool ret;
+
+	spin_lock_irq(&hugetlb_lock);
+	ret = __is_raw_hwp_subpage(folio, subpage);
+	spin_unlock_irq(&hugetlb_lock);
+	return ret;
+}
+
 void folio_putback_active_hugetlb(struct folio *folio)
 {
 	spin_lock_irq(&hugetlb_lock);

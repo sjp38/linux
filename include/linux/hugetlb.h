@@ -997,6 +997,25 @@ void hugetlb_register_node(struct node *node);
 void hugetlb_unregister_node(struct node *node);
 #endif
 
+/*
+ * Struct raw_hwp_page represents information about "raw error page",
+ * constructing singly linked list from ->_hugetlb_hwpoison field of folio.
+ */
+struct raw_hwp_page {
+	struct llist_node node;
+	struct page *page;
+};
+
+static inline struct llist_head *raw_hwp_list_head(struct folio *folio)
+{
+	return (struct llist_head *)&folio->_hugetlb_hwpoison;
+}
+
+/*
+ * Check if a given raw @subpage in a hugepage @folio is HWPOISON.
+ */
+bool is_raw_hwp_subpage(struct folio *folio, struct page *subpage);
+
 #else	/* CONFIG_HUGETLB_PAGE */
 struct hstate {};
 

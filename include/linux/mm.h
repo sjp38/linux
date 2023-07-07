@@ -3701,6 +3701,7 @@ extern const struct attribute_group memory_failure_attr_group;
 extern void memory_failure_queue(unsigned long pfn, int flags);
 extern int __get_huge_page_for_hwpoison(unsigned long pfn, int flags,
 					bool *migratable_cleared);
+extern bool __is_raw_hwp_subpage(struct folio *folio, struct page *subpage);
 void num_poisoned_pages_inc(unsigned long pfn);
 void num_poisoned_pages_sub(unsigned long pfn, long i);
 struct task_struct *task_early_kill(struct task_struct *tsk, int force_early);
@@ -3713,6 +3714,12 @@ static inline int __get_huge_page_for_hwpoison(unsigned long pfn, int flags,
 					bool *migratable_cleared)
 {
 	return 0;
+}
+
+static inline bool __is_raw_hwp_subpage(struct folio *folio,
+					struct page *subpage)
+{
+	return false;
 }
 
 static inline void num_poisoned_pages_inc(unsigned long pfn)
