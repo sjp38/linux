@@ -93,7 +93,7 @@ static const struct kobj_type damon_sysfs_region_ktype = {
 
 struct damon_sysfs_regions {
 	struct kobject kobj;
-	struct damon_sysfs_region **regions_arr;
+	struct damon_sysfs_region **regions_arr __counted_by(nr);
 	int nr;
 };
 
@@ -289,7 +289,7 @@ static const struct kobj_type damon_sysfs_target_ktype = {
 
 struct damon_sysfs_targets {
 	struct kobject kobj;
-	struct damon_sysfs_target **targets_arr;
+	struct damon_sysfs_target **targets_arr __counted_by(nr);
 	int nr;
 };
 
@@ -812,7 +812,7 @@ static const struct kobj_type damon_sysfs_context_ktype = {
 
 struct damon_sysfs_contexts {
 	struct kobject kobj;
-	struct damon_sysfs_context **contexts_arr;
+	struct damon_sysfs_context **contexts_arr __counted_by(nr);
 	int nr;
 };
 
@@ -1590,7 +1590,7 @@ static const struct kobj_type damon_sysfs_kdamond_ktype = {
 
 struct damon_sysfs_kdamonds {
 	struct kobject kobj;
-	struct damon_sysfs_kdamond **kdamonds_arr;
+	struct damon_sysfs_kdamond **kdamonds_arr __counted_by(nr);
 	int nr;
 };
 
