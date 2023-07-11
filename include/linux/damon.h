@@ -238,6 +238,7 @@ struct damos_stat {
  * enum damos_filter_type - Type of memory for &struct damos_filter
  * @DAMOS_FILTER_TYPE_ANON:	Anonymous pages.
  * @DAMOS_FILTER_TYPE_MEMCG:	Specific memcg's pages.
+ * @DAMOS_FILTER_TYPE_ADDR:	Address range.
  * @NR_DAMOS_FILTER_TYPES:	Number of filter types.
  *
  * The support of each filter type is up to running &struct damon_operations.
@@ -248,6 +249,7 @@ struct damos_stat {
 enum damos_filter_type {
 	DAMOS_FILTER_TYPE_ANON,
 	DAMOS_FILTER_TYPE_MEMCG,
+	DAMOS_FILTER_TYPE_ADDR,
 	NR_DAMOS_FILTER_TYPES,
 };
 
@@ -268,6 +270,7 @@ struct damos_filter {
 	bool matching;
 	union {
 		unsigned short memcg_id;
+		struct damon_addr_range addr_range;
 	};
 	struct list_head list;
 };
