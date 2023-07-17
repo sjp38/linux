@@ -534,8 +534,9 @@ struct damon_ctx {
 	struct damon_attrs attrs;
 
 /* private: internal use only */
-	struct timespec64 last_aggregation;
-	struct timespec64 last_ops_update;
+	unsigned long nr_sample_sleeps;
+	unsigned long next_aggregation;
+	unsigned long next_ops_update;
 
 /* public: */
 	struct task_struct *kdamond;

@@ -505,8 +505,11 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->attrs.aggr_interval = 100 * 1000;
 	ctx->attrs.ops_update_interval = 60 * 1000 * 1000;
 
-	ktime_get_coarse_ts64(&ctx->last_aggregation);
-	ctx->last_ops_update = ctx->last_aggregation;
+	ctx->nr_sample_sleeps = 0;
+	ctx->next_aggregation = ctx->attrs.aggr_interval /
+		ctx->attrs.sample_interval;
+	ctx->next_ops_update = ctx->attrs.ops_update_interval /
+		ctx->attrs.sample_interval;
 
 	mutex_init(&ctx->kdamond_lock);
 
@@ -626,12 +629,26 @@ static void damon_update_monitoring_results(struct damon_ctx *ctx,
  */
 int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 {
+	unsigned long remaining_interval_us;
+
 	if (attrs->min_nr_regions < 3)
 		return -EINVAL;
 	if (attrs->min_nr_regions > attrs->max_nr_regions)
 		return -EINVAL;
 	if (attrs->sample_interval > attrs->aggr_interval)
 		return -EINVAL;
+
+	if (attrs->sample_interval) {
+		remaining_interval_us = ctx->attrs.sample_interval *
+			(ctx->next_aggregation - ctx->nr_sample_sleeps);
+		ctx->next_aggregation = ctx->nr_sample_sleeps +
+			remaining_interval_us / attrs->sample_interval;
+
+		remaining_interval_us = ctx->attrs.sample_interval *
+			(ctx->next_ops_update - ctx->nr_sample_sleeps);
+		ctx->next_ops_update = ctx->nr_sample_sleeps +
+			remaining_interval_us / attrs->sample_interval;
+	}
 
 	damon_update_monitoring_results(ctx, attrs);
 	ctx->attrs = *attrs;
@@ -804,38 +821,6 @@ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs)
 			break;
 	}
 	return err;
-}
-
-/*
- * damon_check_reset_time_interval() - Check if a time interval is elapsed.
- * @baseline:	the time to check whether the interval has elapsed since
- * @interval:	the time interval (microseconds)
- *
- * See whether the given time interval has passed since the given baseline
- * time.  If so, it also updates the baseline to current time for next check.
- *
- * Return:	true if the time interval has passed, or false otherwise.
- */
-static bool damon_check_reset_time_interval(struct timespec64 *baseline,
-		unsigned long interval)
-{
-	struct timespec64 now;
-
-	ktime_get_coarse_ts64(&now);
-	if ((timespec64_to_ns(&now) - timespec64_to_ns(baseline)) <
-			interval * 1000)
-		return false;
-	*baseline = now;
-	return true;
-}
-
-/*
- * Check whether it is time to flush the aggregated information
- */
-static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)
-{
-	return damon_check_reset_time_interval(&ctx->last_aggregation,
-			ctx->attrs.aggr_interval);
 }
 
 /*
@@ -1345,18 +1330,6 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 }
 
 /*
- * Check whether it is time to check and apply the operations-related data
- * structures.
- *
- * Returns true if it is.
- */
-static bool kdamond_need_update_operations(struct damon_ctx *ctx)
-{
-	return damon_check_reset_time_interval(&ctx->last_ops_update,
-			ctx->attrs.ops_update_interval);
-}
-
-/*
  * Check whether current monitoring should be stopped
  *
  * The monitoring is stopped when either the user requested to stop, or all
@@ -1498,11 +1471,14 @@ static int kdamond_fn(void *data)
 			break;
 
 		kdamond_usleep(ctx->attrs.sample_interval);
+		ctx->nr_sample_sleeps++;
 
 		if (ctx->ops.check_accesses)
 			max_nr_accesses = ctx->ops.check_accesses(ctx);
 
-		if (kdamond_aggregate_interval_passed(ctx)) {
+		if (ctx->nr_sample_sleeps == ctx->next_aggregation) {
+			ctx->next_aggregation += ctx->attrs.aggr_interval /
+				ctx->attrs.sample_interval;
 			kdamond_merge_regions(ctx,
 					max_nr_accesses / 10,
 					sz_limit);
@@ -1517,7 +1493,9 @@ static int kdamond_fn(void *data)
 				ctx->ops.reset_aggregated(ctx);
 		}
 
-		if (kdamond_need_update_operations(ctx)) {
+		if (ctx->nr_sample_sleeps == ctx->next_ops_update) {
+			ctx->next_ops_update += ctx->attrs.ops_update_interval
+				/ ctx->attrs.sample_interval;
 			if (ctx->ops.update)
 				ctx->ops.update(ctx);
 			sz_limit = damon_region_sz_limit(ctx);
