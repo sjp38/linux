@@ -947,6 +947,7 @@ static bool __damos_filter_out(struct damon_ctx *ctx, struct damon_target *t,
 	bool matched = false;
 	struct damon_target *ti;
 	int target_idx = 0;
+	unsigned long start, end;
 
 	switch (filter->type) {
 	case DAMOS_FILTER_TYPE_TARGET:
@@ -958,31 +959,27 @@ static bool __damos_filter_out(struct damon_ctx *ctx, struct damon_target *t,
 		matched = target_idx == filter->target_idx;
 		break;
 	case DAMOS_FILTER_TYPE_ADDR:
+		start = ALIGN_DOWN(filter->addr_range.start, DAMON_MIN_REGION);
+		end = ALIGN_DOWN(filter->addr_range.end, DAMON_MIN_REGION);
+
 		/* inside the range */
-		if (filter->addr_range.start <= r->ar.start &&
-			r->ar.end <= filter->addr_range.end) {
+		if (start <= r->ar.start && r->ar.end <= end) {
 			matched = true;
 			break;
 		}
 		/* outside of the range */
-		if (r->ar.end <= filter->addr_range.start ||
-				filter->addr_range.end <= r->ar.start) {
+		if (r->ar.end <= start || end <= r->ar.start) {
 			matched = false;
 			break;
 		}
 		/* start before the range and overlap */
-		if (r->ar.start < filter->addr_range.start) {
-			damon_split_region_at(t, r,
-					ALIGN_DOWN(filter->addr_range.start -
-						r->ar.start,
-						DAMON_MIN_REGION));
+		if (r->ar.start < start) {
+			damon_split_region_at(t, r, start - r->ar.start);
 			matched = false;
 			break;
 		}
 		/* start inside the range */
-		damon_split_region_at(t, r,
-				ALIGN_DOWN(filter->addr_range.end -
-					r->ar.start, DAMON_MIN_REGION));
+		damon_split_region_at(t, r, end - r->ar.start);
 		matched = true;
 		break;
 	default:
