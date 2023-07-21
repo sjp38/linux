@@ -241,10 +241,16 @@ struct damos_stat {
  * @DAMOS_FILTER_TYPE_ADDR:	Address range.
  * @NR_DAMOS_FILTER_TYPES:	Number of filter types.
  *
- * The support of each filter type is up to running &struct damon_operations.
- * &enum DAMON_OPS_PADDR is supporting all filter types, while
- * &enum DAMON_OPS_VADDR and &enum DAMON_OPS_FVADDR are not supporting any
- * filter types.
+ * The anon pages type and memcg type filters are handled by underlying
+ * &struct damon_operations as a part of scheme action trying, and therefore
+ * accounted as 'tried'.  In contrast, other types are handled by core layer
+ * before trying of the action and therefore not accounted as 'tried'.
+ *
+ * The support of the filters that handled by &struct damon_operations depend
+ * on the running &struct damon_operations.
+ * &enum DAMON_OPS_PADDR supports both anon pages type and memcg type filters,
+ * while &enum DAMON_OPS_VADDR and &enum DAMON_OPS_FVADDR don't support any of
+ * the two types.
  */
 enum damos_filter_type {
 	DAMOS_FILTER_TYPE_ANON,
@@ -258,12 +264,13 @@ enum damos_filter_type {
  * @type:	Type of the page.
  * @matching:	If the matching page should filtered out or in.
  * @memcg_id:	Memcg id of the question if @type is DAMOS_FILTER_MEMCG.
+ * @addr_range:	Address range if @type is DAMOS_FILTER_TYPE_ADDR.
  * @list:	List head for siblings.
  *
  * Before applying the &damos->action to a memory region, DAMOS checks if each
  * page of the region matches to this and avoid applying the action if so.
- * Note that the check support is up to &struct damon_operations
- * implementation.
+ * Support of each filter type depends on the running &struct damon_operations
+ * and the type.  Refer to &enum damos_filter_type for more detai.
  */
 struct damos_filter {
 	enum damos_filter_type type;
