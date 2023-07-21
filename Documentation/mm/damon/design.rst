@@ -380,12 +380,21 @@ number of filters for each scheme.  Each filter specifies the type of target
 memory, and whether it should exclude the memory of the type (filter-out), or
 all except the memory of the type (filter-in).
 
-As of this writing, anonymous page type and memory cgroup type are supported by
-the feature.  Some filter target types can require additional arguments.  For
-example, the memory cgroup filter type asks users to specify the file path of
-the memory cgroup for the filter.  Hence, users can apply specific schemes to
-only anonymous pages, non-anonymous pages, pages of specific cgroups, all pages
-excluding those of specific cgroups, and any combination of those.
+Currently, anonymous page type, memory cgroup type, and address range type
+filters are supported by the feature.  Some filter target types can require
+additional arguments.  For example, the memory cgroup filter type asks users to
+specify the file path of the memory cgroup for the filter, while the address
+range type asks the start and end addresses of the range.  Hence, users can
+apply specific schemes to only anonymous pages, non-anonymous pages, pages of
+specific cgroups, all pages excluding those of specific cgroups, pages in
+specific address range, and any combination of those.
+
+For more efficient handling, some filter types are handled by core layer while
+others are handled by operations set.  The memory regions that filtered by the
+filters that handled by the core layer are not accounted as the scheme has
+tried at all, while those filtered by filters that handled by the operations
+set are accounted as tried.  The account difference makes difference to the
+statistics and internal callback handlings.
 
 
 Application Programming Interface
