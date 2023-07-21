@@ -941,6 +941,59 @@ static void damos_update_stat(struct damos *s,
 	s->stat.sz_applied += sz_applied;
 }
 
+static bool __damos_filter_out(struct damon_target *t, struct damon_region *r,
+		struct damos_filter *filter)
+{
+	bool matched = false;
+
+	switch (filter->type) {
+	case DAMOS_FILTER_TYPE_ADDR:
+		/* inside the range */
+		if (filter->addr_range.start <= r->ar.start &&
+			r->ar.end <= filter->addr_range.end) {
+			matched = true;
+			break;
+		}
+		/* outside of the range */
+		if (r->ar.end <= filter->addr_range.start ||
+				filter->addr_range.end <= r->ar.start) {
+			matched = false;
+			break;
+		}
+		/* start before the range and overlap */
+		if (r->ar.start < filter->addr_range.start) {
+			damon_split_region_at(t, r,
+					ALIGN_DOWN(filter->addr_range.start -
+						r->ar.start,
+						DAMON_MIN_REGION));
+			matched = false;
+			break;
+		}
+		/* start inside the range */
+		damon_split_region_at(t, r,
+				ALIGN_DOWN(filter->addr_range.end -
+					r->ar.start, DAMON_MIN_REGION));
+		matched = true;
+		break;
+	default:
+		break;
+	}
+
+	return matched == filter->matching;
+}
+
+static bool damos_filter_out(struct damon_target *t, struct damon_region *r,
+		struct damos *s)
+{
+	struct damos_filter *filter;
+
+	damos_for_each_filter(filter, s) {
+		if (__damos_filter_out(t, r, filter))
+			return true;
+	}
+	return false;
+}
+
 static void damos_apply_scheme(struct damon_ctx *c, struct damon_target *t,
 		struct damon_region *r, struct damos *s)
 {
@@ -967,6 +1020,8 @@ static void damos_apply_scheme(struct damon_ctx *c, struct damon_target *t,
 			}
 			damon_split_region_at(t, r, sz);
 		}
+		if (damos_filter_out(t, r, s))
+			return;
 		ktime_get_coarse_ts64(&begin);
 		if (c->callback.before_damos_apply)
 			err = c->callback.before_damos_apply(c, t, r, s);
