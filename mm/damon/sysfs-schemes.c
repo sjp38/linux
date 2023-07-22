@@ -311,7 +311,7 @@ static const char * const damon_sysfs_scheme_filter_type_strs[] = {
 	"anon",
 	"memcg",
 	"addr",
-	"damon_target",
+	"target",
 };
 
 static ssize_t type_show(struct kobject *kobj,
