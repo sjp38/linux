@@ -1877,11 +1877,11 @@ static int zs_page_migrate(struct page *newpage, struct page *page,
 	kunmap_atomic(s_addr);
 
 	replace_sub_page(class, zspage, newpage, page);
+	dec_zspage_isolation(zspage);
 	/*
 	 * Since we complete the data copy and set up new zspage structure,
 	 * it's okay to release the pool's lock.
 	 */
-	dec_zspage_isolation(zspage);
 	spin_unlock(&pool->lock);
 	migrate_write_unlock(zspage);
 
