@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "DAMON Samples"
+
+config SAMPLE_DAMON_WSSE
+	tristate "DAMON sameple for working set size estimation"
+	depends on DAMON && DAMON_VADDR
+	help
+	  This builds DAMON sample module for working set size estimation.
+
+	  The module will be called damon_sample_wsse.
+
+	  If unsure, say N.
+
+config SAMPLE_DAMON_PRCL
+	tristate "DAMON sameple for access-aware proactive reclamation"
+	depends on DAMON && DAMON_VADDR
+	help
+	  This builds DAMON sample module for access-aware proactive
+	  reclamation.
+
+	  The module will be called damon_sample_prcl.
+
+	  If unsure, say N.
+
+endmenu
