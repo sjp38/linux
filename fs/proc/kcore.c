@@ -568,8 +568,8 @@ static ssize_t read_kcore_iter(struct kiocb *iocb, struct iov_iter *iter)
 					goto out;
 				}
 			/*
-			 * We use _copy_to_iter() to bypass usermode hardening
-			 * which would otherwise prevent this operation.
+			 * We know the bounce buffer is safe to copy from, so
+			 * use _copy_to_iter() directly.
 			 */
 			} else if (_copy_to_iter(buf, tsz, iter) != tsz) {
 				ret = -EFAULT;
