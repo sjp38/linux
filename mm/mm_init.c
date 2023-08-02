@@ -376,10 +376,13 @@ static void __init find_zone_movable_pfns_for_nodes(void)
 	 */
 	if (mirrored_kernelcore) {
 		bool mem_below_4gb_not_mirrored = false;
+		bool no_mirror_mem = true;
 
 		for_each_mem_region(r) {
-			if (memblock_is_mirror(r))
+			if (memblock_is_mirror(r)) {
+				no_mirror_mem = false;
 				continue;
+			}
 
 			nid = memblock_get_region_node(r);
 
@@ -397,6 +400,12 @@ static void __init find_zone_movable_pfns_for_nodes(void)
 
 		if (mem_below_4gb_not_mirrored)
 			pr_warn("This configuration results in unmirrored kernel memory.\n");
+
+		if (no_mirror_mem) {
+			pr_warn("There is no mirrored memory. Ignore kernelcore=mirror.\n");
+			mirrored_kernelcore = false;
+			memset(zone_movable_pfn, 0x00, sizeof(zone_movable_pfn));
+		}
 
 		goto out2;
 	}
