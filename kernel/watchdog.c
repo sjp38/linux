@@ -93,6 +93,8 @@ static DEFINE_PER_CPU(bool, watchdog_hardlockup_warned);
 static DEFINE_PER_CPU(bool, watchdog_hardlockup_touched);
 static unsigned long watchdog_hardlockup_all_cpu_dumped;
 
+static struct cpumask *hardlockup_backtrace_mask;
+
 notrace void arch_touch_nmi_watchdog(void)
 {
 	/*
@@ -105,6 +107,29 @@ notrace void arch_touch_nmi_watchdog(void)
 	raw_cpu_write(watchdog_hardlockup_touched, true);
 }
 EXPORT_SYMBOL(arch_touch_nmi_watchdog);
+
+static int hardlockup_all_cpu_backtrace_proc_handler(struct ctl_table *table, int write,
+		  void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	/*
+	 * Only allocate memory for the backtrace mask if userspace actually
+	 * wants to trace all CPUs since this can take up 1K of space on a
+	 * system with CONFIG_NR_CPUS=8192.
+	 */
+	if (sysctl_hardlockup_all_cpu_backtrace && !hardlockup_backtrace_mask) {
+		hardlockup_backtrace_mask =
+			   kzalloc(sizeof(*hardlockup_backtrace_mask), GFP_KERNEL);
+	} else if (!sysctl_hardlockup_all_cpu_backtrace && hardlockup_backtrace_mask) {
+		kfree(hardlockup_backtrace_mask);
+		hardlockup_backtrace_mask = NULL;
+	}
+
+	return ret;
+}
 
 void watchdog_hardlockup_touch_cpu(unsigned int cpu)
 {
@@ -151,9 +176,6 @@ void watchdog_hardlockup_check(unsigned int cpu, struct pt_regs *regs)
 	 */
 	if (is_hardlockup(cpu)) {
 		unsigned int this_cpu = smp_processor_id();
-		struct cpumask backtrace_mask;
-
-		cpumask_copy(&backtrace_mask, cpu_online_mask);
 
 		/* Only print hardlockups once. */
 		if (per_cpu(watchdog_hardlockup_warned, cpu))
@@ -167,19 +189,20 @@ void watchdog_hardlockup_check(unsigned int cpu, struct pt_regs *regs)
 				show_regs(regs);
 			else
 				dump_stack();
-			cpumask_clear_cpu(cpu, &backtrace_mask);
 		} else {
-			if (trigger_single_cpu_backtrace(cpu))
-				cpumask_clear_cpu(cpu, &backtrace_mask);
+			trigger_single_cpu_backtrace(cpu);
 		}
 
 		/*
 		 * Perform multi-CPU dump only once to avoid multiple
 		 * hardlockups generating interleaving traces
 		 */
-		if (sysctl_hardlockup_all_cpu_backtrace &&
-		    !test_and_set_bit(0, &watchdog_hardlockup_all_cpu_dumped))
-			trigger_cpumask_backtrace(&backtrace_mask);
+		if (hardlockup_backtrace_mask &&
+		    !test_and_set_bit(0, &watchdog_hardlockup_all_cpu_dumped)) {
+			cpumask_copy(hardlockup_backtrace_mask, cpu_online_mask);
+			cpumask_clear_cpu(cpu, hardlockup_backtrace_mask);
+			trigger_cpumask_backtrace(hardlockup_backtrace_mask);
+		}
 
 		if (hardlockup_panic)
 			nmi_panic(regs, "Hard LOCKUP");
@@ -192,6 +215,7 @@ void watchdog_hardlockup_check(unsigned int cpu, struct pt_regs *regs)
 
 #else /* CONFIG_HARDLOCKUP_DETECTOR_COUNTS_HRTIMER */
 
+#define hardlockup_all_cpu_backtrace_proc_handler proc_dointvec_minmax
 static inline void watchdog_hardlockup_kick(void) { }
 
 #endif /* !CONFIG_HARDLOCKUP_DETECTOR_COUNTS_HRTIMER */
@@ -916,7 +940,7 @@ static struct ctl_table watchdog_sysctls[] = {
 		.data		= &sysctl_hardlockup_all_cpu_backtrace,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
+		.proc_handler	= hardlockup_all_cpu_backtrace_proc_handler,
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= SYSCTL_ONE,
 	},
