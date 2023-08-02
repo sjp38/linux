@@ -402,7 +402,7 @@ static void __init find_zone_movable_pfns_for_nodes(void)
 			pr_warn("This configuration results in unmirrored kernel memory.\n");
 
 		if (no_mirror_mem) {
-			pr_warn("There is no mirrored memory. Ignore kernelcore=mirror.\n");
+			pr_warn("There is no mirrored memory. Ignoring kernelcore=mirror.\n");
 			mirrored_kernelcore = false;
 			memset(zone_movable_pfn, 0x00, sizeof(zone_movable_pfn));
 		}
