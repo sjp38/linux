@@ -25,6 +25,7 @@ TRACE_EVENT(damos_before_apply,
 		__field(unsigned long, start)
 		__field(unsigned long, end)
 		__field(unsigned int, nr_accesses)
+		__field(unsigned int, moving_accesses_bp)
 		__field(unsigned int, age)
 	),
 
@@ -36,14 +37,16 @@ TRACE_EVENT(damos_before_apply,
 		__entry->start = r->ar.start;
 		__entry->end = r->ar.end;
 		__entry->nr_accesses = r->nr_accesses;
+		__entry->moving_accesses_bp = r->moving_accesses_bp;
 		__entry->age = r->age;
 	),
 
-	TP_printk("ctx_idx=%u scheme_idx=%u target_idx=%lu nr_regions=%u %lu-%lu: %u %u",
+	TP_printk("ctx_idx=%u scheme_idx=%u target_idx=%lu nr_regions=%u %lu-%lu: %u %u %u",
 			__entry->context_idx, __entry->scheme_idx,
 			__entry->target_idx, __entry->nr_regions,
 			__entry->start, __entry->end,
-			__entry->nr_accesses, __entry->age)
+			__entry->nr_accesses, __entry->moving_accesses_bp,
+			__entry->age)
 );
 
 TRACE_EVENT(damon_aggregated,
