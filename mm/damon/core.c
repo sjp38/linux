@@ -323,7 +323,9 @@ static struct damos_quota *damos_quota_init_priv(struct damos_quota *quota)
 }
 
 struct damos *damon_new_scheme(struct damos_access_pattern *pattern,
-			enum damos_action action, struct damos_quota *quota,
+			enum damos_action action,
+			unsigned long apply_interval_us,
+			struct damos_quota *quota,
 			struct damos_watermarks *wmarks)
 {
 	struct damos *scheme;
@@ -333,6 +335,9 @@ struct damos *damon_new_scheme(struct damos_access_pattern *pattern,
 		return NULL;
 	scheme->pattern = *pattern;
 	scheme->action = action;
+	scheme->apply_interval_us = apply_interval_us;
+	/* next_apply_sis will be set in damon_set_attrs() or kdamond_fn() */
+	scheme->next_apply_sis = 0;
 	INIT_LIST_HEAD(&scheme->filters);
 	scheme->stat = (struct damos_stat){};
 	INIT_LIST_HEAD(&scheme->list);
@@ -586,6 +591,8 @@ static void damon_update_monitoring_results(struct damon_ctx *ctx,
 int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 {
 	unsigned long sample_interval;
+	unsigned long remaining_interval_us;
+	struct damos *s;
 
 	if (attrs->min_nr_regions < 3)
 		return -EINVAL;
@@ -599,6 +606,16 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 		attrs->aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->passed_sample_intervals +
 		attrs->ops_update_interval / sample_interval;
+
+	/* adjust scheme->apply_interval_us */
+	damon_for_each_scheme(s, ctx) {
+		if (!s->next_apply_sis)
+			continue;
+		remaining_interval_us = ctx->attrs.sample_interval *
+			(s->next_apply_sis - ctx->passed_sample_intervals);
+		s->next_apply_sis = ctx->passed_sample_intervals +
+			remaining_interval_us / sample_interval;
+	}
 
 	damon_update_monitoring_results(ctx, attrs);
 	ctx->attrs = *attrs;
@@ -1127,13 +1144,28 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 	struct damon_target *t;
 	struct damon_region *r, *next_r;
 	struct damos *s;
+	unsigned long sample_interval = c->attrs.sample_interval ?
+		c->attrs.sample_interval : 1;
+	bool has_schemes_to_apply = false;
 
 	damon_for_each_scheme(s, c) {
+		if (c->passed_sample_intervals != s->next_apply_sis)
+			continue;
+
+		s->next_apply_sis +=
+			(s->apply_interval_us ? s->apply_interval_us :
+			 c->attrs.aggr_interval) / sample_interval;
+
 		if (!s->wmarks.activated)
 			continue;
 
+		has_schemes_to_apply = true;
+
 		damos_adjust_quota(c, s);
 	}
+
+	if (!has_schemes_to_apply)
+		return;
 
 	damon_for_each_target(t, c) {
 		damon_for_each_region_safe(r, next_r, t)
@@ -1419,11 +1451,18 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 {
 	unsigned long sample_interval = ctx->attrs.sample_interval ?
 		ctx->attrs.sample_interval : 1;
+	struct damos *scheme;
 
 	ctx->passed_sample_intervals = 0;
 	ctx->next_aggregation_sis = ctx->attrs.aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->attrs.ops_update_interval /
 		sample_interval;
+
+	damon_for_each_scheme(scheme, ctx) {
+		scheme->next_apply_sis =
+			(scheme->apply_interval_us ? scheme->apply_interval_us
+			 : ctx->attrs.aggr_interval) / sample_interval;
+	}
 }
 
 /*
@@ -1470,16 +1509,30 @@ static int kdamond_fn(void *data)
 			ctx->attrs.sample_interval : 1;
 		if (ctx->passed_sample_intervals ==
 				ctx->next_aggregation_sis) {
-			ctx->next_aggregation_sis +=
-				ctx->attrs.aggr_interval / sample_interval;
 			kdamond_merge_regions(ctx,
 					max_nr_accesses / 10,
 					sz_limit);
 			if (ctx->callback.after_aggregation &&
-					ctx->callback.after_aggregation(ctx))
+					ctx->callback.after_aggregation(ctx)) {
+				ctx->next_aggregation_sis +=
+					ctx->attrs.aggr_interval /
+					sample_interval;
 				break;
-			if (!list_empty(&ctx->schemes))
-				kdamond_apply_schemes(ctx);
+			}
+		}
+
+		/*
+		 * do kdamond_apply_schemes() after kdamond_merge_regions() if
+		 * possible, to reduce overhead
+		 */
+		if (!list_empty(&ctx->schemes))
+			kdamond_apply_schemes(ctx);
+
+		if (ctx->passed_sample_intervals ==
+				ctx->next_aggregation_sis) {
+			ctx->next_aggregation_sis +=
+				ctx->attrs.aggr_interval / sample_interval;
+
 			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
 			if (ctx->ops.reset_aggregated)
