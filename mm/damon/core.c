@@ -1229,6 +1229,12 @@ static void damon_merge_regions_of(struct damon_target *t, unsigned int thres,
 		else
 			r->age++;
 
+		if (r->nr_accesses != r->nr_accesses_bp / 10000) {
+			pr_err("nr_accesses (%u) != nr_accesses_bp (%u)\n",
+					r->nr_accesses, r->nr_accesses_bp);
+			BUG();
+		}
+
 		if (prev && prev->ar.end == r->ar.start &&
 		    abs(prev->nr_accesses - r->nr_accesses) <= thres &&
 		    damon_sz_region(prev) + damon_sz_region(r) <= sz_limit)
