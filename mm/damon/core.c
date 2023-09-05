@@ -336,7 +336,11 @@ struct damos *damon_new_scheme(struct damos_access_pattern *pattern,
 	scheme->pattern = *pattern;
 	scheme->action = action;
 	scheme->apply_interval_us = apply_interval_us;
-	/* next_apply_sis will be set in damon_set_attrs() or kdamond_fn() */
+	/*
+	 * next_apply_sis will be set when kdamond starts.  While kdamond is
+	 * running, it will also updated when it is added to the DAMON context,
+	 * or damon_attrs are updated.
+	 */
 	scheme->next_apply_sis = 0;
 	INIT_LIST_HEAD(&scheme->filters);
 	scheme->stat = (struct damos_stat){};
@@ -350,9 +354,21 @@ struct damos *damon_new_scheme(struct damos_access_pattern *pattern,
 	return scheme;
 }
 
+static void damos_set_next_apply_sis(struct damos *s, struct damon_ctx *ctx)
+{
+	unsigned long sample_interval = ctx->attrs.sample_interval ?
+		ctx->attrs.sample_interval : 1;
+	unsigned long apply_interval = s->apply_interval_us ?
+		s->apply_interval_us : ctx->attrs.aggr_interval;
+
+	s->next_apply_sis = ctx->passed_sample_intervals +
+		apply_interval / sample_interval;
+}
+
 void damon_add_scheme(struct damon_ctx *ctx, struct damos *s)
 {
 	list_add_tail(&s->list, &ctx->schemes);
+	damos_set_next_apply_sis(s, ctx);
 }
 
 static void damon_del_scheme(struct damos *s)
@@ -591,7 +607,6 @@ static void damon_update_monitoring_results(struct damon_ctx *ctx,
 int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 {
 	unsigned long sample_interval;
-	unsigned long remaining_interval_us;
 	struct damos *s;
 
 	if (attrs->min_nr_regions < 3)
@@ -607,18 +622,12 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 	ctx->next_ops_update_sis = ctx->passed_sample_intervals +
 		attrs->ops_update_interval / sample_interval;
 
-	/* adjust scheme->apply_interval_us */
-	damon_for_each_scheme(s, ctx) {
-		if (!s->next_apply_sis)
-			continue;
-		remaining_interval_us = ctx->attrs.sample_interval *
-			(s->next_apply_sis - ctx->passed_sample_intervals);
-		s->next_apply_sis = ctx->passed_sample_intervals +
-			remaining_interval_us / sample_interval;
-	}
-
 	damon_update_monitoring_results(ctx, attrs);
 	ctx->attrs = *attrs;
+
+	damon_for_each_scheme(s, ctx)
+		damos_set_next_apply_sis(s, ctx);
+
 	return 0;
 }
 
@@ -1451,6 +1460,7 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 {
 	unsigned long sample_interval = ctx->attrs.sample_interval ?
 		ctx->attrs.sample_interval : 1;
+	unsigned long apply_interval;
 	struct damos *scheme;
 
 	ctx->passed_sample_intervals = 0;
@@ -1459,9 +1469,9 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 		sample_interval;
 
 	damon_for_each_scheme(scheme, ctx) {
-		scheme->next_apply_sis =
-			(scheme->apply_interval_us ? scheme->apply_interval_us
-			 : ctx->attrs.aggr_interval) / sample_interval;
+		apply_interval = scheme->apply_interval_us ?
+			scheme->apply_interval_us : ctx->attrs.aggr_interval;
+		scheme->next_apply_sis = apply_interval / sample_interval;
 	}
 }
 
