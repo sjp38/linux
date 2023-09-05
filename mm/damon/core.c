@@ -584,7 +584,6 @@ static void damon_update_monitoring_results(struct damon_ctx *ctx,
 int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 {
 	unsigned long sample_interval;
-	unsigned long remaining_interval_us;
 
 	if (attrs->min_nr_regions < 3)
 		return -EINVAL;
@@ -594,18 +593,10 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 		return -EINVAL;
 
 	sample_interval = attrs->sample_interval ? attrs->sample_interval : 1;
-
-	/* adjust next_aggregation_sis */
-	remaining_interval_us = ctx->attrs.sample_interval *
-		(ctx->next_aggregation_sis - ctx->passed_sample_intervals);
 	ctx->next_aggregation_sis = ctx->passed_sample_intervals +
-		remaining_interval_us / sample_interval;
-
-	/* adjust next_ops_update_sis */
-	remaining_interval_us = ctx->attrs.sample_interval *
-		(ctx->next_ops_update_sis - ctx->passed_sample_intervals);
+		attrs->aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->passed_sample_intervals +
-		remaining_interval_us / sample_interval;
+		attrs->ops_update_interval / sample_interval;
 
 	damon_update_monitoring_results(ctx, attrs);
 	ctx->attrs = *attrs;
