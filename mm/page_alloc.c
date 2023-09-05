@@ -2428,7 +2428,13 @@ void free_unref_page(struct page *page, unsigned int order)
 		free_unref_page_commit(zone, pcp, page, migratetype, order);
 		pcp_spin_unlock(pcp);
 	} else {
-		free_one_page(zone, page, pfn, order, migratetype, FPI_NONE);
+		/*
+		 * The page migratetype may have been clobbered for types
+		 * (type >= MIGRATE_PCPTYPES && !is_migrate_isolate) so
+		 * must be rechecked.
+		 */
+		free_one_page(zone, page, pfn, order,
+			      get_pcppage_migratetype(page), FPI_NONE);
 	}
 	pcp_trylock_finish(UP_flags);
 }
