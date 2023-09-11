@@ -9,13 +9,15 @@
 #include <linux/types.h>
 #include <linux/tracepoint.h>
 
-TRACE_EVENT(damos_before_apply,
+TRACE_EVENT_CONDITION(damos_before_apply,
 
 	TP_PROTO(unsigned int context_idx, unsigned int scheme_idx,
 		unsigned int target_idx, struct damon_region *r,
-		unsigned int nr_regions),
+		unsigned int nr_regions, bool do_trace),
 
-	TP_ARGS(context_idx, target_idx, scheme_idx, r, nr_regions),
+	TP_ARGS(context_idx, target_idx, scheme_idx, r, nr_regions, do_trace),
+
+	TP_CONDITION(do_trace),
 
 	TP_STRUCT__entry(
 		__field(unsigned int, context_idx)
