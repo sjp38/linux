@@ -997,16 +997,21 @@ static void damos_apply_scheme(struct damon_ctx *c, struct damon_target *t,
 	unsigned int sidx = 0;
 	struct damon_target *titer;	/* targets iterator */
 	unsigned int tidx = 0;
+	bool do_trace = false;
 
-	damon_for_each_scheme(siter, c) {
-		if (siter == s)
-			break;
-		sidx++;
-	}
-	damon_for_each_target(titer, c) {
-		if (titer == t)
-			break;
-		tidx++;
+	/* get indices for trace_damos_before_apply() */
+	if (trace_damos_before_apply_enabled()) {
+		damon_for_each_scheme(siter, c) {
+			if (siter == s)
+				break;
+			sidx++;
+		}
+		damon_for_each_target(titer, c) {
+			if (titer == t)
+				break;
+			tidx++;
+		}
+		do_trace = true;
 	}
 
 	if (c->ops.apply_scheme) {
@@ -1033,7 +1038,7 @@ static void damos_apply_scheme(struct damon_ctx *c, struct damon_target *t,
 			err = c->callback.before_damos_apply(c, t, r, s);
 		if (!err) {
 			trace_damos_before_apply(cidx, sidx, tidx, r,
-					damon_nr_regions(t));
+					damon_nr_regions(t), do_trace);
 			sz_applied = c->ops.apply_scheme(c, t, r, s);
 		}
 		ktime_get_coarse_ts64(&end);
