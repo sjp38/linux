@@ -2429,7 +2429,7 @@ void free_unref_page(struct page *page, unsigned int order)
 		 * must be rechecked.
 		 */
 		free_one_page(zone, page, pfn, order,
-			      get_pcppage_migratetype(page), FPI_NONE);
+			      get_pfnblock_migratetype(page, pfn), FPI_NONE);
 	}
 	pcp_trylock_finish(UP_flags);
 }
