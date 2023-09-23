@@ -52,6 +52,13 @@ static int anon_allocate_area(void **alloc_area, bool is_src)
 		*alloc_area = NULL;
 		return -errno;
 	}
+
+	/* Prevent source pages from collapsing into THPs */
+	if (madvise(*alloc_area, nr_pages * page_size, MADV_NOHUGEPAGE)) {
+		*alloc_area = NULL;
+		return -errno;
+	}
+
 	return 0;
 }
 
@@ -484,8 +491,14 @@ void uffd_handle_page_fault(struct uffd_msg *msg, struct uffd_args *args)
 		offset = (char *)(unsigned long)msg->arg.pagefault.address - area_dst;
 		offset &= ~(page_size-1);
 
-		if (copy_page(uffd, offset, args->apply_wp))
-			args->missing_faults++;
+		/* UFFD_REMAP is supported for anon non-shared mappings. */
+		if (uffd_test_ops == &anon_uffd_test_ops && !map_shared) {
+			if (remap_page(uffd, offset))
+				args->missing_faults++;
+		} else {
+			if (copy_page(uffd, offset, args->apply_wp))
+				args->missing_faults++;
+		}
 	}
 }
 
@@ -618,6 +631,30 @@ int __copy_page(int ufd, unsigned long offset, bool retry, bool wp)
 int copy_page(int ufd, unsigned long offset, bool wp)
 {
 	return __copy_page(ufd, offset, false, wp);
+}
+
+int remap_page(int ufd, unsigned long offset)
+{
+	struct uffdio_remap uffdio_remap;
+
+	if (offset >= nr_pages * page_size)
+		err("unexpected offset %lu\n", offset);
+	uffdio_remap.dst = (unsigned long) area_dst + offset;
+	uffdio_remap.src = (unsigned long) area_src + offset;
+	uffdio_remap.len = page_size;
+	uffdio_remap.mode = UFFDIO_REMAP_MODE_ALLOW_SRC_HOLES;
+	uffdio_remap.remap = 0;
+	if (ioctl(ufd, UFFDIO_REMAP, &uffdio_remap)) {
+		/* real retval in uffdio_remap.remap */
+		if (uffdio_remap.remap != -EEXIST)
+			err("UFFDIO_REMAP error: %"PRId64,
+			    (int64_t)uffdio_remap.remap);
+		wake_range(ufd, uffdio_remap.dst, page_size);
+	} else if (uffdio_remap.remap != page_size) {
+		err("UFFDIO_REMAP error: %"PRId64, (int64_t)uffdio_remap.remap);
+	} else
+		return 1;
+	return 0;
 }
 
 int uffd_open_dev(unsigned int flags)
