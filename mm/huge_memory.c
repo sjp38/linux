@@ -1956,6 +1956,136 @@ unlock:
 	return ret;
 }
 
+#ifdef CONFIG_USERFAULTFD
+/*
+ * The PT lock for src_pmd and the mmap_lock for reading are held by
+ * the caller, but it must return after releasing the
+ * page_table_lock. We're guaranteed the src_pmd is a pmd_trans_huge
+ * until the PT lock of the src_pmd is released. Just move the page
+ * from src_pmd to dst_pmd if possible. Return zero if succeeded in
+ * moving the page, -EAGAIN if it needs to be repeated by the caller,
+ * or other errors in case of failure.
+ */
+int remap_pages_huge_pmd(struct mm_struct *dst_mm, struct mm_struct *src_mm,
+			 pmd_t *dst_pmd, pmd_t *src_pmd, pmd_t dst_pmdval,
+			 struct vm_area_struct *dst_vma,
+			 struct vm_area_struct *src_vma,
+			 unsigned long dst_addr, unsigned long src_addr)
+{
+	pmd_t _dst_pmd, src_pmdval;
+	struct page *src_page;
+	struct folio *src_folio;
+	struct anon_vma *src_anon_vma, *dst_anon_vma;
+	spinlock_t *src_ptl, *dst_ptl;
+	pgtable_t src_pgtable, dst_pgtable;
+	struct mmu_notifier_range range;
+	int err = 0;
+
+	src_pmdval = *src_pmd;
+	src_ptl = pmd_lockptr(src_mm, src_pmd);
+
+	BUG_ON(!spin_is_locked(src_ptl));
+	mmap_assert_locked(src_mm);
+	mmap_assert_locked(dst_mm);
+
+	BUG_ON(!pmd_trans_huge(src_pmdval));
+	BUG_ON(!pmd_none(dst_pmdval));
+	BUG_ON(src_addr & ~HPAGE_PMD_MASK);
+	BUG_ON(dst_addr & ~HPAGE_PMD_MASK);
+
+	src_page = pmd_page(src_pmdval);
+	if (unlikely(!PageAnonExclusive(src_page))) {
+		spin_unlock(src_ptl);
+		return -EBUSY;
+	}
+
+	src_folio = page_folio(src_page);
+	folio_get(src_folio);
+	spin_unlock(src_ptl);
+
+	/* preallocate dst_pgtable if needed */
+	if (dst_mm != src_mm) {
+		dst_pgtable = pte_alloc_one(dst_mm);
+		if (unlikely(!dst_pgtable)) {
+			err = -ENOMEM;
+			goto put_folio;
+		}
+	} else {
+		dst_pgtable = NULL;
+	}
+
+	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, src_mm, src_addr,
+				src_addr + HPAGE_PMD_SIZE);
+	mmu_notifier_invalidate_range_start(&range);
+
+	/* block all concurrent rmap walks */
+	folio_lock(src_folio);
+
+	/*
+	 * split_huge_page walks the anon_vma chain without the page
+	 * lock. Serialize against it with the anon_vma lock, the page
+	 * lock is not enough.
+	 */
+	src_anon_vma = folio_get_anon_vma(src_folio);
+	if (!src_anon_vma) {
+		err = -EAGAIN;
+		goto unlock_folio;
+	}
+	anon_vma_lock_write(src_anon_vma);
+
+	dst_ptl = pmd_lockptr(dst_mm, dst_pmd);
+	double_pt_lock(src_ptl, dst_ptl);
+	if (unlikely(!pmd_same(*src_pmd, src_pmdval) ||
+		     !pmd_same(*dst_pmd, dst_pmdval) ||
+		     folio_mapcount(src_folio) != 1)) {
+		double_pt_unlock(src_ptl, dst_ptl);
+		err = -EAGAIN;
+		goto put_anon_vma;
+	}
+
+	BUG_ON(!folio_test_head(src_folio));
+	BUG_ON(!folio_test_anon(src_folio));
+
+	dst_anon_vma = (void *)dst_vma->anon_vma + PAGE_MAPPING_ANON;
+	WRITE_ONCE(src_folio->mapping, (struct address_space *) dst_anon_vma);
+	WRITE_ONCE(src_folio->index, linear_page_index(dst_vma, dst_addr));
+
+	src_pmdval = pmdp_huge_clear_flush(src_vma, src_addr, src_pmd);
+	_dst_pmd = mk_huge_pmd(&src_folio->page, dst_vma->vm_page_prot);
+	_dst_pmd = maybe_pmd_mkwrite(pmd_mkdirty(_dst_pmd), dst_vma);
+	set_pmd_at(dst_mm, dst_addr, dst_pmd, _dst_pmd);
+
+	src_pgtable = pgtable_trans_huge_withdraw(src_mm, src_pmd);
+	if (dst_pgtable) {
+		pgtable_trans_huge_deposit(dst_mm, dst_pmd, dst_pgtable);
+		pte_free(src_mm, src_pgtable);
+		dst_pgtable = NULL;
+
+		mm_inc_nr_ptes(dst_mm);
+		mm_dec_nr_ptes(src_mm);
+		add_mm_counter(dst_mm, MM_ANONPAGES, HPAGE_PMD_NR);
+		add_mm_counter(src_mm, MM_ANONPAGES, -HPAGE_PMD_NR);
+	} else {
+		pgtable_trans_huge_deposit(dst_mm, dst_pmd, src_pgtable);
+	}
+	double_pt_unlock(src_ptl, dst_ptl);
+
+put_anon_vma:
+	anon_vma_unlock_write(src_anon_vma);
+	put_anon_vma(src_anon_vma);
+unlock_folio:
+	/* unblock rmap walks */
+	folio_unlock(src_folio);
+	mmu_notifier_invalidate_range_end(&range);
+	if (dst_pgtable)
+		pte_free(dst_mm, dst_pgtable);
+put_folio:
+	folio_put(src_folio);
+
+	return err;
+}
+#endif /* CONFIG_USERFAULTFD */
+
 /*
  * Returns page table lock pointer if a given pmd maps a thp, NULL otherwise.
  *
