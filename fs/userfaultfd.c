@@ -2027,6 +2027,66 @@ static inline unsigned int uffd_ctx_features(__u64 user_features)
 	return (unsigned int)user_features | UFFD_FEATURE_INITIALIZED;
 }
 
+static int userfaultfd_remap(struct userfaultfd_ctx *ctx,
+			     unsigned long arg)
+{
+	__s64 ret;
+	struct uffdio_remap uffdio_remap;
+	struct uffdio_remap __user *user_uffdio_remap;
+	struct userfaultfd_wake_range range;
+
+	user_uffdio_remap = (struct uffdio_remap __user *) arg;
+
+	ret = -EAGAIN;
+	if (atomic_read(&ctx->mmap_changing))
+		goto out;
+
+	ret = -EFAULT;
+	if (copy_from_user(&uffdio_remap, user_uffdio_remap,
+			   /* don't copy "remap" last field */
+			   sizeof(uffdio_remap)-sizeof(__s64)))
+		goto out;
+
+	ret = validate_range(ctx->mm, uffdio_remap.dst, uffdio_remap.len);
+	if (ret)
+		goto out;
+
+	ret = validate_range(current->mm, uffdio_remap.src, uffdio_remap.len);
+	if (ret)
+		goto out;
+
+	ret = -EINVAL;
+	if (uffdio_remap.mode & ~(UFFDIO_REMAP_MODE_ALLOW_SRC_HOLES|
+				  UFFDIO_REMAP_MODE_DONTWAKE))
+		goto out;
+
+	if (mmget_not_zero(ctx->mm)) {
+		ret = remap_pages(ctx->mm, current->mm,
+				  uffdio_remap.dst, uffdio_remap.src,
+				  uffdio_remap.len, uffdio_remap.mode);
+		mmput(ctx->mm);
+	} else {
+		return -ESRCH;
+	}
+
+	if (unlikely(put_user(ret, &user_uffdio_remap->remap)))
+		return -EFAULT;
+	if (ret < 0)
+		goto out;
+
+	/* len == 0 would wake all */
+	BUG_ON(!ret);
+	range.len = ret;
+	if (!(uffdio_remap.mode & UFFDIO_REMAP_MODE_DONTWAKE)) {
+		range.start = uffdio_remap.dst;
+		wake_userfault(ctx, &range);
+	}
+	ret = range.len == uffdio_remap.len ? 0 : -EAGAIN;
+
+out:
+	return ret;
+}
+
 /*
  * userland asks for a certain API version and we return which bits
  * and ioctl commands are implemented in this kernel for such API
@@ -2112,6 +2172,9 @@ static long userfaultfd_ioctl(struct file *file, unsigned cmd,
 		break;
 	case UFFDIO_ZEROPAGE:
 		ret = userfaultfd_zeropage(ctx, arg);
+		break;
+	case UFFDIO_REMAP:
+		ret = userfaultfd_remap(ctx, arg);
 		break;
 	case UFFDIO_WRITEPROTECT:
 		ret = userfaultfd_writeprotect(ctx, arg);
