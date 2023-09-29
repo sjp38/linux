@@ -1244,7 +1244,7 @@ void page_add_anon_rmap(struct page *page, struct vm_area_struct *vma,
 {
 	struct folio *folio = page_folio(page);
 	atomic_t *mapped = &folio->_nr_pages_mapped;
-	int nr = 0, nr_pmdmapped = 0;
+	int nr = 0, nr_pmdmapped = 0, nr_lgmapped = 0;
 	bool compound = flags & RMAP_COMPOUND;
 	bool first;
 
@@ -1253,6 +1253,7 @@ void page_add_anon_rmap(struct page *page, struct vm_area_struct *vma,
 		first = atomic_inc_and_test(&page->_mapcount);
 		nr = first;
 		if (first && folio_test_large(folio)) {
+			nr_lgmapped = 1;
 			nr = atomic_inc_return_relaxed(mapped);
 			nr = (nr < COMPOUND_MAPPED);
 		}
@@ -1277,6 +1278,8 @@ void page_add_anon_rmap(struct page *page, struct vm_area_struct *vma,
 
 	if (nr_pmdmapped)
 		__lruvec_stat_mod_folio(folio, NR_ANON_THPS, nr_pmdmapped);
+	if (nr_lgmapped)
+		__lruvec_stat_mod_folio(folio, NR_ANON_THPS_PTEMAPPED, nr_lgmapped);
 	if (nr)
 		__lruvec_stat_mod_folio(folio, NR_ANON_MAPPED, nr);
 
@@ -1350,6 +1353,7 @@ void folio_add_new_anon_rmap(struct folio *folio, struct vm_area_struct *vma,
 		}
 
 		atomic_set(&folio->_nr_pages_mapped, nr);
+		__lruvec_stat_mod_folio(folio, NR_ANON_THPS_PTEMAPPED, nr);
 	} else {
 		/* increment count (starts at -1) */
 		atomic_set(&folio->_entire_mapcount, 0);
@@ -1464,7 +1468,7 @@ void page_remove_rmap(struct page *page, struct vm_area_struct *vma,
 {
 	struct folio *folio = page_folio(page);
 	atomic_t *mapped = &folio->_nr_pages_mapped;
-	int nr = 0, nr_pmdmapped = 0;
+	int nr = 0, nr_pmdmapped = 0, nr_lgmapped = 0;
 	bool last;
 	enum node_stat_item idx;
 
@@ -1482,6 +1486,7 @@ void page_remove_rmap(struct page *page, struct vm_area_struct *vma,
 		last = atomic_add_negative(-1, &page->_mapcount);
 		nr = last;
 		if (last && folio_test_large(folio)) {
+			nr_lgmapped = 1;
 			nr = atomic_dec_return_relaxed(mapped);
 			nr = (nr < COMPOUND_MAPPED);
 		}
@@ -1513,6 +1518,8 @@ void page_remove_rmap(struct page *page, struct vm_area_struct *vma,
 			idx = NR_FILE_PMDMAPPED;
 		__lruvec_stat_mod_folio(folio, idx, -nr_pmdmapped);
 	}
+	if (nr_lgmapped && folio_test_anon(folio))
+		__lruvec_stat_mod_folio(folio, NR_ANON_THPS_PTEMAPPED, -nr_lgmapped);
 	if (nr) {
 		idx = folio_test_anon(folio) ? NR_ANON_MAPPED : NR_FILE_MAPPED;
 		__lruvec_stat_mod_folio(folio, idx, -nr);
