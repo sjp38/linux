@@ -1267,16 +1267,6 @@ static int damon_sysfs_upd_schemes_regions_start(
 			total_bytes_only);
 }
 
-static int damon_sysfs_upd_schemes_regions_stop(
-		struct damon_sysfs_kdamond *kdamond)
-{
-	struct damon_ctx *ctx = kdamond->damon_ctx;
-
-	if (!ctx)
-		return -EINVAL;
-	return damon_sysfs_schemes_update_regions_stop(ctx);
-}
-
 static int damon_sysfs_clear_schemes_regions(
 		struct damon_sysfs_kdamond *kdamond)
 {
@@ -1341,6 +1331,7 @@ static int damon_sysfs_cmd_request_callback(struct damon_ctx *c)
 {
 	struct damon_sysfs_kdamond *kdamond;
 	static bool damon_sysfs_schemes_regions_updating;
+	struct damon_sysfs_schemes *sysfs_schemes;
 	bool total_bytes_only = false;
 	int err = 0;
 
@@ -1362,6 +1353,7 @@ static int damon_sysfs_cmd_request_callback(struct damon_ctx *c)
 		total_bytes_only = true;
 		fallthrough;
 	case DAMON_SYSFS_CMD_UPDATE_SCHEMES_TRIED_REGIONS:
+		sysfs_schemes = kdamond->contexts->contexts_arr[0]->schemes;
 		if (!damon_sysfs_schemes_regions_updating) {
 			err = damon_sysfs_upd_schemes_regions_start(kdamond,
 					total_bytes_only);
@@ -1369,8 +1361,9 @@ static int damon_sysfs_cmd_request_callback(struct damon_ctx *c)
 				damon_sysfs_schemes_regions_updating = true;
 				goto keep_lock_out;
 			}
+		} else if (sysfs_schemes->tried_regions_updating) {
+			goto keep_lock_out;
 		} else {
-			err = damon_sysfs_upd_schemes_regions_stop(kdamond);
 			damon_sysfs_schemes_regions_updating = false;
 		}
 		break;

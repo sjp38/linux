@@ -31,6 +31,7 @@ struct damon_sysfs_schemes {
 	struct kobject kobj;
 	struct damon_sysfs_scheme **schemes_arr;
 	int nr;
+	bool tried_regions_updating;
 };
 
 struct damon_sysfs_schemes *damon_sysfs_schemes_alloc(void);
