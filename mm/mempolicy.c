@@ -1291,8 +1291,6 @@ static long do_mbind(unsigned long start, unsigned long len,
 		}
 	}
 
-	mmap_write_unlock(mm);
-
 	if (!err && !list_empty(&pagelist)) {
 		/* Convert MPOL_DEFAULT's NULL to task or default policy */
 		if (!new) {
@@ -1334,7 +1332,11 @@ static long do_mbind(unsigned long start, unsigned long len,
 				mmpol.ilx -= page->index >> order;
 			}
 		}
+	}
 
+	mmap_write_unlock(mm);
+
+	if (!err && !list_empty(&pagelist)) {
 		nr_failed |= migrate_pages(&pagelist,
 				alloc_migration_target_by_mpol, NULL,
 				(unsigned long)&mmpol, MIGRATE_SYNC,
