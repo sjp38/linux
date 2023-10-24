@@ -17,6 +17,8 @@
 
 struct mm_struct;
 
+#define NO_INTERLEAVE_INDEX (-1UL)	/* use task il_prev for interleaving */
+
 #ifdef CONFIG_NUMA
 
 /*
@@ -178,6 +180,11 @@ extern bool apply_policy_zone(struct mempolicy *policy, enum zone_type zone);
 #else
 
 struct mempolicy {};
+
+static inline struct mempolicy *get_task_policy(struct task_struct *p)
+{
+	return NULL;
+}
 
 static inline bool mpol_equal(struct mempolicy *a, struct mempolicy *b)
 {

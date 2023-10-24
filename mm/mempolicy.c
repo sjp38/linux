@@ -114,8 +114,6 @@
 #define MPOL_MF_INVERT       (MPOL_MF_INTERNAL << 1)	/* Invert check for nodemask */
 #define MPOL_MF_WRLOCK       (MPOL_MF_INTERNAL << 2)	/* Write-lock walked vmas */
 
-#define NO_INTERLEAVE_INDEX (-1UL)
-
 static struct kmem_cache *policy_cache;
 static struct kmem_cache *sn_cache;
 
