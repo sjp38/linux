@@ -1086,7 +1086,42 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 	}
 }
 
-/* Shouldn't be called if quota->ms and quota->sz are zero */
+/*
+ * damon_feed_loop_next_input() - get next input to achieve a target score.
+ * @last_input	The last input.
+ * @score	Current score that made with @last_input.
+ *
+ * Calculate next input to achieve the target score, based on the last input
+ * and current score.  Assuming the input and the score are positively
+ * proportional, calculate how much compensation should be added to or
+ * subtracted from the last input as a proportion of the last input.  Avoid
+ * next input always being zero by setting it at least 1.  In short form
+ * (assuming support of float and signed calculations), the algorithm is as
+ * below.
+ *
+ * next_input = max(last_input * ((goal - current) / goal + 1), 1)
+ *
+ * For simple implementation, we assume the target score is always 10,000.  The
+ * caller should adjust @score for this.
+ *
+ * Returns next input that assumed to achieve the target score.
+ */
+static unsigned long damon_feed_loop_next_input(unsigned long last_input,
+		unsigned long score)
+{
+	const unsigned long goal = 10000;
+	unsigned long score_goal_diff = max(goal, score) - min(goal, score);
+	unsigned long score_goal_diff_bp = score_goal_diff * 10000 / goal;
+	unsigned long compensation = last_input * score_goal_diff_bp / 10000;
+
+	if (goal > score)
+		return last_input + compensation;
+	if (last_input > compensation)
+		return last_input - compensation;
+	return 1;
+}
+
+/* Shouldn't be called if quota->ms, quota->sz, and quota->get_score unset */
 static void damos_set_effective_quota(struct damos_quota *quota)
 {
 	unsigned long throughput;
@@ -1106,6 +1141,14 @@ static void damos_set_effective_quota(struct damos_quota *quota)
 
 	if (quota->sz && quota->sz < esz)
 		esz = quota->sz;
+
+	if (quota->get_score)
+		esz = damon_feed_loop_next_input(max(quota->esz, 1UL),
+				quota->get_score(quota->get_score_arg));
+	if (quota->sz && quota->sz < esz)
+		esz = quota->sz;
+
+
 	quota->esz = esz;
 }
 
@@ -1117,7 +1160,7 @@ static void damos_adjust_quota(struct damon_ctx *c, struct damos *s)
 	unsigned long cumulated_sz;
 	unsigned int score, max_score = 0;
 
-	if (!quota->ms && !quota->sz)
+	if (!quota->ms && !quota->sz && !quota->get_score)
 		return;
 
 	/* New charge window starts */
