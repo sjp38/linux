@@ -1861,6 +1861,18 @@ static int damon_sysfs_set_scheme_filters(struct damos *scheme,
 	return 0;
 }
 
+struct damos_sysfs_quota_goal_values {
+	unsigned long target_value;
+	unsigned long current_value;
+};
+
+unsigned long damos_sysfs_get_quota_score(void *arg)
+{
+	struct damos_sysfs_quota_goal_values *values = arg;
+
+	return values->current_value * 10000 / values->target_value;
+}
+
 static struct damos *damon_sysfs_mk_scheme(
 		struct damon_sysfs_scheme *sysfs_scheme)
 {
@@ -1868,6 +1880,8 @@ static struct damos *damon_sysfs_mk_scheme(
 		sysfs_scheme->access_pattern;
 	struct damon_sysfs_quotas *sysfs_quotas = sysfs_scheme->quotas;
 	struct damon_sysfs_weights *sysfs_weights = sysfs_quotas->weights;
+	struct damos_sysfs_quota_goals *sysfs_goals = sysfs_quotas->goals;
+	struct damos_sysfs_quota_goal_values *goal_values = NULL;
 	struct damon_sysfs_watermarks *sysfs_wmarks = sysfs_scheme->watermarks;
 	struct damon_sysfs_scheme_filters *sysfs_filters =
 		sysfs_scheme->filters;
@@ -1898,14 +1912,32 @@ static struct damos *damon_sysfs_mk_scheme(
 		.low = sysfs_wmarks->low,
 	};
 
+	/* todo: support multiple goals */
+	if (sysfs_goals->nr && sysfs_goals->goals_arr[0]->target_value) {
+		goal_values = kmalloc(sizeof(*goal_values), GFP_KERNEL);
+		if (!goal_values)
+			return NULL;
+		goal_values->target_value =
+			sysfs_goals->goals_arr[0]->target_value;
+		goal_values->current_value =
+			sysfs_goals->goals_arr[0]->current_value;
+		quota.get_score_arg = goal_values;
+		quota.get_score = damos_sysfs_get_quota_score;
+	} else {
+		quota.get_score = NULL;
+	}
+
 	scheme = damon_new_scheme(&pattern, sysfs_scheme->action,
 			sysfs_scheme->apply_interval_us, &quota, &wmarks);
-	if (!scheme)
+	if (!scheme) {
+		kfree(goal_values);
 		return NULL;
+	}
 
 	err = damon_sysfs_set_scheme_filters(scheme, sysfs_filters);
 	if (err) {
 		damon_destroy_scheme(scheme);
+		kfree(goal_values);
 		return NULL;
 	}
 	return scheme;
@@ -1918,6 +1950,8 @@ static void damon_sysfs_update_scheme(struct damos *scheme,
 		sysfs_scheme->access_pattern;
 	struct damon_sysfs_quotas *sysfs_quotas = sysfs_scheme->quotas;
 	struct damon_sysfs_weights *sysfs_weights = sysfs_quotas->weights;
+	struct damos_sysfs_quota_goals *sysfs_goals = sysfs_quotas->goals;
+	struct damos_sysfs_quota_goal_values *goal_values = NULL;
 	struct damon_sysfs_watermarks *sysfs_wmarks = sysfs_scheme->watermarks;
 	int err;
 
@@ -1938,6 +1972,23 @@ static void damon_sysfs_update_scheme(struct damos *scheme,
 	scheme->quota.weight_nr_accesses = sysfs_weights->nr_accesses;
 	scheme->quota.weight_age = sysfs_weights->age;
 
+	/* TODO: support multiple goals */
+	if (sysfs_goals->nr && sysfs_goals->goals_arr[0]->target_value) {
+		goal_values = scheme->quota.get_score_arg;
+		if (!goal_values)
+			goal_values = kmalloc(sizeof(*goal_values),
+					GFP_KERNEL);
+		goal_values->target_value =
+			sysfs_goals->goals_arr[0]->target_value;
+		goal_values->current_value =
+			sysfs_goals->goals_arr[0]->current_value;
+		scheme->quota.get_score_arg = goal_values;
+		scheme->quota.get_score = damos_sysfs_get_quota_score;
+	} else {
+		scheme->quota.get_score = NULL;
+		/* goal_values will be deallocated in before_terminate */
+	}
+
 	scheme->wmarks.metric = sysfs_wmarks->metric;
 	scheme->wmarks.interval = sysfs_wmarks->interval_us;
 	scheme->wmarks.high = sysfs_wmarks->high;
@@ -1945,8 +1996,10 @@ static void damon_sysfs_update_scheme(struct damos *scheme,
 	scheme->wmarks.low = sysfs_wmarks->low;
 
 	err = damon_sysfs_set_scheme_filters(scheme, sysfs_scheme->filters);
-	if (err)
+	if (err) {
+		kfree(scheme->quota.get_score_arg);
 		damon_destroy_scheme(scheme);
+	}
 }
 
 int damon_sysfs_set_schemes(struct damon_ctx *ctx,
