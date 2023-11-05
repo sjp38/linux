@@ -1231,6 +1231,7 @@ static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
 {
 	struct damon_target *t, *next;
 	struct damon_sysfs_kdamond *kdamond;
+	struct damos *s;
 	enum damon_sysfs_cmd cmd;
 
 	/* damon_sysfs_schemes_update_regions_stop() might not yet called */
@@ -1243,6 +1244,11 @@ static void damon_sysfs_before_terminate(struct damon_ctx *ctx)
 		damon_sysfs_schemes_update_regions_stop(ctx);
 		damon_sysfs_schemes_regions_updating = false;
 		mutex_unlock(&damon_sysfs_lock);
+	}
+
+	damon_for_each_scheme(s, ctx) {
+		if (s->quota.get_score)
+			kfree(s->quota.get_score_arg);
 	}
 
 	if (!damon_target_has_pid(ctx))
