@@ -154,6 +154,10 @@ test_goal()
 {
 	goal_dir=$1
 	ensure_dir "$goal_dir" "exist"
+	ensure_file "$goal_dir/goal_metric" "exist" "600"
+	ensure_write_succ "$goal_dir/goal_metric" "user_input" "valid input"
+	ensure_write_succ "$goal_dir/goal_metric" "psi_mem_some" "valid input"
+	ensure_write_fail "$goal_dir/goal_metric" "abc" "invalid input"
 	ensure_file "$goal_dir/target_value" "exist" "600"
 	ensure_file "$goal_dir/current_value" "exist" "600"
 }
