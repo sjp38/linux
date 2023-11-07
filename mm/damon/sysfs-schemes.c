@@ -816,8 +816,26 @@ static const struct kobj_type damon_sysfs_watermarks_ktype = {
  * quota goal directory
  */
 
+/*
+ * enum damos_sysfs_quota_goal_metric - Type of DAMOS quota goal metrics
+ * @DAMOS_QUOTA_GOAL_USER_INPUT:	User-provided value
+ * @DAMOS_QUOTA_GOAL_PSI_MEM_SOME:	Memory PSI (some) ratio
+ */
+enum damos_sysfs_quota_goal_metric {
+	DAMOS_QUOTA_GOAL_USER_INPUT,
+	DAMOS_QUOTA_GOAL_PSI_MEM_SOME,
+	NR_DAMOS_QUOTA_GOAL_METRICS,
+};
+
+/* This should match with enum damos_sysfs_quota_goal_metric */
+static const char * const damos_sysfs_quota_goal_metric_strs[] = {
+	"user_input",
+	"psi_mem_some",
+};
+
 struct damos_sysfs_quota_goal {
 	struct kobject kobj;
+	enum damos_sysfs_quota_goal_metric goal_metric;
 	unsigned long target_value;
 	unsigned long current_value;
 };
@@ -825,6 +843,35 @@ struct damos_sysfs_quota_goal {
 static struct damos_sysfs_quota_goal *damos_sysfs_quota_goal_alloc(void)
 {
 	return kzalloc(sizeof(struct damos_sysfs_quota_goal), GFP_KERNEL);
+}
+
+static ssize_t goal_metric_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damos_sysfs_quota_goal *goal = container_of(kobj, struct
+			damos_sysfs_quota_goal, kobj);
+
+	return sysfs_emit(buf, "%s\n",
+			damos_sysfs_quota_goal_metric_strs[goal->goal_metric]);
+}
+
+static ssize_t goal_metric_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damos_sysfs_quota_goal *goal = container_of(kobj, struct
+			damos_sysfs_quota_goal, kobj);
+	enum damos_sysfs_quota_goal_metric metric;
+	ssize_t ret = -EINVAL;
+
+	for (metric = 0; metric < NR_DAMOS_QUOTA_GOAL_METRICS; metric++) {
+		if (sysfs_streq(buf,
+				damos_sysfs_quota_goal_metric_strs[metric])) {
+			goal->goal_metric = metric;
+			ret = count;
+			break;
+		}
+	}
+	return ret;
 }
 
 static ssize_t target_value_show(struct kobject *kobj,
@@ -872,6 +919,9 @@ static void damos_sysfs_quota_goal_release(struct kobject *kobj)
 	kfree(container_of(kobj, struct damos_sysfs_quota_goal, kobj));
 }
 
+static struct kobj_attribute damos_sysfs_quota_goal_metric_attr =
+		__ATTR_RW_MODE(goal_metric, 0600);
+
 static struct kobj_attribute damos_sysfs_quota_goal_target_value_attr =
 		__ATTR_RW_MODE(target_value, 0600);
 
@@ -879,6 +929,7 @@ static struct kobj_attribute damos_sysfs_quota_goal_current_value_attr =
 		__ATTR_RW_MODE(current_value, 0600);
 
 static struct attribute *damos_sysfs_quota_goal_attrs[] = {
+	&damos_sysfs_quota_goal_metric_attr.attr,
 	&damos_sysfs_quota_goal_target_value_attr.attr,
 	&damos_sysfs_quota_goal_current_value_attr.attr,
 	NULL,
