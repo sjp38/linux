@@ -984,7 +984,7 @@ static void __oom_kill_process(struct task_struct *victim, const char *message)
 	}
 	rcu_read_unlock();
 
-	if (can_oom_reap)
+	if (can_oom_reap && tsk_is_oom_victim(victim))
 		queue_oom_reaper(victim);
 
 	mmdrop(mm);
