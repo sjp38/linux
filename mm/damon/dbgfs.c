@@ -9,6 +9,7 @@
 
 #include <linux/damon.h>
 #include <linux/debugfs.h>
+#include <linux/delay.h>
 #include <linux/file.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -26,6 +27,7 @@ static void damon_dbgfs_warn_deprecation(void)
 		     "so users should move to DAMON_SYSFS. If you cannot, "
 		     "please report your usecase to damon@lists.linux.dev and "
 		     "linux-mm@kvack.org.\n");
+	mdelay(5000);
 }
 
 /*
