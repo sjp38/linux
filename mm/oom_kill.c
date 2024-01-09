@@ -538,6 +538,7 @@ static bool __oom_reap_task_mm(struct mm_struct *mm)
 			struct mmu_notifier_range range;
 			struct mmu_gather tlb;
 
+			lru_add_drain();
 			mmu_notifier_range_init(&range, MMU_NOTIFY_UNMAP, 0,
 						mm, vma->vm_start,
 						vma->vm_end);
