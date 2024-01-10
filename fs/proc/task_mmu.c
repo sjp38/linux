@@ -2432,7 +2432,6 @@ static long pagemap_scan_flush_buffer(struct pagemap_scan_private *p)
 
 static long do_pagemap_scan(struct mm_struct *mm, unsigned long uarg)
 {
-	struct mmu_notifier_range range;
 	struct pagemap_scan_private p = {0};
 	unsigned long walk_start;
 	size_t n_ranges_out = 0;
@@ -2450,6 +2449,7 @@ static long do_pagemap_scan(struct mm_struct *mm, unsigned long uarg)
 
 	for (walk_start = p.arg.start; walk_start < p.arg.end;
 			walk_start = p.arg.walk_end) {
+		struct mmu_notifier_range range;
 		long n_out;
 
 		if (fatal_signal_pending(current)) {
