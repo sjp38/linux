@@ -3773,10 +3773,12 @@ static bool inc_min_seq(struct lruvec *lruvec, int type, bool can_swap)
 			VM_WARN_ON_ONCE_FOLIO(folio_is_file_lru(folio) != type, folio);
 			VM_WARN_ON_ONCE_FOLIO(folio_zonenum(folio) != zone, folio);
 
-			if (unlikely(list_is_first(&folio->lru, head)))
+			if (unlikely(list_is_first(&folio->lru, head))) {
 				prev = NULL;
-			else
+			} else {
 				prev = lru_to_folio(&folio->lru);
+				prefetchw(&prev->flags);
+			}
 
 			new_gen = folio_inc_gen(lruvec, folio, false, &batch);
 			lru_gen_try_inc_bulk(lrugen, folio, bulk_gen, new_gen, type, zone, &batch);
@@ -4452,10 +4454,12 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 			VM_WARN_ON_ONCE_FOLIO(folio_zonenum(folio) != zone, folio);
 
 			scanned += delta;
-			if (unlikely(list_is_first(&folio->lru, head)))
+			if (unlikely(list_is_first(&folio->lru, head))) {
 				prev = NULL;
-			else
+			} else {
 				prev = lru_to_folio(&folio->lru);
+				prefetchw(&prev->flags);
+			}
 
 			if (sort_folio(lruvec, folio, sc, tier, bulk_gen, &batch))
 				sorted += delta;
