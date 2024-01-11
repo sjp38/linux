@@ -5874,7 +5874,7 @@ static int mem_cgroup_do_precharge(unsigned long count)
 }
 
 union mc_target {
-	struct page	*page;
+	struct folio	*folio;
 	swp_entry_t	ent;
 };
 
@@ -6096,7 +6096,7 @@ out:
  * Return:
  * * MC_TARGET_NONE - If the pte is not a target for move charge.
  * * MC_TARGET_PAGE - If the page corresponding to this pte is a target for
- *   move charge. If @target is not NULL, the page is stored in target->page
+ *   move charge. If @target is not NULL, the folio is stored in target->folio
  *   with extra refcnt taken (Caller should release it).
  * * MC_TARGET_SWAP - If the swap entry corresponding to this pte is a
  *   target for charge migration.  If @target is not NULL, the entry is
@@ -6161,7 +6161,7 @@ static enum mc_target_type get_mctgt_type(struct vm_area_struct *vma,
 			    is_device_coherent_page(page))
 				ret = MC_TARGET_DEVICE;
 			if (target)
-				target->page = page;
+				target->folio = page_folio(page);
 		}
 		if (!ret || !target) {
 			if (target)
@@ -6211,7 +6211,7 @@ static enum mc_target_type get_mctgt_type_thp(struct vm_area_struct *vma,
 				put_page(page);
 				return MC_TARGET_NONE;
 			}
-			target->page = page;
+			target->folio = page_folio(page);
 		}
 	}
 	return ret;
@@ -6441,7 +6441,7 @@ static int mem_cgroup_move_charge_pte_range(pmd_t *pmd,
 		}
 		target_type = get_mctgt_type_thp(vma, addr, *pmd, &target);
 		if (target_type == MC_TARGET_PAGE) {
-			folio = page_folio(target.page);
+			folio = target.folio;
 			if (folio_isolate_lru(folio)) {
 				if (!mem_cgroup_move_account(folio, true,
 							     mc.from, mc.to)) {
@@ -6453,7 +6453,7 @@ static int mem_cgroup_move_charge_pte_range(pmd_t *pmd,
 			folio_unlock(folio);
 			folio_put(folio);
 		} else if (target_type == MC_TARGET_DEVICE) {
-			folio = page_folio(target.page);
+			folio = target.folio;
 			if (!mem_cgroup_move_account(folio, true,
 						     mc.from, mc.to)) {
 				mc.precharge -= HPAGE_PMD_NR;
@@ -6483,7 +6483,7 @@ retry:
 			device = true;
 			fallthrough;
 		case MC_TARGET_PAGE:
-			folio = page_folio(target.page);
+			folio = target.folio;
 			/*
 			 * We can have a part of the split pmd here. Moving it
 			 * can be done but it would be too convoluted so simply
