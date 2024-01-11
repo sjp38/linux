@@ -3120,15 +3120,54 @@ static int folio_update_gen(struct folio *folio, int gen)
  */
 struct gen_update_batch {
 	int delta[MAX_NR_GENS];
+	struct folio *head, *tail;
 };
 
-static void lru_gen_update_batch(struct lruvec *lruvec, int type, int zone,
+static void inline lru_gen_inc_bulk_finish(struct lru_gen_folio *lrugen,
+					   int bulk_gen, bool type, int zone,
+					   struct gen_update_batch *batch)
+{
+	if (!batch->head)
+		return;
+
+	list_bulk_move_tail(&lrugen->folios[bulk_gen][type][zone],
+			    &batch->head->lru,
+			    &batch->tail->lru);
+
+	batch->head = NULL;
+}
+
+/*
+ * When aging, protected pages will go to the tail of the same higher
+ * gen, so the can be moved in batches. Besides reduced overhead, this
+ * also avoids changing their LRU order in a small scope.
+ */
+static inline void lru_gen_try_inc_bulk(struct lru_gen_folio *lrugen, struct folio *folio,
+					int bulk_gen, int gen, bool type, int zone,
+					struct gen_update_batch *batch)
+{
+	/*
+	 * If folio not moving to the bulk_gen, it's raced with promotion
+	 * so it need to go to the head of another LRU.
+	 */
+	if (bulk_gen != gen)
+		list_move(&folio->lru, &lrugen->folios[gen][type][zone]);
+
+	if (!batch->head)
+		batch->tail = folio;
+
+	batch->head = folio;
+}
+
+static void lru_gen_update_batch(struct lruvec *lruvec, int bulk_gen, int type, int zone,
 				 struct gen_update_batch *batch)
 {
 	int gen;
 	int promoted = 0;
 	struct lru_gen_folio *lrugen = &lruvec->lrugen;
 	enum lru_list lru = type ? LRU_INACTIVE_FILE : LRU_INACTIVE_ANON;
+
+	lru_gen_inc_bulk_finish(lrugen, bulk_gen, type, zone, batch);
 
 	for (gen = 0; gen < MAX_NR_GENS; gen++) {
 		int delta = batch->delta[gen];
@@ -3714,6 +3753,7 @@ static bool inc_min_seq(struct lruvec *lruvec, int type, bool can_swap)
 	struct gen_update_batch batch = { };
 	struct lru_gen_folio *lrugen = &lruvec->lrugen;
 	int new_gen, old_gen = lru_gen_from_seq(lrugen->min_seq[type]);
+	int bulk_gen = (old_gen + 1) % MAX_NR_GENS;
 
 	if (type == LRU_GEN_ANON && !can_swap)
 		goto done;
@@ -3721,24 +3761,33 @@ static bool inc_min_seq(struct lruvec *lruvec, int type, bool can_swap)
 	/* prevent cold/hot inversion if force_scan is true */
 	for (zone = 0; zone < MAX_NR_ZONES; zone++) {
 		struct list_head *head = &lrugen->folios[old_gen][type][zone];
+		struct folio *prev = NULL;
 
-		while (!list_empty(head)) {
-			struct folio *folio = lru_to_folio(head);
+		if (!list_empty(head))
+			prev = lru_to_folio(head);
 
+		while (prev) {
+			struct folio *folio = prev;
 			VM_WARN_ON_ONCE_FOLIO(folio_test_unevictable(folio), folio);
 			VM_WARN_ON_ONCE_FOLIO(folio_test_active(folio), folio);
 			VM_WARN_ON_ONCE_FOLIO(folio_is_file_lru(folio) != type, folio);
 			VM_WARN_ON_ONCE_FOLIO(folio_zonenum(folio) != zone, folio);
 
+			if (unlikely(list_is_first(&folio->lru, head)))
+				prev = NULL;
+			else
+				prev = lru_to_folio(&folio->lru);
+
 			new_gen = folio_inc_gen(lruvec, folio, false, &batch);
-			list_move_tail(&folio->lru, &lrugen->folios[new_gen][type][zone]);
+			lru_gen_try_inc_bulk(lrugen, folio, bulk_gen, new_gen, type, zone, &batch);
 
 			if (!--remaining) {
-				lru_gen_update_batch(lruvec, type, zone, &batch);
+				lru_gen_update_batch(lruvec, bulk_gen, type, zone, &batch);
 				return false;
 			}
 		}
-		lru_gen_update_batch(lruvec, type, zone, &batch);
+
+		lru_gen_update_batch(lruvec, bulk_gen, type, zone, &batch);
 	}
 done:
 	reset_ctrl_pos(lruvec, type, true);
@@ -4258,7 +4307,7 @@ void lru_gen_soft_reclaim(struct mem_cgroup *memcg, int nid)
  ******************************************************************************/
 
 static bool sort_folio(struct lruvec *lruvec, struct folio *folio, struct scan_control *sc,
-		       int tier_idx, struct gen_update_batch *batch)
+		       int tier_idx, int bulk_gen, struct gen_update_batch *batch)
 {
 	bool success;
 	int gen = folio_lru_gen(folio);
@@ -4301,7 +4350,7 @@ static bool sort_folio(struct lruvec *lruvec, struct folio *folio, struct scan_c
 		int hist = lru_hist_from_seq(lrugen->min_seq[type]);
 
 		gen = folio_inc_gen(lruvec, folio, false, batch);
-		list_move_tail(&folio->lru, &lrugen->folios[gen][type][zone]);
+		lru_gen_try_inc_bulk(lrugen, folio, bulk_gen, gen, type, zone, batch);
 
 		WRITE_ONCE(lrugen->protected[hist][type][tier - 1],
 			   lrugen->protected[hist][type][tier - 1] + delta);
@@ -4311,7 +4360,7 @@ static bool sort_folio(struct lruvec *lruvec, struct folio *folio, struct scan_c
 	/* ineligible */
 	if (zone > sc->reclaim_idx || skip_cma(folio, sc)) {
 		gen = folio_inc_gen(lruvec, folio, false, batch);
-		list_move_tail(&folio->lru, &lrugen->folios[gen][type][zone]);
+		lru_gen_try_inc_bulk(lrugen, folio, bulk_gen, gen, type, zone, batch);
 		return true;
 	}
 
@@ -4385,11 +4434,16 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 		LIST_HEAD(moved);
 		int skipped_zone = 0;
 		struct gen_update_batch batch = { };
+		int bulk_gen = (gen + 1) % MAX_NR_GENS;
 		int zone = (sc->reclaim_idx + i) % MAX_NR_ZONES;
 		struct list_head *head = &lrugen->folios[gen][type][zone];
+		struct folio *prev = NULL;
 
-		while (!list_empty(head)) {
-			struct folio *folio = lru_to_folio(head);
+		if (!list_empty(head))
+			prev = lru_to_folio(head);
+
+		while (prev) {
+			struct folio *folio = prev;
 			int delta = folio_nr_pages(folio);
 
 			VM_WARN_ON_ONCE_FOLIO(folio_test_unevictable(folio), folio);
@@ -4398,8 +4452,12 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 			VM_WARN_ON_ONCE_FOLIO(folio_zonenum(folio) != zone, folio);
 
 			scanned += delta;
+			if (unlikely(list_is_first(&folio->lru, head)))
+				prev = NULL;
+			else
+				prev = lru_to_folio(&folio->lru);
 
-			if (sort_folio(lruvec, folio, sc, tier, &batch))
+			if (sort_folio(lruvec, folio, sc, tier, bulk_gen, &batch))
 				sorted += delta;
 			else if (isolate_folio(lruvec, folio, sc)) {
 				list_add(&folio->lru, list);
@@ -4419,7 +4477,7 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 			skipped += skipped_zone;
 		}
 
-		lru_gen_update_batch(lruvec, type, zone, &batch);
+		lru_gen_update_batch(lruvec, bulk_gen, type, zone, &batch);
 
 		if (!remaining || isolated >= MIN_LRU_BATCH)
 			break;
