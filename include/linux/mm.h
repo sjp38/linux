@@ -3516,6 +3516,15 @@ static inline bool range_in_vma(struct vm_area_struct *vma,
 	return (vma && vma->vm_start <= start && end <= vma->vm_end);
 }
 
+static inline void vma_range_init(struct vm_area_struct *vma,
+				  unsigned long start, unsigned long end,
+				  pgoff_t pgoff)
+{
+	vma->vm_start = start;
+	vma->vm_end = end;
+	vma->vm_pgoff = pgoff;
+}
+
 #ifdef CONFIG_MMU
 pgprot_t vm_get_page_prot(unsigned long vm_flags);
 void vma_set_page_prot(struct vm_area_struct *vma);
