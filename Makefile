@@ -2,7 +2,7 @@
 VERSION = 6
 PATCHLEVEL = 8
 SUBLEVEL = 0
-EXTRAVERSION = -rc5
+EXTRAVERSION = -rc5-mm-unstable-damon
 NAME = Hurr durr I'ma ninja sloth
 
 # *DOCUMENTATION*
