@@ -5677,6 +5677,16 @@ void __unmap_hugepage_range(struct mmu_gather *tlb, struct vm_area_struct *vma,
 		hugetlb_count_sub(pages_per_huge_page(h), mm);
 		hugetlb_remove_rmap(page_folio(page));
 
+		if (is_vma_resv_set(vma, HPAGE_RESV_OWNER) &&
+		    vma_needs_reservation(h, vma, start)) {
+			/*
+			 * Restore the reservation if needed, otherwise the
+			 * backing page could be stolen by someone.
+			 */
+			folio_set_hugetlb_restore_reserve(page_folio(page));
+			vma_add_reservation(h, vma, address);
+		}
+
 		spin_unlock(ptl);
 		tlb_remove_page_size(tlb, page, huge_page_size(h));
 		/*
