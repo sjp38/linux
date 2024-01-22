@@ -676,7 +676,6 @@ static int queue_pages_test_walk(unsigned long start, unsigned long end,
 {
 	struct vm_area_struct *next, *vma = walk->vma;
 	struct queue_pages *qp = walk->private;
-	unsigned long endvma = vma->vm_end;
 	unsigned long flags = qp->flags;
 
 	/* range check first */
@@ -703,9 +702,6 @@ static int queue_pages_test_walk(unsigned long start, unsigned long end,
 	if (!vma_migratable(vma) &&
 	    !(flags & MPOL_MF_STRICT))
 		return 1;
-
-	if (endvma > end)
-		endvma = end;
 
 	/*
 	 * Check page nodes, and queue pages to move, in the current vma.
