@@ -1031,7 +1031,7 @@ copy_present_ptes(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma
 		} else {
 			folio_ref_add(folio, nr);
 			folio_dup_file_rmap_ptes(folio, page, nr);
-			rss[mm_counter_file(page)] += nr;
+			rss[mm_counter_file(folio)] += nr;
 		}
 		__copy_present_ptes(dst_vma, src_vma, dst_pte, src_pte, pte,
 				    addr, nr);
