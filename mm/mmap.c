@@ -869,7 +869,7 @@ static struct vm_area_struct
 	struct mm_struct *mm = src->vm_mm;
 	struct anon_vma *anon_vma = src->anon_vma;
 	struct file *file = src->vm_file;
-	struct vm_area_struct *curr, *next, *res;
+	struct vm_area_struct *curr = src, *next = NULL, *res;
 	struct vm_area_struct *vma, *adjust, *remove, *remove2;
 	struct vm_area_struct *anon_dup = NULL;
 	struct vma_prepare vp;
@@ -890,14 +890,18 @@ static struct vm_area_struct
 	if (vm_flags & VM_SPECIAL)
 		return NULL;
 
-	/* Does the input range span an existing VMA? (cases 5 - 8) */
-	curr = find_vma_intersection(mm, prev ? prev->vm_end : 0, end);
+	/*
+	 * If the current vma and the prev vma are the same vma, it
+	 * means the current vma is NULL.
+	 * Does the input range span an existing VMA? (cases 5 - 8)
+	 */
+	if (prev == curr || addr != curr->vm_start || end > curr->vm_end)
+		curr = NULL;
 
 	if (!curr ||			/* cases 1 - 4 */
 	    end == curr->vm_end)	/* cases 6 - 8, adjacent VMA */
 		next = vma_lookup(mm, end);
-	else
-		next = NULL;		/* case 5 */
+					/* case 5 set to NULL above */
 
 	if (prev) {
 		vma_start = prev->vm_start;
@@ -921,7 +925,6 @@ static struct vm_area_struct
 
 	/* Verify some invariant that must be enforced by the caller. */
 	VM_WARN_ON(prev && addr <= prev->vm_start);
-	VM_WARN_ON(curr && (addr != curr->vm_start || end > curr->vm_end));
 	VM_WARN_ON(addr >= end);
 
 	if (!merge_prev && !merge_next)
