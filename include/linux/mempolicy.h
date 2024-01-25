@@ -56,7 +56,7 @@ struct mempolicy {
 	} w;
 
 	/* Weighted interleave settings */
-	u8 cur_il_weight;
+	atomic_t cur_il_weight;
 };
 
 /*

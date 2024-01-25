@@ -321,7 +321,7 @@ static struct mempolicy *mpol_new(unsigned short mode, unsigned short flags,
 	policy->mode = mode;
 	policy->flags = flags;
 	policy->home_node = NUMA_NO_NODE;
-	policy->cur_il_weight = 0;
+	atomic_set(&policy->cur_il_weight, 0);
 
 	return policy;
 }
@@ -356,6 +356,7 @@ static void mpol_rebind_nodemask(struct mempolicy *pol, const nodemask_t *nodes)
 		tmp = *nodes;
 
 	pol->nodes = tmp;
+	atomic_set(&pol->cur_il_weight, 0);
 }
 
 static void mpol_rebind_preferred(struct mempolicy *pol,
@@ -969,8 +970,10 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,
 			*policy = next_node_in(current->il_prev, pol->nodes);
 		} else if (pol == current->mempolicy &&
 				(pol->mode == MPOL_WEIGHTED_INTERLEAVE)) {
-			if (pol->cur_il_weight)
-				*policy = current->il_prev;
+			int cweight = atomic_read(&pol->cur_il_weight);
+
+			if (cweight & 0xFF)
+				*policy = cweight >> 8;
 			else
 				*policy = next_node_in(current->il_prev,
 						       pol->nodes);
@@ -1860,36 +1863,48 @@ static unsigned int weighted_interleave_nodes(struct mempolicy *policy)
 	unsigned int node, next;
 	struct task_struct *me = current;
 	u8 __rcu *table;
+	int cur_weight;
 	u8 weight;
 
-	node = next_node_in(me->il_prev, policy->nodes);
-	if (node == MAX_NUMNODES)
-		return node;
+	cur_weight = atomic_read(&policy->cur_il_weight);
+	node = cur_weight >> 8;
+	weight = cur_weight & 0xff;
 
-	/* on first alloc after setting mempolicy, acquire first weight */
-	if (unlikely(!policy->cur_il_weight)) {
+	/* If nodemask was rebound, just fetch the next node */
+	if (!weight || !node_isset(node, policy->nodes)) {
+		node = next_node_in(me->il_prev, policy->nodes);
+		/* can only happen if nodemask has become invalid */
+		if (node == MAX_NUMNODES)
+			return node;
 		rcu_read_lock();
 		table = rcu_dereference(iw_table);
 		/* detect system-default values */
 		weight = table ? table[node] : 1;
-		policy->cur_il_weight = weight ? weight : 1;
+		weight = weight ? weight : 1;
 		rcu_read_unlock();
 	}
 
 	/* account for this allocation call */
-	policy->cur_il_weight--;
+	weight--;
 
 	/* if now at 0, move to next node and set up that node's weight */
-	if (unlikely(!policy->cur_il_weight)) {
+	if (unlikely(!weight)) {
 		me->il_prev = node;
 		next = next_node_in(node, policy->nodes);
-		rcu_read_lock();
-		table = rcu_dereference(iw_table);
-		/* detect system-default values */
-		weight = table ? table[next] : 1;
-		policy->cur_il_weight = weight ? weight : 1;
-		rcu_read_unlock();
-	}
+		if (next != MAX_NUMNODES) {
+			rcu_read_lock();
+			table = rcu_dereference(iw_table);
+			/* detect system-default values */
+			weight = table ? table[next] : 1;
+			weight = weight ? weight : 1;
+			rcu_read_unlock();
+			cur_weight = (next << 8) | weight;
+		} else /* policy->nodes became invalid */
+			cur_weight = 0;
+	} else
+		cur_weight = (node << 8) | weight;
+
+	atomic_set(&policy->cur_il_weight, cur_weight);
 	return node;
 }
 
@@ -2381,6 +2396,7 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 	nodemask_t nodes;
 	int nnodes, node, resume_node, next_node;
 	int prev_node = me->il_prev;
+	int cur_node_and_weight = atomic_read(&pol->cur_il_weight);
 	int i;
 
 	if (!nr_pages)
@@ -2390,10 +2406,11 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 	if (!nnodes)
 		return 0;
 
+	node = cur_node_and_weight >> 8;
+	weight = cur_node_and_weight & 0xff;
 	/* Continue allocating from most recent node and adjust the nr_pages */
-	if (pol->cur_il_weight) {
-		node = next_node_in(prev_node, nodes);
-		node_pages = pol->cur_il_weight;
+	if (weight && node_isset(node, nodes)) {
+		node_pages = weight;
 		if (node_pages > rem_pages)
 			node_pages = rem_pages;
 		nr_allocated = __alloc_pages_bulk(gfp, node, NULL, node_pages,
@@ -2404,27 +2421,36 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 		 * if that's all the pages, no need to interleave, otherwise
 		 * we need to set up the next interleave node/weight correctly.
 		 */
-		if (rem_pages < pol->cur_il_weight) {
+		if (rem_pages < weight) {
 			/* stay on current node, adjust cur_il_weight */
-			pol->cur_il_weight -= rem_pages;
+			weight -= rem_pages;
+			atomic_set(&pol->cur_il_weight, ((node << 8) | weight));
 			return total_allocated;
-		} else if (rem_pages == pol->cur_il_weight) {
+		} else if (rem_pages == weight) {
 			/* move to next node / weight */
 			me->il_prev = node;
 			next_node = next_node_in(node, nodes);
-			rcu_read_lock();
-			table = rcu_dereference(iw_table);
-			weight = table ? table[next_node] : 1;
-			/* detect system-default usage */
-			pol->cur_il_weight = weight ? weight : 1;
-			rcu_read_unlock();
+			if (next_node == MAX_NUMNODES) {
+				next_node = 0;
+				weight = 0;
+			} else {
+				rcu_read_lock();
+				table = rcu_dereference(iw_table);
+				weight = table ? table[next_node] : 1;
+				/* detect system-default usage */
+				weight = weight ? weight : 1;
+				rcu_read_unlock();
+			}
+			atomic_set(&pol->cur_il_weight,
+				   ((next_node << 8) | weight));
 			return total_allocated;
 		}
 		/* Otherwise we adjust nr_pages down, and continue from there */
-		rem_pages -= pol->cur_il_weight;
-		pol->cur_il_weight = 0;
+		rem_pages -= weight;
 		prev_node = node;
 	}
+	/* clear cur_il_weight in case of an allocation failure */
+	atomic_set(&pol->cur_il_weight, 0);
 
 	/* create a local copy of node weights to operate on outside rcu */
 	weights = kmalloc(nr_node_ids, GFP_KERNEL);
@@ -2509,7 +2535,8 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 	}
 	/* resume allocating from the calculated node and weight */
 	me->il_prev = resume_node;
-	pol->cur_il_weight = resume_weight;
+	resume_node = next_node_in(resume_node, nodes);
+	atomic_set(&pol->cur_il_weight, ((resume_node << 8) | resume_weight));
 	kfree(weights);
 	return total_allocated;
 }
