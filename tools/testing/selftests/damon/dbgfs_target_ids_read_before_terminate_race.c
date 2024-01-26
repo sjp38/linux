@@ -14,7 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define DBGFS_MONITOR_ON "/sys/kernel/debug/damon/monitor_on"
+#define DBGFS_MONITOR_ON "/sys/kernel/debug/damon/monitor_on_DEPRECATED"
 #define DBGFS_TARGET_IDS "/sys/kernel/debug/damon/target_ids"
 
 static void turn_damon_on_exit(void)
