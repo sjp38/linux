@@ -1882,6 +1882,7 @@ done:
 	if (order)
 		prep_compound_page(&dst->page, order);
 	cc->nr_freepages -= 1 << order;
+	cc->nr_migratepages -= 1 << order;
 	return page_rmappable_folio(&dst->page);
 }
 
@@ -1904,6 +1905,7 @@ static void compaction_free(struct folio *dst, unsigned long data)
 	list_add(&dst->lru, &cc->freepages[order].pages);
 	cc->freepages[order].nr_pages++;
 	cc->nr_freepages += 1 << order;
+	cc->nr_migratepages += 1 << order;
 }
 
 /* possible outcome of isolate_migratepages */
