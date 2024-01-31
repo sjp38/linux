@@ -2378,7 +2378,7 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 	unsigned int weight_total = 0;
 	unsigned long rem_pages = nr_pages;
 	nodemask_t nodes;
-	int nnodes, node, next_node;
+	int nnodes, node;
 	int resume_node = MAX_NUMNODES - 1;
 	u8 resume_weight = 0;
 	int prev_node;
@@ -2408,7 +2408,7 @@ static unsigned long alloc_pages_bulk_array_weighted_interleave(gfp_t gfp,
 		} else if (rem_pages == weight) {
 			/* move to next node / weight */
 			me->il_prev = next_node_in(node, nodes);
-			me->il_weight = get_il_weight(next_node);
+			me->il_weight = get_il_weight(me->il_prev);
 			return total_allocated;
 		}
 		/* Otherwise we adjust remaining pages, continue from there */
