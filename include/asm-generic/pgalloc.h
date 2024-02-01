@@ -23,6 +23,8 @@ static inline pte_t *__pte_alloc_one_kernel(struct mm_struct *mm)
 
 	if (!ptdesc)
 		return NULL;
+
+	__pagetable_pte_ctor(ptdesc);
 	return ptdesc_address(ptdesc);
 }
 
@@ -46,7 +48,10 @@ static inline pte_t *pte_alloc_one_kernel(struct mm_struct *mm)
  */
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
-	pagetable_free(virt_to_ptdesc(pte));
+	struct ptdesc *ptdesc = virt_to_ptdesc(pte);
+
+	__pagetable_pte_dtor(ptdesc);
+	pagetable_free(ptdesc);
 }
 
 /**
