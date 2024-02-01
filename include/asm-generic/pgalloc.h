@@ -139,7 +139,10 @@ static inline pmd_t *pmd_alloc_one(struct mm_struct *mm, unsigned long addr)
 	ptdesc = pagetable_alloc(gfp, 0);
 	if (!ptdesc)
 		return NULL;
-	if (!pagetable_pmd_ctor(ptdesc)) {
+
+	if (mm == &init_mm) {
+		__pagetable_pmd_ctor(ptdesc);
+	} else if (!pagetable_pmd_ctor(ptdesc)) {
 		pagetable_free(ptdesc);
 		return NULL;
 	}
@@ -153,7 +156,10 @@ static inline void pmd_free(struct mm_struct *mm, pmd_t *pmd)
 	struct ptdesc *ptdesc = virt_to_ptdesc(pmd);
 
 	BUG_ON((unsigned long)pmd & (PAGE_SIZE-1));
-	pagetable_pmd_dtor(ptdesc);
+	if (mm == &init_mm)
+		__pagetable_pmd_dtor(ptdesc);
+	else
+		pagetable_pmd_dtor(ptdesc);
 	pagetable_free(ptdesc);
 }
 #endif
