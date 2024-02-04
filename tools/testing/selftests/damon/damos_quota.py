@@ -34,15 +34,21 @@ def main():
         exit(1)
 
     wss_collected = []
+    nr_quota_exceeds = 0
     while proc.poll() == None:
         time.sleep(0.1)
         err = kdamonds.kdamonds[0].update_schemes_tried_bytes()
         if err != None:
             print('tried bytes update failed: %s' % err)
             exit(1)
+        err = kdamonds.kdamonds[0].update_schemes_stats()
+        if err != None:
+            print('stats update failed: %s' % err)
+            exit(1)
 
-        wss_collected.append(
-                kdamonds.kdamonds[0].contexts[0].schemes[0].tried_bytes)
+        scheme = kdamonds.kdamonds[0].contexts[0].schemes[0]
+        wss_collected.append(scheme.tried_bytes)
+        nr_quota_exceeds = scheme.stats.qt_exceeds
 
     wss_collected.sort()
     for wss in wss_collected:
@@ -51,6 +57,11 @@ def main():
             print('collected samples are as below')
             print('\n'.join(['%d' % wss for wss in wss_collected]))
             exit(1)
+
+    if nr_quota_exceeds < len(wss_collected):
+        print('quota is not always exceeded: %d > %d' %
+              (len(wss_collected), nr_quota_exceeds))
+        exit(1)
 
 if __name__ == '__main__':
     main()
