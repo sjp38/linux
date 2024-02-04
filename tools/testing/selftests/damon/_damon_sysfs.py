@@ -100,18 +100,20 @@ class Damos:
     action = None
     access_pattern = None
     quota = None
+    apply_interval_us = None
     # todo: Support watermarks, stats, tried_regions
     idx = None
     context = None
     tried_bytes = None
 
     def __init__(self, action='stat', access_pattern=DamosAccessPattern(),
-                 quota=DamosQuota()):
+                 quota=DamosQuota(), apply_interval_us=0):
         self.action = action
         self.access_pattern = access_pattern
         self.access_pattern.scheme = self
         self.quota = quota
         self.quota.scheme = self
+        self.apply_interval_us = apply_interval_us
 
     def sysfs_dir(self):
         return os.path.join(
@@ -124,6 +126,11 @@ class Damos:
         err = self.access_pattern.stage()
         if err != None:
             return err
+        err = write_file(os.path.join(self.sysfs_dir(), 'apply_interval_us'),
+                         '%d' % self.apply_interval_us)
+        if err != None:
+            return err
+
         err = self.quota.stage()
         if err != None:
             return err
