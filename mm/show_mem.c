@@ -86,6 +86,49 @@ void si_meminfo(struct sysinfo *val)
 EXPORT_SYMBOL(si_meminfo);
 
 #ifdef CONFIG_NUMA
+long si_mem_node_available(int nid)
+{
+	int zone_type;
+	long available;
+	unsigned long pagecache;
+	unsigned long wmark_low = 0;
+	unsigned long reclaimable;
+	pg_data_t *pgdat = NODE_DATA(nid);
+
+	for (zone_type = 0; zone_type < MAX_NR_ZONES; zone_type++)
+		wmark_low += low_wmark_pages((&pgdat->node_zones[zone_type]));
+
+	/*
+	 * Estimate the amount of memory available for userspace allocations,
+	 * without causing swapping for mbind process.
+	 */
+	available = sum_zone_node_page_state(nid, NR_FREE_PAGES) - pgdat->totalreserve_pages;
+
+	/*
+	 * Not all the page cache can be freed, otherwise the system will
+	 * start swapping or thrashing. Assume at least half of the page
+	 * cache, or the low watermark worth of cache, needs to stay.
+	 */
+	pagecache = node_page_state(pgdat, NR_ACTIVE_FILE) +
+		node_page_state(pgdat, NR_INACTIVE_FILE);
+	pagecache -= min(pagecache / 2, wmark_low);
+	available += pagecache;
+
+	/*
+	 * Part of the reclaimable slab and other kernel memory consists of
+	 * items that are in use, and cannot be freed. Cap this estimate at the
+	 * low watermark.
+	 */
+	reclaimable = node_page_state_pages(pgdat, NR_SLAB_RECLAIMABLE_B) +
+		node_page_state(pgdat, NR_KERNEL_MISC_RECLAIMABLE);
+	reclaimable -= min(reclaimable / 2, wmark_low);
+	available += reclaimable;
+
+	if (available < 0)
+		available = 0;
+	return available;
+}
+
 void si_meminfo_node(struct sysinfo *val, int nid)
 {
 	int zone_type;		/* needs to be signed */
