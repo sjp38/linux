@@ -1881,7 +1881,7 @@ retry:
 	/* to prevent miscount use tsk->mems_allowed_seq to detect rebind */
 	cpuset_mems_cookie = read_mems_allowed_begin();
 	node = current->il_prev;
-	if (!node || !node_isset(node, policy->nodes)) {
+	if (!current->il_weight || !node_isset(node, policy->nodes)) {
 		node = next_node_in(node, policy->nodes);
 		if (read_mems_allowed_retry(cpuset_mems_cookie))
 			goto retry;
