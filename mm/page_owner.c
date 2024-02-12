@@ -832,15 +832,18 @@ static void *stack_next(struct seq_file *m, void *v, loff_t *ppos)
 	return stack;
 }
 
+static unsigned long page_owner_stack_threshold;
+
 static int stack_print(struct seq_file *m, void *v)
 {
 	char *buf;
 	int ret = 0;
 	struct stack *stack = v;
 	struct stack_record *stack_record = stack->stack_record;
+	int stack_count = refcount_read(&stack_record->count);
 
 	if (!stack_record->size || stack_record->size < 0 ||
-	    refcount_read(&stack_record->count) < 2)
+	    stack_count < 2 || stack_count < page_owner_stack_threshold)
 		return 0;
 
 	buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
@@ -851,7 +854,7 @@ static int stack_print(struct seq_file *m, void *v)
 		goto out;
 
 	scnprintf(buf + ret, PAGE_SIZE - ret, "stack_count: %d\n\n",
-		  refcount_read(&stack_record->count));
+		  stack_count);
 
 	seq_printf(m, buf);
 	seq_puts(m, "\n\n");
@@ -884,6 +887,21 @@ static const struct file_operations page_owner_stack_operations = {
 	.release	= seq_release,
 };
 
+static int page_owner_threshold_get(void *data, u64 *val)
+{
+	*val = page_owner_stack_threshold;
+	return 0;
+}
+
+static int page_owner_threshold_set(void *data, u64 val)
+{
+	page_owner_stack_threshold = val;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(proc_page_owner_threshold, &page_owner_threshold_get,
+			&page_owner_threshold_set, "%llu");
+
 static int __init pageowner_init(void)
 {
 	struct dentry *dir;
@@ -898,6 +916,8 @@ static int __init pageowner_init(void)
 	dir = debugfs_create_dir("page_owner_stacks", NULL);
 	debugfs_create_file("show_stacks", 0400, dir, NULL,
 			    &page_owner_stack_operations);
+	debugfs_create_file("set_threshold", 0600, dir, NULL,
+			    &proc_page_owner_threshold);
 
 	return 0;
 }
