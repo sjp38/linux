@@ -361,6 +361,10 @@ class Kdamond:
                     stat_values.append(int(content))
                 scheme.stats = DamosStats(*stat_values)
 
+    def commit_schemes_quota_goals(self):
+        return write_file(os.path.join(self.sysfs_dir(), 'state'),
+                         'commit_schemes_quota_goals')
+
 class Kdamonds:
     kdamonds = []
 
