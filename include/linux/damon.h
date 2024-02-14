@@ -130,12 +130,14 @@ enum damos_action {
  * enum damos_quota_goal_metric - Represents the metric to be used as the goal
  *
  * @DAMOS_QGOAL_METRIC_USER_INPUT:	User-input value.
+ * @DAMOS_QGOAL_METRIC_SOME_MEM_PSI_US:	System level some memory PSI in us.
  * @NR_DAMOS_QUOTA_GOAL_METRICS:	Number of DAMOS quota goal metrics.
  *
  * Metrics equal to larger than @NR_DAMOS_QUOTA_GOAL_METRICS are unsupported.
  */
 enum damos_quota_goal_metric {
 	DAMOS_QGOAL_METRIC_USER_INPUT,
+	DAMOS_QGOAL_METRIC_SOME_MEM_PSI_US,
 	NR_DAMOS_QUOTA_GOAL_METRICS,
 };
 
@@ -144,6 +146,7 @@ enum damos_quota_goal_metric {
  * @metric:		Metric to be used for representing the goal.
  * @target_value:	Target value of @metric to achieve with the tuning.
  * @current_value:	Current value of @metric.
+ * @last_psi_total:	Last measured total PSI
  * @list:		List head for siblings.
  *
  * Data structure for getting the current score of the quota tuning goal.  The
@@ -153,11 +156,16 @@ enum damos_quota_goal_metric {
  *
  * If @metric is DAMOS_QGOAL_METRIC_USER_INPUT, @current_value should be
  * manually entered by the user, probably inside the kdamond callbacks.
+ * Otherwise, DAMON sets @current_value with self-measured value of @metric.
  */
 struct damos_quota_goal {
 	enum damos_quota_goal_metric metric;
 	unsigned long target_value;
 	unsigned long current_value;
+	/* metric-dependent fields */
+	union {
+		u64 last_psi_total;
+	};
 	struct list_head list;
 };
 
