@@ -1882,11 +1882,6 @@ static int damon_sysfs_set_scheme_filters(struct damos *scheme,
 	return 0;
 }
 
-static unsigned long damos_sysfs_get_quota_score(void *arg)
-{
-	return (unsigned long)arg;
-}
-
 static int damos_sysfs_set_quota_score(
 		struct damos_sysfs_quota_goals *sysfs_goals,
 		struct damos_quota *quota)
