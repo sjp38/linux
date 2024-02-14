@@ -1093,6 +1093,8 @@ again:
 				progress += 8;
 				continue;
 			}
+			ptent = ptep_get(src_pte);
+			VM_WARN_ON_ONCE(!pte_present(ptent));
 
 			/*
 			 * Device exclusive entry restored, continue by copying
