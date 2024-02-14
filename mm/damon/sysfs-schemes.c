@@ -1899,8 +1899,9 @@ static int damos_sysfs_set_quota_score(
 		if (!sysfs_goal->target_value)
 			continue;
 
-		goal = damos_new_quota_goal(sysfs_goal->target_value,
-				sysfs_goal->current_value);
+		goal = damos_new_quota_goal(DAMOS_QGOAL_METRIC_USER_INPUT,
+				sysfs_goal->target_value);
+		goal->current_value = sysfs_goal->current_value;
 		if (!goal)
 			return -ENOMEM;
 		damos_add_quota_goal(quota, goal);
