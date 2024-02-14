@@ -137,7 +137,9 @@ enum damos_action {
  */
 enum damos_quota_goal_metric {
 	DAMOS_QGOAL_METRIC_USER_INPUT,
+#ifdef CONFIG_PSI
 	DAMOS_QGOAL_METRIC_SOME_MEM_PSI_US,
+#endif	/* CONFIG_PSI */
 	NR_DAMOS_QUOTA_GOAL_METRICS,
 };
 
@@ -162,10 +164,12 @@ struct damos_quota_goal {
 	enum damos_quota_goal_metric metric;
 	unsigned long target_value;
 	unsigned long current_value;
+#ifdef CONFIG_PSI
 	/* metric-dependent fields */
 	union {
 		u64 last_psi_total;
 	};
+#endif	/* CONFIG_PSI */
 	struct list_head list;
 };
 

@@ -1164,6 +1164,8 @@ static unsigned long damon_feed_loop_next_input(unsigned long last_input,
 	return min_input;
 }
 
+#ifdef CONFIG_PSI
+
 static u64 damos_get_some_mem_psi_total(void)
 {
 	if (static_branch_likely(&psi_disabled))
@@ -1173,18 +1175,32 @@ static u64 damos_get_some_mem_psi_total(void)
 			NSEC_PER_USEC);
 }
 
+#else
+
+static inline u64 damos_get_some_mem_psi_total(void)
+{
+	return 0;
+}
+
+#endif	/* CONFIG_PSI */
+
 static void damos_set_quota_goal_current_value(struct damos_quota_goal *goal)
 {
 	switch (goal->metric) {
 	case DAMOS_QGOAL_METRIC_USER_INPUT:
 		/* User should already set goal->current_value */
 		break;
+
+#ifdef CONFIG_PSI
+
 	case DAMOS_QGOAL_METRIC_SOME_MEM_PSI_US:
 		u64 now_psi_total = damos_get_some_mem_psi_total();
 
 		goal->current_value = now_psi_total - goal->last_psi_total;
 		goal->last_psi_total = now_psi_total;
 		break;
+
+#endif	/* CONFIG_PSI */
 	default:
 		BUG();
 		break;
