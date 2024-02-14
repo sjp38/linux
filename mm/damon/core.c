@@ -1158,22 +1158,44 @@ static unsigned long damon_feed_loop_next_input(unsigned long last_input,
 	return min_input;
 }
 
-/* Called only if quota->ms, quota->sz, or quota->goal.get_score are set */
+/* Return the highest score since it makes schemes least aggressive */
+static unsigned long damos_quota_score(struct damos_quota *quota)
+{
+	struct damos_quota_goal *goal;
+	unsigned long highest_score = 0;
+
+	if (quota->goal.get_score)
+		highest_score = quota->goal.get_score(
+				quota->goal.get_score_arg);
+
+	damos_for_each_quota_goal(goal, quota)
+		highest_score = max(highest_score,
+				goal->get_score(goal->get_score_arg));
+
+	return highest_score;
+}
+
+/*
+ * Called only if quota->ms, quota->sz, or quota->goal.get_score are set, or
+ * quota->goals is not empty
+ */
 static void damos_set_effective_quota(struct damos_quota *quota)
 {
 	unsigned long throughput;
 	unsigned long esz;
 
-	if (!quota->ms && !quota->goal.get_score) {
+	if (!quota->ms && !quota->goal.get_score &&
+			list_empty(&quota->goals)) {
 		quota->esz = quota->sz;
 		return;
 	}
 
-	if (quota->goal.get_score) {
+	if (quota->goal.get_score || !list_empty(&quota->goals)) {
+		unsigned long score = damos_quota_score(quota);
+
 		quota->esz_bp = damon_feed_loop_next_input(
 				max(quota->esz_bp, 10000UL),
-				quota->goal.get_score(
-					quota->goal.get_score_arg));
+				score);
 		esz = quota->esz_bp / 10000;
 	}
 
@@ -1183,7 +1205,7 @@ static void damos_set_effective_quota(struct damos_quota *quota)
 				quota->total_charged_ns;
 		else
 			throughput = PAGE_SIZE * 1024;
-		if (quota->goal.get_score)
+		if (quota->goal.get_score || !list_empty(&quota->goals))
 			esz = min(throughput * quota->ms, esz);
 		else
 			esz = throughput * quota->ms;
@@ -1205,7 +1227,8 @@ static void damos_adjust_quota(struct damon_ctx *c, struct damos *s)
 	unsigned long cumulated_sz;
 	unsigned int score, max_score = 0;
 
-	if (!quota->ms && !quota->sz && !quota->goal.get_score)
+	if (!quota->ms && !quota->sz && !quota->goal.get_score &&
+			list_empty(&quota->goals))
 		return;
 
 	/* New charge window starts */
