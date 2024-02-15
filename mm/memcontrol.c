@@ -7974,7 +7974,7 @@ static int __init setup_swap_account(char *s)
 	bool res;
 
 	if (!kstrtobool(s, &res) && !res)
-		pr_warn_once("The swapaccount=0 commdandline option is deprecated "
+		pr_warn_once("The swapaccount=0 commandline option is deprecated "
 			     "in favor of configuring swap control via cgroupfs. "
 			     "Please report your usecase to linux-mm@kvack.org if you "
 			     "depend on this functionality.\n");
