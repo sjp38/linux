@@ -1538,6 +1538,7 @@ static void damos_set_quota_goal_current_value(struct damos_quota_goal *goal)
 		now_psi_total = damos_get_some_mem_psi_total();
 		goal->current_value = now_psi_total - goal->last_psi_total;
 		goal->last_psi_total = now_psi_total;
+		pr_info("PSI current value %lu\n", goal->current_value);
 		break;
 	default:
 		break;
