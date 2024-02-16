@@ -728,6 +728,7 @@ static noinline void *test_get_entry(struct xarray *xa, unsigned long index)
 {
 	XA_STATE(xas, xa, index);
 	void *p;
+	static unsigned int i = 0;
 
 	rcu_read_lock();
 repeat:
@@ -736,6 +737,17 @@ repeat:
 	if (xas_retry(&xas, p))
 		goto repeat;
 	rcu_read_unlock();
+
+	/*
+	 * This is not part of the page cache, this selftest is pretty
+	 * aggressive and does not want to trust the xarray API but rather
+	 * test it, and for order 20 (4 GiB block size) we can loop over
+	 * over a million entries which can cause a soft lockup. Page cache
+	 * APIs won't be stupid, proper page cache APIs loop over the proper
+	 * order so when using a larger order we skip shared entries.
+	 */
+	if (++i % XA_CHECK_SCHED == 0)
+		schedule();
 
 	return p;
 }
