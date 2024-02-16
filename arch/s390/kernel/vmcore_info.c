@@ -19,5 +19,3 @@ void arch_crash_save_vmcoreinfo(void)
 	abs_lc->vmcore_info = paddr_vmcoreinfo_note();
 	put_abs_lowcore(abs_lc);
 }
-
-

@@ -13,5 +13,3 @@ void arch_crash_save_vmcoreinfo(void)
 	VMCOREINFO_CONFIG(X2TLB);
 #endif
 }
-
-
