@@ -816,14 +816,14 @@ static int damon_update_scheme(struct damos *dst, struct damos *src)
 	dst->pattern = src->pattern;
 	dst->action = src->action;
 	dst->apply_interval_us = src->apply_interval_us;
+
+	dst->quota.reset_interval = src->quota.reset_interval;
 	dst->quota.ms = src->quota.ms;
 	dst->quota.sz = src->quota.sz;
-	dst->quota.reset_interval = src->quota.reset_interval;
+	damos_update_quota_goals(&dst->quota, &src->quota);
 	dst->quota.weight_sz = src->quota.weight_sz;
 	dst->quota.weight_nr_accesses = src->quota.weight_nr_accesses;
 	dst->quota.weight_age = src->quota.weight_age;
-
-	damos_update_quota_goals(&dst->quota, &src->quota);
 
 	dst->wmarks = src->wmarks;
 
@@ -936,34 +936,36 @@ static int damon_update_targets(struct damon_ctx *dst, struct damon_ctx *src)
 }
 
 /**
- * damon_update_ctx_prams() - Update input parameters of given DAMON context.
- * @old_ctx:	DAMON context that need to be udpated.
- * @new_ctx:	DAMON context that having new user parameters.
+ * damon_update_ctx() - Update input parameters of given DAMON context.
+ * @dst:	DAMON context that need to be udpated.
+ * @src:	DAMON context that having new user parameters.
  *
  * damon_ctx contains user input parameters for monitoring requests, internal
  * status of the monitoring, and the results of the monitoring.  This function
- * updates only input parameters for monitoring requests of @old_ctx with those
- * of @new_ctx, while keeping the internal status and monitoring results.  This
+ * updates only input parameters for monitoring requests of @dst with those
+ * of @src, while keeping the internal status and monitoring results.  This
  * function is aimed to be used for online tuning-like use case.
  */
-int damon_update_ctx(struct damon_ctx *old_ctx, struct damon_ctx *new_ctx)
+int damon_update_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 {
 	int err;
 
-	err = damon_update_schemes(old_ctx, new_ctx);
+	err = damon_update_schemes(dst, src);
 	if (err)
 		return err;
-	err = damon_update_targets(old_ctx, new_ctx);
-	if (err)
-		return err;
-	err = damon_set_attrs(old_ctx, &new_ctx->attrs);
+	err = damon_update_targets(dst, src);
 	if (err)
 		return err;
 	/*
-	 * ->ops update should be done at least after targets update, for pid
-	 * handling
+	 * schemes and targets should be updated first, since
+	 * 1. damon_set_attrs() updates monitoring results of targets and
+	 * next_apply_sis of schemes, and
+	 * 2. ops update should be done after pid handling is done.
 	 */
-	old_ctx->ops = new_ctx->ops;
+	err = damon_set_attrs(dst, &src->attrs);
+	if (err)
+		return err;
+	dst->ops = src->ops;
 
 	return 0;
 }
