@@ -728,7 +728,7 @@ static noinline void *test_get_entry(struct xarray *xa, unsigned long index)
 {
 	XA_STATE(xas, xa, index);
 	void *p;
-	static unsigned int i = 0;
+	unsigned int loops = 0;
 
 	rcu_read_lock();
 repeat:
@@ -746,7 +746,7 @@ repeat:
 	 * APIs won't be stupid, proper page cache APIs loop over the proper
 	 * order so when using a larger order we skip shared entries.
 	 */
-	if (++i % XA_CHECK_SCHED == 0)
+	if (++loops % XA_CHECK_SCHED == 0)
 		schedule();
 
 	return p;
