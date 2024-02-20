@@ -742,12 +742,12 @@ static void damos_update_quota_goals(struct damos_quota *dst,
 	damos_for_each_quota_goal_safe(goal, next, dst) {
 		struct damos_quota_goal *src_goal =
 			damos_nth_quota_goal(i++, src);
+		struct list_head head;
 
 		if (src_goal) {
-			goal->metric = src_goal->metric;
-			goal->target_value = src_goal->target_value;
-			goal->current_value = src_goal->current_value;
-			goal->last_psi_total = src_goal->last_psi_total;
+			head = goal->list;
+			*goal = *src_goal;
+			goal->list = head;
 			continue;
 		}
 		damos_destroy_quota_goal(goal);
@@ -778,25 +778,12 @@ static int damos_update_filters(struct damos *dst, struct damos *src)
 
 	damos_for_each_filter_safe(filter, next, dst) {
 		struct damos_filter *src_filter = damos_nth_filter(i++, src);
+		struct list_head head;
 
 		if (src_filter) {
-			filter->type = src_filter->type;
-			filter->matching = src_filter->matching;
-			switch (src_filter->type) {
-			case DAMOS_FILTER_TYPE_ANON:
-				break;
-			case DAMOS_FILTER_TYPE_MEMCG:
-				filter->memcg_id = src_filter->memcg_id;
-				break;
-			case DAMOS_FILTER_TYPE_ADDR:
-				filter->addr_range = src_filter->addr_range;
-				break;
-			case DAMOS_FILTER_TYPE_TARGET:
-				filter->target_idx = src_filter->target_idx;
-				break;
-			default:
-				break;
-			}
+			head = filter->list;
+			*filter = *src_filter;
+			filter->list = head;
 			continue;
 		}
 		damos_destroy_filter(filter);
