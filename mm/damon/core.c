@@ -299,6 +299,12 @@ static void damos_del_filter(struct damos_filter *f)
 	list_del(&f->list);
 }
 
+void damos_move_filter(struct damos *s, struct damos_filter *f)
+{
+	damos_del_filter(f);
+	damos_add_filter(s, f);
+}
+
 static void damos_free_filter(struct damos_filter *f)
 {
 	kfree(f);
@@ -333,6 +339,12 @@ void damos_add_quota_goal(struct damos_quota *q, struct damos_quota_goal *g)
 static void damos_del_quota_goal(struct damos_quota_goal *g)
 {
 	list_del(&g->list);
+}
+
+void damos_move_quota_goal(struct damos_quota *q, struct damos_quota_goal *g)
+{
+	damos_del_quota_goal(g);
+	damos_add_quota_goal(q, g);
 }
 
 static void damos_free_quota_goal(struct damos_quota_goal *g)
@@ -419,6 +431,12 @@ static void damon_del_scheme(struct damos *s)
 	list_del(&s->list);
 }
 
+void damon_move_scheme(struct damon_ctx *ctx, struct damos *s)
+{
+	damon_del_scheme(s);
+	damon_add_scheme(ctx, s);
+}
+
 static void damon_free_scheme(struct damos *s)
 {
 	kfree(s);
@@ -472,6 +490,12 @@ bool damon_targets_empty(struct damon_ctx *ctx)
 static void damon_del_target(struct damon_target *t)
 {
 	list_del(&t->list);
+}
+
+void damon_move_target(struct damon_ctx *ctx, struct damon_target *t)
+{
+	damon_del_target(t);
+	damon_add_target(ctx, t);
 }
 
 void damon_free_target(struct damon_target *t)
@@ -693,6 +717,268 @@ void damon_set_schemes(struct damon_ctx *ctx, struct damos **schemes,
 		damon_destroy_scheme(s);
 	for (i = 0; i < nr_schemes; i++)
 		damon_add_scheme(ctx, schemes[i]);
+}
+
+static struct damos_quota_goal *damos_nth_quota_goal(
+		int n, struct damos_quota *q)
+{
+	struct damos_quota_goal *goal;
+	int i = 0;
+
+	damos_for_each_quota_goal(goal, q) {
+		if (i++ == n)
+			return goal;
+	}
+	return NULL;
+}
+
+
+static void damos_update_quota_goals(struct damos_quota *dst,
+		struct damos_quota *src)
+{
+	struct damos_quota_goal *goal, *next;
+	int i = 0, j = 0;
+
+	damos_for_each_quota_goal_safe(goal, next, dst) {
+		struct damos_quota_goal *src_goal =
+			damos_nth_quota_goal(i++, src);
+
+		if (src_goal) {
+			goal->metric = src_goal->metric;
+			goal->target_value = src_goal->target_value;
+			goal->current_value = src_goal->current_value;
+			goal->last_psi_total = src_goal->last_psi_total;
+			continue;
+		}
+		damos_destroy_quota_goal(goal);
+	}
+	damos_for_each_quota_goal_safe(goal, next, src) {
+		if (j++ < i)
+			continue;
+		damos_move_quota_goal(dst, goal);
+	}
+}
+
+static struct damos_filter *damos_nth_filter(int n, struct damos *s)
+{
+	struct damos_filter *filter;
+	int i = 0;
+
+	damos_for_each_filter(filter, s) {
+		if (i++ == n)
+			return filter;
+	}
+	return NULL;
+}
+
+static int damos_update_filters(struct damos *dst, struct damos *src)
+{
+	struct damos_filter *filter, *next;
+	int i = 0, j = 0;
+
+	damos_for_each_filter_safe(filter, next, dst) {
+		struct damos_filter *src_filter = damos_nth_filter(i++, src);
+
+		if (src_filter) {
+			filter->type = src_filter->type;
+			filter->matching = src_filter->matching;
+			switch (src_filter->type) {
+			case DAMOS_FILTER_TYPE_ANON:
+				break;
+			case DAMOS_FILTER_TYPE_MEMCG:
+				filter->memcg_id = src_filter->memcg_id;
+				break;
+			case DAMOS_FILTER_TYPE_ADDR:
+				filter->addr_range = src_filter->addr_range;
+				break;
+			case DAMOS_FILTER_TYPE_TARGET:
+				filter->target_idx = src_filter->target_idx;
+				break;
+			default:
+				break;
+			}
+			continue;
+		}
+		damos_destroy_filter(filter);
+	}
+
+	damos_for_each_filter_safe(filter, next, src) {
+		if (j++ < i)
+			continue;
+		damos_move_filter(dst, filter);
+	}
+	return 0;
+}
+
+static struct damos *damon_nth_scheme(int n, struct damon_ctx *ctx)
+{
+	struct damos *s;
+	int i = 0;
+
+	damon_for_each_scheme(s, ctx) {
+		if (i++ == n)
+			return s;
+	}
+	return NULL;
+}
+
+static int damon_update_scheme(struct damos *dst, struct damos *src)
+{
+	int err;
+
+	dst->pattern = src->pattern;
+	dst->action = src->action;
+	dst->apply_interval_us = src->apply_interval_us;
+	dst->quota.ms = src->quota.ms;
+	dst->quota.sz = src->quota.sz;
+	dst->quota.reset_interval = src->quota.reset_interval;
+	dst->quota.weight_sz = src->quota.weight_sz;
+	dst->quota.weight_nr_accesses = src->quota.weight_nr_accesses;
+	dst->quota.weight_age = src->quota.weight_age;
+
+	damos_update_quota_goals(&dst->quota, &src->quota);
+
+	dst->wmarks = src->wmarks;
+
+	err = damos_update_filters(dst, src);
+	return err;
+}
+
+static int damon_update_schemes(struct damon_ctx *dst, struct damon_ctx *src)
+{
+	struct damos *scheme, *next;
+	int i = 0, j = 0, err;
+
+	damon_for_each_scheme_safe(scheme, next, dst) {
+		struct damos *src_scheme = damon_nth_scheme(i++, src);
+
+		if (src_scheme) {
+			err = damon_update_scheme(scheme, src_scheme);
+			if (err)
+				return err;
+			continue;
+		}
+		damon_destroy_scheme(scheme);
+	}
+
+	damon_for_each_scheme_safe(scheme, next, src) {
+		if (j++ < i)
+			continue;
+		damon_move_scheme(dst, scheme);
+	}
+	return 0;
+}
+
+static int damon_update_target_regions(struct damon_target *dst,
+		struct damon_target *src)
+{
+	struct damon_addr_range *ranges;
+	int i = 0, err;
+	struct damon_region *r;
+
+	damon_for_each_region(r, src)
+		i++;
+	if (!i)
+		return 0;
+	ranges = kmalloc_array(i, sizeof(*ranges), GFP_KERNEL | __GFP_NOWARN);
+	if (!ranges)
+		return -ENOMEM;
+	i = 0;
+	damon_for_each_region(r, src) {
+		if (r->ar.start > r->ar.end) {
+			err = -EINVAL;
+			goto out;
+		}
+		ranges[i].start = r->ar.start;
+		ranges[i++].end = r->ar.end;
+		if (i == 1)
+			continue;
+		if (ranges[i - 2].end > ranges[i - 1].start) {
+			err = -EINVAL;
+			goto out;
+		}
+	}
+	err = damon_set_regions(dst, ranges, i);
+out:
+	kfree(ranges);
+	return err;
+}
+
+static struct damon_target *damon_nth_target(int n, struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	int i = 0;
+
+	damon_for_each_target(t, ctx) {
+		if (i++ == n)
+			return t;
+	}
+	return NULL;
+}
+
+static int damon_update_targets(struct damon_ctx *dst, struct damon_ctx *src)
+{
+	struct damon_target *t, *next;
+	int i = 0, j = 0, err;
+
+	damon_for_each_target_safe(t, next, dst) {
+		struct damon_target *src_target = damon_nth_target(i++, src);
+
+		if (damon_target_has_pid(dst))
+			put_pid(t->pid);
+
+		if (src_target) {
+			if (damon_target_has_pid(src))
+				get_pid(src_target->pid);
+			t->pid = src_target->pid;
+
+			err = damon_update_target_regions(t, src_target);
+			if (err)
+				return err;
+			continue;
+		}
+		damon_destroy_target(t);
+	}
+
+	damon_for_each_target_safe(t, next, src) {
+		if (j++ < i)
+			continue;
+		damon_move_target(dst, t);
+	}
+	return 0;
+}
+
+/**
+ * damon_update_ctx_prams() - Update input parameters of given DAMON context.
+ * @old_ctx:	DAMON context that need to be udpated.
+ * @new_ctx:	DAMON context that having new user parameters.
+ *
+ * damon_ctx contains user input parameters for monitoring requests, internal
+ * status of the monitoring, and the results of the monitoring.  This function
+ * updates only input parameters for monitoring requests of @old_ctx with those
+ * of @new_ctx, while keeping the internal status and monitoring results.  This
+ * function is aimed to be used for online tuning-like use case.
+ */
+int damon_update_ctx(struct damon_ctx *old_ctx, struct damon_ctx *new_ctx)
+{
+	int err;
+
+	err = damon_update_schemes(old_ctx, new_ctx);
+	if (err)
+		return err;
+	err = damon_update_targets(old_ctx, new_ctx);
+	if (err)
+		return err;
+	err = damon_set_attrs(old_ctx, &new_ctx->attrs);
+	if (err)
+		return err;
+	/*
+	 * ->ops update should be done at least after targets update, for pid
+	 * handling
+	 */
+	old_ctx->ops = new_ctx->ops;
+
+	return 0;
 }
 
 /**
