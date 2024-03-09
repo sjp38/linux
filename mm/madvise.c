@@ -411,7 +411,7 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 huge_unlock:
 		spin_unlock(ptl);
 		if (pageout)
-			reclaim_pages(&folio_list, true);
+			reclaim_pages(&folio_list);
 		return 0;
 	}
 
@@ -537,7 +537,7 @@ restart:
 		pte_unmap_unlock(start_pte, ptl);
 	}
 	if (pageout)
-		reclaim_pages(&folio_list, true);
+		reclaim_pages(&folio_list);
 	cond_resched();
 
 	return 0;
