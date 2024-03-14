@@ -477,6 +477,9 @@ Below types of filters are currently supported.
 - memory cgroup
   - Applied to pages that belonging to a given cgroup.
   - Handled by operations set layer.  Supported by only ``paddr`` set.
+- young page
+  - Applied to pages that are accessed after last access check from the filter.
+  - Handled by operations set layer.  Supported by only ``paddr`` set.
 - address range
   - Applied to pages that belonging to a given address range.
   - Handled by the core logic.
