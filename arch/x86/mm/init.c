@@ -1032,8 +1032,6 @@ void __init memblock_find_dma_reserve(void)
 		if (start_pfn < end_pfn)
 			nr_free_pages += end_pfn - start_pfn;
 	}
-
-	set_dma_reserve(nr_pages - nr_free_pages);
 #endif
 }
 
