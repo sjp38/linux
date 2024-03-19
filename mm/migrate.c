@@ -1654,25 +1654,63 @@ static int migrate_pages_batch(struct list_head *from,
 
 			/*
 			 * Large folio migration might be unsupported or
-			 * the allocation might be failed so we should retry
-			 * on the same folio with the large folio split
+			 * the folio is on deferred split list so we should
+			 * retry on the same folio with the large folio split
 			 * to normal folios.
 			 *
 			 * Split folios are put in split_folios, and
 			 * we will migrate them after the rest of the
 			 * list is processed.
 			 */
-			if (!thp_migration_supported() && is_thp) {
-				nr_failed++;
-				stats->nr_thp_failed++;
-				if (!try_split_folio(folio, split_folios)) {
-					stats->nr_thp_split++;
-					stats->nr_split++;
+			if (is_thp) {
+				bool is_on_deferred_list = false;
+
+				/*
+				 * Check without taking split_queue_lock to
+				 * reduce locking overheads. The worst case is
+				 * that if the folio is put on the deferred
+				 * split list after the check, it will be
+				 * migrated and not put back on the list.
+				 * The migrated folio will not be split
+				 * via shrinker during memory pressure.
+				 */
+				if (!data_race(list_empty(&folio->_deferred_list))) {
+					struct deferred_split *ds_queue;
+					unsigned long flags;
+
+					ds_queue =
+						get_deferred_split_queue(folio);
+					spin_lock_irqsave(&ds_queue->split_queue_lock,
+							  flags);
+					/*
+					 * Only check if the folio is on
+					 * deferred split list without removing
+					 * it. Since the folio can be on
+					 * deferred_split_scan() local list and
+					 * removing it can cause the local list
+					 * corruption. Folio split process
+					 * below can handle it with the help of
+					 * folio_ref_freeze().
+					 */
+					is_on_deferred_list =
+						!list_empty(&folio->_deferred_list);
+					spin_unlock_irqrestore(&ds_queue->split_queue_lock,
+							       flags);
+				}
+				if (!thp_migration_supported() ||
+						is_on_deferred_list) {
+					nr_failed++;
+					stats->nr_thp_failed++;
+					if (!try_split_folio(folio,
+							     split_folios)) {
+						stats->nr_thp_split++;
+						stats->nr_split++;
+						continue;
+					}
+					stats->nr_failed_pages += nr_pages;
+					list_move_tail(&folio->lru, ret_folios);
 					continue;
 				}
-				stats->nr_failed_pages += nr_pages;
-				list_move_tail(&folio->lru, ret_folios);
-				continue;
 			}
 
 			rc = migrate_folio_unmap(get_new_folio, put_new_folio,
