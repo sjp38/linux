@@ -861,10 +861,12 @@ static void __mod_memcg_lruvec_state(struct lruvec *lruvec,
 		case NR_ANON_THPS:
 		case NR_SHMEM_PMDMAPPED:
 		case NR_FILE_PMDMAPPED:
-			WARN_ON_ONCE(!in_task());
+			if (WARN_ON_ONCE(!in_task()))
+				pr_warn("stat item index: %d\n", idx);
 			break;
 		default:
-			VM_WARN_ON_IRQS_ENABLED();
+			if (VM_WARN_ON_IRQS_ENABLED())
+				pr_warn("stat item index: %d\n", idx);
 		}
 	}
 
