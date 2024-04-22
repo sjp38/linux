@@ -1631,6 +1631,12 @@ static bool try_to_unmap_one(struct folio *folio, struct vm_area_struct *vma,
 	if (flags & TTU_SYNC)
 		pvmw.flags = PVMW_SYNC;
 
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+	if (flags & TTU_LAZYFREE_THP)
+		if (discard_trans_pmd(vma, address, folio))
+			return true;
+#endif
+
 	if (flags & TTU_SPLIT_HUGE_PMD)
 		split_huge_pmd_address(vma, address, false, folio);
 

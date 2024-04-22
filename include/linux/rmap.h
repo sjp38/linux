@@ -100,6 +100,8 @@ enum ttu_flags {
 					 * do a final flush if necessary */
 	TTU_RMAP_LOCKED		= 0x80,	/* do not grab rmap lock:
 					 * caller holds it */
+	TTU_LAZYFREE_THP	= 0x100, /* avoid splitting PMD-mapped THPs
+					  * that are marked as lazyfree. */
 };
 
 #ifdef CONFIG_MMU

@@ -1260,6 +1260,13 @@ retry:
 
 			if (folio_test_pmd_mappable(folio))
 				flags |= TTU_SPLIT_HUGE_PMD;
+
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+			if (folio_test_anon(folio) && !was_swapbacked &&
+			    (flags & TTU_SPLIT_HUGE_PMD))
+				flags |= TTU_LAZYFREE_THP;
+#endif
+
 			/*
 			 * Without TTU_SYNC, try_to_unmap will only begin to
 			 * hold PTL from the first present PTE within a large
