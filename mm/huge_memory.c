@@ -2975,7 +2975,8 @@ bool can_split_folio(struct folio *folio, int *pextra_pins)
  *
  * Returns 0 if the huge page was split successfully.
  *
- * Returns -EAGAIN if the folio has unexpected reference (e.g., GUP).
+ * Returns -EAGAIN if the folio has unexpected reference (e.g., GUP) or if
+ * the folio was concurrently removed from the page cache.
  *
  * Returns -EBUSY when trying to split the huge zeropage, if the folio is
  * under writeback, if fs-specific folio metadata cannot currently be
