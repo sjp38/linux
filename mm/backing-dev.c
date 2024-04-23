@@ -160,7 +160,9 @@ static void wb_stats_show(struct seq_file *m, struct bdi_writeback *wb,
 {
 
 	seq_printf(m,
+#ifdef CONFIG_CGROUPS
 		   "WbCgIno:           %10lu\n"
+#endif
 		   "WbWriteback:       %10lu kB\n"
 		   "WbReclaimable:     %10lu kB\n"
 		   "WbDirtyThresh:     %10lu kB\n"
@@ -172,7 +174,9 @@ static void wb_stats_show(struct seq_file *m, struct bdi_writeback *wb,
 		   "b_more_io:         %10lu\n"
 		   "b_dirty_time:      %10lu\n"
 		   "state:             %10lx\n\n",
+#ifdef CONFIG_CGROUPS
 		   cgroup_ino(wb->memcg_css->cgroup),
+#endif
 		   K(stats->nr_writeback),
 		   K(stats->nr_reclaimable),
 		   K(stats->wb_thresh),
