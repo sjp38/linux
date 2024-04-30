@@ -10,6 +10,11 @@ The mailing lists for the subsystem are damon@lists.linux.dev and
 linux-mm@kvack.org.  Patches should be made against the mm-unstable tree [1]_
 whenever possible and posted to the mailing lists.
 
+For beginners who are not familiar with the mailing lists based workflow, there
+are multiple tools.  HacKerMaiL (hkml) [8]_ is one of such tools that DAMON
+maintainer is developing for such beginners to DAMON.  Please feel free to try
+the tool and ask help to the maintainer.
+
 SCM Trees
 ---------
 
@@ -61,3 +66,4 @@ of sending a patch.
 .. [5] https://github.com/awslabs/damon-tests/blob/master/corr/tests/kunit.sh
 .. [6] https://github.com/awslabs/damon-tests/tree/master/corr
 .. [7] https://github.com/awslabs/damon-tests/tree/master/perf
+.. [8] https://github.com/sjp38/hackermail
