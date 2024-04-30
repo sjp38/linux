@@ -53,6 +53,19 @@ Mon-Fri) in PT (Pacific Time).  The response to patches will occasionally be
 slow.  Do not hesitate to send a ping if you have not heard back within a week
 of sending a patch.
 
+Mailing tool support
+--------------------
+
+DAMON uses the mailing list based workflow.  For easy DAMON development
+participation, DAMON maintainer is also developing and maintaining a simple
+tool for the workflow, called HacKerMaiL (hkml) [8]_ .  Because of the purpose
+and the fact that the maintainer of the tool and DAMON is the same person, the
+tool will support DAMON development workflow use cases as much as possible.
+
+If you want to participate in DAMON development but having troubles due to the
+workflow or existing tools, you can try hkml, report any issue from it, and
+request new features to the maintainer.
+
 
 .. [1] https://git.kernel.org/akpm/mm/h/mm-unstable
 .. [2] https://git.kernel.org/sj/h/damon/next
@@ -61,3 +74,4 @@ of sending a patch.
 .. [5] https://github.com/awslabs/damon-tests/blob/master/corr/tests/kunit.sh
 .. [6] https://github.com/awslabs/damon-tests/tree/master/corr
 .. [7] https://github.com/awslabs/damon-tests/tree/master/perf
+.. [8] https://github.com/sjp38/hackermail
