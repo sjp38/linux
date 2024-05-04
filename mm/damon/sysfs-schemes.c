@@ -1460,6 +1460,10 @@ static const char * const damon_sysfs_damos_action_strs[] = {
 	"lru_deprio",
 	"migrate_hot",
 	"migrate_cold",
+#ifdef CONFIG_ACMA
+	"damos_alloc",
+	"damos_free",
+#endif
 	"stat",
 };
 
