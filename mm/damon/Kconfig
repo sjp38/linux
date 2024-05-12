@@ -121,4 +121,14 @@ config DAMON_LRU_SORT
 	  protect frequently accessed (hot) pages while rarely accessed (cold)
 	  pages reclaimed first under memory pressure.
 
+config DAMON_ACMA
+	bool "Build Access/Contiguity-aware Memory Auto-scaling (DAMON_ACMA)"
+	depends on DAMON_PADDR
+	help
+	  This builds the DAMON-based Access/Contiguity-aware Memory
+	  Auto-scaling subsystem.  It preempts unnecessary memory from the
+	  system and report it to the host while respecting user-specified
+	  min/max memory for the system and maximum memory pressure stall time
+	  ratio.
+
 endmenu
