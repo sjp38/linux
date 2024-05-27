@@ -58,6 +58,23 @@ Mon-Fri) in PT (Pacific Time).  The response to patches will occasionally be
 slow.  Do not hesitate to send a ping if you have not heard back within a week
 of sending a patch.
 
+Community meetup
+----------------
+
+There are two bi-weekly meetup series for DAMON community.
+
+The first one is for any discussion between every community member.  No
+reservation is needed.
+
+The seconds one is for discussions on specific topics between restricted
+members including the maintainer.  Reservation is required to join the meeting.
+The maintainer shares the reservation available time slots, and attendees
+should reserve one of those at least 24 hours before the time slot, by reaching
+out to the maintainer.
+
+Schedules and available reservation time slots are available at the Google doc
+[9]_ .
+
 
 .. [1] https://git.kernel.org/akpm/mm/h/mm-unstable
 .. [2] https://git.kernel.org/sj/h/damon/next
@@ -67,3 +84,4 @@ of sending a patch.
 .. [6] https://github.com/awslabs/damon-tests/tree/master/corr
 .. [7] https://github.com/awslabs/damon-tests/tree/master/perf
 .. [8] https://github.com/sjp38/hackermail
+.. [9] https://docs.google.com/document/d/1v43Kcj3ly4CYqmAkMaZzLiM2GEnWfgdGbZAH3mi2vpM/edit?usp=sharing
