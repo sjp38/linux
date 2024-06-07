@@ -695,6 +695,70 @@ void damon_set_schemes(struct damon_ctx *ctx, struct damos **schemes,
 		damon_add_scheme(ctx, schemes[i]);
 }
 
+static struct damos_quota_goal *damos_nth_quota_goal(
+		int n, struct damos_quota *q)
+{
+	struct damos_quota_goal *goal;
+	int i = 0;
+
+	damos_for_each_quota_goal(goal, q) {
+		if (i++ == n)
+			return goal;
+	}
+	return NULL;
+}
+
+static void damos_commit_quota_goal(
+		struct damos_quota_goal *dst, struct damos_quota_goal *src)
+{
+	dst->metric = src->metric;
+	dst->target_value = src->target_value;
+	if (dst->metric == DAMOS_QUOTA_USER_INPUT)
+		dst->current_value = src->current_value;
+	/* keep last_psi_total as is, since it will be updated in next cycle */
+}
+
+static int damos_commit_quota_goals(
+		struct damos_quota *dst, struct damos_quota *src)
+{
+	struct damos_quota_goal *dst_goal, *next, *src_goal, *new_goal;
+	int i = 0, j = 0;
+
+	damos_for_each_quota_goal_safe(dst_goal, next, dst) {
+		src_goal = damos_nth_quota_goal(i++, src);
+		if (src_goal)
+			damos_commit_quota_goal(dst_goal, src_goal);
+		else
+			damos_destroy_quota_goal(dst_goal);
+	}
+	damos_for_each_quota_goal_safe(src_goal, next, src) {
+		if (j++ < i)
+			continue;
+		new_goal = damos_new_quota_goal(
+				src_goal->metric, src_goal->target_value);
+		if (!new_goal)
+			return -ENOMEM;
+		damos_add_quota_goal(dst, new_goal);
+	}
+	return 0;
+}
+
+int damos_commit_quota(struct damos_quota *dst, struct damos_quota *src)
+{
+	int err;
+
+	dst->reset_interval = src->reset_interval;
+	dst->ms = src->ms;
+	dst->sz = src->sz;
+	err = damos_commit_quota_goals(dst, src);
+	if (err)
+		return err;
+	dst->weight_sz = src->weight_sz;
+	dst->weight_nr_accesses = src->weight_nr_accesses;
+	dst->weight_age = src->weight_age;
+	return 0;
+}
+
 /**
  * damon_nr_running_ctxs() - Return number of currently running contexts.
  */
