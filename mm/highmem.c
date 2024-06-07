@@ -133,6 +133,7 @@ unsigned long __totalhigh_pages(void)
 		if (is_highmem(zone))
 			pages += zone_managed_pages(zone);
 	}
+EXPORT_SYMBOL(__totalhigh_pages);
 
 	return pages;
 }
