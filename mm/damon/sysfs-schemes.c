@@ -2001,7 +2001,7 @@ int damos_sysfs_set_quota_scores(struct damon_sysfs_schemes *sysfs_schemes,
 				damos_destroy_quota_goal(g);
 			return err;
 		}
-		err = damos_commit_quota(&scheme->quota, &quota);
+		err = damos_commit_quota_goals(&scheme->quota, &quota);
 		damos_for_each_quota_goal_safe(g, g_next, &quota)
 			damos_destroy_quota_goal(g);
 		if (err)

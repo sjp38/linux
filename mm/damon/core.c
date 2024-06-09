@@ -718,8 +718,7 @@ static void damos_commit_quota_goal(
 	/* keep last_psi_total as is, since it will be updated in next cycle */
 }
 
-static int damos_commit_quota_goals(
-		struct damos_quota *dst, struct damos_quota *src)
+int damos_commit_quota_goals(struct damos_quota *dst, struct damos_quota *src)
 {
 	struct damos_quota_goal *dst_goal, *next, *src_goal, *new_goal;
 	int i = 0, j = 0;
@@ -743,7 +742,7 @@ static int damos_commit_quota_goals(
 	return 0;
 }
 
-int damos_commit_quota(struct damos_quota *dst, struct damos_quota *src)
+static int damos_commit_quota(struct damos_quota *dst, struct damos_quota *src)
 {
 	int err;
 
