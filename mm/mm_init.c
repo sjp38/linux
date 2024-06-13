@@ -1923,7 +1923,7 @@ unsigned long __init node_map_pfn_alignment(void)
 
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
 static void __init deferred_free_pages(unsigned long pfn,
-				       unsigned long nr_pages)
+		unsigned long nr_pages)
 {
 	struct page *page;
 	unsigned long i;
@@ -1967,8 +1967,7 @@ static inline void __init pgdat_init_report_one_done(void)
  * Return number of pages initialized.
  */
 static unsigned long __init deferred_init_pages(struct zone *zone,
-						unsigned long pfn,
-						unsigned long end_pfn)
+		unsigned long pfn, unsigned long end_pfn)
 {
 	int nid = zone_to_nid(zone);
 	unsigned long nr_pages = end_pfn - pfn;
