@@ -1185,6 +1185,7 @@ static int check_bytes_and_report(struct kmem_cache *s, struct slab *slab,
 	metadata_access_enable();
 	fault = memchr_inv(kasan_reset_tag(start), value, bytes);
 	metadata_access_disable();
+	kmsan_unpoison_memory(&fault, sizeof(fault));
 	if (!fault)
 		return 1;
 
@@ -1291,6 +1292,7 @@ static void slab_pad_check(struct kmem_cache *s, struct slab *slab)
 	metadata_access_enable();
 	fault = memchr_inv(kasan_reset_tag(pad), POISON_INUSE, remainder);
 	metadata_access_disable();
+	kmsan_unpoison_memory(&fault, sizeof(fault));
 	if (!fault)
 		return;
 	while (end > fault && end[-1] == POISON_INUSE)
