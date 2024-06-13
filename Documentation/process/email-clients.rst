@@ -370,3 +370,11 @@ clients may encrypt responses to encrypted mail for all recipients, including
 the mailing lists.
 Unless a way to disable this "feature" is introduced, Proton Mail is unsuited
 to kernel development.
+
+HacKerMaiL (TUI)
+****************
+
+HacKerMaiL is a public-inbox based mails management tool.  It is developed and
+maintained by the DAMON maintainer to support DAMON development.  No special
+installation or configuration are required.  Refer to the README
+(https://github.com/sjp38/hackermail/blob/master/README.md) to get started.
