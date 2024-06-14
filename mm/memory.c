@@ -4885,7 +4885,7 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 		if (unlikely(vma_off < idx ||
 			    vma_off + (nr_pages - idx) > vma_pages(vma) ||
 			    pte_off < idx ||
-			    pte_off + (nr_pages - idx)  > PTRS_PER_PTE - 1)) {
+			    pte_off + (nr_pages - idx)  > PTRS_PER_PTE)) {
 			nr_pages = 1;
 		} else {
 			/* Now we can set mappings for the whole large folio. */
