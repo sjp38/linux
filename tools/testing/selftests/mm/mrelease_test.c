@@ -10,7 +10,7 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <asm-generic/unistd.h>
+#include <linux/unistd.h>
 #include "vm_util.h"
 #include "../kselftest.h"
 
