@@ -1141,12 +1141,7 @@ static void init_object(struct kmem_cache *s, void *object, u8 val)
 	unsigned int poison_size = s->object_size;
 
 	if (s->flags & SLAB_RED_ZONE) {
-		/*
-		 * Use __memset() here and below in order to avoid overwriting
-		 * the KMSAN shadow. Keeping the shadow makes it possible to
-		 * distinguish uninit-value from use-after-free.
-		 */
-		__memset(p - s->red_left_pad, val, s->red_left_pad);
+		memset(p - s->red_left_pad, val, s->red_left_pad);
 
 		if (slub_debug_orig_size(s) && val == SLUB_RED_ACTIVE) {
 			/*
@@ -1159,12 +1154,12 @@ static void init_object(struct kmem_cache *s, void *object, u8 val)
 	}
 
 	if (s->flags & __OBJECT_POISON) {
-		__memset(p, POISON_FREE, poison_size - 1);
-		__memset(p + poison_size - 1, POISON_END, 1);
+		memset(p, POISON_FREE, poison_size - 1);
+		p[poison_size - 1] = POISON_END;
 	}
 
 	if (s->flags & SLAB_RED_ZONE)
-		__memset(p + poison_size, val, s->inuse - poison_size);
+		memset(p + poison_size, val, s->inuse - poison_size);
 }
 
 static void restore_bytes(struct kmem_cache *s, char *message, u8 data,
