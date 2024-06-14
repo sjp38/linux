@@ -2,7 +2,7 @@
 #define _GNU_SOURCE
 #include <sys/mman.h>
 #include <stdint.h>
-#include <unistd.h>
+#include <linux/unistd.h>
 #include <string.h>
 #include <sys/time.h>
 #include <sys/resource.h>
