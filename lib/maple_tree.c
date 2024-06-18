@@ -3431,18 +3431,14 @@ static inline bool mas_reuse_node(struct ma_wr_state *wr_mas,
 static noinline_for_kasan int mas_commit_b_node(struct ma_wr_state *wr_mas,
 			    struct maple_big_node *b_node, unsigned char end)
 {
-	struct maple_node *node;
-	struct maple_enode *old_enode;
-	unsigned char b_end = b_node->b_end;
-	enum maple_type b_type = b_node->type;
+	unsigned char b_end = 0;
+	struct maple_enode *new_enode;
+	struct maple_enode *old_enode = wr_mas->mas->node;
 
-	old_enode = wr_mas->mas->node;
-	if ((b_end < mt_min_slots[b_type]) &&
-	    (!mte_is_root(old_enode)) &&
-	    (mas_mt_height(wr_mas->mas) > 1))
+	if (wr_mas->mas->store_type == wr_rebalance)
 		return mas_rebalance(wr_mas->mas, b_node);
 
-	if (b_end >= mt_slots[b_type])
+	if (wr_mas->mas->store_type == wr_split_store)
 		return mas_split(wr_mas->mas, b_node);
 
 	if (mas_reuse_node(wr_mas, b_node, end))
@@ -3452,9 +3448,10 @@ static noinline_for_kasan int mas_commit_b_node(struct ma_wr_state *wr_mas,
 	if (mas_is_err(wr_mas->mas))
 		return 0;
 
-	node = mas_pop_node(wr_mas->mas);
-	node->parent = mas_mn(wr_mas->mas)->parent;
-	wr_mas->mas->node = mt_mk_node(node, b_type);
+	b_end = b_node->b_end;
+	new_enode = mas_new_ma_node(wr_mas->mas, b_node);
+	mte_to_node(new_enode)->parent = mte_to_node(old_enode)->parent;
+	wr_mas->mas->node = new_enode;
 	mab_mas_cp(b_node, 0, b_end, wr_mas->mas, false);
 	mas_replace_node(wr_mas->mas, old_enode);
 reuse_node:
