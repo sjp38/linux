@@ -1961,7 +1961,7 @@ again:
 			break;
 	}
 	if (nr_pages >= NR_MAX_BATCHED_MIGRATION)
-		list_cut_before(&folios, from, &folio2->lru);
+		list_cut_before(&folios, from, &folio->lru);
 	else
 		list_splice_init(from, &folios);
 	if (mode == MIGRATE_ASYNC)
