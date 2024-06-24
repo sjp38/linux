@@ -24,63 +24,58 @@
 #include <sys/statfs.h>
 #include <sys/types.h>
 
+#include "../kselftest.h"
+
 #ifndef MADV_SOFT_OFFLINE
 #define MADV_SOFT_OFFLINE 101
 #endif
 
-#define PREFIX " ... "
 #define EPREFIX " !!! "
 
-enum test_status {
-	TEST_PASS = 0,
-	TEST_FAILED = 1,
-	// From ${ksft_skip} in run_vmtests.sh.
-	TEST_SKIPPED = 4,
-};
-
-static enum test_status do_soft_offline(int fd, size_t len, int expect_ret)
+static int do_soft_offline(int fd, size_t len, int expect_errno)
 {
 	char *filemap = NULL;
 	char *hwp_addr = NULL;
 	const unsigned long pagesize = getpagesize();
 	int ret = 0;
-	enum test_status status = TEST_SKIPPED;
 
 	if (ftruncate(fd, len) < 0) {
-		perror(EPREFIX "ftruncate to len failed");
-		return status;
+		ksft_perror(EPREFIX "ftruncate to len failed");
+		return -1;
 	}
 
 	filemap = mmap(NULL, len, PROT_READ | PROT_WRITE,
 		       MAP_SHARED | MAP_POPULATE, fd, 0);
 	if (filemap == MAP_FAILED) {
-		perror(EPREFIX "mmap failed");
+		ksft_perror(EPREFIX "mmap failed");
+		ret = -1;
 		goto untruncate;
 	}
 
 	memset(filemap, 0xab, len);
-	printf(PREFIX "Allocated %#lx bytes of hugetlb pages\n", len);
+	ksft_print_msg("Allocated %#lx bytes of hugetlb pages\n", len);
 
 	hwp_addr = filemap + len / 2;
 	ret = madvise(hwp_addr, pagesize, MADV_SOFT_OFFLINE);
-	printf(PREFIX "MADV_SOFT_OFFLINE %p ret=%d, errno=%d\n",
-	       hwp_addr, ret, errno);
+	ksft_print_msg("MADV_SOFT_OFFLINE %p ret=%d, errno=%d\n",
+		       hwp_addr, ret, errno);
 	if (ret != 0)
-		perror(EPREFIX "madvise failed");
+		ksft_perror(EPREFIX "madvise failed");
 
-	if (errno == expect_ret)
-		status = TEST_PASS;
+	if (errno == expect_errno)
+		ret = 0;
 	else {
-		printf(EPREFIX "MADV_SOFT_OFFLINE should ret %d\n", expect_ret);
-		status = TEST_FAILED;
+		ksft_print_msg("MADV_SOFT_OFFLINE should ret %d\n",
+			       expect_errno);
+		ret = -1;
 	}
 
 	munmap(filemap, len);
 untruncate:
 	if (ftruncate(fd, 0) < 0)
-		perror(EPREFIX "ftruncate back to 0 failed");
+		ksft_perror(EPREFIX "ftruncate back to 0 failed");
 
-	return status;
+	return ret;
 }
 
 static int set_enable_soft_offline(int value)
@@ -95,9 +90,9 @@ static int set_enable_soft_offline(int value)
 	cmdfile = popen(cmd, "r");
 
 	if (cmdfile)
-		printf(PREFIX "enable_soft_offline => %d\n", value);
+		ksft_print_msg("enable_soft_offline => %d\n", value);
 	else {
-		perror(EPREFIX "failed to set enable_soft_offline");
+		ksft_perror(EPREFIX "failed to set enable_soft_offline");
 		return errno;
 	}
 
@@ -116,12 +111,12 @@ static int read_nr_hugepages(unsigned long hugepage_size,
 	FILE *cmdfile = popen(cmd, "r");
 
 	if (cmdfile == NULL) {
-		perror(EPREFIX "failed to popen nr_hugepages");
+		ksft_perror(EPREFIX "failed to popen nr_hugepages");
 		return -1;
 	}
 
 	if (!fgets(buffer, sizeof(buffer), cmdfile)) {
-		perror(EPREFIX "failed to read nr_hugepages");
+		ksft_perror(EPREFIX "failed to read nr_hugepages");
 		pclose(cmdfile);
 		return -1;
 	}
@@ -137,17 +132,17 @@ static int create_hugetlbfs_file(struct statfs *file_stat)
 
 	fd = memfd_create("hugetlb_tmp", MFD_HUGETLB);
 	if (fd < 0) {
-		perror(EPREFIX "could not open hugetlbfs file");
+		ksft_perror(EPREFIX "could not open hugetlbfs file");
 		return -1;
 	}
 
 	memset(file_stat, 0, sizeof(*file_stat));
 	if (fstatfs(fd, file_stat)) {
-		perror(EPREFIX "fstatfs failed");
+		ksft_perror(EPREFIX "fstatfs failed");
 		goto close;
 	}
 	if (file_stat->f_type != HUGETLBFS_MAGIC) {
-		printf(EPREFIX "not hugetlbfs file\n");
+		ksft_print_msg(EPREFIX "not hugetlbfs file\n");
 		goto close;
 	}
 
@@ -157,73 +152,76 @@ close:
 	return -1;
 }
 
-static enum test_status test_soft_offline_common(int enable_soft_offline)
+static void test_soft_offline_common(int enable_soft_offline)
 {
 	int fd;
-	int expect_ret = enable_soft_offline ? 0 : EOPNOTSUPP;
+	int expect_errno = enable_soft_offline ? 0 : EOPNOTSUPP;
 	struct statfs file_stat;
 	unsigned long hugepagesize_kb = 0;
 	unsigned long nr_hugepages_before = 0;
 	unsigned long nr_hugepages_after = 0;
-	enum test_status status = TEST_SKIPPED;
+	int ret;
 
-	printf("Test soft-offline when enabled_soft_offline=%d\n",
-		enable_soft_offline);
+	ksft_print_msg("Test soft-offline when enabled_soft_offline=%d\n",
+		       enable_soft_offline);
 
 	fd = create_hugetlbfs_file(&file_stat);
 	if (fd < 0) {
-		printf(EPREFIX "Failed to create hugetlbfs file\n");
-		return status;
+		ksft_exit_fail_msg("Failed to create hugetlbfs file\n");
+		return;
 	}
 
 	hugepagesize_kb = file_stat.f_bsize / 1024;
-	printf(PREFIX "Hugepagesize is %ldkB\n", hugepagesize_kb);
+	ksft_print_msg("Hugepagesize is %ldkB\n", hugepagesize_kb);
 
-	if (set_enable_soft_offline(enable_soft_offline))
-		return TEST_FAILED;
+	if (set_enable_soft_offline(enable_soft_offline)) {
+		ksft_exit_fail_msg("Failed to set enable_soft_offline\n");
+		return;
+	}
 
-	if (read_nr_hugepages(hugepagesize_kb, &nr_hugepages_before) != 0)
-		return TEST_FAILED;
+	if (read_nr_hugepages(hugepagesize_kb, &nr_hugepages_before) != 0) {
+		ksft_exit_fail_msg("Failed to read nr_hugepages\n");
+		return;
+	}
 
-	printf(PREFIX "Before MADV_SOFT_OFFLINE nr_hugepages=%ld\n",
-		nr_hugepages_before);
+	ksft_print_msg("Before MADV_SOFT_OFFLINE nr_hugepages=%ld\n",
+		       nr_hugepages_before);
 
-	status = do_soft_offline(fd, 2 * file_stat.f_bsize, expect_ret);
+	ret = do_soft_offline(fd, 2 * file_stat.f_bsize, expect_errno);
 
-	if (read_nr_hugepages(hugepagesize_kb, &nr_hugepages_after) != 0)
-		return TEST_FAILED;
+	if (read_nr_hugepages(hugepagesize_kb, &nr_hugepages_after) != 0) {
+		ksft_exit_fail_msg("Failed to read nr_hugepages\n");
+		return;
+	}
 
-	printf(PREFIX "After MADV_SOFT_OFFLINE nr_hugepages=%ld\n",
+	ksft_print_msg("After MADV_SOFT_OFFLINE nr_hugepages=%ld\n",
 		nr_hugepages_after);
 
 	if (enable_soft_offline) {
 		if (nr_hugepages_before != nr_hugepages_after + 1) {
-			printf(EPREFIX "MADV_SOFT_OFFLINE should reduced 1 hugepage\n");
-			return TEST_FAILED;
+			ksft_test_result_fail("MADV_SOFT_OFFLINE should reduced 1 hugepage\n");
+			return;
 		}
 	} else {
 		if (nr_hugepages_before != nr_hugepages_after) {
-			printf(EPREFIX "MADV_SOFT_OFFLINE reduced %lu hugepages\n",
+			ksft_test_result_fail("MADV_SOFT_OFFLINE reduced %lu hugepages\n",
 				nr_hugepages_before - nr_hugepages_after);
-			return TEST_FAILED;
+			return;
 		}
 	}
 
-	return status;
+	ksft_test_result(ret == 0,
+			 "Test soft-offline when enabled_soft_offline=%d\n",
+			 enable_soft_offline);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-	enum test_status status;
+	ksft_print_header();
+	ksft_set_plan(2);
 
-	status = test_soft_offline_common(1);
-	if (status != TEST_PASS)
-		return status;
+	test_soft_offline_common(1);
+	test_soft_offline_common(0);
 
-	status = test_soft_offline_common(0);
-	if (status != TEST_PASS)
-		return status;
-
-	printf("Soft-offline tests all good!\n");
-	return TEST_PASS;
+	ksft_finished();
 }
