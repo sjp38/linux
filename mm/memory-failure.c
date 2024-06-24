@@ -2770,8 +2770,8 @@ static int soft_offline_in_use_page(struct page *page)
  * @flags: flags. Same as memory_failure().
  *
  * Returns 0 on success,
- *         -EOPNOTSUPP for hwpoison_filter() filtered the error event,
- *         -EOPNOTSUPP if disabled by /proc/sys/vm/enable_soft_offline,
+ *         -EOPNOTSUPP for hwpoison_filter() filtered the error event, or
+ *         disabled by /proc/sys/vm/enable_soft_offline,
  *         < 0 otherwise negated errno.
  *
  * Soft offline a page, by migration or invalidation,
