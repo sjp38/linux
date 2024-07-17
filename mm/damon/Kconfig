@@ -14,7 +14,8 @@ config DAMON
 
 config DAMON_KUNIT_TEST
 	bool "Test for damon" if !KUNIT_ALL_TESTS
-	depends on DAMON && KUNIT=y
+	depends on KUNIT=y
+	select DAMON
 	default KUNIT_ALL_TESTS
 	help
 	  This builds the DAMON Kunit test suite.
@@ -42,7 +43,8 @@ config DAMON_PADDR
 
 config DAMON_VADDR_KUNIT_TEST
 	bool "Test for DAMON operations" if !KUNIT_ALL_TESTS
-	depends on DAMON_VADDR && KUNIT=y
+	depends on KUNIT=y
+	select DAMON_VADDR
 	default KUNIT_ALL_TESTS
 	help
 	  This builds the DAMON virtual addresses operations Kunit test suite.
@@ -61,7 +63,8 @@ config DAMON_SYSFS
 
 config DAMON_SYSFS_KUNIT_TEST
 	bool "Test for damon debugfs interface" if !KUNIT_ALL_TESTS
-	depends on DAMON_SYSFS && KUNIT=y
+	depends on KUNIT=y
+	select DAMON_SYSFS
 	default KUNIT_ALL_TESTS
 	help
 	  This builds the DAMON sysfs interface Kunit test suite.
@@ -91,7 +94,8 @@ config DAMON_DBGFS
 
 config DAMON_DBGFS_KUNIT_TEST
 	bool "Test for damon debugfs interface" if !KUNIT_ALL_TESTS
-	depends on DAMON_DBGFS && KUNIT=y
+	depends on KUNIT=y
+	select DAMON_DBGFS
 	default KUNIT_ALL_TESTS
 	help
 	  This builds the DAMON debugfs interface Kunit test suite.
