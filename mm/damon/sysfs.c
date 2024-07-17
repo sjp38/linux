@@ -1908,4 +1908,4 @@ out:
 }
 subsys_initcall(damon_sysfs_init);
 
-#include "sysfs-test.h"
+#include "tests/sysfs-test.h"

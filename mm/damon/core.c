@@ -2267,4 +2267,4 @@ static int __init damon_init(void)
 
 subsys_initcall(damon_init);
 
-#include "core-test.h"
+#include "tests/core-test.h"
