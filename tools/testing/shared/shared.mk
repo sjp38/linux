@@ -50,9 +50,11 @@ maple-shared.o: ../shared/maple-shared.c ../../../lib/maple_tree.c \
 	../../../lib/test_maple_tree.c
 
 generated/autoconf.h:
+	@mkdir -p generated
 	cp ../shared/autoconf.h generated/autoconf.h
 
 generated/map-shift.h:
+	@mkdir -p generated
 	@if ! grep -qws $(SHIFT) generated/map-shift.h; then            \
 		echo "Generating $@";                                   \
 		echo "#define XA_CHUNK_SHIFT $(SHIFT)" >                \
@@ -60,6 +62,7 @@ generated/map-shift.h:
 	fi
 
 generated/bit-length.h: FORCE
+	@mkdir -p generated
 	@if ! grep -qws CONFIG_$(LONG_BIT)BIT generated/bit-length.h; then   \
 		echo "Generating $@";                                        \
 		echo "#define CONFIG_$(LONG_BIT)BIT 1" > $@;                 \
