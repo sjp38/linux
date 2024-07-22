@@ -1738,6 +1738,8 @@ static inline void vma_set_access_pid_bit(struct vm_area_struct *vma)
 		__set_bit(pid_bit, &vma->numab_state->pids_active[1]);
 	}
 }
+
+bool folio_has_cpupid(struct folio *folio);
 #else /* !CONFIG_NUMA_BALANCING */
 static inline int folio_xchg_last_cpupid(struct folio *folio, int cpupid)
 {
@@ -1790,6 +1792,10 @@ static inline bool cpupid_match_pid(struct task_struct *task, int cpupid)
 
 static inline void vma_set_access_pid_bit(struct vm_area_struct *vma)
 {
+}
+static inline bool folio_has_cpupid(struct folio *folio)
+{
+	return true;
 }
 #endif /* CONFIG_NUMA_BALANCING */
 
