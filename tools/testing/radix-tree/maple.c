@@ -8,21 +8,8 @@
  * difficult to handle in kernel tests.
  */
 
-#define CONFIG_DEBUG_MAPLE_TREE
-#define CONFIG_MAPLE_SEARCH
-#define MAPLE_32BIT (MAPLE_NODE_SLOTS > 31)
+#include "maple-shared.h"
 #include "test.h"
-#include <stdlib.h>
-#include <time.h>
-#include "linux/init.h"
-
-#define module_init(x)
-#define module_exit(x)
-#define MODULE_AUTHOR(x)
-#define MODULE_DESCRIPTION(X)
-#define MODULE_LICENSE(x)
-#define dump_stack()	assert(0)
-
 #include "../../../lib/maple_tree.c"
 #include "../../../lib/test_maple_tree.c"
 
