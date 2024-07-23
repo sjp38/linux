@@ -43,8 +43,6 @@
 #include <linux/userfaultfd_k.h>
 
 #include <asm/current.h>
-#include <asm/page_types.h>
-#include <asm/pgtable_types.h>
 #include <asm/tlb.h>
 
 #include "internal.h"
