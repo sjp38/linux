@@ -1494,15 +1494,36 @@ static unsigned long damon_feed_loop_next_input(unsigned long last_input,
 		unsigned long score)
 {
 	const unsigned long goal = 10000;
-	unsigned long score_goal_diff = max(goal, score) - min(goal, score);
-	unsigned long score_goal_diff_bp = score_goal_diff * 10000 / goal;
-	unsigned long compensation = last_input * score_goal_diff_bp / 10000;
 	/* Set minimum input as 10000 to avoid compensation be zero */
 	const unsigned long min_input = 10000;
+	unsigned long score_goal_diff;
+	unsigned long compensation;
 
-	if (goal > score)
-		return last_input + compensation;
-	if (last_input > compensation + min_input)
+	if (score == goal)
+		return last_input;
+
+	/* last_input, score <= ULONG_MAX */
+	if (score < goal) {
+		score_goal_diff = goal - score;
+	} else {
+		/* if score_goal_diff > goal, will return min_input anyway */
+		score_goal_diff = min(score - goal, goal);
+	}
+
+	if (last_input < ULONG_MAX / score_goal_diff)
+		compensation = last_input * score_goal_diff / goal;
+	else
+		compensation = last_input / goal * score_goal_diff;
+
+	/* compensation <= last_input <= ULONG_MAX */
+
+	if (goal > score) {
+		if (last_input < ULONG_MAX - compensation)
+			return last_input + compensation;
+		return ULONG_MAX;
+	}
+
+	if (last_input - compensation > min_input)
 		return last_input - compensation;
 	return min_input;
 }
