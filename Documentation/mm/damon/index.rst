@@ -37,3 +37,8 @@ with no code but simple configurations.
 
 To utilize and control DAMON from the user-space, please refer to the
 administration :doc:`guide </admin-guide/mm/damon/index>`.
+
+If you are more familiar with academic papers, please refer to and/or cite
+DAMON papers for `Middleware19 Industry
+<https://dl.acm.org/doi/abs/10.1145/3366626.3368125>`_ and `HPDC'19
+<https://dl.acm.org/doi/abs/10.1145/3502181.3531466>`.
