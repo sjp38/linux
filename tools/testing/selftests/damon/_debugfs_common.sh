@@ -8,7 +8,7 @@ test_write_result() {
 	expect_reason=$4
 	expected=$5
 
-	echo "$content" > "$file"
+	echo "$content" > "$file" 2> /dev/null
 	if [ $? -ne "$expected" ]
 	then
 		echo "writing $content to $file doesn't return $expected"
