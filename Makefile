@@ -2,7 +2,7 @@
 VERSION = 6
 PATCHLEVEL = 16
 SUBLEVEL = 0
-EXTRAVERSION = -rc4
+EXTRAVERSION = -rc4-mm-new-damon
 NAME = Baby Opossum Posse
 
 # *DOCUMENTATION*
