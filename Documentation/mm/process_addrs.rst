@@ -68,8 +68,8 @@ described below).
 
 Stabilising a VMA also keeps the address space described by it around.
 
-Using address space locks
--------------------------
+Lock usage
+----------
 
 If you want to **read** VMA metadata fields or just keep the VMA stable, you
 must do one of the following:
@@ -298,7 +298,7 @@ typically refer to the leaf level as the PTE level regardless.
 	  compiler might, in practice, eliminate any code relating to missing
 	  ones.
 
-There are free key operations typically performed on page tables:
+There are four key operations typically performed on page tables:
 
 1. **Traversing** page tables - Simply reading page tables in order to traverse
    them. This only requires that the VMA is kept stable, so a lock which
@@ -525,11 +525,11 @@ When performing a page table traversal and keeping the VMA stable, whether a
 read must be performed once and only once or not depends on the architecture
 (for instance x86-64 does not require any special precautions).
 
-It is on the write side, or if a read informs whether a write takes place (on an
-installation of a page table entry say, for instance in
-:c:func:`!__pud_install`), where special care must always be taken. In these
-cases we can never assume that page table locks give us entirely exclusive
-access, and must retrieve page table entries once and only once.
+If a write is being performed, or if a read informs whether a write takes place
+(on an installation of a page table entry say, for instance in
+:c:func:`!__pud_install`), special care must always be taken. In these cases we
+can never assume that page table locks give us entirely exclusive access, and
+must retrieve page table entries once and only once.
 
 If we are reading page table entries, then we need only ensure that the compiler
 does not rearrange our loads. This is achieved via :c:func:`!pXXp_get`
