@@ -53,7 +53,7 @@ Terminology
   you **must** have already acquired an :c:func:`!mmap_write_lock`.
 * **rmap locks** - When trying to access VMAs through the reverse mapping via a
   :c:struct:`!struct address_space` or :c:struct:`!struct anon_vma` object
-  (reachable from a folio via :c:member:`!folio->mapping`) VMAs must be stabilised via
+  (reachable from a folio via :c:member:`!folio->mapping`). VMAs must be stabilised via
   :c:func:`!anon_vma_[try]lock_read` or :c:func:`!anon_vma_[try]lock_write` for
   anonymous memory and :c:func:`!i_mmap_[try]lock_read` or
   :c:func:`!i_mmap_[try]lock_write` for file-backed memory. We refer to these
@@ -100,6 +100,9 @@ VMA locks are special in that you must obtain an mmap **write** lock **first**
 in order to obtain a VMA **write** lock. A VMA **read** lock however can be
 obtained without any other lock (:c:func:`!lock_vma_under_rcu` will acquire then
 release an RCU lock to lookup the VMA for you).
+
+This constrains the impact of writers on readers, as a writer can interact with
+one VMA while a reader interacts with another simultaneously.
 
 .. note:: The primary users of VMA read locks are page fault handlers, which
           means that without a VMA write lock, page faults will run concurrent with
@@ -209,13 +212,17 @@ These are the core fields which describe the MM the VMA belongs to and its attri
                                                            :c:struct:`!struct anon_vma_name`        VMA write.
                                                            object providing a name for anonymous
                                                            mappings, or :c:macro:`!NULL` if none
-                                                           is set or the VMA is file-backed.
+                                                           is set or the VMA is file-backed. The
+							   underlying object is reference counted
+							   and can be shared across multiple VMAs
+							   for scalability.
    :c:member:`!swap_readahead_info`  CONFIG_SWAP           Metadata used by the swap mechanism      mmap read,
                                                            to perform readahead. This field is      swap-specific
                                                            accessed atomically.                     lock.
    :c:member:`!vm_policy`            CONFIG_NUMA           :c:type:`!mempolicy` object which        mmap write,
                                                            describes the NUMA behaviour of the      VMA write.
-                                                           VMA.
+                                                           VMA. The underlying object is reference
+							   counted.
    :c:member:`!numab_state`          CONFIG_NUMA_BALANCING :c:type:`!vma_numab_state` object which  mmap read,
                                                            describes the current state of           numab-specific
                                                            NUMA balancing in relation to this VMA.  lock.
@@ -287,7 +294,7 @@ typically refer to the leaf level as the PTE level regardless.
 .. note:: In instances where the architecture supports fewer page tables than
 	  five the kernel cleverly 'folds' page table levels, that is stubbing
 	  out functions related to the skipped levels. This allows us to
-	  conceptually act is if there were always five levels, even if the
+	  conceptually act as if there were always five levels, even if the
 	  compiler might, in practice, eliminate any code relating to missing
 	  ones.
 
@@ -298,21 +305,26 @@ There are free key operations typically performed on page tables:
    establishes this suffices for traversal (there are also lockless variants
    which eliminate even this requirement, such as :c:func:`!gup_fast`).
 2. **Installing** page table mappings - Whether creating a new mapping or
-   modifying an existing one. This requires that the VMA is kept stable via an
-   mmap or VMA lock (explicitly not rmap locks).
+   modifying an existing one in such a way as to change its identity. This
+   requires that the VMA is kept stable via an mmap or VMA lock (explicitly not
+   rmap locks).
 3. **Zapping/unmapping** page table entries - This is what the kernel calls
    clearing page table mappings at the leaf level only, whilst leaving all page
    tables in place. This is a very common operation in the kernel performed on
    file truncation, the :c:macro:`!MADV_DONTNEED` operation via
    :c:func:`!madvise`, and others. This is performed by a number of functions
-   including :c:func:`!unmap_mapping_range` and :c:func:`!unmap_mapping_pages`
-   among others. The VMA need only be kept stable for this operation.
+   including :c:func:`!unmap_mapping_range` and :c:func:`!unmap_mapping_pages`.
+   The VMA need only be kept stable for this operation.
 4. **Freeing** page tables - When finally the kernel removes page tables from a
    userland process (typically via :c:func:`!free_pgtables`) extreme care must
    be taken to ensure this is done safely, as this logic finally frees all page
    tables in the specified range, ignoring existing leaf entries (it assumes the
    caller has both zapped the range and prevented any further faults or
    modifications within it).
+
+.. note:: Modifying mappings for reclaim or migration is performed under rmap
+          lock as it, like zapping, does not fundamentally modify the identity
+          of what is being mapped.
 
 **Traversing** and **zapping** ranges can be performed holding any one of the
 locks described in the terminology section above - that is the mmap lock, the
@@ -323,9 +335,9 @@ ahead and perform these operations on page tables (though internally, kernel
 operations that perform writes also acquire internal page table locks to
 serialise - see the page table implementation detail section for more details).
 
-When **installing** page table entries, the mmap or VMA lock mut be held to keep
-the VMA stable. We explore why this is in the page table locking details section
-below.
+When **installing** page table entries, the mmap or VMA lock must be held to
+keep the VMA stable. We explore why this is in the page table locking details
+section below.
 
 **Freeing** page tables is an entirely internal memory management operation and
 has special requirements (see the page freeing section below for more details).
@@ -386,50 +398,50 @@ There is also a file-system specific lock ordering comment located at the top of
 
 .. code-block::
 
-  ->i_mmap_rwsem                (truncate_pagecache)
-    ->private_lock              (__free_pte->block_dirty_folio)
-      ->swap_lock               (exclusive_swap_page, others)
+  ->i_mmap_rwsem                        (truncate_pagecache)
+    ->private_lock                      (__free_pte->block_dirty_folio)
+      ->swap_lock                       (exclusive_swap_page, others)
         ->i_pages lock
 
   ->i_rwsem
-    ->invalidate_lock           (acquired by fs in truncate path)
-      ->i_mmap_rwsem            (truncate->unmap_mapping_range)
+    ->invalidate_lock                   (acquired by fs in truncate path)
+      ->i_mmap_rwsem                    (truncate->unmap_mapping_range)
 
   ->mmap_lock
     ->i_mmap_rwsem
       ->page_table_lock or pte_lock     (various, mainly in memory.c)
-        ->i_pages lock  (arch-dependent flush_dcache_mmap_lock)
+        ->i_pages lock                  (arch-dependent flush_dcache_mmap_lock)
 
   ->mmap_lock
-    ->invalidate_lock           (filemap_fault)
-      ->lock_page               (filemap_fault, access_process_vm)
+    ->invalidate_lock                   (filemap_fault)
+      ->lock_page                       (filemap_fault, access_process_vm)
 
-  ->i_rwsem                     (generic_perform_write)
-    ->mmap_lock         (fault_in_readable->do_page_fault)
+  ->i_rwsem                             (generic_perform_write)
+    ->mmap_lock                         (fault_in_readable->do_page_fault)
 
   bdi->wb.list_lock
-    sb_lock                     (fs/fs-writeback.c)
-    ->i_pages lock              (__sync_single_inode)
+    sb_lock                             (fs/fs-writeback.c)
+    ->i_pages lock                      (__sync_single_inode)
 
   ->i_mmap_rwsem
-    ->anon_vma.lock             (vma_merge)
+    ->anon_vma.lock                     (vma_merge)
 
   ->anon_vma.lock
     ->page_table_lock or pte_lock       (anon_vma_prepare and various)
 
   ->page_table_lock or pte_lock
-    ->swap_lock         (try_to_unmap_one)
-    ->private_lock              (try_to_unmap_one)
-    ->i_pages lock              (try_to_unmap_one)
-    ->lruvec->lru_lock  (follow_page_mask->mark_page_accessed)
-    ->lruvec->lru_lock  (check_pte_range->folio_isolate_lru)
-    ->private_lock              (folio_remove_rmap_pte->set_page_dirty)
-    ->i_pages lock              (folio_remove_rmap_pte->set_page_dirty)
-    bdi.wb->list_lock           (folio_remove_rmap_pte->set_page_dirty)
-    ->inode->i_lock             (folio_remove_rmap_pte->set_page_dirty)
-    bdi.wb->list_lock           (zap_pte_range->set_page_dirty)
-    ->inode->i_lock             (zap_pte_range->set_page_dirty)
-    ->private_lock              (zap_pte_range->block_dirty_folio)
+    ->swap_lock                         (try_to_unmap_one)
+    ->private_lock                      (try_to_unmap_one)
+    ->i_pages lock                      (try_to_unmap_one)
+    ->lruvec->lru_lock                  (follow_page_mask->mark_page_accessed)
+    ->lruvec->lru_lock                  (check_pte_range->folio_isolate_lru)
+    ->private_lock                      (folio_remove_rmap_pte->set_page_dirty)
+    ->i_pages lock                      (folio_remove_rmap_pte->set_page_dirty)
+    bdi.wb->list_lock                   (folio_remove_rmap_pte->set_page_dirty)
+    ->inode->i_lock                     (folio_remove_rmap_pte->set_page_dirty)
+    bdi.wb->list_lock                   (zap_pte_range->set_page_dirty)
+    ->inode->i_lock                     (zap_pte_range->set_page_dirty)
+    ->private_lock                      (zap_pte_range->block_dirty_folio)
 
 Please check the current state of these comments which may have changed since
 the time of writing of this document.
@@ -592,7 +604,7 @@ or zapping).
 A typical pattern taken when traversing page table entries to install a new
 mapping is to optimistically determine whether the page table entry in the table
 above is empty, if so, only then acquiring the page table lock and checking
-again to see if it was allocated underneath is.
+again to see if it was allocated underneath us.
 
 This allows for a traversal with page table locks only being taken when
 required. An example of this is :c:func:`!__pud_alloc`.
@@ -603,7 +615,7 @@ eliminated the PMD entry as well as the PTE from under us.
 
 This is why :c:func:`!__pte_offset_map_lock` locklessly retrieves the PMD entry
 for the PTE, carefully checking it is as expected, before acquiring the
-PTE-specific lock, and then *again* checking that the PMD lock is as expected.
+PTE-specific lock, and then *again* checking that the PMD entry is as expected.
 
 If a THP collapse (or similar) were to occur then the lock on both pages would
 be acquired, so we can ensure this is prevented while the PTE lock is held.
@@ -654,7 +666,7 @@ page tables). Most notable of these is :c:func:`!mremap`, which is capable of
 moving higher level page tables.
 
 In these instances, it is required that **all** locks are taken, that is
-the mmap lock, the VMA lock and the relevant rmap lock.
+the mmap lock, the VMA lock and the relevant rmap locks.
 
 You can observe this in the :c:func:`!mremap` implementation in the functions
 :c:func:`!take_rmap_locks` and :c:func:`!drop_rmap_locks` which perform the rmap
@@ -669,11 +681,10 @@ Overview
 VMA read locking is entirely optimistic - if the lock is contended or a competing
 write has started, then we do not obtain a read lock.
 
-A VMA **read** lock is obtained by :c:func:`!lock_vma_under_rcu` function, which
-first calls :c:func:`!rcu_read_lock` to ensure that the VMA is looked up in an
-RCU critical section, then attempts to VMA lock it via
-:c:func:`!vma_start_read`, before releasing the RCU lock via
-:c:func:`!rcu_read_unlock`.
+A VMA **read** lock is obtained by :c:func:`!lock_vma_under_rcu`, which first
+calls :c:func:`!rcu_read_lock` to ensure that the VMA is looked up in an RCU
+critical section, then attempts to VMA lock it via :c:func:`!vma_start_read`,
+before releasing the RCU lock via :c:func:`!rcu_read_unlock`.
 
 VMA read locks hold the read lock on the :c:member:`!vma->vm_lock` semaphore for
 their duration and the caller of :c:func:`!lock_vma_under_rcu` must release it
