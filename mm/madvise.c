@@ -1582,6 +1582,15 @@ static bool is_invalid_madvise_request(
 	return false;
 }
 
+static int __do_madvise(struct mm_struct *mm, unsigned long start,
+		unsigned long end, int behavior)
+{
+	if (behavior == MADV_POPULATE_READ || behavior == MADV_POPULATE_WRITE)
+		return madvise_populate(mm, start, end, behavior);
+	return madvise_walk_vmas(mm, start, end, behavior,
+				 madvise_vma_behavior);
+}
+
 /*
  * The madvise(2) system call.
  *
@@ -1687,16 +1696,7 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 	end = start + len;
 
 	blk_start_plug(&plug);
-	switch (behavior) {
-	case MADV_POPULATE_READ:
-	case MADV_POPULATE_WRITE:
-		error = madvise_populate(mm, start, end, behavior);
-		break;
-	default:
-		error = madvise_walk_vmas(mm, start, end, behavior,
-					  madvise_vma_behavior);
-		break;
-	}
+	error = __do_madvise(mm, start, end, behavior);
 	blk_finish_plug(&plug);
 
 	if (write)
