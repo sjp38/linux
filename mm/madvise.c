@@ -1561,6 +1561,27 @@ int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
 }
 #endif /* CONFIG_ANON_VMA_NAME */
 
+static bool is_invalid_madvise_request(
+		unsigned long start, size_t len_in, int behavior)
+{
+	size_t len;
+
+	if (!madvise_behavior_valid(behavior))
+		return true;
+
+	if (!PAGE_ALIGNED(start))
+		return true;
+	len = PAGE_ALIGN(len_in);
+
+	/* Check to see whether len was rounded up from small -ve to zero */
+	if (len_in && !len)
+		return true;
+
+	if (start + len < start)
+		return true;
+	return false;
+}
+
 /*
  * The madvise(2) system call.
  *
@@ -1641,21 +1662,11 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 	size_t len;
 	struct blk_plug plug;
 
-	if (!madvise_behavior_valid(behavior))
+	if (is_invalid_madvise_request(start, len_in, behavior))
 		return -EINVAL;
 
-	if (!PAGE_ALIGNED(start))
-		return -EINVAL;
 	len = PAGE_ALIGN(len_in);
-
-	/* Check to see whether len was rounded up from small -ve to zero */
-	if (len_in && !len)
-		return -EINVAL;
-
 	end = start + len;
-	if (end < start)
-		return -EINVAL;
-
 	if (end == start)
 		return 0;
 
