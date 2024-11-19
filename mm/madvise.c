@@ -1560,6 +1560,7 @@ int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
 				 madvise_vma_anon_name);
 }
 #endif /* CONFIG_ANON_VMA_NAME */
+
 /*
  * The madvise(2) system call.
  *
