@@ -1713,6 +1713,16 @@ SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
 	return do_madvise(current->mm, start, len_in, behavior);
 }
 
+static int vector_madvise_handle_return_value(ssize_t ret)
+{
+	if (ret == -ERESTARTNOINTR) {
+		if (fatal_signal_pending(current))
+			return -EINTR;
+		return 0;
+	}
+	return ret;
+}
+
 /*
  * Perform an madvise operation over a vector of addresses and lengths.
  * Do the work for each user-input region one by one, and stop doing it once
@@ -1762,15 +1772,9 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 		for (i = 0; i < nr_addrs; i++) {
 			ret = madvise_inject_error(behavior, start_addrs[i],
 					start_addrs[i] + lengths[i]);
-			if (ret == -ERESTARTNOINTR) {
-				if (fatal_signal_pending(current)) {
-					ret = -EINTR;
-					goto out;
-				}
-				continue;
-			}
+			ret = vector_madvise_handle_return_value(ret);
 			if (ret < 0)
-				break;
+				goto out;
 			bytes += lengths[i];
 		}
 		goto out;
@@ -1791,16 +1795,15 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	for (i = 0; i < nr_addrs; i ++) {
 		ret = __do_madvise(mm, start_addrs[i], start_addrs[i] +
 				PAGE_ALIGNED(lengths[i]), behavior);
-		if (ret == -ERESTARTNOINTR) {
+		if (ret < 0) {
 			blk_finish_plug(&plug);
 			if (write)
 				mmap_write_unlock(mm);
 			else
 				mmap_read_unlock(mm);
-			if (fatal_signal_pending(current)) {
-				ret = -EINTR;
+			ret = vector_madvise_handle_return_value(ret);
+			if (ret < 0)
 				goto out;
-			}
 			if (write) {
 				if (mmap_write_lock_killable(mm)) {
 					ret = -EINTR;
@@ -1812,12 +1815,9 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 			blk_start_plug(&plug);
 			continue;
 		}
-		if (ret < 0)
-			goto unlock_out;
 		bytes += lengths[i];
 	}
 
-unlock_out:
 	blk_finish_plug(&plug);
 	if (write)
 		mmap_write_unlock(mm);
