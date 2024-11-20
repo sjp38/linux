@@ -54,7 +54,7 @@ struct madvise_walk_private {
  * take mmap_lock for writing. Others, which simply traverse vmas, need
  * to only take it for reading.
  */
-static int madvise_need_mmap_write(int behavior)
+static bool madvise_need_mmap_write(int behavior)
 {
 	switch (behavior) {
 	case MADV_REMOVE:
@@ -69,10 +69,10 @@ static int madvise_need_mmap_write(int behavior)
 	case MADV_COLLAPSE:
 	case MADV_GUARD_INSTALL:
 	case MADV_GUARD_REMOVE:
-		return 0;
+		return false;
 	default:
 		/* be safe, default to 1. list exceptions explicitly */
-		return 1;
+		return true;
 	}
 }
 
@@ -1668,7 +1668,7 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 {
 	unsigned long end;
 	int error;
-	int write;
+	bool write;
 	size_t len;
 	struct blk_plug plug;
 
@@ -1739,7 +1739,7 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	ssize_t ret;
 	size_t bytes = 0;
 	int i;
-	int write;
+	bool write;
 	struct blk_plug plug;
 
 	start_addrs = vmalloc(sizeof(*start_addrs) * vlen);
