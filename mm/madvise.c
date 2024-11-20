@@ -31,6 +31,7 @@
 #include <linux/swapops.h>
 #include <linux/shmem_fs.h>
 #include <linux/mmu_notifier.h>
+#include <linux/vmalloc.h>
 
 #include <asm/tlb.h>
 
@@ -1712,43 +1713,121 @@ SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
 	return do_madvise(current->mm, start, len_in, behavior);
 }
 
-/* Perform an madvise operation over a vector of addresses and lengths. */
+/*
+ * Perform an madvise operation over a vector of addresses and lengths.
+ * Do the work for each user-input region one by one, and stop doing it once
+ * any of the region failed for whatever reason.
+ * Maybe simply cancelling any work if any invalid request is found is ok and
+ * better, but keep the old behavior for now.
+ */
 static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
-			      int behavior)
+			      size_t vlen, int behavior)
 {
-	ssize_t ret = 0;
-	size_t total_len;
+	unsigned long *start_addrs;
+	unsigned long *lengths;
+	int nr_addrs = 0;
+	ssize_t ret;
+	size_t bytes = 0;
+	int i;
+	int write;
+	struct blk_plug plug;
 
-	total_len = iov_iter_count(iter);
+	start_addrs = vmalloc(sizeof(*start_addrs) * vlen);
+	if (!start_addrs)
+		return -ENOMEM;
+	lengths = vmalloc(sizeof(*lengths) * vlen);
+	if (!lengths) {
+		vfree(start_addrs);
+		return -ENOMEM;
+	}
 
-	while (iov_iter_count(iter)) {
-		ret = do_madvise(mm, (unsigned long)iter_iov_addr(iter),
-				 iter_iov_len(iter), behavior);
-		/*
-		 * An madvise operation is attempting to restart the syscall,
-		 * but we cannot proceed as it would not be correct to repeat
-		 * the operation in aggregate, and would be surprising to the
-		 * user.
-		 *
-		 * As we have already dropped locks, it is safe to just loop and
-		 * try again. We check for fatal signals in case we need exit
-		 * early anyway.
-		 */
+	for (; iov_iter_count(iter);
+			iov_iter_advance(iter, iter_iov_len(iter))) {
+		unsigned long start;
+		size_t len;
+
+		start = (unsigned long)iter_iov_addr(iter);
+		len = iter_iov_len(iter);
+
+		/* ignore any region after first invalid region */
+		if (is_invalid_madvise_request(start, len, behavior))
+			break;
+
+		start_addrs[nr_addrs] = start;
+		lengths[nr_addrs++] = len;
+	}
+
+#ifdef CONFIG_MEMORY_FAILURE
+	if (behavior == MADV_HWPOISON || behavior == MADV_SOFT_OFFLINE) {
+		for (i = 0; i < nr_addrs; i++) {
+			ret = madvise_inject_error(behavior, start_addrs[i],
+					start_addrs[i] + lengths[i]);
+			if (ret == -ERESTARTNOINTR) {
+				if (fatal_signal_pending(current)) {
+					ret = -EINTR;
+					goto out;
+				}
+				continue;
+			}
+			if (ret < 0)
+				break;
+			bytes += lengths[i];
+		}
+		goto out;
+	}
+#endif
+
+	write = madvise_need_mmap_write(behavior);
+	if (write) {
+		if (mmap_write_lock_killable(mm)) {
+			ret = -EINTR;
+			goto out;
+		}
+	} else {
+		mmap_read_lock(mm);
+	}
+	blk_start_plug(&plug);
+
+	for (i = 0; i < nr_addrs; i ++) {
+		ret = __do_madvise(mm, start_addrs[i], start_addrs[i] +
+				PAGE_ALIGNED(lengths[i]), behavior);
 		if (ret == -ERESTARTNOINTR) {
+			blk_finish_plug(&plug);
+			if (write)
+				mmap_write_unlock(mm);
+			else
+				mmap_read_unlock(mm);
 			if (fatal_signal_pending(current)) {
 				ret = -EINTR;
-				break;
+				goto out;
 			}
+			if (write) {
+				if (mmap_write_lock_killable(mm)) {
+					ret = -EINTR;
+					goto out;
+				}
+			} else {
+				mmap_read_lock(mm);
+			}
+			blk_start_plug(&plug);
 			continue;
 		}
 		if (ret < 0)
-			break;
-		iov_iter_advance(iter, iter_iov_len(iter));
+			goto unlock_out;
+		bytes += lengths[i];
 	}
 
-	ret = (total_len - iov_iter_count(iter)) ? : ret;
+unlock_out:
+	blk_finish_plug(&plug);
+	if (write)
+		mmap_write_unlock(mm);
+	else
+		mmap_read_unlock(mm);
 
-	return ret;
+out:
+	vfree(start_addrs);
+	vfree(lengths);
+	return bytes ? bytes: ret;
 }
 
 SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
@@ -1803,7 +1882,7 @@ SYSCALL_DEFINE5(process_madvise, int, pidfd, const struct iovec __user *, vec,
 		goto release_mm;
 	}
 
-	ret = vector_madvise(mm, &iter, behavior);
+	ret = vector_madvise(mm, &iter, vlen, behavior);
 
 release_mm:
 	mmput(mm);
