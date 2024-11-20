@@ -1749,6 +1749,7 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	unsigned long *start_addrs;
 	unsigned long *lengths;
 	int nr_addrs = 0;
+	unsigned long start;
 	ssize_t ret;
 	size_t bytes = 0;
 	int i;
@@ -1766,7 +1767,6 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 
 	for (; iov_iter_count(iter);
 			iov_iter_advance(iter, iter_iov_len(iter))) {
-		unsigned long start;
 		size_t len;
 
 		start = (unsigned long)iter_iov_addr(iter);
@@ -1801,8 +1801,9 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	blk_start_plug(&plug);
 
 	for (i = 0; i < nr_addrs; i ++) {
-		ret = __do_madvise(mm, start_addrs[i], start_addrs[i] +
-				PAGE_ALIGNED(lengths[i]), behavior);
+		start = untagged_addr_remote(mm, start_addrs[i]);
+		ret = __do_madvise(mm, start, start + PAGE_ALIGNED(lengths[i]),
+				behavior);
 		if (ret < 0) {
 			blk_finish_plug(&plug);
 			madvise_unlock(mm, write);
