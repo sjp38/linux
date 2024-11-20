@@ -1592,6 +1592,25 @@ static int __do_madvise(struct mm_struct *mm, unsigned long start,
 				 madvise_vma_behavior);
 }
 
+static int madvise_lock(struct mm_struct *mm, bool write)
+{
+	if (write) {
+		if (mmap_write_lock_killable(mm))
+			return -EINTR;
+	} else {
+		mmap_read_lock(mm);
+	}
+	return 0;
+}
+
+static void madvise_unlock(struct mm_struct *mm, bool write)
+{
+	if (write)
+		mmap_write_unlock(mm);
+	else
+		mmap_read_unlock(mm);
+}
+
 /*
  * The madvise(2) system call.
  *
@@ -1686,12 +1705,9 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 #endif
 
 	write = madvise_need_mmap_write(behavior);
-	if (write) {
-		if (mmap_write_lock_killable(mm))
-			return -EINTR;
-	} else {
-		mmap_read_lock(mm);
-	}
+	error = madvise_lock(mm, write);
+	if (error)
+		return error;
 
 	start = untagged_addr_remote(mm, start);
 	end = start + len;
@@ -1700,10 +1716,7 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
 	error = __do_madvise(mm, start, end, behavior);
 	blk_finish_plug(&plug);
 
-	if (write)
-		mmap_write_unlock(mm);
-	else
-		mmap_read_unlock(mm);
+	madvise_unlock(mm, write);
 
 	return error;
 }
@@ -1782,14 +1795,9 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 #endif
 
 	write = madvise_need_mmap_write(behavior);
-	if (write) {
-		if (mmap_write_lock_killable(mm)) {
-			ret = -EINTR;
-			goto out;
-		}
-	} else {
-		mmap_read_lock(mm);
-	}
+	ret = madvise_lock(mm, write);
+	if (ret)
+		goto out;
 	blk_start_plug(&plug);
 
 	for (i = 0; i < nr_addrs; i ++) {
@@ -1797,21 +1805,13 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 				PAGE_ALIGNED(lengths[i]), behavior);
 		if (ret < 0) {
 			blk_finish_plug(&plug);
-			if (write)
-				mmap_write_unlock(mm);
-			else
-				mmap_read_unlock(mm);
+			madvise_unlock(mm, write);
 			ret = vector_madvise_handle_return_value(ret);
 			if (ret < 0)
 				goto out;
-			if (write) {
-				if (mmap_write_lock_killable(mm)) {
-					ret = -EINTR;
-					goto out;
-				}
-			} else {
-				mmap_read_lock(mm);
-			}
+			ret = madvise_lock(mm, write);
+			if (ret)
+				goto out;
 			blk_start_plug(&plug);
 			continue;
 		}
@@ -1819,10 +1819,7 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	}
 
 	blk_finish_plug(&plug);
-	if (write)
-		mmap_write_unlock(mm);
-	else
-		mmap_read_unlock(mm);
+	madvise_unlock(write);
 
 out:
 	vfree(start_addrs);
