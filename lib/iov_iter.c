@@ -1505,10 +1505,10 @@ ssize_t __import_iovec(int type, const struct iovec __user *uvec,
  *     on-stack) kernel array.
  * @i: Pointer to iterator that will be initialized on success.
  *
- * If the array pointed to by *@iov is large enough to hold all @nr_segs,
- * then this function places %NULL in *@iov on return. Otherwise, a new
- * array will be allocated and the result placed in *@iov. This means that
- * the caller may call kfree() on *@iov regardless of whether the small
+ * If the array pointed to by *@iovp is large enough to hold all @nr_segs,
+ * then this function places %NULL in *@iovp on return. Otherwise, a new
+ * array will be allocated and the result placed in *@iovp. This means that
+ * the caller may call kfree() on *@iovp regardless of whether the small
  * on-stack array was used or not (and regardless of whether this function
  * returns an error or not).
  *
