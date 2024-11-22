@@ -227,6 +227,9 @@ static bool damos_pa_filter_match(struct damos_filter *filter,
 		matched = folio_size(folio) == HPAGE_PMD_SIZE;
 		break;
 #endif
+	case DAMOS_FILTER_TYPE_UNMAPPED:
+		matched = !folio_mapped(folio) || !folio_raw_mapping(folio);
+		break;
 	default:
 		break;
 	}
