@@ -101,4 +101,10 @@ config DAMON_ACMA
 	  min/max memory for the system and maximum memory pressure stall time
 	  ratio.
 
+config DAMON_CADDR
+	bool "Build cache monitoring"
+	depends on DAMON_PADDR
+	help
+	  To be updated.
+
 endmenu
