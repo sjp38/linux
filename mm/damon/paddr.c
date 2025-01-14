@@ -47,6 +47,113 @@ static void damon_pa_prepare_access_checks(struct damon_ctx *ctx)
 	}
 }
 
+#ifdef CONFIG_DAMON_CADDR
+
+/*
+ * Page granular cache monitoring.
+ *
+ * cache line:	as everyone knows.  usually 64 bytes size.
+ * cache set:	same to that of textbook. a group of cache lines mapping same
+ * 		cache line index data.
+ * cache group: a new concept.  a group of cache sets that mapping same pages.
+ *
+ * In case of 128 MiB (2**27) size cache of 64B cache line, 16 ways,
+ * there are 128 MiB / 64 B (cache line size) = 2,097,152 (2**21) cache lines.
+ * there are 2**21 / 16 ways = 131,072i (2**17) cache sets
+ * A part of page can be mapped to 4 KiB / 64 B = 64 cache sets (a cache group).
+ * There are 131,072 cache sets / 64 cache sets per cache group =  2,048 cache groups.
+ * cache group #0 can contain content of page #0, #2,048, #4,096, ... (assuming
+ * physical address starts from zero and there are no holes)
+ *
+ * Each cache group may contain content of total memory / total number of cache
+ * cgroups data.  For 64 GiB system, 64 GiB / 2,048 = 32 MiB per cache set.
+ * cache cgroup #0 contains data of 0B-4K, 32MiB-32MiB4K, 64MiB-64MiB4K, ...
+ * cache cgroup #1 contains data of 4K-8K, 32MiB4K-32MiB8K, 64MiB4K-64MiB8K, ...
+ *
+ * From below, cache address means cache group index.
+ */
+
+struct damon_cache_spec {
+	unsigned size;
+	unsigned sz_line;
+	unsigned ways;
+	unsigned long min_pa;
+	unsigned long max_pa;
+
+	unsigned nr_pg_groups;
+	unsigned way_capacity;
+	unsigned long max_pways;
+};
+
+static struct damon_cache_spec *cache_spec;
+
+static void damon_ca_set_spec_internal(struct damon_cache_spec *spec)
+{
+	unsigned sz_set = spec->sz_line * spec->ways;
+	unsigned nr_sets = spec->size / sz_set;
+	unsigned sets_per_group = PAGE_SIZE / spec->sz_line;
+
+	spec->nr_pg_groups = nr_sets / sets_per_group;
+	spec->way_capacity = spec->size / spec->ways;
+	spec->max_pways = spec->max_pa / spec->way_capacity;
+}
+
+static struct damon_cache_spec *damon_ca_mk_cache_spec(
+		unsigned size, unsigned sz_line, unsigned ways,
+		unsigned long min_pa, unsigned long max_pa)
+{
+	struct damon_cache_spec *spec;
+
+	spec = kmalloc(sizeof(*spec), GFP_KERNEL);
+	if (!spec)
+		return NULL;
+	spec->size = size;
+	spec->sz_line = sz_line;
+	spec->ways = ways;
+	spec->min_pa = min_pa;
+	spec->max_pa = max_pa;
+	damon_ca_set_spec_internal(spec);
+	return spec;
+}
+
+/* convert physical address to cache address */
+/*
+ * This is not really required, since we set sampling address in physical address.
+ *
+static unsigned long damon_pa_to_ca(unsigned long paddr)
+{
+	return paddr / PAGE_SIZE % cache_spec->nr_cache_groups;
+}
+*/
+
+/* convert cache address to a random matching physical address */
+static unsigned long damon_ca_to_pa(unsigned long caddr)
+{
+	unsigned long way = damon_rand(0, cache_spec->max_pways);
+
+	return caddr * PAGE_SIZE + way * cache_spec->way_capacity;
+}
+
+static void __damon_ca_prepare_access_check(struct damon_region *r)
+{
+	r->sampling_addr = damon_ca_to_pa(damon_rand(r->ar.start, r->ar.end));
+
+	damon_pa_mkold(r->sampling_addr);
+}
+
+static void damon_ca_prepare_access_checks(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+
+	damon_for_each_target(t, ctx) {
+		damon_for_each_region(r, t)
+			__damon_ca_prepare_access_check(r);
+	}
+}
+
+#endif
+
 static bool damon_pa_young(unsigned long paddr, unsigned long *folio_sz)
 {
 	struct folio *folio = damon_get_folio(PHYS_PFN(paddr));
@@ -96,6 +203,39 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 
 	return max_nr_accesses;
 }
+
+#ifdef CONFIG_DAMON_CADDR
+
+/* caddr's access check can reuse almost every pa's access check logic, since
+ * r->sampling_addr is a physical address */
+
+static void __damon_ca_check_access(struct damon_region *r,
+		struct damon_attrs *attrs)
+{
+	static unsigned long last_folio_sz = PAGE_SIZE;
+	static bool accessed;
+
+	accessed = damon_pa_young(r->sampling_addr, &last_folio_sz);
+	damon_update_region_access_rate(r, accessed, attrs);
+}
+
+static unsigned int damon_ca_check_accesses(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+	unsigned int max_nr_accesses = 0;
+
+	damon_for_each_target(t, ctx) {
+		damon_for_each_region(r, t) {
+			__damon_ca_check_access(r, &ctx->attrs);
+			max_nr_accesses = max(r->nr_accesses, max_nr_accesses);
+		}
+	}
+
+	return max_nr_accesses;
+}
+
+#endif
 
 /*
  * damos_pa_filter_out - Return true if the page should be filtered out.
@@ -448,6 +588,18 @@ static int __init damon_pa_initcall(void)
 		.apply_scheme = damon_pa_apply_scheme,
 		.get_scheme_score = damon_pa_scheme_score,
 	};
+#ifdef CONFIG_DAMON_CADDR
+	struct damon_operations cops = {
+		.id = DAMON_OPS_CADDR,
+		.prepare_access_checks = damon_ca_prepare_access_checks,
+		.check_accesses = damon_ca_check_accesses,
+	};
+
+	cache_spec = damon_ca_mk_cache_spec(
+			128 * 1024 * 1024, 64, 16,
+			4UL * 1024 * 1024 * 1024, 64UL * 1024 * 1024 * 1024);
+	damon_register_ops(&cops);
+#endif
 
 	return damon_register_ops(&ops);
 };
