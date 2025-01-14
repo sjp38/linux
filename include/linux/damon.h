@@ -589,6 +589,9 @@ enum damon_ops_id {
 	DAMON_OPS_VADDR,
 	DAMON_OPS_FVADDR,
 	DAMON_OPS_PADDR,
+#ifdef CONFIG_DAMON_CADDR
+	DAMON_OPS_CADDR,
+#endif
 	NR_DAMON_OPS,
 };
 
