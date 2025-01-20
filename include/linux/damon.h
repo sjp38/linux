@@ -632,6 +632,10 @@ struct damon_call_control {
  *				regions.
  * @max_nr_regions:		The maximum number of adaptive monitoring
  *				regions.
+ * @tune_interval_aggrs:	Intervals tuning time interval in number of
+ *				aggregations.
+ * @target_access_samples_bp:	Intervals tuning target access samples ratio.
+ * @max_aggr_interval:		Maximum aggregation interval after tuning.
  *
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not during the last @sample_interval.  If such access is found, DAMON
@@ -642,6 +646,18 @@ struct damon_call_control {
  * and applies the changes for each @ops_update_interval.  All time intervals
  * are in micro-seconds.  Please refer to &struct damon_operations and &struct
  * damon_callback for more detail.
+ *
+ * If @tune_interval_aggrs is not zero, DAMON automatically tunes
+ * @aggr_interval and @sample_interval aiming the positive access check samples
+ * to total samples ratio within @tune_interval_aggrs of aggregations be same
+ * to @target_access_samples_bp.  The logic increases @aggr_interval and
+ * @sampling_interval in same ratio if the current positive access samples
+ * ratio is lower than the target, and vice versa.  The user-set
+ * @sampling_interval and @aggr_interval work as minimum values of the
+ * after-tune parameters.  User can set the maximum value of tuned aggregation
+ * interval via @max_aggr_interval.  Because the tuning logic keeps the
+ * @sample_interval to @aggr_interval ratio, @max_aggr_interval can be used to
+ * limit @sample_interval, too.
  */
 struct damon_attrs {
 	unsigned long sample_interval;
@@ -649,6 +665,14 @@ struct damon_attrs {
 	unsigned long ops_update_interval;
 	unsigned long min_nr_regions;
 	unsigned long max_nr_regions;
+
+	unsigned long tune_interval_aggrs;
+	unsigned int target_access_samples_bp;
+	unsigned long max_aggr_interval;
+
+/* private: internal use only */
+	unsigned long access_samples;
+	unsigned long min_aggr_interval;
 };
 
 /**
@@ -697,6 +721,11 @@ struct damon_ctx {
 	 * update
 	 */
 	unsigned long next_ops_update_sis;
+	/*
+	 * number of sample intervals that should be passed before next
+	 * intervals tuning
+	 */
+	unsigned long next_intervals_tune_sis;
 	/* for waiting until the execution of the kdamond_fn is started */
 	struct completion kdamond_started;
 	/* for scheme quotas prioritization */
