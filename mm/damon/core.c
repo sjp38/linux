@@ -1268,11 +1268,22 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 
 		damon_for_each_region(r, t) {
 			trace_damon_aggregated(ti, r, damon_nr_regions(t));
+			c->attrs.access_samples += r->nr_accesses;
 			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
 		}
 		ti++;
 	}
+}
+
+static void kdamond_tune_intervals(struct damon_ctx *c)
+{
+	if (!c->attrs.tune_interval_aggrs)
+		return;
+
+	/* todo: do the tuning */
+
+	c->attrs.access_samples = 0;
 }
 
 static void damon_split_region_at(struct damon_target *t,
@@ -2175,6 +2186,8 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 	ctx->next_aggregation_sis = ctx->attrs.aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->attrs.ops_update_interval /
 		sample_interval;
+	ctx->next_intervals_tune_sis = ctx->next_aggregation_sis *
+		ctx->attrs.tune_interval_aggrs;
 
 	damon_for_each_scheme(scheme, ctx) {
 		apply_interval = scheme->apply_interval_us ?
@@ -2261,6 +2274,14 @@ static int kdamond_fn(void *data)
 				ctx->attrs.aggr_interval / sample_interval;
 
 			kdamond_reset_aggregated(ctx);
+			if (ctx->passed_sample_intervals >=
+					ctx->next_intervals_tune_sis) {
+				ctx->next_intervals_tune_sis +=
+					ctx->attrs.aggr_interval /
+					sample_interval *
+					ctx->attrs.tune_interval_aggrs;
+				kdamond_tune_intervals(ctx);
+			}
 			kdamond_split_regions(ctx);
 			if (ctx->ops.reset_aggregated)
 				ctx->ops.reset_aggregated(ctx);
