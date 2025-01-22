@@ -600,21 +600,6 @@ static ssize_t tuned_aggr_us_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", intervals->tuned_aggr_us);
 }
 
-static ssize_t tuned_aggr_us_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_intervals *intervals = container_of(kobj,
-			struct damon_sysfs_intervals, kobj);
-	unsigned long us;
-	int err = kstrtoul(buf, 0, &us);
-
-	if (err)
-		return err;
-
-	intervals->tuned_aggr_us = us;
-	return count;
-}
-
 static void damon_sysfs_intervals_release(struct kobject *kobj)
 {
 	kfree(container_of(kobj, struct damon_sysfs_intervals, kobj));
@@ -640,7 +625,7 @@ static struct kobj_attribute damon_sysfs_intervals_max_aggr_us_attr =
 		__ATTR_RW_MODE(max_aggr_us, 0600);
 
 static struct kobj_attribute damon_sysfs_intervals_tuned_aggr_us_attr =
-		__ATTR_RW_MODE(tuned_aggr_us, 0600);
+		__ATTR_RO_MODE(tuned_aggr_us, 0400);
 
 static struct attribute *damon_sysfs_intervals_attrs[] = {
 	&damon_sysfs_intervals_sample_us_attr.attr,
