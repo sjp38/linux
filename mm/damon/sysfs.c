@@ -1201,6 +1201,10 @@ static int damon_sysfs_set_attrs(struct damon_ctx *ctx,
 		.ops_update_interval = sys_intervals->update_us,
 		.min_nr_regions = sys_nr_regions->min,
 		.max_nr_regions = sys_nr_regions->max,
+		.tune_interval_aggrs = sys_intervals->tune_aggrs,
+		.target_access_samples_bp =
+			sys_intervals->target_access_samples_bp,
+		.max_aggr_interval = sys_intervals->max_aggr_us,
 	};
 	return damon_set_attrs(ctx, &attrs);
 }
