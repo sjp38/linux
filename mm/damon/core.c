@@ -1289,6 +1289,7 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	unsigned long adaptation_bp;
 	unsigned long sample_to_aggr_bp;
 	unsigned long new_aggr_interval, new_sample_interval;
+	struct damon_attrs new_attrs;
 
 	if (!c->attrs.tune_interval_aggrs)
 		return;
@@ -1302,13 +1303,17 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 		c->attrs.target_access_samples_bp / 10000;
 	score_bp = c->attrs.access_samples * 10000 / target_access_samples;
 	adaptation_bp = damon_feed_loop_next_input(10000, score_bp);
-	new_aggr_interval = max(c->attrs.aggr_interval * adaptation_bp / 10000,
+
+	new_attrs = c->attrs;
+	new_attrs.aggr_interval = max(
+			c->attrs.aggr_interval * adaptation_bp / 10000,
 			c->attrs.max_aggr_interval);
 	sample_to_aggr_bp = c->attrs.sample_interval * 10000 /
 		c->attrs.aggr_interval;
-	new_sample_interval = new_aggr_interval * sample_to_aggr_bp / 10000;
-
-	/* todo: commit new intervals */
+	new_attrs.sample_interval =
+		new_aggr_interval * sample_to_aggr_bp / 10000;
+	/* damon_set_attrs() returns error only for wrong parameter */
+	damon_set_attrs(c, &new_attrs);
 
 	c->attrs.access_samples = 0;
 }
