@@ -1305,7 +1305,7 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	adaptation_bp = damon_feed_loop_next_input(10000, score_bp);
 
 	new_attrs = c->attrs;
-	new_attrs.aggr_interval = max(
+	new_attrs.aggr_interval = min(
 			c->attrs.aggr_interval * adaptation_bp / 10000,
 			c->attrs.max_aggr_interval);
 	sample_to_aggr_bp = c->attrs.sample_interval * 10000 /
