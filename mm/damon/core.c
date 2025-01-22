@@ -1308,6 +1308,8 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	new_attrs.aggr_interval = min(
 			c->attrs.aggr_interval * adaptation_bp / 10000,
 			c->attrs.max_aggr_interval);
+	new_attrs.aggr_interval = max(new_attrs.aggr_interval,
+			c->attrs.min_aggr_interval);
 	sample_to_aggr_bp = c->attrs.sample_interval * 10000 /
 		c->attrs.aggr_interval;
 	new_attrs.sample_interval =
@@ -2243,6 +2245,9 @@ static int kdamond_fn(void *data)
 
 	complete(&ctx->kdamond_started);
 	kdamond_init_intervals_sis(ctx);
+
+	if (ctx->attrs.tune_interval_aggrs)
+		ctx->attrts.min_aggr_interval = ctx->attrs.aggr_interval;
 
 	if (ctx->ops.init)
 		ctx->ops.init(ctx);
