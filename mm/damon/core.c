@@ -2376,8 +2376,6 @@ static int kdamond_fn(void *data)
 		if (ctx->passed_sample_intervals >= next_aggregation_sis) {
 			ctx->next_aggregation_sis = next_aggregation_sis +
 				ctx->attrs.aggr_interval / sample_interval;
-
-			kdamond_reset_aggregated(ctx);
 			if (ctx->passed_sample_intervals >=
 					ctx->next_intervals_tune_sis) {
 				ctx->next_intervals_tune_sis +=
@@ -2386,6 +2384,8 @@ static int kdamond_fn(void *data)
 					ctx->attrs.tune_interval_aggrs;
 				kdamond_tune_intervals(ctx);
 			}
+
+			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
 			if (ctx->ops.reset_aggregated)
 				ctx->ops.reset_aggregated(ctx);
