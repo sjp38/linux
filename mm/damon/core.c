@@ -1348,7 +1348,10 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	new_attrs.sample_interval =
 		new_attrs.aggr_interval * sample_to_aggr_bp / 10000;
 	/* damon_set_attrs() returns error only for wrong parameter */
-	pr_info("tune intervals to %lu %lu\n",
+	pr_info("access_ratio bp %lu, score_bp %lu, adaptation bp %lu\n",
+			access_samples * 10000 / max_access_samples, score_bp,
+			adaptabion_bp);
+	pr_info("tune intervals to %lu %lu\n\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
 }
@@ -2541,7 +2544,14 @@ int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 static unsigned int damon_moving_sum(unsigned int mvsum, unsigned int nomvsum,
 		unsigned int len_window, unsigned int new_value)
 {
-	return mvsum - nomvsum / len_window + new_value;
+	unsigned int ret = mvsum - nomvsum / len_window + new_value;
+
+	if (ret > 100 * 10000) {
+		pr_info("current %u last %u window %u new input %u -> %lu\n",
+				mvsum, nomvsum, len_window, new_value, ret);
+		BUG();
+	}
+	return ret;
 }
 
 /**
