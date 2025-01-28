@@ -1308,34 +1308,43 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 static unsigned long damon_feed_loop_next_input(unsigned long last_input,
 		unsigned long score);
 
-static void kdamond_tune_intervals(struct damon_ctx *c)
+static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct damon_region *r;
-	unsigned long total_nr_regions;
-	unsigned long max_access_samples;
-	unsigned long target_access_samples;
-	unsigned long score_bp;
-	unsigned long adaptation_bp;
-	unsigned long sample_to_aggr_bp;
-	struct damon_attrs new_attrs;
+	unsigned long nr_regions = 0;
 	unsigned long access_samples = 0;
+	unsigned long max_access_samples, access_samples_bp, score_bp;
+	unsigned long adaptation_bp;
+
+	damon_for_each_target(t, c) {
+		nr_regions += damon_nr_regions(t);
+		damon_for_each_region(r, t)
+			access_samples += r->nr_accesses;
+	}
+	max_access_samples = damon_max_nr_accesses(&c->attrs) * nr_regions;
+	access_samples_bp = access_samples * 10000 / max_access_samples;
+	score_bp = access_samples_bp * 10000 /
+		c->attrs.target_access_samples_bp;
+	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) /
+		10000;
+
+	pr_info("access_ratio bp %lu, score_bp %lu, adaptation bp %lu\n",
+			access_samples_bp, score_bp, adaptation_bp);
+	return adaptation_bp;
+}
+
+static void kdamond_tune_intervals(struct damon_ctx *c)
+{
+	unsigned long adaptation_bp, sample_to_aggr_bp;
+	struct damon_attrs new_attrs;
 
 	if (!c->attrs.tune_interval_aggrs)
 		return;
 
-	total_nr_regions = 0;
-	damon_for_each_target(t, c) {
-		total_nr_regions += damon_nr_regions(t);
-		damon_for_each_region(r, t)
-			access_samples += r->nr_accesses;
-	}
-	max_access_samples = c->attrs.aggr_interval / c->attrs.sample_interval
-		* total_nr_regions;
-	target_access_samples = max_access_samples *
-		c->attrs.target_access_samples_bp / 10000;
-	score_bp = access_samples * 10000 / target_access_samples;
-	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) / 10000;
+	adaptation_bp = damon_get_intervals_adaptation_bp(c);
+	if (adaptation_bp == 10000)
+		return;
 
 	new_attrs = c->attrs;
 	new_attrs.aggr_interval = min(
@@ -1343,14 +1352,11 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 			c->attrs.max_aggr_interval);
 	new_attrs.aggr_interval = max(new_attrs.aggr_interval,
 			c->attrs.min_aggr_interval);
+	/* todo: keep the initial ratio */
 	sample_to_aggr_bp = c->attrs.sample_interval * 10000 /
 		c->attrs.aggr_interval;
-	new_attrs.sample_interval =
-		new_attrs.aggr_interval * sample_to_aggr_bp / 10000;
-	/* damon_set_attrs() returns error only for wrong parameter */
-	pr_info("access_ratio bp %lu, score_bp %lu, adaptation bp %lu\n",
-			access_samples * 10000 / max_access_samples, score_bp,
-			adaptation_bp);
+	new_attrs.sample_interval = new_attrs.aggr_interval * sample_to_aggr_bp
+		/ 10000;
 	pr_info("tune intervals to %lu %lu\n\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
@@ -2547,7 +2553,7 @@ static unsigned int damon_moving_sum(unsigned int mvsum, unsigned int nomvsum,
 	unsigned int ret = mvsum - nomvsum / len_window + new_value;
 
 	if (ret > 100 * 10000) {
-		pr_info("current %u last %u window %u new input %u -> %lu\n",
+		pr_info("current %u last %u window %u new input %u -> %u\n",
 				mvsum, nomvsum, len_window, new_value, ret);
 		BUG();
 	}
