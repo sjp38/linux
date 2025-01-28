@@ -1344,6 +1344,8 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	new_attrs.sample_interval =
 		new_attrs.aggr_interval * sample_to_aggr_bp / 10000;
 	/* damon_set_attrs() returns error only for wrong parameter */
+	pr_info("tune intervals to %lu %lu\n",
+			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
 
 	c->attrs.access_samples = 0;
