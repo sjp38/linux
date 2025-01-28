@@ -1298,7 +1298,6 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 
 		damon_for_each_region(r, t) {
 			trace_damon_aggregated(ti, r, damon_nr_regions(t));
-			c->attrs.access_samples += r->nr_accesses;
 			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
 		}
@@ -1312,6 +1311,7 @@ static unsigned long damon_feed_loop_next_input(unsigned long last_input,
 static void kdamond_tune_intervals(struct damon_ctx *c)
 {
 	struct damon_target *t;
+	struct damon_region *r;
 	unsigned long total_nr_regions;
 	unsigned long max_access_samples;
 	unsigned long target_access_samples;
@@ -1319,19 +1319,23 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	unsigned long adaptation_bp;
 	unsigned long sample_to_aggr_bp;
 	struct damon_attrs new_attrs;
+	unsigned long access_samples = 0;
 
 	if (!c->attrs.tune_interval_aggrs)
 		return;
 
 	total_nr_regions = 0;
-	damon_for_each_target(t, c)
+	damon_for_each_target(t, c) {
 		total_nr_regions += damon_nr_regions(t);
+		damon_for_each_region(r, t)
+			access_samples += r->nr_accesses;
+	}
 	max_access_samples = c->attrs.aggr_interval / c->attrs.sample_interval
 		* total_nr_regions;
 	target_access_samples = max_access_samples *
 		c->attrs.target_access_samples_bp / 10000;
-	score_bp = c->attrs.access_samples * 10000 / target_access_samples;
-	adaptation_bp = damon_feed_loop_next_input(10000, score_bp);
+	score_bp = access_samples * 10000 / target_access_samples;
+	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) / 10000;
 
 	new_attrs = c->attrs;
 	new_attrs.aggr_interval = min(
@@ -1347,8 +1351,6 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	pr_info("tune intervals to %lu %lu\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
-
-	c->attrs.access_samples = 0;
 }
 
 static void damon_split_region_at(struct damon_target *t,
