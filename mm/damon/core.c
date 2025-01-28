@@ -1350,7 +1350,7 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	/* damon_set_attrs() returns error only for wrong parameter */
 	pr_info("access_ratio bp %lu, score_bp %lu, adaptation bp %lu\n",
 			access_samples * 10000 / max_access_samples, score_bp,
-			adaptabion_bp);
+			adaptation_bp);
 	pr_info("tune intervals to %lu %lu\n\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
