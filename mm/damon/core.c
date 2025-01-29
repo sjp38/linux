@@ -1338,11 +1338,10 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct damon_region *r;
-	unsigned long nr_regions = 0, access_samples = 0, score_bp;
+	unsigned long access_samples = 0, score_bp;
 	unsigned long adaptation_bp;
 
 	damon_for_each_target(t, c) {
-		nr_regions += damon_nr_regions(t);
 		damon_for_each_region(r, t)
 			access_samples += r->nr_accesses;
 	}
