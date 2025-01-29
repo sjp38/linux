@@ -1351,13 +1351,14 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 		10000;
 
 	pr_info("access_samples %lu/%lu, score_bp %lu, adaptation bp %lu\n",
-			access_samples, score_bp, adaptation_bp);
+			access_samples, c->attrs.intervals_goal.samples,
+			score_bp, adaptation_bp);
 	return adaptation_bp;
 }
 
 static void kdamond_tune_intervals(struct damon_ctx *c)
 {
-	unsigned long adaptation_bp, sample_to_aggr_bp;
+	unsigned long adaptation_bp;
 	struct damon_attrs new_attrs;
 	struct damon_intervals_goal *goal;
 
