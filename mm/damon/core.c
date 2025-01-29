@@ -644,6 +644,27 @@ static void damon_update_monitoring_results(struct damon_ctx *ctx,
 					r, old_attrs, new_attrs);
 }
 
+/*
+ * damon_valid_intervals_goal() - return if the intervals goal of @attrs is
+ * valid.
+ */
+static bool damon_valid_intervals_goal(struct damon_attrs *attrs)
+{
+	struct damon_intervals_goal *goal = &attrs->intervals_goal;
+
+	/* tuning is disabled */
+	if (!goal->aggrs)
+		return true;
+	if (goal->min_sample_us > goal->max_sample_us)
+		return false;
+	if (attrs->sample_interval < goal->min_sample_us ||
+			goal->max_sample_us < attrs->sample_interval)
+		return false;
+	if (!goal->aggr_samples)
+		return false;
+	return true;
+}
+
 /**
  * damon_set_attrs() - Set attributes for the monitoring.
  * @ctx:		monitoring context
@@ -663,6 +684,9 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 	unsigned long sample_interval = attrs->sample_interval ?
 		attrs->sample_interval : 1;
 	struct damos *s;
+
+	if (!damon_valid_intervals_goal(attrs))
+		return -EINVAL;
 
 	if (attrs->min_nr_regions < 3)
 		return -EINVAL;
@@ -1312,9 +1336,7 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct damon_region *r;
-	unsigned long nr_regions = 0;
-	unsigned long access_samples = 0;
-	unsigned long max_access_samples, access_samples_bp, score_bp;
+	unsigned long nr_regions = 0, access_samples = 0, score_bp;
 	unsigned long adaptation_bp;
 
 	damon_for_each_target(t, c) {
@@ -1322,15 +1344,12 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 		damon_for_each_region(r, t)
 			access_samples += r->nr_accesses;
 	}
-	max_access_samples = damon_max_nr_accesses(&c->attrs) * nr_regions;
-	access_samples_bp = access_samples * 10000 / max_access_samples;
-	score_bp = access_samples_bp * 10000 /
-		c->attrs.target_access_samples_bp;
+	score_bp = access_samples * 10000 / c->attrs.intervals_goal.samples;
 	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) /
 		10000;
 
-	pr_info("access_ratio bp %lu, score_bp %lu, adaptation bp %lu\n",
-			access_samples_bp, score_bp, adaptation_bp);
+	pr_info("access_samples %lu/%lu, score_bp %lu, adaptation bp %lu\n",
+			access_samples, score_bp, adaptation_bp);
 	return adaptation_bp;
 }
 
@@ -1338,25 +1357,22 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 {
 	unsigned long adaptation_bp, sample_to_aggr_bp;
 	struct damon_attrs new_attrs;
-
-	if (!c->attrs.tune_interval_aggrs)
-		return;
+	struct damon_intervals_goal *goal;
 
 	adaptation_bp = damon_get_intervals_adaptation_bp(c);
 	if (adaptation_bp == 10000)
 		return;
 
 	new_attrs = c->attrs;
-	new_attrs.aggr_interval = min(
-			c->attrs.aggr_interval * adaptation_bp / 10000,
-			c->attrs.max_aggr_interval);
-	new_attrs.aggr_interval = max(new_attrs.aggr_interval,
-			c->attrs.min_aggr_interval);
-	/* todo: keep the initial ratio */
-	sample_to_aggr_bp = c->attrs.sample_interval * 10000 /
-		c->attrs.aggr_interval;
-	new_attrs.sample_interval = new_attrs.aggr_interval * sample_to_aggr_bp
-		/ 10000;
+	goal = &c->attrs.intervals_goal;
+	new_attrs.sample_interval = min(
+			c->attrs.sample_interval * adaptation_bp / 10000,
+			goal->max_sample_us);
+	new_attrs.sample_interval = max(new_attrs.sample_interval,
+			goal->min_sample_us);
+	new_attrs.aggr_interval = new_attrs.sample_interval *
+		goal->aggr_samples;
+
 	pr_info("tune intervals to %lu %lu\n\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
 	damon_set_attrs(c, &new_attrs);
@@ -2298,7 +2314,7 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 	ctx->next_ops_update_sis = ctx->attrs.ops_update_interval /
 		sample_interval;
 	ctx->next_intervals_tune_sis = ctx->next_aggregation_sis *
-		ctx->attrs.tune_interval_aggrs;
+		ctx->attrs.intervals_goal.aggrs;
 
 	/* todo: ensure apply_interval_us > sample_interval */
 	damon_for_each_scheme(scheme, ctx) {
@@ -2323,9 +2339,6 @@ static int kdamond_fn(void *data)
 
 	complete(&ctx->kdamond_started);
 	kdamond_init_intervals_sis(ctx);
-
-	if (ctx->attrs.tune_interval_aggrs)
-		ctx->attrs.min_aggr_interval = ctx->attrs.aggr_interval;
 
 	if (ctx->ops.init)
 		ctx->ops.init(ctx);
@@ -2387,12 +2400,12 @@ static int kdamond_fn(void *data)
 		if (ctx->passed_sample_intervals >= next_aggregation_sis) {
 			ctx->next_aggregation_sis = next_aggregation_sis +
 				ctx->attrs.aggr_interval / sample_interval;
-			if (ctx->passed_sample_intervals >=
+			if (ctx->attrs.intervals_goal.aggrs &&
+					ctx->passed_sample_intervals >=
 					ctx->next_intervals_tune_sis) {
 				ctx->next_intervals_tune_sis +=
-					ctx->attrs.aggr_interval /
-					sample_interval *
-					ctx->attrs.tune_interval_aggrs;
+					ctx->attrs.intervals_goal.aggr_samples * 
+					ctx->attrs.intervals_goal.aggrs;
 				kdamond_tune_intervals(ctx);
 			}
 

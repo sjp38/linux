@@ -661,19 +661,46 @@ struct damon_call_control {
 };
 
 /**
+ * struct damon_intervals_goal - Monitoring intervals auto-tuning goal.
+ *
+ * @samples:		Number of positive access check samples to achieve.
+ * @aggrs:		Number of aggregations to acheive @samples within.
+ * @min_sample_us:	Minimum resulting sampling interval in microseconds.
+ * @max_sample_us:	Maximum resulting sampling interval in microseconds.
+ * @aggr_samples:	Aggregation to sample interval ratio.
+ *
+ * DAMON automatically tunes &damon_attrs->sample_interval and
+ * &damon_attrs->aggr_interval aiming the number of access check samples that
+ * shown positive result (was accessed) within @aggrs aggregations be same to
+ * @samples.  The logic increases &damon_attrs->aggr_interval and
+ * &damon_attrs->sampling_interval in same ratio (@aggr_samples) if the current
+ * positive access samples ratio is lower than the target for each @aggrs
+ * aggregations, and vice versa.
+ *
+ * If @aggrs is zero, the tuning is disabled.  If any input makes no sense
+ * (e.g., @min_sample_us is samller than @max_sample_us, or
+ * &damon_attrs->sample_interval is out of @min_sample_us-@max_sample_us
+ * range), damon_commit_ctx() returns an error.
+ */
+struct damon_intervals_goal {
+	unsigned long samples;
+	unsigned long aggrs;
+	unsigned long min_sample_us;
+	unsigned long max_sample_us;
+	unsigned long aggr_samples;
+};
+
+/**
  * struct damon_attrs - Monitoring attributes for accuracy/overhead control.
  *
  * @sample_interval:		The time between access samplings.
  * @aggr_interval:		The time between monitor results aggregations.
  * @ops_update_interval:	The time between monitoring operations updates.
+ * @intervals_goal:		Intervals auto-tuning goal.
  * @min_nr_regions:		The minimum number of adaptive monitoring
  *				regions.
  * @max_nr_regions:		The maximum number of adaptive monitoring
  *				regions.
- * @tune_interval_aggrs:	Intervals tuning time interval in number of
- *				aggregations.
- * @target_access_samples_bp:	Intervals tuning target access samples ratio.
- * @max_aggr_interval:		Maximum aggregation interval after tuning.
  *
  * For each @sample_interval, DAMON checks whether each region is accessed or
  * not during the last @sample_interval.  If such access is found, DAMON
@@ -684,33 +711,14 @@ struct damon_call_control {
  * and applies the changes for each @ops_update_interval.  All time intervals
  * are in micro-seconds.  Please refer to &struct damon_operations and &struct
  * damon_callback for more detail.
- *
- * If @tune_interval_aggrs is not zero, DAMON automatically tunes
- * @aggr_interval and @sample_interval aiming the positive access check samples
- * to total samples ratio within @tune_interval_aggrs of aggregations be same
- * to @target_access_samples_bp.  The logic increases @aggr_interval and
- * @sampling_interval in same ratio if the current positive access samples
- * ratio is lower than the target, and vice versa.  The user-set
- * @sampling_interval and @aggr_interval work as minimum values of the
- * after-tune parameters.  User can set the maximum value of tuned aggregation
- * interval via @max_aggr_interval.  Because the tuning logic keeps the
- * @sample_interval to @aggr_interval ratio, @max_aggr_interval can be used to
- * limit @sample_interval, too.
  */
 struct damon_attrs {
 	unsigned long sample_interval;
 	unsigned long aggr_interval;
 	unsigned long ops_update_interval;
+	struct damon_intervals_goal intervals_goal;
 	unsigned long min_nr_regions;
 	unsigned long max_nr_regions;
-
-	unsigned long tune_interval_aggrs;
-	unsigned int target_access_samples_bp;
-	unsigned long max_aggr_interval;
-
-/* private: internal use only */
-	unsigned long access_samples;
-	unsigned long min_aggr_interval;
 };
 
 /**
