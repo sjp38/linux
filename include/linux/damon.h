@@ -663,26 +663,26 @@ struct damon_call_control {
 /**
  * struct damon_intervals_goal - Monitoring intervals auto-tuning goal.
  *
- * @samples:		Number of positive access check samples to achieve.
+ * @samples_bp:		Positive access check samples ratio to achieve.
  * @aggrs:		Number of aggregations to acheive @samples within.
  * @min_sample_us:	Minimum resulting sampling interval in microseconds.
  * @max_sample_us:	Maximum resulting sampling interval in microseconds.
  *
  * DAMON automatically tunes &damon_attrs->sample_interval and
- * &damon_attrs->aggr_interval aiming the number of access check samples that
- * shown positive result (was accessed) within @aggrs aggregations be same to
- * @samples.  The logic increases &damon_attrs->aggr_interval and
- * &damon_attrs->sampling_interval in same ratio if the current positive access
- * samples ratio is lower than the target for each @aggrs aggregations, and
- * vice versa.
+ * &damon_attrs->aggr_interval aiming the ratio in bp (1/10,000) of access
+ * check samples that shown positive result (was accessed) to total samples
+ * within @aggrs aggregations be same to @samples_bp.  The logic increases
+ * &damon_attrs->aggr_interval and &damon_attrs->sampling_interval in same
+ * ratio if the current positive access samples ratio is lower than the target
+ * for each @aggrs aggregations, and vice versa.
  *
- * If @aggrs is zero, the tuning is disabled.  If any input makes no sense
- * (e.g., @min_sample_us is samller than @max_sample_us, or
- * &damon_attrs->sample_interval is out of @min_sample_us-@max_sample_us
- * range), damon_commit_ctx() returns an error.
+ * If @aggrs is zero, the tuning is disabled and hence this struct is ignored.
+ * If it is not zero and any input makes no sense (e.g., @min_sample_us is
+ * samller than @max_sample_us, or &damon_attrs->sample_interval is out of
+ * @min_sample_us-@max_sample_us range), damon_commit_ctx() returns an error.
  */
 struct damon_intervals_goal {
-	unsigned long samples;
+	unsigned long samples_bp;
 	unsigned long aggrs;
 	unsigned long min_sample_us;
 	unsigned long max_sample_us;

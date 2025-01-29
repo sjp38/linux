@@ -1338,20 +1338,25 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 {
 	struct damon_target *t;
 	struct damon_region *r;
-	unsigned long access_samples = 0, score_bp;
+	unsigned long nr_regions = 0, access_samples = 0;
+	struct damon_intervals_goal *goal = &c->attrs.intervals_goal;
+	unsigned long max_samples, target_samples, score_bp;
 	unsigned long adaptation_bp;
 
 	damon_for_each_target(t, c) {
+		nr_regions = damon_nr_regions(t);
 		damon_for_each_region(r, t)
 			access_samples += r->nr_accesses;
 	}
-	score_bp = access_samples * 10000 / c->attrs.intervals_goal.samples;
+	max_samples = nr_regions * c->attrs.aggr_samples;
+	target_samples = max_samples * goal->samples_bp / 10000;
+	score_bp = access_samples * 10000 / target_samples;
 	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) /
 		10000;
 
 	pr_info("access_samples %lu/%lu, score_bp %lu, adaptation bp %lu\n",
-			access_samples, c->attrs.intervals_goal.samples,
-			score_bp, adaptation_bp);
+			access_samples, target_samples, score_bp,
+			adaptation_bp);
 	return adaptation_bp;
 }
 
