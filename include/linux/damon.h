@@ -667,15 +667,14 @@ struct damon_call_control {
  * @aggrs:		Number of aggregations to acheive @samples within.
  * @min_sample_us:	Minimum resulting sampling interval in microseconds.
  * @max_sample_us:	Maximum resulting sampling interval in microseconds.
- * @aggr_samples:	Aggregation to sample interval ratio.
  *
  * DAMON automatically tunes &damon_attrs->sample_interval and
  * &damon_attrs->aggr_interval aiming the number of access check samples that
  * shown positive result (was accessed) within @aggrs aggregations be same to
  * @samples.  The logic increases &damon_attrs->aggr_interval and
- * &damon_attrs->sampling_interval in same ratio (@aggr_samples) if the current
- * positive access samples ratio is lower than the target for each @aggrs
- * aggregations, and vice versa.
+ * &damon_attrs->sampling_interval in same ratio if the current positive access
+ * samples ratio is lower than the target for each @aggrs aggregations, and
+ * vice versa.
  *
  * If @aggrs is zero, the tuning is disabled.  If any input makes no sense
  * (e.g., @min_sample_us is samller than @max_sample_us, or
@@ -687,7 +686,6 @@ struct damon_intervals_goal {
 	unsigned long aggrs;
 	unsigned long min_sample_us;
 	unsigned long max_sample_us;
-	unsigned long aggr_samples;
 };
 
 /**
@@ -719,6 +717,17 @@ struct damon_attrs {
 	struct damon_intervals_goal intervals_goal;
 	unsigned long min_nr_regions;
 	unsigned long max_nr_regions;
+/* private: internal use only */
+	/*
+	 * @aggr_interval to @sample_interval ratio.
+	 * Core-external components call damon_set_attrs() with &damon_attrs
+	 * that this field is unset.  In the case, damon_set_attrs() sets this
+	 * field of resulting &damon_attrs.  Core-internal components such as
+	 * kdamond_tune_intervals() calls damon_set_attrs() with &damon_attrs
+	 * that this field is set.  In the case, damon_set_attrs() just keep
+	 * it.
+	 */
+	unsigned long aggr_samples;
 };
 
 /**

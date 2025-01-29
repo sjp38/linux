@@ -660,8 +660,6 @@ static bool damon_valid_intervals_goal(struct damon_attrs *attrs)
 	if (attrs->sample_interval < goal->min_sample_us ||
 			goal->max_sample_us < attrs->sample_interval)
 		return false;
-	if (!goal->aggr_samples)
-		return false;
 	return true;
 }
 
@@ -694,6 +692,10 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 		return -EINVAL;
 	if (attrs->sample_interval > attrs->aggr_interval)
 		return -EINVAL;
+
+	/* Only calls from core-external doesn't set this. */
+	if (!attrs->aggr_samples)
+		attrs->aggr_samples = attrs->aggr_interval / sample_interval;
 
 	ctx->next_aggregation_sis = ctx->passed_sample_intervals +
 		attrs->aggr_interval / sample_interval;
@@ -1371,7 +1373,7 @@ static void kdamond_tune_intervals(struct damon_ctx *c)
 	new_attrs.sample_interval = max(new_attrs.sample_interval,
 			goal->min_sample_us);
 	new_attrs.aggr_interval = new_attrs.sample_interval *
-		goal->aggr_samples;
+		c->attrs.aggr_samples;
 
 	pr_info("tune intervals to %lu %lu\n\n",
 			new_attrs.sample_interval, new_attrs.aggr_interval);
@@ -2404,7 +2406,7 @@ static int kdamond_fn(void *data)
 					ctx->passed_sample_intervals >=
 					ctx->next_intervals_tune_sis) {
 				ctx->next_intervals_tune_sis +=
-					ctx->attrs.intervals_goal.aggr_samples * 
+					ctx->attrs.aggr_samples *
 					ctx->attrs.intervals_goal.aggrs;
 				kdamond_tune_intervals(ctx);
 			}

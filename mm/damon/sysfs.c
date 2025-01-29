@@ -418,13 +418,11 @@ struct damon_sysfs_intervals_goal {
 	unsigned long aggrs;
 	unsigned long min_sample_us;
 	unsigned long max_sample_us;
-	unsigned long aggr_samples;
 };
 
 static struct damon_sysfs_intervals_goal *damon_sysfs_intervals_goal_alloc(
 		unsigned long samples, unsigned long aggrs,
-		unsigned long min_sample_us, unsigned long max_sample_us,
-		unsigned long aggr_samples)
+		unsigned long min_sample_us, unsigned long max_sample_us)
 {
 	struct damon_sysfs_intervals_goal *goal = kmalloc(sizeof(*goal),
 			GFP_KERNEL);
@@ -437,7 +435,6 @@ static struct damon_sysfs_intervals_goal *damon_sysfs_intervals_goal_alloc(
 	goal->aggrs = aggrs;
 	goal->min_sample_us = min_sample_us;
 	goal->max_sample_us = max_sample_us;
-	goal->aggr_samples = aggr_samples;
 	return goal;
 }
 
@@ -537,30 +534,6 @@ static ssize_t max_sample_us_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t aggr_samples_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
-{
-	struct damon_sysfs_intervals_goal *goal = container_of(kobj,
-			struct damon_sysfs_intervals_goal, kobj);
-
-	return sysfs_emit(buf, "%lu\n", goal->aggr_samples);
-}
-
-static ssize_t aggr_samples_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	struct damon_sysfs_intervals_goal *goal = container_of(kobj,
-			struct damon_sysfs_intervals_goal, kobj);
-	unsigned long nr;
-	int err = kstrtoul(buf, 0, &nr);
-
-	if (err)
-		return err;
-
-	goal->aggr_samples = nr;
-	return count;
-}
-
 static void damon_sysfs_intervals_goal_release(struct kobject *kobj)
 {
 	kfree(container_of(kobj, struct damon_sysfs_intervals_goal, kobj));
@@ -578,15 +551,11 @@ static struct kobj_attribute damon_sysfs_intervals_goal_min_sample_us_attr =
 static struct kobj_attribute damon_sysfs_intervals_goal_max_sample_us_attr =
 		__ATTR_RW_MODE(max_sample_us, 0600);
 
-static struct kobj_attribute damon_sysfs_intervals_goal_aggr_samples_attr =
-		__ATTR_RW_MODE(aggr_samples, 0600);
-
 static struct attribute *damon_sysfs_intervals_goal_attrs[] = {
 	&damon_sysfs_intervals_goal_samples_attr.attr,
 	&damon_sysfs_intervals_goal_aggrs_attr.attr,
 	&damon_sysfs_intervals_goal_min_sample_us_attr.attr,
 	&damon_sysfs_intervals_goal_max_sample_us_attr.attr,
-	&damon_sysfs_intervals_goal_aggr_samples_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_intervals_goal);
@@ -631,7 +600,7 @@ static int damon_sysfs_intervals_add_dirs(struct damon_sysfs_intervals *interval
 	struct damon_sysfs_intervals_goal *goal;
 	int err;
 
-	goal = damon_sysfs_intervals_goal_alloc(0, 0, 0, 0, 0);
+	goal = damon_sysfs_intervals_goal_alloc(0, 0, 0, 0);
 	if (!goal)
 		return -ENOMEM;
 
@@ -1321,8 +1290,7 @@ static int damon_sysfs_set_attrs(struct damon_ctx *ctx,
 			.samples = sys_goal->samples,
 			.aggrs = sys_goal->aggrs,
 			.min_sample_us = sys_goal->min_sample_us,
-			.max_sample_us = sys_goal->max_sample_us,
-			.aggr_samples = sys_goal->aggr_samples},
+			.max_sample_us = sys_goal->max_sample_us},
 		.ops_update_interval = sys_intervals->update_us,
 		.min_nr_regions = sys_nr_regions->min,
 		.max_nr_regions = sys_nr_regions->max,
