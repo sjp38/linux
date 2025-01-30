@@ -1103,7 +1103,7 @@ static int zswap_writeback_entry(struct zswap_entry *entry,
 	folio_mark_uptodate(folio);
 
 	/* free the folio after writeback */
-	folio_set_dropbehind(folio);
+	folio_set_reclaim(folio);
 
 	/* start writeback */
 	__swap_writepage(folio, &wbc);

@@ -683,8 +683,8 @@ void folio_migrate_flags(struct folio *newfolio, struct folio *folio)
 		folio_set_dirty(newfolio);
 
 	/* TODO: free the folio on migration? */
-	if (folio_test_dropbehind(folio))
-		folio_set_dropbehind(newfolio);
+	if (folio_test_reclaim(folio))
+		folio_set_reclaim(newfolio);
 
 	if (folio_test_young(folio))
 		folio_set_young(newfolio);

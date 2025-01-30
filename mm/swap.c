@@ -406,7 +406,7 @@ static bool lru_gen_clear_refs(struct folio *folio)
  */
 void folio_mark_accessed(struct folio *folio)
 {
-	if (folio_test_dropbehind(folio))
+	if (folio_test_reclaim(folio))
 		return;
 	if (lru_gen_enabled()) {
 		lru_gen_inc_refs(folio);

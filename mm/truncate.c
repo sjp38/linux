@@ -488,7 +488,7 @@ unsigned long mapping_try_invalidate(struct address_space *mapping,
 			if (!ret) {
 				if (!folio_test_unevictable(folio) &&
 				    !folio_mapped(folio))
-					folio_set_dropbehind(folio);
+					folio_set_reclaim(folio);
 
 				/* Likely in the lru cache of a remote CPU */
 				if (nr_failed)
