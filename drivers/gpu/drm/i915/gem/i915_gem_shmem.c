@@ -329,10 +329,8 @@ void __shmem_writeback(size_t size, struct address_space *mapping)
 		if (!folio_mapped(folio) && folio_clear_dirty_for_io(folio)) {
 			int ret;
 
-			folio_set_reclaim(folio);
+			folio_set_dropbehind(folio);
 			ret = mapping->a_ops->writepage(&folio->page, &wbc);
-			if (!PageWriteback(page))
-				folio_clear_reclaim(folio);
 			if (!ret)
 				goto put;
 		}
