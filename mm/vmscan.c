@@ -1140,7 +1140,7 @@ retry:
 		 * for immediate reclaim are making it to the end of
 		 * the LRU a second time.
 		 */
-		if (writeback && folio_test_reclaim(folio))
+		if (writeback && folio_test_dropbehind(folio))
 			stat->nr_congested += nr_pages;
 
 		/*
@@ -1149,7 +1149,7 @@ retry:
 		 *
 		 * 1) If reclaim is encountering an excessive number
 		 *    of folios under writeback and this folio has both
-		 *    the writeback and reclaim flags set, then it
+		 *    the writeback and dropbehind flags set, then it
 		 *    indicates that folios are being queued for I/O but
 		 *    are being recycled through the LRU before the I/O
 		 *    can complete. Waiting on the folio itself risks an
@@ -1173,7 +1173,7 @@ retry:
 		 *    would probably show more reasons.
 		 *
 		 * 3) Legacy memcg encounters a folio that already has the
-		 *    reclaim flag set. memcg does not have any dirty folio
+		 *    dropbehind flag set. memcg does not have any dirty folio
 		 *    throttling so we could easily OOM just because too many
 		 *    folios are in writeback and there is nothing else to
 		 *    reclaim. Wait for the writeback to complete.
@@ -1190,30 +1190,16 @@ retry:
 		if (folio_test_writeback(folio)) {
 			/* Case 1 above */
 			if (current_is_kswapd() &&
-			    folio_test_reclaim(folio) &&
+			    folio_test_dropbehind(folio) &&
 			    test_bit(PGDAT_WRITEBACK, &pgdat->flags)) {
 				stat->nr_immediate += nr_pages;
 				goto activate_locked;
 
 			/* Case 2 above */
 			} else if (writeback_throttling_sane(sc) ||
-			    !folio_test_reclaim(folio) ||
+			    !folio_test_dropbehind(folio) ||
 			    !may_enter_fs(folio, sc->gfp_mask)) {
-				/*
-				 * This is slightly racy -
-				 * folio_end_writeback() might have
-				 * just cleared the reclaim flag, then
-				 * setting the reclaim flag here ends up
-				 * interpreted as the readahead flag - but
-				 * that does not matter enough to care.
-				 * What we do want is for this folio to
-				 * have the reclaim flag set next time
-				 * memcg reclaim reaches the tests above,
-				 * so it will then wait for writeback to
-				 * avoid OOM; and it's also appropriate
-				 * in global reclaim.
-				 */
-				folio_set_reclaim(folio);
+				folio_set_dropbehind(folio);
 				stat->nr_writeback += nr_pages;
 				goto activate_locked;
 
@@ -1368,7 +1354,7 @@ retry:
 			 */
 			if (folio_is_file_lru(folio) &&
 			    (!current_is_kswapd() ||
-			     !folio_test_reclaim(folio) ||
+			     !folio_test_dropbehind(folio) ||
 			     !test_bit(PGDAT_DIRTY, &pgdat->flags))) {
 				/*
 				 * Immediately reclaim when written back.
@@ -1378,7 +1364,7 @@ retry:
 				 */
 				node_stat_mod_folio(folio, NR_VMSCAN_IMMEDIATE,
 						nr_pages);
-				folio_set_reclaim(folio);
+				folio_set_dropbehind(folio);
 
 				goto activate_locked;
 			}
