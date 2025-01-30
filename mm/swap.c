@@ -59,14 +59,10 @@ struct cpu_fbatches {
 #ifdef CONFIG_SMP
 	struct folio_batch lru_activate;
 #endif
-	/* Protecting the following batches which require disabling interrupts */
-	local_lock_t lock_irq;
-	struct folio_batch lru_move_tail;
 };
 
 static DEFINE_PER_CPU(struct cpu_fbatches, cpu_fbatches) = {
 	.lock = INIT_LOCAL_LOCK(lock),
-	.lock_irq = INIT_LOCAL_LOCK(lock_irq),
 };
 
 static void __page_cache_release(struct folio *folio, struct lruvec **lruvecp,
@@ -175,29 +171,20 @@ static void folio_batch_move_lru(struct folio_batch *fbatch, move_fn_t move_fn)
 }
 
 static void __folio_batch_add_and_move(struct folio_batch __percpu *fbatch,
-		struct folio *folio, move_fn_t move_fn,
-		bool on_lru, bool disable_irq)
+		struct folio *folio, move_fn_t move_fn, bool on_lru)
 {
-	unsigned long flags;
-
 	if (on_lru && !folio_test_clear_lru(folio))
 		return;
 
 	folio_get(folio);
 
-	if (disable_irq)
-		local_lock_irqsave(&cpu_fbatches.lock_irq, flags);
-	else
-		local_lock(&cpu_fbatches.lock);
+	local_lock(&cpu_fbatches.lock);
 
 	if (!folio_batch_add(this_cpu_ptr(fbatch), folio) || folio_test_large(folio) ||
 	    lru_cache_disabled())
 		folio_batch_move_lru(this_cpu_ptr(fbatch), move_fn);
 
-	if (disable_irq)
-		local_unlock_irqrestore(&cpu_fbatches.lock_irq, flags);
-	else
-		local_unlock(&cpu_fbatches.lock);
+	local_unlock(&cpu_fbatches.lock);
 }
 
 #define folio_batch_add_and_move(folio, op, on_lru)						\
@@ -205,36 +192,8 @@ static void __folio_batch_add_and_move(struct folio_batch __percpu *fbatch,
 		&cpu_fbatches.op,								\
 		folio,										\
 		op,										\
-		on_lru,										\
-		offsetof(struct cpu_fbatches, op) >= offsetof(struct cpu_fbatches, lock_irq)	\
+		on_lru										\
 	)
-
-static void lru_move_tail(struct lruvec *lruvec, struct folio *folio)
-{
-	if (folio_test_unevictable(folio))
-		return;
-
-	lruvec_del_folio(lruvec, folio);
-	folio_clear_active(folio);
-	lruvec_add_folio_tail(lruvec, folio);
-	__count_vm_events(PGROTATED, folio_nr_pages(folio));
-}
-
-/*
- * Writeback is about to end against a folio which has been marked for
- * immediate reclaim.  If it still appears to be reclaimable, move it
- * to the tail of the inactive list.
- *
- * folio_rotate_reclaimable() must disable IRQs, to prevent nasty races.
- */
-void folio_rotate_reclaimable(struct folio *folio)
-{
-	if (folio_test_locked(folio) || folio_test_dirty(folio) ||
-	    folio_test_unevictable(folio))
-		return;
-
-	folio_batch_add_and_move(folio, lru_move_tail, true);
-}
 
 void lru_note_cost(struct lruvec *lruvec, bool file,
 		   unsigned int nr_io, unsigned int nr_rotated)
@@ -578,17 +537,6 @@ void lru_add_drain_cpu(int cpu)
 	if (folio_batch_count(fbatch))
 		folio_batch_move_lru(fbatch, lru_add);
 
-	fbatch = &fbatches->lru_move_tail;
-	/* Disabling interrupts below acts as a compiler barrier. */
-	if (data_race(folio_batch_count(fbatch))) {
-		unsigned long flags;
-
-		/* No harm done if a racing interrupt already did this */
-		local_lock_irqsave(&cpu_fbatches.lock_irq, flags);
-		folio_batch_move_lru(fbatch, lru_move_tail);
-		local_unlock_irqrestore(&cpu_fbatches.lock_irq, flags);
-	}
-
 	fbatch = &fbatches->lru_deactivate;
 	if (folio_batch_count(fbatch))
 		folio_batch_move_lru(fbatch, lru_deactivate);
@@ -682,7 +630,6 @@ static bool cpu_needs_drain(unsigned int cpu)
 
 	/* Check these in order of likelihood that they're not zero */
 	return folio_batch_count(&fbatches->lru_add) ||
-		folio_batch_count(&fbatches->lru_move_tail) ||
 		folio_batch_count(&fbatches->lru_deactivate) ||
 		folio_batch_count(&fbatches->lru_lazyfree) ||
 		folio_batch_count(&fbatches->lru_activate) ||

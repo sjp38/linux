@@ -1626,18 +1626,6 @@ void folio_end_writeback(struct folio *folio)
 	VM_BUG_ON_FOLIO(!folio_test_writeback(folio), folio);
 
 	/*
-	 * folio_test_clear_reclaim() could be used here but it is an
-	 * atomic operation and overkill in this particular case. Failing
-	 * to shuffle a folio marked for immediate reclaim is too mild
-	 * a gain to justify taking an atomic operation penalty at the
-	 * end of every folio writeback.
-	 */
-	if (folio_test_reclaim(folio)) {
-		folio_clear_reclaim(folio);
-		folio_rotate_reclaimable(folio);
-	}
-
-	/*
 	 * Writeback does not hold a folio reference of its own, relying
 	 * on truncation to wait for the clearing of PG_writeback.
 	 * But here we must make sure that the folio is not freed and
