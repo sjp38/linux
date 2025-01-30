@@ -353,7 +353,7 @@ and ``aggregation interval`` in same ratio always, the minimum and maximum
 together.
 
 The tuning is turned off by default, and need to be set explicitly by the user.
-As a rule of thumb and the Parreto principle, 20% access samples ratio target
+As a rule of thumbs and the Parreto principle, 20% access samples ratio target
 is recommended.
 
 To know how user-space can use this feature via :ref:`DAMON sysfs interface
