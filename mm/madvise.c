@@ -1751,6 +1751,7 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 {
 	ssize_t ret = 0;
 	size_t total_len;
+	unsigned int foo = 0;
 
 	total_len = iov_iter_count(iter);
 
@@ -1762,6 +1763,8 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 		unsigned long start = (unsigned long)iter_iov_addr(iter);
 		size_t len_in = iter_iov_len(iter);
 		size_t len;
+
+		pr_info("%s loop %u time\n", __func__, foo++);
 
 		if (!is_valid_madvise(start, len_in, behavior)) {
 			ret = -EINVAL;
