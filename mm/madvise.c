@@ -1789,6 +1789,10 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 				ret = -EINTR;
 				break;
 			}
+
+			/* Drop and reacquire lock to unwind race. */
+			madvise_unlock(mm, behavior);
+			madvise_lock(mm, behavior);
 			continue;
 		}
 		if (ret < 0)
