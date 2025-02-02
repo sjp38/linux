@@ -1568,7 +1568,7 @@ int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
 }
 #endif /* CONFIG_ANON_VMA_NAME */
 
-static int madvise_lock(struct mm_struct *mm, int behavior)
+static inline int madvise_lock(struct mm_struct *mm, int behavior)
 {
 
 #ifdef CONFIG_MEMORY_FAILURE
@@ -1586,7 +1586,7 @@ static int madvise_lock(struct mm_struct *mm, int behavior)
 
 }
 
-static void madvise_unlock(struct mm_struct *mm, int behavior)
+static inline void madvise_unlock(struct mm_struct *mm, int behavior)
 {
 	if (madvise_need_mmap_write(behavior))
 		mmap_write_unlock(mm);
@@ -1594,7 +1594,7 @@ static void madvise_unlock(struct mm_struct *mm, int behavior)
 		mmap_read_unlock(mm);
 }
 
-static bool is_valid_madvise(unsigned long start, size_t len_in, int behavior)
+static inline bool is_valid_madvise(unsigned long start, size_t len_in, int behavior)
 {
 	size_t len;
 
@@ -1615,7 +1615,7 @@ static bool is_valid_madvise(unsigned long start, size_t len_in, int behavior)
 	return true;
 }
 
-static int madvise_do_behavior(struct mm_struct *mm,
+static inline int madvise_do_behavior(struct mm_struct *mm,
 		unsigned long start, size_t len_in, size_t len, int behavior)
 {
 	struct blk_plug plug;
