@@ -133,7 +133,7 @@ static vm_fault_t fb_deferred_io_fault(struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 
 	if (!vmf->vma->vm_file)
-		fb_err("no mapping available\n");
+		fb_err(info, "no mapping available\n");
 
 	BUG_ON(!info->fbdefio->mapping);
 
