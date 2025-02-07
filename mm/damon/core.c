@@ -663,6 +663,10 @@ int damon_set_attrs(struct damon_ctx *ctx, struct damon_attrs *attrs)
 	if (attrs->sample_interval > attrs->aggr_interval)
 		return -EINVAL;
 
+	/* calls from core-external doesn't set this. */
+	if (!attrs->aggr_samples)
+		attrs->aggr_samples = attrs->aggr_interval / sample_interval;
+
 	ctx->next_aggregation_sis = ctx->passed_sample_intervals +
 		attrs->aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->passed_sample_intervals +
@@ -1298,6 +1302,60 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 		}
 		ti++;
 	}
+}
+
+static unsigned long damon_feed_loop_next_input(unsigned long last_input,
+		unsigned long score);
+
+static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+	unsigned long nr_regions = 0, access_samples = 0;
+	struct damon_intervals_goal *goal = &c->attrs.intervals_goal;
+	unsigned long max_samples, target_samples, score_bp;
+	unsigned long adaptation_bp;
+
+	damon_for_each_target(t, c) {
+		nr_regions = damon_nr_regions(t);
+		damon_for_each_region(r, t)
+			access_samples += r->nr_accesses;
+	}
+	max_samples = nr_regions * c->attrs.aggr_samples;
+	target_samples = max_samples * goal->samples_bp / 10000;
+	score_bp = access_samples * 10000 / target_samples;
+	adaptation_bp = damon_feed_loop_next_input(100000000, score_bp) /
+		10000;
+	/*
+	 * adaptaion_bp ranges from 1 to 20,000.  Avoid too rapid reduction of
+	 * the intervals by rescaling [1,10,000] to [5000, 10,000].
+	 */
+	if (adaptation_bp <= 10000)
+		adaptation_bp = 5000 + adaptation_bp / 2;
+
+	return adaptation_bp;
+}
+
+static void kdamond_tune_intervals(struct damon_ctx *c)
+{
+	unsigned long adaptation_bp;
+	struct damon_attrs new_attrs;
+	struct damon_intervals_goal *goal;
+
+	adaptation_bp = damon_get_intervals_adaptation_bp(c);
+	if (adaptation_bp == 10000)
+		return;
+
+	new_attrs = c->attrs;
+	goal = &c->attrs.intervals_goal;
+	new_attrs.sample_interval = min(
+			c->attrs.sample_interval * adaptation_bp / 10000,
+			goal->max_sample_us);
+	new_attrs.sample_interval = max(new_attrs.sample_interval,
+			goal->min_sample_us);
+	new_attrs.aggr_interval = new_attrs.sample_interval *
+		c->attrs.aggr_samples;
+	damon_set_attrs(c, &new_attrs);
 }
 
 static void damon_split_region_at(struct damon_target *t,
@@ -2204,6 +2262,8 @@ static void kdamond_init_intervals_sis(struct damon_ctx *ctx)
 	ctx->next_aggregation_sis = ctx->attrs.aggr_interval / sample_interval;
 	ctx->next_ops_update_sis = ctx->attrs.ops_update_interval /
 		sample_interval;
+	ctx->next_intervals_tune_sis = ctx->next_aggregation_sis *
+		ctx->attrs.intervals_goal.aggrs;
 
 	damon_for_each_scheme(scheme, ctx) {
 		apply_interval = scheme->apply_interval_us ?
@@ -2290,6 +2350,14 @@ static int kdamond_fn(void *data)
 		if (ctx->passed_sample_intervals >= next_aggregation_sis) {
 			ctx->next_aggregation_sis = next_aggregation_sis +
 				ctx->attrs.aggr_interval / sample_interval;
+			if (ctx->attrs.intervals_goal.aggrs &&
+					ctx->passed_sample_intervals >=
+					ctx->next_intervals_tune_sis) {
+				ctx->next_intervals_tune_sis +=
+					ctx->attrs.aggr_samples *
+					ctx->attrs.intervals_goal.aggrs;
+				kdamond_tune_intervals(ctx);
+			}
 
 			kdamond_reset_aggregated(ctx);
 			kdamond_split_regions(ctx);
