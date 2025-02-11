@@ -1438,6 +1438,9 @@ static unsigned long damon_get_intervals_adaptation_bp(struct damon_ctx *c)
 	if (adaptation_bp <= 10000)
 		adaptation_bp = 5000 + adaptation_bp / 2;
 
+	pr_info("access_samples %lu/%lu, score_bp %lu, adaptation bp %lu\n",
+			access_samples, target_samples, score_bp,
+			adaptation_bp);
 	return adaptation_bp;
 }
 
