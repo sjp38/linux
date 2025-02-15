@@ -494,6 +494,7 @@ struct damos {
 	unsigned long next_apply_sis;
 	/* informs if ongoing DAMOS walk for this scheme is finished */
 	bool walk_completed;
+	bool reject_by_default;
 /* public: */
 	struct damos_quota quota;
 	struct damos_watermarks wmarks;
