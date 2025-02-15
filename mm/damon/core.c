@@ -890,6 +890,24 @@ static int damos_commit_ops_filters(struct damos *dst, struct damos *src)
 	return 0;
 }
 
+static void damos_set_reject_by_default(struct damos *s)
+{
+	struct damos_filter *last_filter;
+
+	if (list_empty(&s->filters) && list_empty(&s->ops_filters)) {
+		s->reject_by_default = false;
+		return;
+	}
+
+	if (!list_empty(&s->ops_filters))
+		last_filter = list_last_entry(
+				&s->ops_filters, struct damos_filter, list);
+	else
+		last_filter = list_last_entry(
+				&s->filters, struct damos_filter, list);
+	s->reject_by_default = last_filter->allow;
+}
+
 static int damos_commit_filters(struct damos *dst, struct damos *src)
 {
 	int err;
@@ -897,7 +915,11 @@ static int damos_commit_filters(struct damos *dst, struct damos *src)
 	err = damos_commit_core_filters(dst, src);
 	if (err)
 		return err;
-	return damos_commit_ops_filters(dst, src);
+	err = damos_commit_ops_filters(dst, src);
+	if (err)
+		return err;
+	damos_set_reject_by_default(dst);
+	return 0;
 }
 
 static struct damos *damon_nth_scheme(int n, struct damon_ctx *ctx)
@@ -1570,7 +1592,7 @@ static bool damos_filter_out(struct damon_ctx *ctx, struct damon_target *t,
 		if (damos_filter_match(ctx, t, r, filter))
 			return !filter->allow;
 	}
-	return false;
+	return s->reject_by_default;
 }
 
 /*
