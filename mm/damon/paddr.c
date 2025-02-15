@@ -254,7 +254,7 @@ static bool damos_pa_filter_out(struct damos *scheme, struct folio *folio)
 		if (damos_pa_filter_match(filter, folio))
 			return !filter->allow;
 	}
-	return false;
+	return scheme->reject_by_default;
 }
 
 static bool damon_pa_invalid_damos_folio(struct folio *folio, struct damos *s)
