@@ -864,6 +864,29 @@ static int damos_commit_ops_filters(struct damos *dst, struct damos *src)
 	return 0;
 }
 
+/**
+ * damos_filters_default_reject() - decide whether to reject memory that didn't
+ *				    match with any given filter.
+ * @filters:	Given DAMOS filters of a group.
+ */
+static bool damos_filters_default_reject(struct list_head *filters)
+{
+	struct damos_filter *last_filter;
+
+	if (list_empty(filters))
+		return false;
+	last_filter = list_last_entry(filters, struct damos_filter, list);
+	return last_filter->allow;
+}
+
+static void damos_set_filters_default_reject(struct damos *s)
+{
+	s->core_filters_default_reject =
+		damos_filters_default_reject(&s->filters);
+	s->ops_filters_default_reject =
+		damos_filters_default_reject(&s->ops_filters);
+}
+
 static int damos_commit_filters(struct damos *dst, struct damos *src)
 {
 	int err;
@@ -871,7 +894,11 @@ static int damos_commit_filters(struct damos *dst, struct damos *src)
 	err = damos_commit_core_filters(dst, src);
 	if (err)
 		return err;
-	return damos_commit_ops_filters(dst, src);
+	err = damos_commit_ops_filters(dst, src);
+	if (err)
+		return err;
+	damos_set_filters_default_reject(dst);
+	return 0;
 }
 
 static struct damos *damon_nth_scheme(int n, struct damon_ctx *ctx)
@@ -1490,7 +1517,7 @@ static bool damos_filter_out(struct damon_ctx *ctx, struct damon_target *t,
 		if (damos_filter_match(ctx, t, r, filter))
 			return !filter->allow;
 	}
-	return false;
+	return s->core_filters_default_reject;
 }
 
 /*
