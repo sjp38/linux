@@ -1241,6 +1241,10 @@ static long madvise_guard_remove(struct vm_area_struct *vma,
 			       &guard_remove_walk_ops, NULL);
 }
 
+struct madvise_behavior {
+	int behavior;
+};
+
 /*
  * Apply an madvise behavior to a region of a vma.  madvise_update_vma
  * will handle splitting a vm area into separate areas, each area with its own
@@ -1249,8 +1253,10 @@ static long madvise_guard_remove(struct vm_area_struct *vma,
 static int madvise_vma_behavior(struct vm_area_struct *vma,
 				struct vm_area_struct **prev,
 				unsigned long start, unsigned long end,
-				unsigned long behavior)
+				unsigned long behavior_arg)
 {
+	struct madvise_behavior *arg = (struct madvise_behavior *)behavior_arg;
+	int behavior = arg->behavior;
 	int error;
 	struct anon_vma_name *anon_name;
 	unsigned long new_flags = vma->vm_flags;
@@ -1665,10 +1671,6 @@ static bool is_memory_populate(int behavior)
 	}
 }
 
-struct madvise_behavior {
-	int behavior;
-};
-
 static int madvise_do_behavior(struct mm_struct *mm,
 		unsigned long start, size_t len_in,
 		struct madvise_behavior *madv_behavior)
@@ -1687,7 +1689,8 @@ static int madvise_do_behavior(struct mm_struct *mm,
 	if (is_memory_populate(behavior))
 		error = madvise_populate(mm, start, end, behavior);
 	else
-		error = madvise_walk_vmas(mm, start, end, behavior,
+		error = madvise_walk_vmas(mm, start, end,
+					  (unsigned long)madv_behavior,
 					  madvise_vma_behavior);
 	blk_finish_plug(&plug);
 	return error;
