@@ -1788,8 +1788,11 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	while (iov_iter_count(iter)) {
 		unsigned long start = (unsigned long)iter_iov_addr(iter);
 		size_t len_in = iter_iov_len(iter);
+		int error;
 
-		if (!madvise_should_skip(start, len_in, behavior, &ret))
+		if (madvise_should_skip(start, len_in, behavior, &error))
+			ret = error;
+		else
 			ret = madvise_do_behavior(mm, start, len_in, behavior);
 		/*
 		 * An madvise operation is attempting to restart the syscall,
