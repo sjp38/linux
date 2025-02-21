@@ -848,7 +848,8 @@ static int madvise_free_single_vma(struct vm_area_struct *vma,
  * An interface that causes the system to free clean pages and flush
  * dirty pages is already available as msync(MS_INVALIDATE).
  */
-static long madvise_dontneed_single_vma(struct vm_area_struct *vma,
+static long madvise_dontneed_single_vma(struct mmu_gather *tlb,
+					struct vm_area_struct *vma,
 					unsigned long start, unsigned long end)
 {
 	struct zap_details details = {
@@ -856,7 +857,10 @@ static long madvise_dontneed_single_vma(struct vm_area_struct *vma,
 		.even_cows = true,
 	};
 
-	zap_page_range_single(vma, start, end - start, &details);
+	if (!tlb)
+		zap_page_range_single(vma, start, end - start, &details);
+	else
+		unmap_vma_single(tlb, vma, start, end - start, &details);
 	return 0;
 }
 
@@ -951,7 +955,7 @@ static long madvise_dontneed_free(struct vm_area_struct *vma,
 	}
 
 	if (behavior == MADV_DONTNEED || behavior == MADV_DONTNEED_LOCKED)
-		return madvise_dontneed_single_vma(vma, start, end);
+		return madvise_dontneed_single_vma(NULL, vma, start, end);
 	else if (behavior == MADV_FREE)
 		return madvise_free_single_vma(vma, start, end);
 	else

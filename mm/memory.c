@@ -2011,9 +2011,9 @@ void unmap_vmas(struct mmu_gather *tlb, struct ma_state *mas,
 	mmu_notifier_invalidate_range_end(&range);
 }
 
-static void unmap_vma_single(struct mmu_gather *tlb,
-		struct vm_area_struct *vma, unsigned long address,
-		unsigned long size, struct zap_details *details)
+void unmap_vma_single(struct mmu_gather *tlb, struct vm_area_struct *vma,
+		      unsigned long address, unsigned long size,
+		      struct zap_details *details)
 {
 	const unsigned long end = address + size;
 	struct mmu_notifier_range range;
