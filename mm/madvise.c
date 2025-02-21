@@ -894,6 +894,11 @@ static bool madvise_dontneed_free_valid_vma(struct vm_area_struct *vma,
 	return true;
 }
 
+struct madvise_behavior {
+	int behavior;
+	struct mmu_gather *tlb;
+};
+
 static long madvise_dontneed_free(struct vm_area_struct *vma,
 				  struct vm_area_struct **prev,
 				  unsigned long start, unsigned long end,
@@ -1246,10 +1251,6 @@ static long madvise_guard_remove(struct vm_area_struct *vma,
 			       &guard_remove_walk_ops, NULL);
 }
 
-struct madvise_behavior {
-	int behavior;
-};
-
 /*
  * Apply an madvise behavior to a region of a vma.  madvise_update_vma
  * will handle splitting a vm area into separate areas, each area with its own
@@ -1281,7 +1282,7 @@ static int madvise_vma_behavior(struct vm_area_struct *vma,
 	case MADV_FREE:
 	case MADV_DONTNEED:
 	case MADV_DONTNEED_LOCKED:
-		return madvise_dontneed_free(vma, prev, start, end, behavior);
+		return madvise_dontneed_free(vma, prev, start, end, arg);
 	case MADV_NORMAL:
 		new_flags = new_flags & ~VM_RAND_READ & ~VM_SEQ_READ;
 		break;
@@ -1787,19 +1788,51 @@ SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
 	return do_madvise(current->mm, start, len_in, behavior);
 }
 
+static bool vector_madvise_batch_tlb_flush(int behavior)
+{
+	switch (behavior)
+	{
+	case MADV_DONTNEED:
+	case MADV_DONTNEED_LOCKED:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void vector_madvise_init_tlb(struct madvise_behavior *madv_behavior,
+		struct mm_struct *mm)
+{
+	if (!vector_madvise_batch_tlb_flush(madv_behavior->behavior))
+		return;
+	tlb_gather_mmu(madv_behavior->tlb, mm);
+}
+
+static void vector_madvise_finish_tlb(struct madvise_behavior *madv_behavior)
+{
+	if (!vector_madvise_batch_tlb_flush(madv_behavior->behavior))
+		return;
+	tlb_finish_mmu(madv_behavior->tlb);
+}
+
 /* Perform an madvise operation over a vector of addresses and lengths. */
 static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 			      int behavior)
 {
 	ssize_t ret = 0;
 	size_t total_len;
-	struct madvise_behavior madv_behavior = {.behavior = behavior};
+	struct mmu_gather tlb;
+	struct madvise_behavior madv_behavior = {
+		.behavior = behavior,
+		.tlb = &tlb,
+	};
 
 	total_len = iov_iter_count(iter);
 
 	ret = madvise_lock(mm, behavior);
 	if (ret)
 		return ret;
+	vector_madvise_init_tlb(&madv_behavior, mm);
 
 	while (iov_iter_count(iter)) {
 		unsigned long start = (unsigned long)iter_iov_addr(iter);
@@ -1828,14 +1861,17 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 			}
 
 			/* Drop and reacquire lock to unwind race. */
+			vector_madvise_finish_tlb(&madv_behavior);
 			madvise_unlock(mm, behavior);
 			madvise_lock(mm, behavior);
+			vector_madvise_init_tlb(&madv_behavior, mm);
 			continue;
 		}
 		if (ret < 0)
 			break;
 		iov_iter_advance(iter, iter_iov_len(iter));
 	}
+	vector_madvise_finish_tlb(&madv_behavior);
 	madvise_unlock(mm, behavior);
 
 	ret = (total_len - iov_iter_count(iter)) ? : ret;
