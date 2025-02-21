@@ -1995,9 +1995,19 @@ void unmap_vmas(struct mmu_gather *tlb, struct ma_state *mas,
 	mmu_notifier_invalidate_range_end(&range);
 }
 
-static void unmap_vma_single(struct mmu_gather *tlb,
-		struct vm_area_struct *vma, unsigned long address,
-		unsigned long size, struct zap_details *details)
+/**
+ * unmap_vma_single - remove user pages in a given range
+ * @tlb: pointer to the caller's struct mmu_gather
+ * @vma: vm_area_struct holding the applicable pages
+ * @address: starting address of the pages
+ * @size: number of bytes to remove
+ * @details: details of shared cache invalidation
+ *
+ * @tlb shouldn't be NULL.  The range must fit into one VMA.
+ */
+void unmap_vma_single(struct mmu_gather *tlb, struct vm_area_struct *vma,
+		      unsigned long address, unsigned long size,
+		      struct zap_details *details)
 {
 	const unsigned long end = address + size;
 	struct mmu_notifier_range range;
