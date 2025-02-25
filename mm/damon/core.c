@@ -2448,6 +2448,9 @@ static int kdamond_fn(void *data)
 					ctx->attrs.aggr_samples *
 					ctx->attrs.intervals_goal.aggrs;
 				kdamond_tune_intervals(ctx);
+				sample_interval = ctx->attrs.sample_interval ?
+					ctx->attrs.sample_interval : 1;
+
 			}
 			ctx->next_aggregation_sis = next_aggregation_sis +
 				ctx->attrs.aggr_interval / sample_interval;
