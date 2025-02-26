@@ -1832,10 +1832,8 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 {
 	ssize_t ret = 0;
 	size_t total_len;
-	struct mmu_gather tlb;
 	struct madvise_behavior madv_behavior = {
 		.behavior = behavior,
-		.tlb = &tlb,
 	};
 
 	total_len = iov_iter_count(iter);
@@ -1843,7 +1841,6 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 	ret = madvise_lock(mm, behavior);
 	if (ret)
 		return ret;
-	vector_madvise_init_tlb(&madv_behavior, mm);
 
 	while (iov_iter_count(iter)) {
 		unsigned long start = (unsigned long)iter_iov_addr(iter);
@@ -1872,17 +1869,14 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 			}
 
 			/* Drop and reacquire lock to unwind race. */
-			vector_madvise_finish_tlb(&madv_behavior);
 			madvise_unlock(mm, behavior);
 			madvise_lock(mm, behavior);
-			vector_madvise_init_tlb(&madv_behavior, mm);
 			continue;
 		}
 		if (ret < 0)
 			break;
 		iov_iter_advance(iter, iter_iov_len(iter));
 	}
-	vector_madvise_finish_tlb(&madv_behavior);
 	madvise_unlock(mm, behavior);
 
 	ret = (total_len - iov_iter_count(iter)) ? : ret;
