@@ -2468,6 +2468,24 @@ static int kdamond_fn(void *data)
 			if (ctx->attrs.intervals_goal.aggrs &&
 					ctx->passed_sample_intervals >=
 					ctx->next_intervals_tune_sis) {
+				/*
+				 * ctx->next_aggregation_sis might be updated
+				 * from kdamond_call().  In the case,
+				 * damon_set_attrs() which will be called from
+				 * kdamond_tune_interval() may wrongly think
+				 * this is in the middle of the current
+				 * aggregation, and make aggregation
+				 * information reset for all regions.  Then,
+				 * following kdamond_reset_aggregated() call
+				 * will make the region information invalid,
+				 * particularly for ->nr_accesses_bp.
+				 *
+				 * Reset ->next_aggregation_sis to avoid that.
+				 * It will anyway correctly updated after this
+				 * if caluse.
+				 */
+				ctx->next_aggregation_sis =
+					next_aggregation_sis;
 				ctx->next_intervals_tune_sis +=
 					ctx->attrs.aggr_samples *
 					ctx->attrs.intervals_goal.aggrs;
