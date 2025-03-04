@@ -795,18 +795,11 @@ static const struct mm_walk_ops madvise_free_walk_ops = {
 };
 
 static int madvise_free_single_vma(
-		struct mmu_gather *caller_tlb, struct vm_area_struct *vma,
+		struct mmu_gather *tlb, struct vm_area_struct *vma,
 		unsigned long start_addr, unsigned long end_addr)
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct mmu_notifier_range range;
-	struct mmu_gather self_tlb;
-	struct mmu_gather *tlb;
-
-	if (caller_tlb)
-		tlb = caller_tlb;
-	else
-		tlb = &self_tlb;
 
 	/* MADV_FREE works for only anon vma at the moment */
 	if (!vma_is_anonymous(vma))
@@ -822,8 +815,6 @@ static int madvise_free_single_vma(
 				range.start, range.end);
 
 	lru_add_drain();
-	if (!caller_tlb)
-		tlb_gather_mmu(tlb, mm);
 	update_hiwater_rss(mm);
 
 	mmu_notifier_invalidate_range_start(&range);
@@ -832,9 +823,6 @@ static int madvise_free_single_vma(
 			&madvise_free_walk_ops, tlb);
 	tlb_end_vma(tlb, vma);
 	mmu_notifier_invalidate_range_end(&range);
-	if (!caller_tlb)
-		tlb_finish_mmu(tlb);
-
 	return 0;
 }
 
