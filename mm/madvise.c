@@ -866,10 +866,7 @@ static long madvise_dontneed_single_vma(struct mmu_gather *tlb,
 		.even_cows = true,
 	};
 
-	if (!tlb)
-		zap_page_range_single(vma, start, end - start, &details);
-	else
-		unmap_vma_single(tlb, vma, start, end - start, &details);
+	unmap_vma_single(tlb, vma, start, end - start, &details);
 	return 0;
 }
 
