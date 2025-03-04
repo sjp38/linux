@@ -968,7 +968,8 @@ static long madvise_dontneed_free(struct vm_area_struct *vma,
 		return madvise_dontneed_single_vma(
 				madv_behavior->tlb, vma, start, end);
 	else if (behavior == MADV_FREE)
-		return madvise_free_single_vma(NULL, vma, start, end);
+		return madvise_free_single_vma(
+				madv_behavior->tlb, vma, start, end);
 	else
 		return -EINVAL;
 }
