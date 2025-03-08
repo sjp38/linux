@@ -1235,6 +1235,8 @@ void xas_try_split(struct xa_state *xas, void *entry, unsigned int order)
 EXPORT_SYMBOL_GPL(xas_try_split);
 #endif
 
+#ifdef CONFIG_XARRAY_MULTI
+
 /**
  * xas_try_split_min_order() - Minimal split order xas_try_split() can accept
  * @order: Current entry order.
@@ -1256,6 +1258,8 @@ unsigned int xas_try_split_min_order(unsigned int order)
 	return order - (order % XA_CHUNK_SHIFT);
 }
 EXPORT_SYMBOL_GPL(xas_try_split_min_order);
+
+#endif
 
 /**
  * xas_pause() - Pause a walk to drop a lock.
