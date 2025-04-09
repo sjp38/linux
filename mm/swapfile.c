@@ -1514,11 +1514,13 @@ fallback:
  * Drop the last ref(1, SWAP_HAS_CACHE or SWAP_MAP_SHMEM) of swap entries,
  * caller have to ensure all entries belong to the same cgroup and cluster.
  */
+#ifdef CONFIG_DEBUG_VM
 static inline bool swap_is_last_ref(unsigned char count)
 {
 	return (count == SWAP_HAS_CACHE) || (count == 1) ||
 	       (count == SWAP_MAP_SHMEM);
 }
+#endif
 
 static void swap_entries_free(struct swap_info_struct *si,
 			      struct swap_cluster_info *ci,
