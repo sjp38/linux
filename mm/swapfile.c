@@ -1545,6 +1545,8 @@ static inline bool swap_is_last_ref(unsigned char count)
 	return (count == SWAP_HAS_CACHE) || (count == 1) ||
 	       (count == SWAP_MAP_SHMEM);
 }
+#else
+#define swap_is_last_ref(x) (false)
 #endif
 
 static void swap_entries_free(struct swap_info_struct *si,
