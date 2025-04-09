@@ -3567,7 +3567,7 @@ static int wi_node_notifier(struct notifier_block *nb,
 	if (nid < 0)
 		return NOTIFY_OK;
 
-	switch(action) {
+	switch (action) {
 	case MEM_ONLINE:
 		err = sysfs_wi_node_add(nid);
 		if (err)
