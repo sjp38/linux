@@ -328,7 +328,7 @@ static void zblock_zpool_destroy(void *pool)
 }
 
 static int zblock_zpool_malloc(void *pool, size_t size, gfp_t gfp,
-			unsigned long *handle)
+			unsigned long *handle, const int nid)
 {
 	return zblock_alloc(pool, size, gfp, handle);
 }
