@@ -716,7 +716,6 @@ static unsigned long damon_pa_stat(struct damon_pa_damos_arg *arg)
 	struct damos *s = arg->scheme;
 	unsigned long *sz_filter_passed = arg->sz_filter_passed;
 	phys_addr_t addr;
-	LIST_HEAD(folio_list);
 	struct folio *folio;
 
 	if (!damon_pa_scheme_has_filter(s))
