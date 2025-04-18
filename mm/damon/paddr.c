@@ -427,10 +427,19 @@ static bool damon_pa_invalid_damos_folio(struct folio *folio, struct damos *s)
 	return false;
 }
 
-static unsigned long damon_pa_pageout(struct damon_region *r,
-		unsigned long addr_unit, struct damos *s,
-		unsigned long *sz_filter_passed)
+struct damon_pa_damos_arg {
+	struct damon_region *region;
+	unsigned long addr_unit;
+	struct damos *scheme;
+	unsigned long *sz_filter_passed;
+};
+
+static unsigned long damon_pa_pageout(struct damon_pa_damos_arg *arg)
 {
+	struct damon_region *r = arg->region;
+	unsigned long addr_unit = arg->addr_unit;
+	struct damos *s = arg->scheme;
+	unsigned long *sz_filter_passed = arg->sz_filter_passed;
 	phys_addr_t addr;
 	unsigned long applied;
 	LIST_HEAD(folio_list);
@@ -487,10 +496,12 @@ put_folio:
 }
 
 static inline unsigned long damon_pa_mark_accessed_or_deactivate(
-		struct damon_region *r, unsigned long addr_unit,
-		struct damos *s, bool mark_accessed,
-		unsigned long *sz_filter_passed)
+		struct damon_pa_damos_arg *arg, bool mark_accessed)
 {
+	struct damon_region *r = arg->region;
+	unsigned long addr_unit = arg->addr_unit;
+	struct damos *s = arg->scheme;
+	unsigned long *sz_filter_passed = arg->sz_filter_passed;
 	phys_addr_t addr;
 	unsigned long applied = 0;
 	struct folio *folio;
@@ -521,20 +532,14 @@ put_folio:
 	return applied * PAGE_SIZE;
 }
 
-static unsigned long damon_pa_mark_accessed(struct damon_region *r,
-		unsigned long addr_unit, struct damos *s,
-		unsigned long *sz_filter_passed)
+static unsigned long damon_pa_mark_accessed(struct damon_pa_damos_arg *arg)
 {
-	return damon_pa_mark_accessed_or_deactivate(r, addr_unit, s, true,
-			sz_filter_passed);
+	return damon_pa_mark_accessed_or_deactivate(arg, true);
 }
 
-static unsigned long damon_pa_deactivate_pages(struct damon_region *r,
-		unsigned long addr_unit, struct damos *s,
-		unsigned long *sz_filter_passed)
+static unsigned long damon_pa_deactivate_pages(struct damon_pa_damos_arg *arg)
 {
-	return damon_pa_mark_accessed_or_deactivate(r, addr_unit, s, false,
-			sz_filter_passed);
+	return damon_pa_mark_accessed_or_deactivate(arg, false);
 }
 
 static unsigned int __damon_pa_migrate_folio_list(
@@ -658,10 +663,12 @@ static unsigned long damon_pa_migrate_pages(struct list_head *folio_list,
 	return nr_migrated;
 }
 
-static unsigned long damon_pa_migrate(struct damon_region *r,
-		unsigned long addr_unit, struct damos *s,
-		unsigned long *sz_filter_passed)
+static unsigned long damon_pa_migrate(struct damon_pa_damos_arg *arg)
 {
+	struct damon_region *r = arg->region;
+	unsigned long addr_unit = arg->addr_unit;
+	struct damos *s = arg->scheme;
+	unsigned long *sz_filter_passed = arg->sz_filter_passed;
 	phys_addr_t addr;
 	unsigned long applied;
 	LIST_HEAD(folio_list);
@@ -702,10 +709,12 @@ static bool damon_pa_scheme_has_filter(struct damos *s)
 	return false;
 }
 
-static unsigned long damon_pa_stat(struct damon_region *r,
-		unsigned long addr_unit, struct damos *s,
-		unsigned long *sz_filter_passed)
+static unsigned long damon_pa_stat(struct damon_pa_damos_arg *arg)
 {
+	struct damon_region *r = arg->region;
+	unsigned long addr_unit = arg->addr_unit;
+	struct damos *s = arg->scheme;
+	unsigned long *sz_filter_passed = arg->sz_filter_passed;
 	phys_addr_t addr;
 	LIST_HEAD(folio_list);
 	struct folio *folio;
@@ -822,19 +831,20 @@ static unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
 		struct damos *scheme, unsigned long *sz_filter_passed)
 {
 	unsigned long aunit = ctx->addr_unit;
+	struct damon_pa_damos_arg arg = {
+		.region = r, .addr_unit = aunit, .scheme = scheme,
+		.sz_filter_passed = sz_filter_passed};
 
 	switch (scheme->action) {
 	case DAMOS_PAGEOUT:
-		return damon_pa_pageout(r, aunit, scheme, sz_filter_passed);
+		return damon_pa_pageout(&arg);
 	case DAMOS_LRU_PRIO:
-		return damon_pa_mark_accessed(r, aunit, scheme,
-				sz_filter_passed);
+		return damon_pa_mark_accessed(&arg);
 	case DAMOS_LRU_DEPRIO:
-		return damon_pa_deactivate_pages(r, aunit, scheme,
-				sz_filter_passed);
+		return damon_pa_deactivate_pages(&arg);
 	case DAMOS_MIGRATE_HOT:
 	case DAMOS_MIGRATE_COLD:
-		return damon_pa_migrate(r, aunit, scheme, sz_filter_passed);
+		return damon_pa_migrate(&arg);
 #ifdef CONFIG_ACMA
 	case DAMOS_ALLOC:
 		return damon_pa_alloc_or_free(r, scheme, true);
@@ -842,7 +852,7 @@ static unsigned long damon_pa_apply_scheme(struct damon_ctx *ctx,
 		return damon_pa_alloc_or_free(r, scheme, false);
 #endif
 	case DAMOS_STAT:
-		return damon_pa_stat(r, aunit, scheme, sz_filter_passed);
+		return damon_pa_stat(&arg);
 	default:
 		/* DAMOS actions that not yet supported by 'paddr'. */
 		break;
