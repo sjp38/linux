@@ -21,7 +21,8 @@
 /* max 256 slots per block, max table size 64 */
 #define SLOT_BITS 8
 #else
-#error Unsupported PAGE_SIZE
+#warn This PAGE_SIZE is not quite supported yet
+#define SLOT_BITS 8
 #endif
 
 #define MAX_SLOTS (1 << SLOT_BITS)
@@ -101,7 +102,7 @@ static const struct block_desc block_desc[] = {
 	{ SLOT_SIZE(10, 3), 10, 3 },
 	{ SLOT_SIZE(9, 3), 9, 3 },
 	{ SLOT_SIZE(4, 2), 4, 2 },
-#elif PAGE_SIZE == 0x4000
+#else
 	{ SLOT_SIZE(255, 0), 255, 0 },
 	{ SLOT_SIZE(185, 0), 185, 0 },
 	{ SLOT_SIZE(145, 0), 145, 0 },
