@@ -21,7 +21,7 @@
 /* max 256 slots per block, max table size 64 */
 #define SLOT_BITS 8
 #else
-#warn This PAGE_SIZE is not quite supported yet
+#warning This PAGE_SIZE is not quite supported yet
 #define SLOT_BITS 8
 #endif
 
