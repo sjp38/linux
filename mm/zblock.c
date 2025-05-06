@@ -24,6 +24,7 @@
 #include <linux/preempt.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/vmalloc.h>
 #include <linux/zpool.h>
 #include "zblock.h"
 
@@ -31,19 +32,16 @@ static struct rb_root block_desc_tree = RB_ROOT;
 static struct dentry *zblock_debugfs_root;
 
 /* Encode handle of a particular slot in the pool using metadata */
-static inline unsigned long metadata_to_handle(struct zblock_block *block,
-				unsigned int block_type, unsigned int slot)
+static inline unsigned long metadata_to_handle(struct zblock_block *block, unsigned int slot)
 {
-	return (unsigned long)(block) | (block_type << SLOT_BITS) | slot;
+	return (unsigned long)(block) | slot;
 }
 
 /* Return block, block type and slot in the pool corresponding to handle */
-static inline struct zblock_block *handle_to_metadata(unsigned long handle,
-				unsigned int *block_type, unsigned int *slot)
+static inline struct zblock_block *handle_to_metadata(unsigned long handle, unsigned int *slot)
 {
-	*block_type = (handle & (PAGE_SIZE - 1)) >> SLOT_BITS;
 	*slot = handle & SLOT_MASK;
-	return (struct zblock_block *)(handle & PAGE_MASK);
+	return (struct zblock_block *)(handle & ~SLOT_MASK);
 }
 
 /*
@@ -56,13 +54,14 @@ static inline struct zblock_block *find_and_claim_block(struct block_list *b,
 	struct list_head *l = &b->active_list;
 	unsigned int slot;
 
-	if (!list_empty(l)) {
+	spin_lock(&b->lock);
+	if (likely(!list_empty(l))) {
 		struct zblock_block *z = list_first_entry(l, typeof(*z), link);
 
 		if (--z->free_slots == 0)
-			list_move(&z->link, &b->full_list);
+			__list_del_clearprev(&z->link);
 		/*
-		 * There is a slot in the block and we just made sure it would
+		 * There is a slot in the block and we just made sure it will
 		 * remain.
 		 * Find that slot and set the busy bit.
 		 */
@@ -74,13 +73,13 @@ static inline struct zblock_block *find_and_claim_block(struct block_list *b,
 					slot)) {
 			if (!test_and_set_bit(slot, z->slot_info))
 				break;
-			barrier();
 		}
+		spin_unlock(&b->lock);
 
-		WARN_ON(slot >= block_desc[block_type].slots_per_block);
-		*handle = metadata_to_handle(z, block_type, slot);
+		*handle = metadata_to_handle(z, slot);
 		return z;
 	}
+	spin_unlock(&b->lock);
 	return NULL;
 }
 
@@ -89,22 +88,23 @@ static inline struct zblock_block *find_and_claim_block(struct block_list *b,
  */
 static struct zblock_block *alloc_block(struct zblock_pool *pool,
 					int block_type, gfp_t gfp,
-					unsigned long *handle)
+					unsigned long *handle,
+					unsigned int nid)
 {
+	struct block_list *block_list = &pool->block_lists[block_type];
+	unsigned int num_pages = block_desc[block_type].num_pages;
 	struct zblock_block *block;
-	struct block_list *block_list;
 
-	block = (void *)__get_free_pages(gfp, block_desc[block_type].order);
+	block = __vmalloc_node(PAGE_SIZE * num_pages, PAGE_SIZE, gfp, nid, NULL);
 	if (!block)
 		return NULL;
 
-	block_list = &pool->block_lists[block_type];
-
-	/* init block data  */
+	/* init block data */
+	block->block_type = block_type;
 	block->free_slots = block_desc[block_type].slots_per_block - 1;
 	memset(&block->slot_info, 0, sizeof(block->slot_info));
 	set_bit(0, block->slot_info);
-	*handle = metadata_to_handle(block, block_type, 0);
+	*handle = metadata_to_handle(block, 0);
 
 	spin_lock(&block_list->lock);
 	list_add(&block->link, &block_list->active_list);
@@ -122,8 +122,8 @@ static int zblock_blocks_show(struct seq_file *s, void *v)
 		struct block_list *block_list = &pool->block_lists[i];
 
 		seq_printf(s, "%d: %ld blocks of %d pages (total %ld pages)\n",
-			i, block_list->block_count, 1 << block_desc[i].order,
-			block_list->block_count << block_desc[i].order);
+			i, block_list->block_count, block_desc[i].num_pages,
+			block_list->block_count * block_desc[i].num_pages);
 	}
 	return 0;
 }
@@ -141,26 +141,34 @@ DEFINE_SHOW_ATTRIBUTE(zblock_blocks);
  */
 static struct zblock_pool *zblock_create_pool(gfp_t gfp)
 {
-	struct zblock_pool *pool;
-	struct block_list *block_list;
+	struct zblock_pool *pool = kmalloc(sizeof(struct zblock_pool), gfp);
 	int i;
 
-	pool = kmalloc(sizeof(struct zblock_pool), gfp);
 	if (!pool)
 		return NULL;
 
 	/* init each block list */
 	for (i = 0; i < ARRAY_SIZE(block_desc); i++) {
-		block_list = &pool->block_lists[i];
+		struct block_list *block_list = &pool->block_lists[i];
+
 		spin_lock_init(&block_list->lock);
-		INIT_LIST_HEAD(&block_list->full_list);
 		INIT_LIST_HEAD(&block_list->active_list);
 		block_list->block_count = 0;
 	}
 
+	pool->block_header_cache = kmem_cache_create("zblock",
+						     sizeof(struct zblock_block),
+						     (1 << SLOT_BITS), 0, NULL);
+	if (!pool->block_header_cache)
+		goto out;
+
 	debugfs_create_file("blocks", S_IFREG | 0444, zblock_debugfs_root,
 			    pool, &zblock_blocks_fops);
 	return pool;
+
+out:
+	kfree(pool);
+	return NULL;
 }
 
 /**
@@ -170,6 +178,7 @@ static struct zblock_pool *zblock_create_pool(gfp_t gfp)
  */
 static void zblock_destroy_pool(struct zblock_pool *pool)
 {
+	kmem_cache_destroy(pool->block_header_cache);
 	kfree(pool);
 }
 
@@ -186,7 +195,7 @@ static void zblock_destroy_pool(struct zblock_pool *pool)
  * a new slot.
  */
 static int zblock_alloc(struct zblock_pool *pool, size_t size, gfp_t gfp,
-			unsigned long *handle)
+			unsigned long *handle, unsigned int nid)
 {
 	int block_type = -1;
 	struct zblock_block *block;
@@ -195,7 +204,7 @@ static int zblock_alloc(struct zblock_pool *pool, size_t size, gfp_t gfp,
 	if (!size)
 		return -EINVAL;
 
-	if (size > PAGE_SIZE)
+	if (size > block_desc[ARRAY_SIZE(block_desc) - 1].slot_size)
 		return -ENOSPC;
 
 	/* find basic block type with suitable slot size */
@@ -219,19 +228,15 @@ static int zblock_alloc(struct zblock_pool *pool, size_t size, gfp_t gfp,
 	}
 	if (WARN_ON(block_type < 0))
 		return -EINVAL;
-	if (block_type >= ARRAY_SIZE(block_desc))
-		return -ENOSPC;
 
 	block_list = &pool->block_lists[block_type];
 
-	spin_lock(&block_list->lock);
 	block = find_and_claim_block(block_list, block_type, handle);
-	spin_unlock(&block_list->lock);
 	if (block)
 		return 0;
 
 	/* not found block with free slots try to allocate new empty block */
-	block = alloc_block(pool, block_type, gfp & ~(__GFP_MOVABLE | __GFP_HIGHMEM), handle);
+	block = alloc_block(pool, block_type, gfp, handle, nid);
 	return block ? 0 : -ENOMEM;
 }
 
@@ -247,20 +252,23 @@ static void zblock_free(struct zblock_pool *pool, unsigned long handle)
 	struct zblock_block *block;
 	struct block_list *block_list;
 
-	block = handle_to_metadata(handle, &block_type, &slot);
+	block = handle_to_metadata(handle, &slot);
+	block_type = block->block_type;
 	block_list = &pool->block_lists[block_type];
 
+	/* clear bit early, this will shorten the search */
+	clear_bit(slot, block->slot_info);
+
 	spin_lock(&block_list->lock);
-	/* if all slots in block are empty delete whole block */
+	/* if all slots in block are empty delete the whole block */
 	if (++block->free_slots == block_desc[block_type].slots_per_block) {
 		block_list->block_count--;
-		list_del(&block->link);
+		__list_del_clearprev(&block->link);
 		spin_unlock(&block_list->lock);
-		free_pages((unsigned long)block, block_desc[block_type].order);
+		vfree(block);
 		return;
 	} else if (block->free_slots == 1)
-		list_move_tail(&block->link, &block_list->active_list);
-	clear_bit(slot, block->slot_info);
+		list_add(&block->link, &block_list->active_list);
 	spin_unlock(&block_list->lock);
 }
 
@@ -274,15 +282,11 @@ static void zblock_free(struct zblock_pool *pool, unsigned long handle)
  */
 static void *zblock_map(struct zblock_pool *pool, unsigned long handle)
 {
-	unsigned int block_type, slot;
-	struct zblock_block *block;
-	unsigned long offs;
-	void *p;
+	unsigned int slot;
+	struct zblock_block *block = handle_to_metadata(handle, &slot);
+	unsigned long offs = ZBLOCK_HEADER_SIZE + slot * block_desc[block->block_type].slot_size;
 
-	block = handle_to_metadata(handle, &block_type, &slot);
-	offs = ZBLOCK_HEADER_SIZE + slot * block_desc[block_type].slot_size;
-	p = (void *)block + offs;
-	return p;
+	return (void *)block + offs;
 }
 
 /**
@@ -304,15 +308,11 @@ static void zblock_unmap(struct zblock_pool *pool, unsigned long handle)
 static void zblock_write(struct zblock_pool *pool, unsigned long handle,
 			 void *handle_mem, size_t mem_len)
 {
-	unsigned int block_type, slot;
-	struct zblock_block *block;
-	unsigned long offs;
-	void *p;
+	unsigned int slot;
+	struct zblock_block *block = handle_to_metadata(handle, &slot);
+	unsigned long offs = ZBLOCK_HEADER_SIZE + slot * block_desc[block->block_type].slot_size;
 
-	block = handle_to_metadata(handle, &block_type, &slot);
-	offs = ZBLOCK_HEADER_SIZE + slot * block_desc[block_type].slot_size;
-	p = (void *)block + offs;
-	memcpy(p, handle_mem, mem_len);
+	memcpy((void *)block + offs, handle_mem, mem_len);
 }
 
 /**
@@ -328,7 +328,7 @@ static u64 zblock_get_total_pages(struct zblock_pool *pool)
 
 	total_size = 0;
 	for (i = 0; i < ARRAY_SIZE(block_desc); i++)
-		total_size += pool->block_lists[i].block_count << block_desc[i].order;
+		total_size += pool->block_lists[i].block_count * block_desc[i].num_pages;
 
 	return total_size;
 }
@@ -350,7 +350,7 @@ static void zblock_zpool_destroy(void *pool)
 static int zblock_zpool_malloc(void *pool, size_t size, gfp_t gfp,
 			unsigned long *handle, const int nid)
 {
-	return zblock_alloc(pool, size, gfp, handle);
+	return zblock_alloc(pool, size, gfp, handle, nid);
 }
 
 static void zblock_zpool_free(void *pool, unsigned long handle)
@@ -406,6 +406,7 @@ static int __init create_rbtree(void)
 {
 	int i;
 
+	BUILD_BUG_ON(ARRAY_SIZE(block_desc) > MAX_TABLE_SIZE);
 	for (i = 0; i < ARRAY_SIZE(block_desc); i++) {
 		struct block_desc_node *block_node = kmalloc(sizeof(*block_node),
 							GFP_KERNEL);
@@ -424,7 +425,7 @@ static int __init create_rbtree(void)
 		block_node->this_slot_size = block_desc[i].slot_size;
 		block_node->block_idx = i;
 		if (i == ARRAY_SIZE(block_desc) - 1)
-			block_node->next_slot_size = PAGE_SIZE;
+			block_node->next_slot_size = PAGE_SIZE * 2;
 		else
 			block_node->next_slot_size = block_desc[i+1].slot_size;
 		while (*new) {
