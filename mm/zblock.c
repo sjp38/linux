@@ -117,7 +117,6 @@ static struct zblock_block *alloc_block(struct zblock_pool *pool,
 /**
  * zblock_create_pool() - create a new zblock pool
  * @gfp:	gfp flags when allocating the zblock pool structure
- * @ops:	user-defined operations for the zblock pool
  *
  * Return: pointer to the new zblock pool or NULL if the metadata allocation
  * failed.
