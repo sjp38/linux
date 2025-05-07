@@ -24,6 +24,8 @@
 #define DAMON_MIN_REGION 1
 #endif
 
+#define DAMON_ACCESS_REPORTS_CAP 1000
+
 static DEFINE_MUTEX(damon_lock);
 static int nr_running_ctxs;
 static bool running_exclusive_ctxs;
@@ -32,6 +34,11 @@ static DEFINE_MUTEX(damon_ops_lock);
 static struct damon_operations damon_registered_ops[NR_DAMON_OPS];
 
 static struct kmem_cache *damon_region_cache __ro_after_init;
+
+static DEFINE_MUTEX(damon_access_reports_lock);
+static struct damon_access_report damon_access_reports[
+	DAMON_ACCESS_REPORTS_CAP];
+static int damon_access_reports_len;
 
 /* Should be called under damon_ops_lock with id smaller than NR_DAMON_OPS */
 static bool __damon_is_registered_ops(enum damon_ops_id id)
@@ -1397,6 +1404,39 @@ int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control)
 	if (control->canceled)
 		return -ECANCELED;
 	return 0;
+}
+
+/**
+ * damon_report_access() - Report identified access events to DAMON.
+ * @pid:		The PID of the virtual addres sspace of the address.
+ *			NULL if it is of the physical address.
+ * @addr:		The start address of the reporting region.
+ * @size:		The size of the reporting region.
+ * @nr_accesses:	Number of detected accesses to the region.
+ * @node_id:		NUMA node that made the accesses.
+ *
+ * Report access events to DAMON.
+ *
+ * Context: May sleep.
+ * TODO: allow any context?
+ */
+void damon_report_access(struct pid *pid, unsigned long addr,
+		unsigned long size, int nr_accesses, int node_id)
+{
+	struct damon_access_report *report;
+
+	/* silently fail for races */
+	if (!mutex_trylock(&damon_access_reports_lock))
+		return;
+	report = &damon_access_reports[damon_access_reports_len++];
+	if (damon_access_reports_len == DAMON_ACCESS_REPORTS_CAP)
+		damon_access_reports_len = 0;
+	report->pid = pid;
+	report->addr = addr;
+	report->size = size;
+	report->nr_accesses = nr_accesses;
+	report->node_id = node_id;
+	mutex_unlock(&damon_access_reports_lock);
 }
 
 /*
