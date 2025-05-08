@@ -8,6 +8,7 @@
 
 #include <linux/mm.h>
 #include <linux/rbtree.h>
+#include <linux/rculist.h>
 #include <linux/types.h>
 
 #if PAGE_SIZE == 0x1000
@@ -42,6 +43,7 @@
 struct zblock_block {
 	DECLARE_BITMAP(slot_info, 1 << SLOT_BITS);
 	struct list_head link;
+	struct rcu_head rcu;
 	unsigned short block_type;
 	unsigned short free_slots;
 };
