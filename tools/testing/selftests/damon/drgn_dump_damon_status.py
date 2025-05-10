@@ -4,12 +4,20 @@
 '''
 Read DAMON context data and dump as a json string.
 '''
+import drgn
 from drgn import FaultError, NULL, Object, alignof, cast, container_of, execscript, implicit_convert, offsetof, reinterpret, sizeof, stack_trace
 from drgn.helpers.common import *
 from drgn.helpers.linux import *
 
 import json
 import sys
+
+if "prog" not in globals():
+    try:
+        prog = drgn.get_default_prog()
+    except drgn.NoDefaultProgramError:
+        prog = drgn.program_from_kernel()
+        drgn.set_default_prog(prog)
 
 def to_dict(object, attr_name_converter):
     d = {}
