@@ -162,6 +162,8 @@ static void damon_sample_mtier_stop(void)
 	damon_destroy_ctx(ctxs[1]);
 }
 
+static bool damon_sample_mtier_init_called;
+
 static int damon_sample_mtier_enable_store(
 		const char *val, const struct kernel_param *kp)
 {
@@ -175,6 +177,14 @@ static int damon_sample_mtier_enable_store(
 	if (enable == enabled)
 		return 0;
 
+	/*
+	 * If called before init, probably from parse_args(), cannot call
+	 * damon_new_ctx() since kzalloc() is not ready.  Let
+	 * damon_sample_mtier_init() handle.
+	 */
+	if (!damon_sample_mtier_init_called)
+		return 0;
+
 	if (enable)
 		return damon_sample_mtier_start();
 	damon_sample_mtier_stop();
@@ -183,7 +193,13 @@ static int damon_sample_mtier_enable_store(
 
 static int __init damon_sample_mtier_init(void)
 {
-	return 0;
+	int err = 0;
+
+	damon_sample_mtier_init_called = true;
+
+	if (enable)
+		err = damon_sample_mtier_start();
+	return err;
 }
 
 module_init(damon_sample_mtier_init);
