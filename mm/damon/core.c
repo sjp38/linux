@@ -2908,7 +2908,7 @@ static int __init damon_init(void)
 
 #ifdef DAMON_HACK_IDEA
 /**
- * damos_search() - Return damon_region of a given address and type.
+ * damon_search() - Return damon_region of a given address and type.
  * @addr:	the address of the region to search for.
  * @pid:	PID of the address space.
  *
@@ -2919,7 +2919,7 @@ static int __init damon_init(void)
  *
  * Return: damon_region covering the memory of the given address.
  */
-struct damon_region *damon_search(unsigned long addr)
+struct damon_region *damon_search(unsigned long addr, struct pid *pid)
 {
 	return NULL;
 }
