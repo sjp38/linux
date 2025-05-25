@@ -1408,34 +1408,21 @@ int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control)
 
 /**
  * damon_report_access() - Report identified access events to DAMON.
- * @pid:		The PID of the virtual addres sspace of the address.
- *			NULL if it is of the physical address.
- * @addr:		The start address of the reporting region.
- * @size:		The size of the reporting region.
- * @nr_accesses:	Number of detected accesses to the region.
- * @node_id:		NUMA node that made the accesses.
+ * @report:	The reporting access information.
  *
  * Report access events to DAMON.
  *
  * Context: May sleep.
  * TODO: allow any context?
  */
-void damon_report_access(struct pid *pid, unsigned long addr,
-		unsigned long size, int nr_accesses, int node_id)
+void damon_report_access(struct damon_access_report *report)
 {
-	struct damon_access_report *report;
-
 	/* silently fail for races */
 	if (!mutex_trylock(&damon_access_reports_lock))
 		return;
-	report = &damon_access_reports[damon_access_reports_len++];
+	damon_access_reports[damon_access_reports_len++] = *report;
 	if (damon_access_reports_len == DAMON_ACCESS_REPORTS_CAP)
 		damon_access_reports_len = 0;
-	report->pid = pid;
-	report->addr = addr;
-	report->size = size;
-	report->nr_accesses = nr_accesses;
-	report->node_id = node_id;
 	mutex_unlock(&damon_access_reports_lock);
 }
 
