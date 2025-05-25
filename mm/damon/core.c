@@ -1417,12 +1417,16 @@ int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control)
  */
 void damon_report_access(struct damon_access_report *report)
 {
+	struct damon_access_report *dst;
+
 	/* silently fail for races */
 	if (!mutex_trylock(&damon_access_reports_lock))
 		return;
-	damon_access_reports[damon_access_reports_len++] = *report;
+	dst = &damon_access_reports[damon_access_reports_len++];
 	if (damon_access_reports_len == DAMON_ACCESS_REPORTS_CAP)
 		damon_access_reports_len = 0;
+	*dst = *report;
+	dst->report_jiffies = jiffies;
 	mutex_unlock(&damon_access_reports_lock);
 }
 

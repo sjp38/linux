@@ -119,6 +119,8 @@ struct damon_access_report {
 	unsigned long size;
 	int nr_accesses;
 	int node_id;
+/* private: */
+	unsigned long report_jiffies;
 };
 
 /**
