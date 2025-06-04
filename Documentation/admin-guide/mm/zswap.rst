@@ -71,8 +71,8 @@ can achieve great storage densities.
 When a swap page is passed from swapout to zswap, zswap maintains a mapping
 of the swap entry, a combination of the swap type and swap offset, to the zpool
 handle that references that compressed swap page.  This mapping is achieved
-with a red-black tree per swap type.  The swap offset is the search key for the
-tree nodes.
+with an xarray per swap type.  The swap offset is the search key for the xarray
+entries.
 
 During a page fault on a PTE that is a swap entry, the swapin code calls the
 zswap load function to decompress the page into the page allocated by the page
