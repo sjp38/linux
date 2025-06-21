@@ -491,6 +491,12 @@ struct damos_access_pattern {
 	unsigned int max_age_region;
 };
 
+struct damos_migrate_dest {
+	unsigned *node_id;
+	unsigned *weight;
+	size_t nr_dests;
+};
+
 /**
  * struct damos - Represents a Data Access Monitoring-based Operation Scheme.
  * @pattern:		Access pattern of target regions.
@@ -504,6 +510,7 @@ struct damos_access_pattern {
  * @quota:		Control the aggressiveness of this scheme.
  * @wmarks:		Watermarks for automated (in)activation of this scheme.
  * @target_nid:		Destination node if @action is "migrate_{hot,cold}".
+ * @migrate_dest:	Destination nodes if @action is "migrate_{hot,cold}".
  * @filters:		Additional set of &struct damos_filter for &action.
  * @ops_filters:	ops layer handling &struct damos_filter objects list.
  * @last_applied:	Last @action applied ops-managing entity.
@@ -534,8 +541,11 @@ struct damos_access_pattern {
  * repeatedly checks the watermarks.
  *
  * @target_nid is used to set the migration target node for migrate_hot or
- * migrate_cold actions, which means it's only meaningful when @action is either
- * "migrate_hot" or "migrate_cold".
+ * migrate_cold actions, and @migrate_dest is unset.
+ *
+ * @migrate_dest is used to set multiple migration target nodes with different
+ * weights for migrate_hot or migrate_cold actions.  @target_nid is ignored if
+ * this is set.
  *
  * Before applying the &action to a memory region, &struct damon_operations
  * implementation could check pages of the region and skip &action to respect
@@ -583,7 +593,10 @@ struct damos {
 	struct damos_quota quota;
 	struct damos_watermarks wmarks;
 	union {
-		int target_nid;
+		struct {
+			int target_nid;
+			struct damos_migrate_dest migrate_dest;
+		};
 	};
 	struct list_head filters;
 	struct list_head ops_filters;
