@@ -2576,6 +2576,29 @@ void damos_sysfs_update_effective_quotas(
 	}
 }
 
+static int damos_sysfs_add_migrate_dest(struct damos *scheme,
+		struct damos_sysfs_dests *sysfs_dests)
+{
+	struct damos_migrate_dest *dest = &scheme->migrate_dest;
+	int i;
+
+	dest->node_id_arr = kmalloc_array(sysfs_dests->nr,
+			sizeof(*dest->node_id_arr), GFP_KERNEL);
+	if (!dest->node_id_arr)
+		return -ENOMEM;
+	dest->weight_arr = kmalloc_array(sysfs_dests->nr,
+			sizeof(*dest->weight_arr), GFP_KERNEL);
+	if (!dest->weight_arr)
+		/* ->node_id_arr will be freed by scheme destruction */
+		return -ENOMEM;
+	for (i = 0; i < sysfs_dests->nr; i++) {
+		dest->node_id_arr[i] = sysfs_dests->dests_arr[i]->id;
+		dest->weight_arr[i] = sysfs_dests->dests_arr[i]->weight;
+	}
+	dest->nr_dests = sysfs_dests->nr;
+	return 0;
+}
+
 static struct damos *damon_sysfs_mk_scheme(
 		struct damon_sysfs_scheme *sysfs_scheme)
 {
@@ -2634,6 +2657,11 @@ static struct damos *damon_sysfs_mk_scheme(
 		return NULL;
 	}
 	err = damon_sysfs_add_scheme_filters(scheme, sysfs_scheme->filters);
+	if (err) {
+		damon_destroy_scheme(scheme);
+		return NULL;
+	}
+	err = damos_sysfs_add_migrate_dest(scheme, sysfs_scheme->dests);
 	if (err) {
 		damon_destroy_scheme(scheme);
 		return NULL;
