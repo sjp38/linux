@@ -610,6 +610,12 @@ static unsigned int damon_va_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
+static bool damon_va_eligible_report(struct damon_access_report *report,
+		struct damon_target *t)
+{
+	return report->pid == t->pid;
+}
+
 /*
  * Functions for the target validity check and cleanup
  */
@@ -710,6 +716,7 @@ static int __init damon_va_initcall(void)
 		.update = damon_va_update,
 		.prepare_access_checks = damon_va_prepare_access_checks,
 		.check_accesses = damon_va_check_accesses,
+		.eligible_report = damon_va_eligible_report,
 		.target_valid = damon_va_target_valid,
 		.cleanup = NULL,
 		.apply_scheme = damon_va_apply_scheme,
