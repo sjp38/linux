@@ -2855,6 +2855,11 @@ void damon_update_region_access_rate(struct damon_region *r, bool accessed,
 		r->nr_accesses++;
 }
 
+bool damon_initialized(void)
+{
+	return damon_region_cache != NULL;
+}
+
 static int __init damon_init(void)
 {
 	damon_region_cache = KMEM_CACHE(damon_region, 0);
@@ -2862,7 +2867,6 @@ static int __init damon_init(void)
 		pr_err("creating damon_region_cache fails\n");
 		return -ENOMEM;
 	}
-
 	return 0;
 }
 
