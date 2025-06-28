@@ -111,6 +111,7 @@ struct damon_target {
  * @addr:		The start address of the reporting region.
  * @size:		The size of the reporting region.
  * @nr_accesses:	Number of detected accesses to the region.
+ * @node_id:		NUMA node that made the access.
  *
  * @pid could be stale, and hence shouldn't be de-referenced.
  */
@@ -119,6 +120,7 @@ struct damon_access_report {
 	unsigned long addr;
 	unsigned long size;
 	int nr_accesses;
+	int node_id;
 /* private: */
 	unsigned long report_jiffies;	/* when this report is made */
 };
