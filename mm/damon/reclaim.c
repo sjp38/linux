@@ -238,6 +238,32 @@ out:
 	return err;
 }
 
+static int damon_reclaim_handle_commit_inputs(void)
+{
+	int err;
+
+	if (!commit_inputs)
+		return 0;
+
+	err = damon_reclaim_apply_parameters();
+	commit_inputs = false;
+	return err;
+}
+
+static int damon_reclaim_damon_call_fn(void *arg)
+{
+	struct damon_ctx *c = arg;
+	struct damos *s;
+
+	/* update the stats parameter */
+	damon_for_each_scheme(s, c)
+		damon_reclaim_stat = s->stat;
+
+	return damon_reclaim_handle_commit_inputs();
+}
+
+static struct damon_call_control call_control;
+
 static int damon_reclaim_turn(bool on)
 {
 	int err;
@@ -257,6 +283,10 @@ static int damon_reclaim_turn(bool on)
 	if (err)
 		return err;
 	kdamond_pid = ctx->kdamond->pid;
+	call_control.fn = damon_reclaim_damon_call_fn;
+	call_control.data = ctx;
+	call_control.repeat = true;
+	damon_call(ctx, &call_control);
 	return 0;
 }
 
@@ -296,34 +326,6 @@ module_param_cb(enabled, &enabled_param_ops, &enabled, 0600);
 MODULE_PARM_DESC(enabled,
 	"Enable or disable DAMON_RECLAIM (default: disabled)");
 
-static int damon_reclaim_handle_commit_inputs(void)
-{
-	int err;
-
-	if (!commit_inputs)
-		return 0;
-
-	err = damon_reclaim_apply_parameters();
-	commit_inputs = false;
-	return err;
-}
-
-static int damon_reclaim_after_aggregation(struct damon_ctx *c)
-{
-	struct damos *s;
-
-	/* update the stats parameter */
-	damon_for_each_scheme(s, c)
-		damon_reclaim_stat = s->stat;
-
-	return damon_reclaim_handle_commit_inputs();
-}
-
-static int damon_reclaim_after_wmarks_check(struct damon_ctx *c)
-{
-	return damon_reclaim_handle_commit_inputs();
-}
-
 static int __init damon_reclaim_init(void)
 {
 	int err = damon_modules_new_paddr_ctx_target(&ctx, &target);
@@ -332,9 +334,6 @@ static int __init damon_reclaim_init(void)
 		return err;
 	if (!damon_initialized())
 		return -ENOMEM;
-
-	ctx->callback.after_wmarks_check = damon_reclaim_after_wmarks_check;
-	ctx->callback.after_aggregation = damon_reclaim_after_aggregation;
 
 	/* 'enabled' has set before this function, probably via command line */
 	if (enabled)
