@@ -2373,7 +2373,7 @@ static int khugepaged_collapse_single_pmd(unsigned long addr,
 	int result = SCAN_FAIL;
 	struct mm_struct *mm = vma->vm_mm;
 
-	if (IS_ENABLED(CONFIG_SHMEM) && !vma_is_anonymous(vma)) {
+	if (!vma_is_anonymous(vma)) {
 		struct file *file = get_file(vma->vm_file);
 		pgoff_t pgoff = linear_page_index(vma, addr);
 
