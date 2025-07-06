@@ -2442,7 +2442,7 @@ static void kdamond_call(struct damon_ctx *ctx, bool cancel)
 				struct damon_call_control, list);
 		mutex_unlock(&ctx->call_controls_lock);
 		if (!control)
-			return;
+			break;
 		if (cancel) {
 			control->canceled = true;
 		} else {
