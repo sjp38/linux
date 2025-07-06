@@ -1521,9 +1521,12 @@ static int damon_sysfs_repeat_call_fn(void *data)
 	next_update_jiffies = jiffies +
 		msecs_to_jiffies(sysfs_kdamond->refresh_ms);
 
+	if (!mutex_trylock(&damon_sysfs_lock))
+		return 0;
 	damon_sysfs_upd_tuned_intervals(sysfs_kdamond);
 	damon_sysfs_upd_schemes_stats(sysfs_kdamond);
 	damon_sysfs_upd_schemes_effective_quotas(sysfs_kdamond);
+	mutex_unlock(&damon_sysfs_lock);
 	return 0;
 }
 
