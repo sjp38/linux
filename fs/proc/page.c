@@ -148,18 +148,21 @@ u64 stable_page_flags(const struct page *page)
 	folio = page_folio(page);
 
 	k = folio->flags;
-	mapping = (unsigned long)folio->mapping;
-	is_anon = mapping & FOLIO_MAPPING_ANON;
 
 	/*
 	 * pseudo flags for the well known (anonymous) memory mapped pages
 	 */
-	if (page_mapped(page))
-		u |= 1 << KPF_MMAP;
-	if (is_anon) {
-		u |= 1 << KPF_ANON;
-		if (mapping & FOLIO_MAPPING_KSM)
-			u |= 1 << KPF_KSM;
+	if (folio_has_mapcount(folio)) {
+		mapping = (unsigned long)folio->mapping;
+		is_anon = mapping & FOLIO_MAPPING_ANON;
+
+		if (page_mapped(page))
+			u |= 1 << KPF_MMAP;
+		if (is_anon) {
+			u |= 1 << KPF_ANON;
+			if (mapping & FOLIO_MAPPING_KSM)
+				u |= 1 << KPF_KSM;
+		}
 	}
 
 	/*
