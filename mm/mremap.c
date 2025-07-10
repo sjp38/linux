@@ -1345,7 +1345,7 @@ static int remap_is_valid(struct vma_remap_struct *vrm)
 	if (old_len > vma->vm_end - addr)
 		return -EFAULT;
 
-	if (new_len == old_len)
+	if (new_len <= old_len)
 		return 0;
 
 	/* Need to be careful about a growing mapping */
@@ -1444,10 +1444,6 @@ static unsigned long mremap_to(struct vma_remap_struct *vrm)
 		/* Set up for the move now shrink has been executed. */
 		vrm->old_len = vrm->new_len;
 	}
-
-	err = remap_is_valid(vrm);
-	if (err)
-		return err;
 
 	/* MREMAP_DONTUNMAP expands by old_len since old_len == new_len */
 	if (vrm->flags & MREMAP_DONTUNMAP) {
@@ -1637,10 +1633,6 @@ static unsigned long expand_vma(struct vma_remap_struct *vrm)
 {
 	unsigned long err;
 
-	err = remap_is_valid(vrm);
-	if (err)
-		return err;
-
 	/*
 	 * [addr, old_len) spans precisely to the end of the VMA, so try to
 	 * expand it in-place.
@@ -1707,6 +1699,21 @@ static unsigned long mremap_at(struct vma_remap_struct *vrm)
 	return -EINVAL;
 }
 
+/*
+ * Will this operation result in the VMA being expanded or moved and thus need
+ * to map a new portion of virtual address space?
+ */
+static bool vrm_will_map_new(struct vma_remap_struct *vrm)
+{
+	if (vrm->remap_type == MREMAP_EXPAND)
+		return true;
+
+	if (vrm_implies_new_addr(vrm))
+		return true;
+
+	return false;
+}
+
 static int check_prep_vma(struct vma_remap_struct *vrm)
 {
 	struct vm_area_struct *vma = vrm->vma;
@@ -1727,6 +1734,9 @@ static int check_prep_vma(struct vma_remap_struct *vrm)
 	/* For convenience, we set new_addr even if VMA won't move. */
 	if (!vrm_implies_new_addr(vrm))
 		vrm->new_addr = vrm->addr;
+
+	if (vrm_will_map_new(vrm))
+		return remap_is_valid(vrm);
 
 	return 0;
 }
