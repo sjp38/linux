@@ -88,6 +88,14 @@ def main():
     if scheme['target_nid'] != -1:
         fail('damos target nid', status)
 
+    migrate_dests = scheme['migrate_dests']
+    if migrate_dests['nr_dests'] != 0:
+        fail('nr_dests', status)
+    if migrate_dests['node_id_arr'] != []:
+        fail('node_id_arr', status)
+    if migrate_dests['weight_arr'] != []:
+        fail('weight_arr', status)
+
     if scheme['quota'] != {
             'reset_interval': 0,
             'ms': 0,
