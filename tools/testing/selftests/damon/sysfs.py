@@ -46,6 +46,8 @@ def main():
         fail('number of contexts', status)
 
     ctx = status['contexts'][0]
+    if ctx['ops']['id'] != '(enum damon_ops_id)DAMON_OPS_PADDR':
+        fail('ops id', status)
     attrs = ctx['attrs']
     if attrs['sample_interval'] != 5000:
         fail('sample interval', status)
