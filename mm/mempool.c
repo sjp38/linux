@@ -545,6 +545,23 @@ void mempool_free(void *element, mempool_t *pool)
 		}
 		spin_unlock_irqrestore(&pool->lock, flags);
 	}
+
+	/*
+	 * Handle the min_nr = 0 edge case:
+	 * For zero-minimum pools, curr_nr < min_nr (0 < 0) never succeeds,
+	 * so waiters sleeping on pool->wait would never be woken by the
+	 * normal wake-up path. This explicit check ensures that when
+	 * pool->min_nr == 0 and pool->curr_nr == 0, any active waiters
+	 * are properly awakened.
+	 * The wq_has_sleeper() avoids unnecessary wake-ups when no
+	 * threads are waiting.
+	 */
+	if (unlikely(pool->min_nr == 0 &&
+		     READ_ONCE(pool->curr_nr) == 0 &&
+		     wq_has_sleeper(&pool->wait))) {
+		wake_up(&pool->wait);
+	}
+
 	pool->free(element, pool->pool_data);
 }
 EXPORT_SYMBOL(mempool_free);
