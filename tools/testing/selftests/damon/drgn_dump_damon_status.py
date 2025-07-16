@@ -135,8 +135,36 @@ def damos_migrate_dests_to_dict(dests):
             'nr_dests': nr_dests,
             }
 
+def damos_filter_to_dict(damos_filter):
+    filter_type_keyword = {
+            0: 'anon',
+            1: 'active',
+            2: 'memcg',
+            3: 'young',
+            4: 'hugepage_size',
+            5: 'unmapped',
+            6: 'addr',
+            7: 'target'
+            }
+    dict_ = {
+            'type': filter_type_keyword[damos_filter.type],
+            'matching': damos_filter.matching,
+            'allow': damos_filter.allow
+            }
+    type_ = dict_['type']
+    if type_ == 'memcg':
+        dict_['memcg_id'] = damos_filter.memcg_id
+    elif type_ == 'addr':
+        dict_['addr_range'] = [damos_fitler.addr_range.start,
+                               damos_filter.addr_range.end]
+    elif type_ == 'target':
+        dict_['target_idx'] = damos_filter.target_idx
+    elif type_ == 'hugeapge_size':
+        dict_['sz_range'] = [damos_filter.sz_range.min,
+                             damos_filter.sz_range.max]
+
 def scheme_to_dict(scheme):
-    return to_dict(scheme, [
+    dict_ = to_dict(scheme, [
         ['pattern', damos_access_pattern_to_dict],
         ['action', int],
         ['apply_interval_us', int],
@@ -145,6 +173,18 @@ def scheme_to_dict(scheme):
         ['target_nid', int],
         ['migrate_dests', damos_migrate_dests_to_dict],
         ])
+    filters = []
+    for f in list_for_each_entry(
+            'struct damos_filter', scheme.filters.address_of_(), 'list'):
+        filters.append(damos_filter_to_dict(f))
+    dict_['filters'] = filters
+    ops_filters = []
+    for f in list_for_each_entry(
+            'struct damos_filter', scheme.ops_filters.address_of_(), 'list'):
+        ops_filters.append(damos_filter_to_dict(f))
+    dict_['ops_filters'] = ops_filters
+
+    return dict_
 
 def schemes_to_list(schemes):
     return [scheme_to_dict(s)
