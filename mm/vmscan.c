@@ -7748,7 +7748,7 @@ int user_proactive_reclaim(char *buf,
 	substring_t args[MAX_OPT_ARGS];
 	gfp_t gfp_mask = GFP_KERNEL;
 
-	if (!buf || (!memcg && !pgdat))
+	if (!buf || (!memcg && !pgdat) || (memcg && pgdat))
 		return -EINVAL;
 
 	buf = strstrip(buf);
