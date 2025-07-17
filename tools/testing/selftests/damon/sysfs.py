@@ -174,6 +174,32 @@ def main():
 
     assert_ctxs_committed(kdamonds.kdamonds[0].contexts, status['contexts'])
 
+    context = _damon_sysfs.DamonCtx(
+            monitoring_attrs=_damon_sysfs.DamonAttrs(
+                sample_us=100000, aggr_us=2000000,
+                intervals_goal=_damon_sysfs.IntervalsGoal(
+                    access_bp=400, aggrs=3, min_sample_us=5000,
+                    max_sample_us=10000000),
+                update_us=2000000),
+            schemes=[_damon_sysfs.Damos(
+                action='pageout',
+                access_pattern=_damon_sysfs.DamosAccessPattern(
+                    size=[4096, 2**10],
+                    nr_accesses=[3, 317],
+                    age=[5,71]),
+                )])
+    context.idx = 0
+    context.kdamond = kdamonds.kdamonds[0]
+    kdamonds.kdamonds[0].contexts = [context]
+    kdamonds.kdamonds[0].commit()
+
+    status, err = dump_damon_status_dict(kdamonds.kdamonds[0].pid)
+    if err is not None:
+        print(err)
+        exit(1)
+
+    assert_ctxs_committed(kdamonds.kdamonds[0].contexts, status['contexts'])
+
     kdamonds.stop()
 
 if __name__ == '__main__':
