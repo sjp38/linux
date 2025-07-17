@@ -7818,7 +7818,7 @@ int user_proactive_reclaim(char *buf,
 
 			if (test_and_set_bit_lock(PGDAT_RECLAIM_LOCKED,
 						  &pgdat->flags))
-				return -EAGAIN;
+				return -EBUSY;
 
 			reclaimed = __node_reclaim(pgdat, gfp_mask,
 						   batch_size, &sc);
