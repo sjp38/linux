@@ -187,6 +187,16 @@ def main():
                     size=[4096, 2**10],
                     nr_accesses=[3, 317],
                     age=[5,71]),
+                quota=_damon_sysfs.DamosQuota(
+                    sz=100*1024*1024, ms=100,
+                    goals=[_damon_sysfs.DamosQuotaGoal(
+                        metric='node_mem_used_bp',
+                        target_value=9950,
+                        nid=1)],
+                    reset_interval_ms=1500,
+                    weight_sz_permil=20,
+                    weight_nr_accesses_permil=200,
+                    weight_age_permil=1000),
                 )])
     context.idx = 0
     context.kdamond = kdamonds.kdamonds[0]
