@@ -14,6 +14,7 @@
 #include <linux/swap.h>
 #include <linux/memory-tiers.h>
 #include <linux/mm_inline.h>
+#include <asm/tlb.h>
 
 #include "../internal.h"
 #include "ops-common.h"
@@ -97,9 +98,61 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
+/* todo: batch or remove tlb flushing */
+static bool damon_pa_fault_change_protection_one(struct folio *folio,
+		struct vm_area_struct *vma, unsigned long addr, void *arg)
+{
+	struct mmu_gather tlb;
+
+	tlb_gather_mmu(&tlb, vma->vm_mm);
+
+	/* TODO: define and use MM_CP_PROT_DAMON */
+	change_protection(&tlb, vma, addr, addr + 1, MM_CP_PROT_NUMA);
+
+	tlb_finish_mmu(&tlb);
+	return true;
+}
+
+static void damon_pa_fault_change_protection(unsigned long paddr)
+{
+	struct folio *folio = damon_get_folio(PHYS_PFN(paddr));
+	struct rmap_walk_control rwc = {
+		.rmap_one = damon_pa_fault_change_protection_one,
+		.anon_lock = folio_lock_anon_vma_read,
+	};
+	bool need_lock;
+
+	if (!folio)
+		return;
+	if (!folio_mapped(folio) || !folio_raw_mapping(folio))
+		return;
+
+	need_lock = !folio_test_anon(folio) || folio_test_ksm(folio);
+	if (need_lock && !folio_trylock(folio))
+		return;
+
+	rmap_walk(folio, &rwc);
+
+	if (need_lock)
+		folio_unlock(folio);
+}
+
+static void __damon_pa_fault_prepare_access_check(struct damon_region *r)
+{
+	r->sampling_addr = damon_rand(r->ar.start, r->ar.end);
+
+	damon_pa_fault_change_protection(r->sampling_addr);
+}
+
 static void damon_pa_fault_prepare_access_checks(struct damon_ctx *ctx)
 {
-	return;
+	struct damon_target *t;
+	struct damon_region *r;
+
+	damon_for_each_target(t, ctx) {
+		damon_for_each_region(r, t)
+			__damon_pa_fault_prepare_access_check(r);
+	}
 }
 
 static unsigned int damon_pa_fault_check_accesses(struct damon_ctx *ctx)
