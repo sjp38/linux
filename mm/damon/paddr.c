@@ -97,6 +97,16 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 	return max_nr_accesses;
 }
 
+static void damon_pa_fault_prepare_access_checks(struct damon_ctx *ctx)
+{
+	return;
+}
+
+static unsigned int damon_pa_fault_check_accesses(struct damon_ctx *ctx)
+{
+	return 0;
+}
+
 /*
  * damos_pa_filter_out - Return true if the page should be filtered out.
  */
@@ -355,8 +365,23 @@ static int __init damon_pa_initcall(void)
 		.apply_scheme = damon_pa_apply_scheme,
 		.get_scheme_score = damon_pa_scheme_score,
 	};
+	struct damon_operations fault_ops = {
+		.id = DAMON_OPS_PADDR_FAULT,
+		.init = NULL,
+		.update = NULL,
+		.prepare_access_checks = damon_pa_fault_prepare_access_checks,
+		.check_accesses = damon_pa_fault_check_accesses,
+		.target_valid = NULL,
+		.cleanup = NULL,
+		.apply_scheme = damon_pa_apply_scheme,
+		.get_scheme_score = damon_pa_scheme_score,
+	};
+	int err;
 
-	return damon_register_ops(&ops);
+	err = damon_register_ops(&ops);
+	if (err)
+		return err;
+	return damon_register_ops(&fault_ops);
 };
 
 subsys_initcall(damon_pa_initcall);
