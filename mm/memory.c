@@ -75,6 +75,7 @@
 #include <linux/ptrace.h>
 #include <linux/vmalloc.h>
 #include <linux/sched/sysctl.h>
+#include <linux/damon.h>
 
 #include <trace/events/kmem.h>
 
@@ -5990,6 +5991,11 @@ split:
 static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 {
 	pte_t entry;
+	struct damon_access_report access_report = {
+		.addr = vmf->address,
+		.size = 1,
+		.nr_accesses = 1,
+	};
 
 	if (unlikely(pmd_none(*vmf->pmd))) {
 		/*
@@ -6036,8 +6042,10 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 	if (!pte_present(vmf->orig_pte))
 		return do_swap_page(vmf);
 
-	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
+	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
+		damon_report_access(&access_report);
 		return do_numa_page(vmf);
+	}
 
 	spin_lock(vmf->ptl);
 	entry = vmf->orig_pte;
@@ -6097,6 +6105,11 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	p4d_t *p4d;
 	vm_fault_t ret;
+	struct damon_access_report access_report = {
+		.addr = address,
+		.size = 1,
+		.nr_accesses = 1,
+	};
 
 	pgd = pgd_offset(mm, address);
 	p4d = p4d_alloc(mm, pgd, address);
@@ -6159,8 +6172,10 @@ retry_pud:
 			return 0;
 		}
 		if (pmd_trans_huge(vmf.orig_pmd)) {
-			if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma))
+			if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma)) {
+				damon_report_access(&access_report);
 				return do_huge_pmd_numa_page(&vmf);
+			}
 
 			if ((flags & (FAULT_FLAG_WRITE|FAULT_FLAG_UNSHARE)) &&
 			    !pmd_write(vmf.orig_pmd)) {
