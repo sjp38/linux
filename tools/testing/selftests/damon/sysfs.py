@@ -90,6 +90,21 @@ def assert_access_pattern_committed(pattern, dump):
     assert_true(dump['max_age_region'] == pattern.age[1], 'miaxage_region',
                 dump)
 
+def assert_filter_committed(filter_, dump):
+    assert_true(filter_.type_ == dump['type'], 'type', dump)
+    assert_true(filter_.matching == dump['matching'], 'matching', dump)
+    assert_true(filter_.allow == dump['allow'], 'allow', dump)
+    # TODO: check memcg_path and memcg_id if type is memcg
+    if filter_.type_ == 'addr':
+        assert_true([filter_.addr_start, filter_.addr_end] ==
+                    dump['addr_range'], 'addr_range', dump)
+    elif filter_.type_ == 'target':
+        assert_true(filter_.target_idx == dump['target_idx'], 'target_idx',
+                    dump)
+    elif filter_.type_ == 'hugepage_size':
+        assert_true([filter_.min_, filter_.max_] == dump['sz_range'],
+                    'sz_range', dump)
+
 def assert_scheme_committed(scheme, dump):
     assert_access_pattern_committed(scheme.access_pattern, dump['pattern'])
     action_val = {
