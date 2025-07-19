@@ -200,6 +200,12 @@ def main():
                 watermarks=_damon_sysfs.DamosWatermarks(
                     metric = 'free_mem_rate', interval = 5000000, # 5 secodns
                     high = 500, mid = 400, low = 50),
+                target_nid=1,
+                apply_interval_us=1000000,
+                dests=_damon_sysfs.DamosDests(
+                    dests=[_damon_sysfs.DamosDest(id=1, weight=30),
+                           _damon_sysfs.DamosDest(id=0, weight=70)]),
+
                 )])
     context.idx = 0
     context.kdamond = kdamonds.kdamonds[0]
