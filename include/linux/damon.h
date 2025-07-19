@@ -977,6 +977,13 @@ void damon_report_access(struct damon_access_report *report);
 int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 				unsigned long *start, unsigned long *end);
 
+#else	/* CONFIG_DAMON */
+
+static inline void damon_report_access(struct damon_access_report *report)
+{
+	return;
+}
+
 #endif	/* CONFIG_DAMON */
 
 #endif	/* _DAMON_H */
