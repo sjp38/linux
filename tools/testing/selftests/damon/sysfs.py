@@ -197,6 +197,9 @@ def main():
                     weight_sz_permil=20,
                     weight_nr_accesses_permil=200,
                     weight_age_permil=1000),
+                watermarks=_damon_sysfs.DamosWatermarks(
+                    metric = 'free_mem_rate', interval = 5000000, # 5 secodns
+                    high = 500, mid = 400, low = 50),
                 )])
     context.idx = 0
     context.kdamond = kdamonds.kdamonds[0]
