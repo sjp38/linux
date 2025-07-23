@@ -110,7 +110,7 @@ static bool damon_pa_fault_change_protection_one(struct folio *folio,
 	tlb_gather_mmu(&tlb, vma->vm_mm);
 
 	/* TODO: define and use MM_CP_PROT_DAMON */
-	change_protection(&tlb, vma, addr, addr + 1, MM_CP_PROT_NUMA);
+	change_protection(&tlb, vma, addr, addr + PAGE_SIZE, MM_CP_PROT_NUMA);
 
 	tlb_finish_mmu(&tlb);
 	return true;
