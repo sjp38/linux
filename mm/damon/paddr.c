@@ -104,6 +104,9 @@ static bool damon_pa_fault_change_protection_one(struct folio *folio,
 {
 	struct mmu_gather tlb;
 
+	if (!vma_is_accessible(vma))
+		return true;
+
 	tlb_gather_mmu(&tlb, vma->vm_mm);
 
 	/* TODO: define and use MM_CP_PROT_DAMON */
