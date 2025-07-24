@@ -14,6 +14,8 @@
 #include <linux/types.h>
 #include <linux/random.h>
 
+#define DAMON_PADDR_FAULT_TESTING 0
+
 /* Minimal region size.  Every damon_region is aligned by this. */
 #define DAMON_MIN_REGION	PAGE_SIZE
 /* Max priority score for DAMON-based operation schemes */

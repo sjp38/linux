@@ -2382,7 +2382,9 @@ static void damon_merge_regions_of(struct damon_target *t, unsigned int thres,
 		if (r->nr_accesses != r->nr_accesses_bp / 10000) {
 			pr_err("nr_accesses (%u) != nr_accesses_bp (%u)\n",
 					r->nr_accesses, r->nr_accesses_bp);
+#if DAMON_PADDR_FAULT_TESTING == 0
 			BUG();
+#endif
 		}
 
 		if (prev && prev->ar.end == r->ar.start &&

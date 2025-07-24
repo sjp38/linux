@@ -38,6 +38,9 @@
 #include <asm/tlbflush.h>
 #include <asm/tlb.h>
 
+/* For PADDR_FAULT testing only */
+#include <linux/damon.h>
+
 #include "internal.h"
 
 static bool maybe_change_pte_writable(struct vm_area_struct *vma, pte_t pte)
@@ -126,6 +129,10 @@ static bool prot_numa_skip(struct vm_area_struct *vma, unsigned long addr,
 	bool ret = true;
 	bool toptier;
 	int nid;
+
+#if DAMON_PADDR_FAULT_TESTING != 0
+	return false;
+#endif
 
 	/* Avoid TLB flush if possible */
 	if (pte_protnone(oldpte))
