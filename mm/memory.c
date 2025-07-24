@@ -5973,6 +5973,17 @@ split:
 	return VM_FAULT_FALLBACK;
 }
 
+static void do_damon_page(struct vm_fault *vmf)
+{
+	struct damon_access_report access_report = {
+		.addr = vmf->address,
+		.size = 1,
+		.nr_accesses = 1,
+	};
+
+	damon_report_access(&access_report);
+}
+
 /*
  * These routines also need to handle stuff like marking pages dirty
  * and/or accessed for architectures that don't do it in hardware (most
@@ -5991,11 +6002,6 @@ split:
 static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 {
 	pte_t entry;
-	struct damon_access_report access_report = {
-		.addr = vmf->address,
-		.size = 1,
-		.nr_accesses = 1,
-	};
 
 	if (unlikely(pmd_none(*vmf->pmd))) {
 		/*
@@ -6043,7 +6049,7 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 		return do_swap_page(vmf);
 
 	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
-		damon_report_access(&access_report);
+		do_damon_page(vmf);
 		return do_numa_page(vmf);
 	}
 
@@ -6105,11 +6111,6 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	p4d_t *p4d;
 	vm_fault_t ret;
-	struct damon_access_report access_report = {
-		.addr = address,
-		.size = 1,
-		.nr_accesses = 1,
-	};
 
 	pgd = pgd_offset(mm, address);
 	p4d = p4d_alloc(mm, pgd, address);
@@ -6173,7 +6174,7 @@ retry_pud:
 		}
 		if (pmd_trans_huge(vmf.orig_pmd)) {
 			if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma)) {
-				damon_report_access(&access_report);
+				do_damon_page(&vmf);
 				return do_huge_pmd_numa_page(&vmf);
 			}
 
