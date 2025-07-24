@@ -5973,7 +5973,7 @@ split:
 	return VM_FAULT_FALLBACK;
 }
 
-static void do_damon_page(struct vm_fault *vmf)
+static void do_damon_page(struct vm_fault *vmf, bool huge_pmd)
 {
 	struct damon_access_report access_report = {
 		.addr = vmf->address,
@@ -5981,6 +5981,10 @@ static void do_damon_page(struct vm_fault *vmf)
 		.nr_accesses = 1,
 	};
 
+	if (huge_pmd)
+		access_report.addr = PFN_PHYS(pmd_pfn(vmf->orig_pmd));
+	else
+		access_report.addr = PFN_PHYS(pte_pfn(vmf->orig_pte));
 	damon_report_access(&access_report);
 }
 
@@ -6049,7 +6053,7 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 		return do_swap_page(vmf);
 
 	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
-		do_damon_page(vmf);
+		do_damon_page(vmf, false);
 		return do_numa_page(vmf);
 	}
 
@@ -6174,7 +6178,7 @@ retry_pud:
 		}
 		if (pmd_trans_huge(vmf.orig_pmd)) {
 			if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma)) {
-				do_damon_page(&vmf);
+				do_damon_page(&vmf, true);
 				return do_huge_pmd_numa_page(&vmf);
 			}
 
