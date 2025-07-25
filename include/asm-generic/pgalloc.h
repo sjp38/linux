@@ -4,6 +4,8 @@
 
 #ifdef CONFIG_MMU
 
+#include <linux/pgtable.h>
+
 #define GFP_PGTABLE_KERNEL	(GFP_KERNEL | __GFP_ZERO)
 #define GFP_PGTABLE_USER	(GFP_PGTABLE_KERNEL | __GFP_ACCOUNT)
 
@@ -295,6 +297,20 @@ static inline void pgd_free(struct mm_struct *mm, pgd_t *pgd)
 	__pgd_free(mm, pgd);
 }
 #endif
+
+#define pgd_populate_kernel(addr, pgd, p4d)			\
+do {								\
+	pgd_populate(&init_mm, pgd, p4d);			\
+	if (ARCH_PAGE_TABLE_SYNC_MASK & PGTBL_PGD_MODIFIED)	\
+		arch_sync_kernel_mappings(addr, addr);		\
+} while (0)
+
+#define p4d_populate_kernel(addr, p4d, pud)			\
+do {								\
+	p4d_populate(&init_mm, p4d, pud);			\
+	if (ARCH_PAGE_TABLE_SYNC_MASK & PGTBL_P4D_MODIFIED)	\
+		arch_sync_kernel_mappings(addr, addr);		\
+} while (0)
 
 #endif /* CONFIG_MMU */
 
