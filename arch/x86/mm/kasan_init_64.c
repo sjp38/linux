@@ -108,7 +108,7 @@ static void __init kasan_populate_p4d(p4d_t *p4d, unsigned long addr,
 	if (p4d_none(*p4d)) {
 		void *p = early_alloc(PAGE_SIZE, nid, true);
 
-		p4d_populate(&init_mm, p4d, p);
+		p4d_populate_kernel(addr, p4d, p);
 	}
 
 	pud = pud_offset(p4d, addr);
@@ -128,7 +128,7 @@ static void __init kasan_populate_pgd(pgd_t *pgd, unsigned long addr,
 
 	if (pgd_none(*pgd)) {
 		p = early_alloc(PAGE_SIZE, nid, true);
-		pgd_populate(&init_mm, pgd, p);
+		pgd_populate_kernel(addr, pgd, p);
 	}
 
 	p4d = p4d_offset(pgd, addr);
@@ -255,7 +255,7 @@ static void __init kasan_shallow_populate_p4ds(pgd_t *pgd,
 
 		if (p4d_none(*p4d)) {
 			p = early_alloc(PAGE_SIZE, NUMA_NO_NODE, true);
-			p4d_populate(&init_mm, p4d, p);
+			p4d_populate_kernel(addr, p4d, p);
 		}
 	} while (p4d++, addr = next, addr != end);
 }
@@ -273,7 +273,7 @@ static void __init kasan_shallow_populate_pgds(void *start, void *end)
 
 		if (pgd_none(*pgd)) {
 			p = early_alloc(PAGE_SIZE, NUMA_NO_NODE, true);
-			pgd_populate(&init_mm, pgd, p);
+			pgd_populate_kernel(addr, pgd, p);
 		}
 
 		/*

@@ -75,6 +75,19 @@ DEFINE_POPULATE(pgd_populate, pgd, p4d, init)
 DEFINE_POPULATE(pud_populate, pud, pmd, init)
 DEFINE_POPULATE(pmd_populate_kernel, pmd, pte, init)
 
+#define DEFINE_POPULATE_KERNEL(fname, type1, type2, init)	\
+static inline void fname##_init(unsigned long addr,		\
+		type1##_t *arg1, type2##_t *arg2, bool init)	\
+{								\
+	if (init)						\
+		fname##_safe(addr, arg1, arg2);			\
+	else							\
+		fname(addr, arg1, arg2);			\
+}
+
+DEFINE_POPULATE_KERNEL(pgd_populate_kernel, pgd, p4d, init)
+DEFINE_POPULATE_KERNEL(p4d_populate_kernel, p4d, pud, init)
+
 #define DEFINE_ENTRY(type1, type2, init)			\
 static inline void set_##type1##_init(type1##_t *arg1,		\
 			type2##_t arg2, bool init)		\
@@ -255,7 +268,7 @@ static p4d_t *fill_p4d(pgd_t *pgd, unsigned long vaddr)
 {
 	if (pgd_none(*pgd)) {
 		p4d_t *p4d = (p4d_t *)spp_getpage();
-		pgd_populate(&init_mm, pgd, p4d);
+		pgd_populate_kernel(vaddr, pgd, p4d);
 		if (p4d != p4d_offset(pgd, 0))
 			printk(KERN_ERR "PAGETABLE BUG #00! %p <-> %p\n",
 			       p4d, p4d_offset(pgd, 0));
@@ -267,7 +280,7 @@ static pud_t *fill_pud(p4d_t *p4d, unsigned long vaddr)
 {
 	if (p4d_none(*p4d)) {
 		pud_t *pud = (pud_t *)spp_getpage();
-		p4d_populate(&init_mm, p4d, pud);
+		p4d_populate_kernel(vaddr, p4d, pud);
 		if (pud != pud_offset(p4d, 0))
 			printk(KERN_ERR "PAGETABLE BUG #01! %p <-> %p\n",
 			       pud, pud_offset(p4d, 0));
@@ -720,7 +733,7 @@ phys_p4d_init(p4d_t *p4d_page, unsigned long paddr, unsigned long paddr_end,
 					   page_size_mask, prot, init);
 
 		spin_lock(&init_mm.page_table_lock);
-		p4d_populate_init(&init_mm, p4d, pud, init);
+		p4d_populate_kernel_init(vaddr, p4d, pud, init);
 		spin_unlock(&init_mm.page_table_lock);
 	}
 
@@ -762,10 +775,10 @@ __kernel_physical_mapping_init(unsigned long paddr_start,
 
 		spin_lock(&init_mm.page_table_lock);
 		if (pgtable_l5_enabled())
-			pgd_populate_init(&init_mm, pgd, p4d, init);
+			pgd_populate_kernel_init(vaddr, pgd, p4d, init);
 		else
-			p4d_populate_init(&init_mm, p4d_offset(pgd, vaddr),
-					  (pud_t *) p4d, init);
+			p4d_populate_kernel_init(vaddr, p4d_offset(pgd, vaddr),
+						 (pud_t *) p4d, init);
 
 		spin_unlock(&init_mm.page_table_lock);
 		pgd_changed = true;
