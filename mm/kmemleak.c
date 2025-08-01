@@ -103,6 +103,8 @@
 #include <linux/kmemleak.h>
 #include <linux/memory_hotplug.h>
 
+#include "../kernel/printk/internal.h"		/* __printk_safe_enter */
+
 /*
  * Kmemleak configuration and common defines.
  */
