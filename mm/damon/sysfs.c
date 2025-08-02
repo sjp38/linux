@@ -1525,6 +1525,7 @@ static int damon_sysfs_apply_inputs(struct damon_ctx *ctx,
 	err = damon_select_ops(ctx, sys_ctx->ops_id);
 	if (err)
 		return err;
+	ctx->ops_attrs.use_reports = sys_ctx->ops_attrs->use_reports;
 	ctx->addr_unit = sys_ctx->addr_unit;
 	ctx->min_sz_region = max(DAMON_MIN_REGION / sys_ctx->addr_unit, 1);
 	err = damon_sysfs_set_attrs(ctx, sys_ctx->attrs);
