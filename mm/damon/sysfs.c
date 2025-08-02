@@ -1518,6 +1518,7 @@ static int damon_sysfs_apply_inputs(struct damon_ctx *ctx,
 	if (err)
 		return err;
 	ctx->ops_attrs.use_reports = sys_ctx->ops_attrs->use_reports;
+	ctx->ops_attrs.write_only = sys_ctx->ops_attrs->write_only;
 	err = damon_sysfs_set_attrs(ctx, sys_ctx->attrs);
 	if (err)
 		return err;
