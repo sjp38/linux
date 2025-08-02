@@ -1253,6 +1253,7 @@ int damon_commit_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 			return err;
 	}
 	dst->ops = src->ops;
+	dst->ops_attrs = src->ops_attrs;
 
 	return 0;
 }
