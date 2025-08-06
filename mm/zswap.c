@@ -504,6 +504,7 @@ unsigned long zswap_total_pages(void)
 	list_for_each_entry_rcu(pool, &zswap_pools, list)
 		total += zpool_get_total_pages(pool->zpool);
 	rcu_read_unlock();
+	total += total * sizeof(struct zswap_entry) >> PAGE_SHIFT;
 
 	return total;
 }
@@ -1552,7 +1553,7 @@ static bool zswap_store_page(struct page *page,
 	zswap_pool_get(pool);
 	if (objcg) {
 		obj_cgroup_get(objcg);
-		obj_cgroup_charge_zswap(objcg, entry->length);
+		obj_cgroup_charge_zswap(objcg, entry->length + sizeof(entry));
 	}
 	atomic_long_inc(&zswap_stored_pages);
 
