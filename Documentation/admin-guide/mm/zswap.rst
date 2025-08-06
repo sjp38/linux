@@ -142,6 +142,15 @@ User can enable it as follows::
 This can be enabled at the boot time if ``CONFIG_ZSWAP_SHRINKER_DEFAULT_ON`` is
 selected.
 
+If a page cannot be compressed into a size smaller than PAGE_SIZE, it can be
+beneficial to save the content as is without compression, to keep the LRU
+order.  Users can enable this behavior, as follows::
+
+  echo Y > /sys/module/zswap/parameters/save_incompressible_pages
+
+This is disabled by default, and doesn't change behavior of zswap writeback
+disabled case.
+
 A debugfs interface is provided for various statistic about pool size, number
 of pages stored, same-value filled pages and various counters for the reasons
 pages are rejected.
