@@ -1961,6 +1961,36 @@ int futex_hash_prctl(unsigned long arg2, unsigned long arg3, unsigned long arg4)
 	return ret;
 }
 
+/*
+ * process_has_robust_futex() - check whether the given task hold robust futexes.
+ * @p: task struct of which task to consider
+ *
+ * If any thread in the task has a non-NULL robust_list or compat_robust_list,
+ * it indicates that the task holds robust futexes.
+ */
+bool process_has_robust_futex(struct task_struct *tsk)
+{
+	struct task_struct *t;
+	bool ret = false;
+
+	rcu_read_lock();
+	for_each_thread(tsk, t) {
+		if (unlikely(t->robust_list)) {
+			ret = true;
+			break;
+		}
+#ifdef CONFIG_COMPAT
+		if (unlikely(t->compat_robust_list)) {
+			ret = true;
+			break;
+		}
+#endif
+	}
+	rcu_read_unlock();
+
+	return ret;
+}
+
 static int __init futex_init(void)
 {
 	unsigned long hashsize, i;
