@@ -39,6 +39,7 @@
 #include <linux/ptrace.h>
 #include <linux/freezer.h>
 #include <linux/ftrace.h>
+#include <linux/futex.h>
 #include <linux/ratelimit.h>
 #include <linux/kthread.h>
 #include <linux/init.h>
@@ -692,7 +693,7 @@ static void wake_oom_reaper(struct timer_list *timer)
  * before the exit path is able to wake the futex waiters.
  */
 #define OOM_REAPER_DELAY (2*HZ)
-static void queue_oom_reaper(struct task_struct *tsk)
+static void queue_oom_reaper(struct task_struct *tsk, bool delay)
 {
 	/* mm is already queued? */
 	if (mm_flags_test_and_set(MMF_OOM_REAP_QUEUED, tsk->signal->oom_mm))
@@ -700,7 +701,7 @@ static void queue_oom_reaper(struct task_struct *tsk)
 
 	get_task_struct(tsk);
 	timer_setup(&tsk->oom_reaper_timer, wake_oom_reaper, 0);
-	tsk->oom_reaper_timer.expires = jiffies + OOM_REAPER_DELAY;
+	tsk->oom_reaper_timer.expires = jiffies + (delay ? OOM_REAPER_DELAY : 0);
 	add_timer(&tsk->oom_reaper_timer);
 }
 
@@ -742,7 +743,7 @@ static int __init oom_init(void)
 }
 subsys_initcall(oom_init)
 #else
-static inline void queue_oom_reaper(struct task_struct *tsk)
+static inline void queue_oom_reaper(struct task_struct *tsk, bool delay)
 {
 }
 #endif /* CONFIG_MMU */
@@ -843,6 +844,16 @@ bool oom_killer_disable(signed long timeout)
 	return true;
 }
 
+/*
+ * If the owner thread of robust futexes is killed by OOM, the robust futexes might be freed
+ * by the OOM reaper before futex_cleanup() runs, which could cause the waiters to
+ * block indefinitely. So when the task hold robust futexes, delay oom reaper.
+ */
+static inline bool should_delay_oom_reap(struct task_struct *task)
+{
+	return process_has_robust_futex(task);
+}
+
 static inline bool __task_will_free_mem(struct task_struct *task)
 {
 	struct signal_struct *sig = task->signal;
@@ -865,17 +876,19 @@ static inline bool __task_will_free_mem(struct task_struct *task)
 }
 
 /*
- * Checks whether the given task is dying or exiting and likely to
- * release its address space. This means that all threads and processes
+ * Determine whether the given task should be reaped based on
+ * whether it is dying or exiting and likely to release its
+ * address space. This means that all threads and processes
  * sharing the same mm have to be killed or exiting.
  * Caller has to make sure that task->mm is stable (hold task_lock or
  * it operates on the current).
  */
-static bool task_will_free_mem(struct task_struct *task)
+static bool should_reap_task(struct task_struct *task, bool *delay_reap)
 {
 	struct mm_struct *mm = task->mm;
 	struct task_struct *p;
 	bool ret = true;
+	bool delay;
 
 	/*
 	 * Skip tasks without mm because it might have passed its exit_mm and
@@ -887,6 +900,8 @@ static bool task_will_free_mem(struct task_struct *task)
 
 	if (!__task_will_free_mem(task))
 		return false;
+
+	delay = should_delay_oom_reap(task);
 
 	/*
 	 * This task has already been drained by the oom reaper so there are
@@ -912,8 +927,11 @@ static bool task_will_free_mem(struct task_struct *task)
 		ret = __task_will_free_mem(p);
 		if (!ret)
 			break;
+		if (!delay)
+			delay = should_delay_oom_reap(p);
 	}
 	rcu_read_unlock();
+	*delay_reap = delay;
 
 	return ret;
 }
@@ -923,6 +941,7 @@ static void __oom_kill_process(struct task_struct *victim, const char *message)
 	struct task_struct *p;
 	struct mm_struct *mm;
 	bool can_oom_reap = true;
+	bool delay_reap;
 
 	p = find_lock_task_mm(victim);
 	if (!p) {
@@ -959,6 +978,7 @@ static void __oom_kill_process(struct task_struct *victim, const char *message)
 		from_kuid(&init_user_ns, task_uid(victim)),
 		mm_pgtables_bytes(mm) >> 10, victim->signal->oom_score_adj);
 	task_unlock(victim);
+	delay_reap = should_delay_oom_reap(victim);
 
 	/*
 	 * Kill all user processes sharing victim->mm in other thread groups, if
@@ -990,11 +1010,13 @@ static void __oom_kill_process(struct task_struct *victim, const char *message)
 		if (unlikely(p->flags & PF_KTHREAD))
 			continue;
 		do_send_sig_info(SIGKILL, SEND_SIG_PRIV, p, PIDTYPE_TGID);
+		if (!delay_reap)
+			delay_reap = should_delay_oom_reap(p);
 	}
 	rcu_read_unlock();
 
 	if (can_oom_reap)
-		queue_oom_reaper(victim);
+		queue_oom_reaper(victim, delay_reap);
 
 	mmdrop(mm);
 	put_task_struct(victim);
@@ -1020,6 +1042,7 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
 	struct mem_cgroup *oom_group;
 	static DEFINE_RATELIMIT_STATE(oom_rs, DEFAULT_RATELIMIT_INTERVAL,
 					      DEFAULT_RATELIMIT_BURST);
+	bool delay_reap = false;
 
 	/*
 	 * If the task is already exiting, don't alarm the sysadmin or kill
@@ -1027,9 +1050,9 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
 	 * so it can die quickly
 	 */
 	task_lock(victim);
-	if (task_will_free_mem(victim)) {
+	if (should_reap_task(victim, &delay_reap)) {
 		mark_oom_victim(victim);
-		queue_oom_reaper(victim);
+		queue_oom_reaper(victim, delay_reap);
 		task_unlock(victim);
 		put_task_struct(victim);
 		return;
@@ -1112,6 +1135,7 @@ EXPORT_SYMBOL_GPL(unregister_oom_notifier);
 bool out_of_memory(struct oom_control *oc)
 {
 	unsigned long freed = 0;
+	bool delay_reap = false;
 
 	if (oom_killer_disabled)
 		return false;
@@ -1128,9 +1152,9 @@ bool out_of_memory(struct oom_control *oc)
 	 * select it.  The goal is to allow it to allocate so that it may
 	 * quickly exit and free its memory.
 	 */
-	if (task_will_free_mem(current)) {
+	if (should_reap_task(current, &delay_reap)) {
 		mark_oom_victim(current);
-		queue_oom_reaper(current);
+		queue_oom_reaper(current, delay_reap);
 		return true;
 	}
 
@@ -1209,6 +1233,7 @@ SYSCALL_DEFINE2(process_mrelease, int, pidfd, unsigned int, flags)
 	struct task_struct *p;
 	unsigned int f_flags;
 	bool reap = false;
+	bool delay_reap = false;
 	long ret = 0;
 
 	if (flags)
@@ -1231,7 +1256,7 @@ SYSCALL_DEFINE2(process_mrelease, int, pidfd, unsigned int, flags)
 	mm = p->mm;
 	mmgrab(mm);
 
-	if (task_will_free_mem(p))
+	if (should_reap_task(p, &delay_reap))
 		reap = true;
 	else {
 		/* Error only if the work has not been done already */
@@ -1240,7 +1265,7 @@ SYSCALL_DEFINE2(process_mrelease, int, pidfd, unsigned int, flags)
 	}
 	task_unlock(p);
 
-	if (!reap)
+	if (!reap || delay_reap)
 		goto drop_mm;
 
 	if (mmap_read_lock_killable(mm)) {
