@@ -974,6 +974,9 @@ static inline void vma_iter_set(struct vma_iterator *vmi, unsigned long addr)
 #define for_each_vma_range(__vmi, __vma, __end)				\
 	while (((__vma) = vma_find(&(__vmi), (__end))) != NULL)
 
+#define for_each_vma_reverse(__vmi, __vma)					\
+	while (((__vma) = vma_prev(&(__vmi))) != NULL)
+
 #ifdef CONFIG_SHMEM
 /*
  * The vma_is_shmem is not inline because it is used only by slow
