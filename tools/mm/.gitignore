@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
-slabinfo
+madvise
 page-types
 page_owner_sort
+slabinfo
+thp_swap_allocator_test
