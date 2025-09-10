@@ -3,6 +3,7 @@
 #define _MM_SWAP_H
 
 #include <linux/atomic.h> /* for atomic_long_t */
+#include <linux/swapops.h>
 struct mempolicy;
 struct swap_iocb;
 
