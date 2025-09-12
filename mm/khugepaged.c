@@ -1476,6 +1476,28 @@ static int set_huge_pmd(struct vm_area_struct *vma, unsigned long addr,
 	return SCAN_SUCCEED;
 }
 
+static int install_huge_pmd(struct vm_area_struct *vma, unsigned long haddr,
+			    pmd_t *pmd, struct folio *folio)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+
+	pgd = pgd_offset(mm, haddr);
+	p4d = p4d_alloc(mm, pgd, haddr);
+	if (!p4d)
+		return SCAN_FAIL;
+	pud = pud_alloc(mm, p4d, haddr);
+	if (!pud)
+		return SCAN_FAIL;
+	pmd = pmd_alloc(mm, pud, haddr);
+	if (!pmd)
+		return SCAN_FAIL;
+
+	return set_huge_pmd(vma, haddr, pmd, folio, &folio->page);
+}
+
 /**
  * collapse_pte_mapped_thp - Try to collapse a pte-mapped THP for mm at
  * address haddr.
@@ -1544,6 +1566,7 @@ int collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr,
 	switch (result) {
 	case SCAN_SUCCEED:
 		break;
+	case SCAN_PMD_NULL:
 	case SCAN_PMD_NONE:
 		/*
 		 * All pte entries have been removed and pmd cleared.
@@ -1688,7 +1711,7 @@ int collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr,
 maybe_install_pmd:
 	/* step 5: install pmd entry */
 	result = install_pmd
-			? set_huge_pmd(vma, haddr, pmd, folio, &folio->page)
+			? install_huge_pmd(vma, haddr, pmd, folio)
 			: SCAN_SUCCEED;
 	goto drop_folio;
 abort:
