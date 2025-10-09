@@ -103,6 +103,9 @@ struct damon_target {
 	unsigned int nr_regions;
 	struct list_head regions_list;
 	struct list_head list;
+/* private: Interval use only */
+	/* damon_commit_targets() will remove matching dst target */
+	bool remove_on_commit;
 };
 
 /**
