@@ -571,11 +571,10 @@ static inline int thp_collapse_check_pte(pte_t pte, struct vm_area_struct *vma,
 		    (!cc->is_khugepaged ||
 		     *none_or_zero <= khugepaged_max_ptes_none)) {
 			return PTE_CHECK_CONTINUE;
-		} else {
-			*scan_result = SCAN_EXCEED_NONE_PTE;
-			count_vm_event(THP_SCAN_EXCEED_NONE_PTE);
-			return PTE_CHECK_FAIL;
 		}
+		*scan_result = SCAN_EXCEED_NONE_PTE;
+		count_vm_event(THP_SCAN_EXCEED_NONE_PTE);
+		return PTE_CHECK_FAIL;
 	} else if (!pte_present(pte)) {
 		if (!unmapped) {
 			*scan_result = SCAN_PTE_NON_PRESENT;
@@ -600,11 +599,10 @@ static inline int thp_collapse_check_pte(pte_t pte, struct vm_area_struct *vma,
 				return PTE_CHECK_FAIL;
 			}
 			return PTE_CHECK_CONTINUE;
-		} else {
-			*scan_result = SCAN_EXCEED_SWAP_PTE;
-			count_vm_event(THP_SCAN_EXCEED_SWAP_PTE);
-			return PTE_CHECK_FAIL;
 		}
+		*scan_result = SCAN_EXCEED_SWAP_PTE;
+		count_vm_event(THP_SCAN_EXCEED_SWAP_PTE);
+		return PTE_CHECK_FAIL;
 	} else if (pte_uffd_wp(pte)) {
 		/*
 		 * Don't collapse the page if any of the small PTEs are
