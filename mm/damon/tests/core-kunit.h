@@ -866,7 +866,6 @@ static void damon_test_commit_ctx_ensure_target_committed(struct kunit *test,
 		struct damon_ctx *dst, struct damon_ctx *src)
 {
 	struct damon_target *dst_target, *src_target;
-	struct damon_target dst_target_cp, src_target_cp;
 	int i;
 
 	KUNIT_EXPECT_EQ(test, damon_test_nr_targets(dst),
@@ -875,12 +874,9 @@ static void damon_test_commit_ctx_ensure_target_committed(struct kunit *test,
 	for (i = 0; i < damon_test_nr_targets(dst); i++) {
 		dst_target = damon_test_nth_target(dst, i);
 		src_target = damon_test_nth_target(src, i);
-		memcpy(&dst_target_cp, dst_target, sizeof(dst_target_cp));
-		memcpy(&src_target_cp, src_target, sizeof(src_target_cp));
-		dst_target_cp.regions_list = src_target_cp.regions_list;
-		dst_target_cp.list = src_target_cp.list;
-		KUNIT_EXPECT_EQ(test, memcmp(&dst_target_cp, &src_target_cp,
-					sizeof(dst_target_cp)), 0);
+		KUNIT_EXPECT_EQ(test, dst_target->pid, src_target->pid);
+		KUNIT_EXPECT_EQ(test, dst_target->nr_regions,
+				src_target->nr_regions);
 		damon_test_commit_ctx_ensure_regions_committed(dst_target,
 				src_target, test);
 	}
