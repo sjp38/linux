@@ -874,7 +874,7 @@ static void damon_test_commit_ctx_ensure_target_committed(struct kunit *test,
 	for (i = 0; i < damon_test_nr_targets(dst); i++) {
 		dst_target = damon_test_nth_target(dst, i);
 		src_target = damon_test_nth_target(src, i);
-		KUNIT_EXPECT_EQ(test, dst_target->pid, src_target->pid);
+		KUNIT_EXPECT_PTR_EQ(test, dst_target->pid, src_target->pid);
 		KUNIT_EXPECT_EQ(test, dst_target->nr_regions,
 				src_target->nr_regions);
 		damon_test_commit_ctx_ensure_regions_committed(dst_target,
