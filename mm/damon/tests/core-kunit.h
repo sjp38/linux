@@ -981,6 +981,260 @@ static void damon_test_set_filters_default_reject(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, scheme.ops_filters_default_reject, true);
 }
 
+static int damon_test_commit_ctx_add_src_targets(struct damon_ctx *ctx)
+{
+	struct damon_target *target;
+
+	target = damon_new_target();
+	if (!target)
+		return -ENOMEM;
+	damon_add_target(ctx, target);
+	return 0;
+}
+
+static struct damon_ctx *damon_test_commit_ctx_new_src_ctx(void)
+{
+	struct damon_ctx *src;
+	int err;
+
+	src = damon_new_ctx();
+	if (!src)
+		return src;
+	src->attrs = (struct damon_attrs){
+		.sample_interval = 6000,
+		.aggr_interval = 900000,
+		.ops_update_interval = 180000000,
+		.intervals_goal = {
+			.access_bp = 500,
+			.aggrs = 4,
+			.min_sample_us = 6000,
+			.max_sample_us = 11000000,
+		},
+		.min_nr_regions = 30,
+		.max_nr_regions = 3000,
+	};
+	src->addr_unit = 1024;
+	src->min_sz_region = 4;
+	err = damon_test_commit_ctx_add_src_targets(src);
+	if (err) {
+		damon_destroy_ctx(src);
+		return NULL;
+	}
+
+	return src;
+}
+
+static int damon_test_commit_ctx_add_dst_targets(struct damon_ctx *ctx)
+{
+	struct damon_target *target;
+
+	target = damon_new_target();
+	if (!target)
+		return -ENOMEM;
+	damon_add_target(ctx, target);
+	return 0;
+}
+
+static struct damon_ctx *damon_test_commit_ctx_new_dst_ctx(void)
+{
+	struct damon_ctx *dst;
+	int err;
+
+	dst = damon_new_ctx();
+	if (!dst)
+		return dst;
+	dst->attrs = (struct damon_attrs){
+		.sample_interval = 5000,
+		.aggr_interval = 100000,
+		.ops_update_interval = 60000000,
+		.intervals_goal = {
+			.access_bp = 400,
+			.aggrs = 3,
+			.min_sample_us = 5000,
+			.max_sample_us = 10000000,
+		},
+		.min_nr_regions = 10,
+		.max_nr_regions = 1000,
+	};
+	dst->addr_unit = 1;
+	dst->min_sz_region = 4096;
+	err = damon_test_commit_ctx_add_dst_targets(dst);
+	if (err) {
+		damon_destroy_ctx(dst);
+		return NULL;
+	}
+
+	return dst;
+}
+
+static void damon_test_commit_ctx_ensure_regions_committed(
+		struct damon_target *dst, struct damon_target *src,
+		struct kunit *test)
+{
+	struct damon_region *dst_region, *src_region;
+	int i;
+
+	for (i = 0; i < dst->nr_regions; i++) {
+		dst_region = __nth_region_of(dst, i);
+		src_region = __nth_region_of(src, i);
+		KUNIT_EXPECT_EQ(test, memcmp(dst_region, src_region,
+					sizeof(*dst_region)), 0);
+	}
+}
+
+static int damon_test_nr_targets(struct damon_ctx *ctx)
+{
+	struct damon_target *target;
+	int i = 0;
+
+	damon_for_each_target(target, ctx)
+		i++;
+	return i;
+}
+
+static struct damon_target *damon_test_nth_target(struct damon_ctx *ctx, int n)
+{
+	struct damon_target *target;
+	int i = 0;
+
+	damon_for_each_target(target, ctx) {
+		if (i == n)
+			return target;
+		i++;
+	}
+	return NULL;
+}
+
+static void damon_test_commit_ctx_ensure_target_committed(struct kunit *test,
+		struct damon_ctx *dst, struct damon_ctx *src)
+{
+	struct damon_target *dst_target, *src_target;
+	int i;
+
+	KUNIT_EXPECT_EQ(test, damon_test_nr_targets(dst),
+			damon_test_nr_targets(src));
+
+	for (i = 0; i < damon_test_nr_targets(dst); i++) {
+		dst_target = damon_test_nth_target(dst, i);
+		src_target = damon_test_nth_target(src, i);
+		KUNIT_EXPECT_PTR_EQ(test, dst_target->pid, src_target->pid);
+		KUNIT_EXPECT_EQ(test, dst_target->nr_regions,
+				src_target->nr_regions);
+		damon_test_commit_ctx_ensure_regions_committed(dst_target,
+				src_target, test);
+	}
+}
+
+static int damon_test_nr_schemes(struct damon_ctx *dst)
+{
+	struct damos *scheme;
+	int i = 0;
+
+	damon_for_each_scheme(scheme, dst)
+		i++;
+	return i;
+}
+
+static void damon_test_commit_ctx_ensure_schemes_committed(struct kunit *test,
+		struct damon_ctx *dst, struct damon_ctx *src)
+{
+	KUNIT_EXPECT_EQ(test, damon_test_nr_schemes(dst),
+			damon_test_nr_schemes(src));
+}
+
+static void damon_test_commit_ctx_ensure_committed(struct kunit *test,
+		struct damon_ctx *dst, struct damon_ctx *src)
+{
+	/* test if attrs are committed as expected */
+	dst->attrs.aggr_samples = 0;
+	src->attrs.aggr_samples = 0;
+	KUNIT_EXPECT_EQ(test, memcmp(&dst->attrs, &src->attrs,
+				sizeof(src->attrs)), 0);
+	damon_test_commit_ctx_ensure_target_committed(test, dst, src);
+	damon_test_commit_ctx_ensure_schemes_committed(test, dst, src);
+}
+
+static void damon_test_commit_ctx(struct kunit *test)
+{
+	struct damon_ctx *dst, *src;
+
+	dst = damon_test_commit_ctx_new_dst_ctx();
+	if (!dst) {
+		kunit_skip(test, "dst alloc fail\n");
+		return;
+	}
+	src = damon_test_commit_ctx_new_src_ctx();
+	if (!src) {
+		kunit_skip(test, "src alloc fail\n");
+		damon_destroy_ctx(dst);
+		return;
+	}
+	damon_commit_ctx(dst, src);
+	damon_test_commit_ctx_ensure_committed(test, dst, src);
+	damon_destroy_ctx(src);
+	damon_destroy_ctx(dst);
+}
+
+static int damon_test_commit_targets_set_n_targets(
+		struct damon_ctx *ctx, int nr_targets)
+{
+	struct damon_target *target;
+	int i;
+
+	for (i = 0; i < nr_targets; i++) {
+		target = damon_new_target();
+		if (!target)
+			return -ENOMEM;
+		damon_add_target(ctx, target);
+	}
+	return 0;
+}
+
+static void damon_test_commit_targets(struct kunit *test)
+{
+	struct damon_ctx *dst, *src;
+	struct damon_target *t;
+	int err = 0, i;
+
+	dst = damon_new_ctx();
+	if (!dst)
+		kunit_skip(test, "dst alloc fail");
+	src = damon_new_ctx();
+	if (!src) {
+		damon_destroy_ctx(dst);
+		kunit_skip(test, "src alloc fail");
+	}
+	if (damon_test_commit_targets_set_n_targets(src, 5)) {
+		damon_destroy_ctx(src);
+		damon_destroy_ctx(dst);
+		kunit_skip(test, "src targets set fail");
+	}
+	if (damon_test_commit_targets_set_n_targets(dst, 5)) {
+		damon_destroy_ctx(src);
+		damon_destroy_ctx(dst);
+		kunit_skip(test, "dst targets set fail");
+	}
+	err = damon_commit_targets(dst, src);
+	KUNIT_EXPECT_EQ(test, err, 0);
+	i = 0;
+	damon_for_each_target(t, dst)
+		i++;
+	KUNIT_EXPECT_EQ(test, i, 5);
+
+	damon_nth_target(1, src)->obsolete = true;
+	damon_nth_target(2, src)->obsolete = true;
+	damon_nth_target(4, src)->obsolete = true;
+	err = damon_commit_targets(dst, src);
+	KUNIT_EXPECT_EQ(test, err, 0);
+	i = 0;
+	damon_for_each_target(t, dst)
+		i++;
+	KUNIT_EXPECT_EQ(test, i, 2);
+
+	damon_destroy_ctx(src);
+	damon_destroy_ctx(dst);
+}
+
 static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damon_test_target),
 	KUNIT_CASE(damon_test_regions),
@@ -1005,6 +1259,8 @@ static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damos_test_filter_out),
 	KUNIT_CASE(damon_test_feed_loop_next_input),
 	KUNIT_CASE(damon_test_set_filters_default_reject),
+	KUNIT_CASE(damon_test_commit_ctx),
+	KUNIT_CASE(damon_test_commit_targets),
 	{},
 };
 
