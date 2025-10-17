@@ -722,6 +722,8 @@ static void damos_test_commit_filter(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, dst_filter->matching, src_filter->matching);
 	KUNIT_EXPECT_EQ(test, dst_filter->allow, src_filter->allow);
 
+	/* TODO: test damos_commit_filter_arg for different types */
+
 	damos_destroy_filter(src_filter);
 	damos_destroy_filter(dst_filter);
 }
