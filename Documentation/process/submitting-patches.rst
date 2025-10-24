@@ -805,7 +805,8 @@ not part of the changelog which gets committed to the git tree. It is
 additional information for the reviewers. If it's placed above the
 commit tags, it needs manual interaction to remove it. If it is below
 the separator line, it gets automatically stripped off when applying the
-patch::
+patch.  Adding links to previous version of the previous versions can
+also help reviewers double checking the changes::
 
   <commit message>
   ...
@@ -813,6 +814,9 @@ patch::
   ---
   V2 -> V3: Removed redundant helper function
   V1 -> V2: Cleaned up coding style and addressed review comments
+
+  v1: https://lore.kernel.org/foo
+  v2: https://lore.kernel.org/bar
 
   path/to/file | 5+++--
   ...
