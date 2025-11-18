@@ -7547,3 +7547,27 @@ void vma_pgtable_walk_end(struct vm_area_struct *vma)
 	if (is_vm_hugetlb_page(vma))
 		hugetlb_vma_unlock_read(vma);
 }
+
+static LIST_HEAD(faults_monitor_controls);
+DEFINE_SPINLOCK(faults_monitor_controls_lock);
+
+void faults_monitor_register(struct faults_monitor_control *control)
+{
+	spin_lock(&faults_monitor_controls_lock);
+	list_add_tail(&control->list, &faults_monitor_controls);
+	spin_unlock(&faults_monitor_controls_lock);
+}
+
+void faults_monitor_unregister(struct faults_monitor_control *control)
+{
+	struct faults_monitor_control *c, *next;
+
+	spin_lock(&faults_monitor_controls_lock);
+	list_for_each_entry_safe(c, next, &faults_monitor_controls, list) {
+		if (c != control)
+			continue;
+		list_del(&control->list);
+		break;
+	}
+	spin_unlock(&faults_monitor_controls_lock);
+}

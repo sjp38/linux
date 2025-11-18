@@ -1770,4 +1770,13 @@ static inline int io_remap_pfn_range_complete(struct vm_area_struct *vma,
 	return remap_pfn_range_complete(vma, addr, pfn, size, prot);
 }
 
+struct faults_monitor_control {
+	void (*pte_fault)(struct vm_fault *vmf);
+	void (*huge_pmd_fault)(struct vm_fault *vmf);
+	struct list_head list;
+};
+
+void faults_monitor_register(struct faults_monitor_control *c);
+void faults_monitor_unregister(struct faults_monitor_control *c);
+
 #endif	/* __MM_INTERNAL_H */
