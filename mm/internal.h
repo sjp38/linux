@@ -1889,4 +1889,13 @@ static inline int get_sysctl_max_map_count(void)
 	return READ_ONCE(sysctl_max_map_count);
 }
 
+struct faults_monitor_control {
+	void (*pte_fault)(struct vm_fault *vmf);
+	void (*huge_pmd_fault)(struct vm_fault *vmf);
+	struct list_head list;
+};
+
+void faults_monitor_register(struct faults_monitor_control *c);
+void faults_monitor_unregister(struct faults_monitor_control *c);
+
 #endif	/* __MM_INTERNAL_H */
