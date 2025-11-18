@@ -6075,6 +6075,15 @@ out_map:
 	return 0;
 }
 
+static vm_fault_t do_damon_page(struct vm_fault *vmf, bool huge_pmd);
+
+static vm_fault_t do_faults_monitor_page(struct vm_fault *vmf)
+{
+	if (sysctl_numa_balancing_mode == NUMA_BALANCING_DISABLED)
+		return do_damon_page(vmf, false);
+	return do_numa_page(vmf);
+}
+
 static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
@@ -6307,11 +6316,8 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 	if (!pte_present(vmf->orig_pte))
 		return do_swap_page(vmf);
 
-	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
-		if (sysctl_numa_balancing_mode == NUMA_BALANCING_DISABLED)
-			return do_damon_page(vmf, false);
-		return do_numa_page(vmf);
-	}
+	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
+		return do_faults_monitor_page(vmf);
 
 	spin_lock(vmf->ptl);
 	entry = vmf->orig_pte;
@@ -6335,6 +6341,14 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 unlock:
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 	return 0;
+}
+
+static vm_fault_t do_huge_pmd_faults_monitor_page(struct vm_fault *vmf)
+{
+	if (sysctl_numa_balancing_mode ==
+			NUMA_BALANCING_DISABLED)
+		return do_damon_page(vmf, true);
+	return do_huge_pmd_numa_page(vmf);
 }
 
 /*
@@ -6425,12 +6439,8 @@ retry_pud:
 		return 0;
 	}
 	if (pmd_trans_huge(vmf.orig_pmd)) {
-		if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma)) {
-			if (sysctl_numa_balancing_mode ==
-					NUMA_BALANCING_DISABLED)
-				return do_damon_page(&vmf, true);
-			return do_huge_pmd_numa_page(&vmf);
-		}
+		if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma))
+			return do_huge_pmd_faults_monitor_page(&vmf);
 
 		if ((flags & (FAULT_FLAG_WRITE|FAULT_FLAG_UNSHARE)) &&
 		    !pmd_write(vmf.orig_pmd)) {
