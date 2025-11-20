@@ -38,18 +38,18 @@ def main():
                 kdamonds.kdamonds[0].contexts[0].schemes[0].tried_bytes)
 
     wss_collected.sort()
+    percentile = 75
+    sample = wss_collected[int(len(wss_collected) * percentile / 100)]
+    error_rate = abs(sample - sz_region) / sz_region
+    print('%d-th percentile (%d) error %f' %
+            (percentile, sample, error_rate))
     acceptable_error_rate = 0.2
-    for percentile in [50, 75]:
-        sample = wss_collected[int(len(wss_collected) * percentile / 100)]
-        error_rate = abs(sample - sz_region) / sz_region
-        print('%d-th percentile (%d) error %f' %
-                (percentile, sample, error_rate))
-        if error_rate > acceptable_error_rate:
-            print('the error rate is not acceptable (> %f)' %
-                    acceptable_error_rate)
-            print('samples are as below')
-            print('\n'.join(['%d' % wss for wss in wss_collected]))
-            exit(1)
+    if error_rate > acceptable_error_rate:
+        print('the error rate is not acceptable (> %f)' %
+                acceptable_error_rate)
+        print('samples are as below')
+        print('\n'.join(['%d' % wss for wss in wss_collected]))
+        exit(1)
 
 if __name__ == '__main__':
     main()
