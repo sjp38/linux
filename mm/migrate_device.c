@@ -92,8 +92,10 @@ static int migrate_vma_split_folio(struct folio *folio,
 		folio_unlock(folio);
 		folio_put(folio);
 	} else if (folio != new_fault_folio) {
-		folio_get(new_fault_folio);
-		folio_lock(new_fault_folio);
+		if (new_fault_folio != fault_folio) {
+			folio_get(new_fault_folio);
+			folio_lock(new_fault_folio);
+		}
 		folio_unlock(folio);
 		folio_put(folio);
 	}
@@ -154,10 +156,11 @@ again:
 		}
 	}
 
-	ptep = pte_offset_map_lock(mm, pmdp, addr, &ptl);
+	ptep = pte_offset_map_lock(mm, pmdp, start, &ptl);
 	if (!ptep)
 		goto again;
 	arch_enter_lazy_mmu_mode();
+	ptep += (addr - start) / PAGE_SIZE;
 
 	for (; addr < end; addr += PAGE_SIZE, ptep++) {
 		struct dev_pagemap *pgmap;
@@ -222,16 +225,18 @@ again:
 			if (folio && folio_test_large(folio)) {
 				int ret;
 
+				arch_leave_lazy_mmu_mode();
 				pte_unmap_unlock(ptep, ptl);
 				ret = migrate_vma_split_folio(folio,
 							  migrate->fault_page);
 
 				if (ret) {
-					ptep = pte_offset_map_lock(mm, pmdp, addr, &ptl);
-					goto next;
+					if (unmapped)
+						flush_tlb_range(walk->vma, start, end);
+
+					return migrate_vma_collect_skip(addr, end, walk);
 				}
 
-				addr = start;
 				goto again;
 			}
 			mpfn = migrate_pfn(pfn) | MIGRATE_PFN_MIGRATE;
