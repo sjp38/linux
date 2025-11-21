@@ -602,9 +602,9 @@ static ssize_t writeback_batch_size_store(struct device *dev,
 	if (!val)
 		val = 1;
 
-	down_read(&zram->init_lock);
+	down_write(&zram->init_lock);
 	zram->wb_batch_size = val;
-	up_read(&zram->init_lock);
+	up_write(&zram->init_lock);
 	ret = len;
 
 	return ret;
