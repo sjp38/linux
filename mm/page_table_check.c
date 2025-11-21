@@ -181,7 +181,7 @@ EXPORT_SYMBOL(__page_table_check_pud_clear);
 /* Whether the swap entry cached writable information */
 static inline bool softleaf_cached_writable(softleaf_t entry)
 {
-	return softleaf_is_device_private(entry) ||
+	return softleaf_is_device_private_write(entry) ||
 		softleaf_is_migration_write(entry);
 }
 
