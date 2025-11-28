@@ -836,6 +836,57 @@ struct damon_attrs {
 };
 
 /**
+ * struct damon_primitives_enablement - Eanblementment of DAMON primitives.
+ * @page_table_scan:		Page table accessed bit scanning.
+ * @page_faults_monitoring:	Page faults monitoring.
+ */
+struct damon_primitives_enablement {
+	bool page_table_scan;
+	bool page_faults_monitoring;
+};
+
+/**
+ * enum damon_report_filter_type - Type of &struct damon_access_report to
+ * filter.
+ * @DAMON_FILTER_TYPE_CPUS:	Access-generated CPUs.
+ * @DAMON_FILTER_TYPE_WRITE:	Whether the access was for writing.
+ */
+enum damon_report_filter_type {
+	DAMON_FILTER_TYPE_CPUS,
+	DAMON_FILTER_TYPE_WRITE,
+};
+
+/**
+ * struct damon_report_filter - &struct damon_access_report filter.
+ * @type:	The type of this filter.
+ * @matching:	Whether is is for condition-matching reports.
+ * @allow:	Whether to include or excludie the @matching reports.
+ * @cpus:	Access-originated CPUs if @type is DAMON_FILTER_TYPE_CPUS.
+ * @write:	If the access was writing if @type is DAMOS_FILTER_TYPE_WRITE.
+ * @list:	List head for siblings.
+ */
+struct damon_report_filter {
+	enum damon_report_filter_type type;
+	bool matching;
+	bool allow;
+	union {
+		cpumask_t cpus;
+		bool write;
+	};
+	struct list_head list;
+};
+
+/**
+ * struct damon_access_check_control - Low level access check rules.
+ * @primitives_enablement:	Enablement of access check primitives.
+ * @report_filters:		List of added access check report filters.
+ */
+struct damon_access_check_control {
+	struct damon_primitives_enablement primitives_enablement;
+	struct list_head report_filters;
+};
+
+/**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
@@ -904,6 +955,7 @@ struct damon_ctx {
 
 	struct damon_operations ops;
 	struct damon_operations_attrs ops_attrs;
+	struct damon_access_check_control access_check_control;
 	unsigned long addr_unit;
 	unsigned long min_sz_region;
 
