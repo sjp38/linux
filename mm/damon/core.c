@@ -589,6 +589,8 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->attrs.min_nr_regions = 10;
 	ctx->attrs.max_nr_regions = 1000;
 
+	INIT_LIST_HEAD(&ctx->access_check_control.report_filters);
+
 	ctx->addr_unit = 1;
 	ctx->min_sz_region = DAMON_MIN_REGION;
 
