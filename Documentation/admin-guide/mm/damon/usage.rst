@@ -65,6 +65,9 @@ comma (",").
     │ │ │ │ │ :ref:`monitoring_attrs <sysfs_monitoring_attrs>`/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
+    │ │ │ │ │ │ sample/primitives/page_table,page_faults
+    │ │ │ │ │ │ sample/filters/nr_filters
+    │ │ │ │ │ │ │ 0/type,matching,allow,cpumask,tid_arr
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ :ref:`targets <sysfs_targets>`/nr_targets
     │ │ │ │ │ │ :ref:`0 <sysfs_target>`/pid_target,obsolete_target
