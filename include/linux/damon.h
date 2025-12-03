@@ -116,6 +116,7 @@ struct damon_target {
  * @addr:		The start address of the accessed address range.
  * @size:		The size of the accessed address range.
  * @cpu:		The id of the CPU that made the access.
+ * @tid:		The task id of the task that made the access.
  *
  * Any DAMON API callers that notified access events can report the information
  * to DAMON using damon_report_access().  This struct contains the reporting
@@ -125,6 +126,7 @@ struct damon_access_report {
 	unsigned long addr;
 	unsigned long size;
 	unsigned int cpu;
+	pid_t tid;
 /* private: */
 	unsigned long report_jiffies;	/* when this report is made */
 };
