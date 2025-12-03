@@ -782,6 +782,10 @@ damon_sysfs_sample_filter_type_names[] = {
 		.type = DAMON_FILTER_TYPE_THREADS,
 		.name = "threads",
 	},
+	{
+		.type = DAMON_FILTER_TYPE_WRITE,
+		.name = "write",
+	},
 };
 
 static ssize_t type_show(struct kobject *kobj,
