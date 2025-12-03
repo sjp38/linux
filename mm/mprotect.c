@@ -716,6 +716,9 @@ long change_protection(struct mmu_gather *tlb,
 	if (IS_ENABLED(CONFIG_ARCH_HAS_PTE_PROTNONE) &&
 	    (cp_flags & MM_CP_UFFD_RWP))
 		newprot = PAGE_NONE;
+	if (IS_ENABLED(CONFIG_ARCH_HAS_PTE_PROTNONE) &&
+			(cp_flags & MM_CP_DAMON))
+		newprot = PAGE_NONE;
 
 	if (is_vm_hugetlb_page(vma))
 		pages = hugetlb_change_protection(vma, start, end, newprot,
