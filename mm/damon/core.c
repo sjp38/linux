@@ -1608,6 +1608,23 @@ void damon_report_access(struct damon_access_report *report)
 	mutex_unlock(&damon_access_reports_lock);
 }
 
+#ifdef CONFIG_MMU
+void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
+{
+	struct damon_access_report access_report = {
+		.size = 1,	/* todo: set appripriately */
+	};
+
+	if (huge_pmd)
+		access_report.addr = PFN_PHYS(pmd_pfn(vmf->orig_pmd));
+	else
+		access_report.addr = PFN_PHYS(pte_pfn(vmf->orig_pte));
+	/* todo: report vmf->address as virtual address */
+
+	damon_report_access(&access_report);
+}
+#endif
+
 /*
  * Warn and fix corrupted ->nr_accesses[_bp] for investigations and preventing
  * the problem being propagated.
