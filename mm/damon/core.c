@@ -1761,6 +1761,7 @@ void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
 		.size = 1,	/* todo: set appripriately */
 		.cpu = smp_processor_id(),
 		.tid = task_pid_vnr(current),
+		.is_write = vmf->flags & FAULT_FLAG_WRITE,
 	};
 
 	if (huge_pmd)
