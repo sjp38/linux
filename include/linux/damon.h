@@ -790,12 +790,14 @@ struct damon_primitives_enabled {
  *
  * @DAMON_FILTER_TYPE_CPUMASK:	Filter by access-generated CPUs.
  * @DAMON_FILTER_TYPE_THREADS:	Filter by access-generated threads.
+ * @DAMON_FILTER_TYPE_WRITE:	Filter by whether the access was for writing.
  *
  * Read &struct damon_sample_control for more details.
  */
 enum damon_sample_filter_type {
 	DAMON_FILTER_TYPE_CPUMASK,
 	DAMON_FILTER_TYPE_THREADS,
+	DAMON_FILTER_TYPE_WRITE,
 };
 
 /**
@@ -836,9 +838,10 @@ struct damon_sample_filter {
  * that to make higher access pattern picture.  It can use multiple sampling
  * primitives including page table accessed bits and page fault events.  It can
  * also filter in/out specific types of sampled access events to monitor
- * accesses of specific types, such as access-generated CPUs and threads.  This
- * struct is for controlling what sampling primitives to use (enable), and what
- * sampled access events should be filtered in/out.
+ * accesses of specific types, such as access-generated CPUs, threads, and
+ * whether it was for read or writes.  This struct is for controlling what
+ * sampling primitives to use (enable), and what sampled access events should
+ * be filtered in/out.
  */
 struct damon_sample_control {
 	struct damon_primitives_enabled primitives_enabled;
