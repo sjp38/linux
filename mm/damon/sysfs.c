@@ -750,11 +750,110 @@ static const struct kobj_type damon_sysfs_intervals_ktype = {
 };
 
 /*
+ * access check primitives directory
+ */
+
+struct damon_sysfs_primitives {
+	struct kobject kobj;
+	bool page_table;
+	bool page_fault;
+};
+
+static struct damon_sysfs_primitives *damon_sysfs_primitives_alloc(
+		bool page_table, bool page_fault)
+{
+	struct damon_sysfs_primitives *primitives = kmalloc(
+			sizeof(*primitives), GFP_KERNEL);
+
+	if (!primitives)
+		return NULL;
+
+	primitives->kobj = (struct kobject){};
+	primitives->page_table = page_table;
+	primitives->page_fault = page_fault;
+	return primitives;
+}
+
+static ssize_t page_table_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_primitives *primitives = container_of(kobj,
+			struct damon_sysfs_primitives, kobj);
+
+	return sysfs_emit(buf, "%c\n", primitives->page_table ? 'Y' : 'N');
+}
+
+static ssize_t page_table_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_primitives *primitives = container_of(kobj,
+			struct damon_sysfs_primitives, kobj);
+	bool enable;
+	int err = kstrtobool(buf, &enable);
+
+	if (err)
+		return err;
+	primitives->page_table = enable;
+	return count;
+}
+
+static ssize_t page_fault_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_primitives *primitives = container_of(kobj,
+			struct damon_sysfs_primitives, kobj);
+
+	return sysfs_emit(buf, "%c\n", primitives->page_fault ? 'Y' : 'N');
+}
+
+static ssize_t page_fault_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct damon_sysfs_primitives *primitives = container_of(kobj,
+			struct damon_sysfs_primitives, kobj);
+	bool enable;
+	int err = kstrtobool(buf, &enable);
+
+	if (err)
+		return err;
+	primitives->page_fault = enable;
+	return count;
+}
+
+static void damon_sysfs_primitives_release(struct kobject *kobj)
+{
+	struct damon_sysfs_primitives *primitives = container_of(kobj,
+			struct damon_sysfs_primitives, kobj);
+
+	kfree(primitives);
+}
+
+static struct kobj_attribute damon_sysfs_primitives_page_table_attr =
+		__ATTR_RW_MODE(page_table, 0600);
+
+static struct kobj_attribute damon_sysfs_primitives_page_fault_attr =
+		__ATTR_RW_MODE(page_fault, 0600);
+
+static struct attribute *damon_sysfs_primitives_attrs[] = {
+	&damon_sysfs_primitives_page_table_attr.attr,
+	&damon_sysfs_primitives_page_fault_attr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_primitives);
+
+static const struct kobj_type damon_sysfs_primitives_ktype = {
+	.release = damon_sysfs_primitives_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_primitives_groups,
+};
+
+/*
  * sample directory
  */
 
 struct damon_sysfs_sample {
 	struct kobject kobj;
+	struct damon_sysfs_primitives *primitives;
 };
 
 static struct damon_sysfs_sample *damon_sysfs_sample_alloc(void)
@@ -766,6 +865,35 @@ static struct damon_sysfs_sample *damon_sysfs_sample_alloc(void)
 		return NULL;
 	sample->kobj = (struct kobject){};
 	return sample;
+}
+
+static int damon_sysfs_sample_add_dirs(
+		struct damon_sysfs_sample *sample)
+{
+	struct damon_sysfs_primitives *primitives;
+	int err;
+
+	primitives = damon_sysfs_primitives_alloc(true, false);
+	if (!primitives)
+		return -ENOMEM;
+	err = kobject_init_and_add(&primitives->kobj,
+			&damon_sysfs_primitives_ktype, &sample->kobj,
+			"primitives");
+	if (err)
+		goto put_primitives_out;
+	sample->primitives = primitives;
+
+put_primitives_out:
+	kobject_put(&primitives->kobj);
+	sample->primitives = NULL;
+	return err;
+}
+
+static void damon_sysfs_sample_rm_dirs(
+		struct damon_sysfs_sample *sample)
+{
+	if (sample->primitives)
+		kobject_put(&sample->primitives->kobj);
 }
 
 static void damon_sysfs_sample_release(struct kobject *kobj)
@@ -849,6 +977,9 @@ static int damon_sysfs_attrs_add_dirs(struct damon_sysfs_attrs *attrs)
 			"sample");
 	if (err)
 		goto put_sample_out;
+	err = damon_sysfs_sample_add_dirs(sample);
+	if (err)
+		goto put_sample_out;
 	attrs->sample = sample;
 	return 0;
 
@@ -871,6 +1002,7 @@ static void damon_sysfs_attrs_rm_dirs(struct damon_sysfs_attrs *attrs)
 	kobject_put(&attrs->nr_regions_range->kobj);
 	damon_sysfs_intervals_rm_dirs(attrs->intervals);
 	kobject_put(&attrs->intervals->kobj);
+	damon_sysfs_sample_rm_dirs(attrs->sample);
 	kobject_put(&attrs->sample->kobj);
 }
 
