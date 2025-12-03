@@ -111,6 +111,22 @@ struct damon_target {
 };
 
 /**
+ * struct damon_access_report - Represent single acces report information.
+ * @addr:		The start address of the accessed address range.
+ * @size:		The size of the accessed address range.
+ *
+ * Any DAMON API callers that notified access events can report the information
+ * to DAMON using damon_report_access().  This struct contains the reporting
+ * infomration.  Refer to damon_report_access() for more details.
+ */
+struct damon_access_report {
+	unsigned long addr;
+	unsigned long size;
+/* private: */
+	unsigned long report_jiffies;	/* when this report is made */
+};
+
+/**
  * enum damos_action - Represents an action of a Data Access Monitoring-based
  * Operation Scheme.
  *
@@ -972,9 +988,17 @@ bool damon_is_running(struct damon_ctx *ctx);
 int damon_call(struct damon_ctx *ctx, struct damon_call_control *control);
 int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control);
 
+void damon_report_access(struct damon_access_report *report);
+
 int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 				unsigned long *start, unsigned long *end,
 				unsigned long min_sz_region);
+
+#else	/* CONFIG_DAMON */
+
+static inline void damon_report_access(struct damon_access_report *report)
+{
+}
 
 #endif	/* CONFIG_DAMON */
 
