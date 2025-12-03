@@ -573,6 +573,19 @@ void damon_destroy_sample_filter(struct damon_sample_filter *f,
 	damon_free_sample_filter(f);
 }
 
+static struct damon_sample_filter *damon_nth_sample_filter(int n,
+		struct damon_sample_control *ctrl)
+{
+	struct damon_sample_filter *f;
+	int i = 0;
+
+	damon_for_each_sample_filter(f, ctrl) {
+		if (i++ == n)
+			return f;
+	}
+	return NULL;
+}
+
 struct damon_ctx *damon_new_ctx(void)
 {
 	struct damon_ctx *ctx;
@@ -1290,6 +1303,67 @@ static int damon_commit_targets(
 	return 0;
 }
 
+static int damon_commit_sample_filter_arg(struct damon_sample_filter *dst,
+		struct damon_sample_filter *src)
+{
+	switch (src->type) {
+	case DAMON_FILTER_TYPE_CPUMASK:
+		dst->cpumask = src->cpumask;
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static int damon_commit_sample_filter(struct damon_sample_filter *dst,
+		struct damon_sample_filter *src)
+{
+	int err;
+
+	err = damon_commit_sample_filter_arg(dst, src);
+	if (err)
+		return err;
+	dst->matching = src->matching;
+	dst->allow = src->allow;
+	return 0;
+}
+
+static int damon_commit_sample_filters(struct damon_sample_control *dst,
+		struct damon_sample_control *src)
+{
+	struct damon_sample_filter *dst_filter, *next, *src_filter, *new_filter;
+	int i = 0, j = 0, err;
+
+	damon_for_each_sample_filter_safe(dst_filter, next, dst) {
+		src_filter = damon_nth_sample_filter(i++, src);
+		if (src_filter) {
+			err = damon_commit_sample_filter(dst_filter,
+					src_filter);
+			if (err)
+				return err;
+		} else {
+			damon_destroy_sample_filter(dst_filter, dst);
+		}
+	}
+
+	damon_for_each_sample_filter_safe(src_filter, next, src) {
+		if (j++ < i)
+			continue;
+
+		new_filter = damon_new_sample_filter(
+				src_filter->type, src_filter->matching,
+				src_filter->allow);
+		if (!new_filter)
+			return -ENOMEM;
+		err = damon_commit_sample_filter_arg(new_filter, src_filter);
+		if (err)
+			return err;
+		damon_add_sample_filter(dst, new_filter);
+	}
+	return 0;
+}
+
 static bool damon_primitives_enabled_invalid(
 		struct damon_primitives_enabled *config)
 {
@@ -1304,7 +1378,7 @@ static int damon_commit_sample_control(
 		return -EINVAL;
 
 	dst->primitives_enabled = src->primitives_enabled;
-	return 0;
+	return damon_commit_sample_filters(dst, src);
 }
 
 /**
