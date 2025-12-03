@@ -1018,6 +1018,13 @@ int damon_call(struct damon_ctx *ctx, struct damon_call_control *control);
 int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control);
 
 void damon_report_access(struct damon_access_report *report);
+#ifdef CONFIG_MMU
+void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd);
+#else
+static inline void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
+{
+}
+#endif
 
 int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 				unsigned long *start, unsigned long *end,
@@ -1026,6 +1033,9 @@ int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 #else	/* CONFIG_DAMON */
 
 static inline void damon_report_access(struct damon_access_report *report)
+{
+}
+static inline void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
 {
 }
 
