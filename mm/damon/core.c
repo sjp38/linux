@@ -559,6 +559,8 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->attrs.min_nr_regions = 10;
 	ctx->attrs.max_nr_regions = 1000;
 
+	ctx->sample_control.primitives_enabled.page_table = true;
+
 	ctx->addr_unit = 1;
 	ctx->min_sz_region = DAMON_MIN_REGION;
 
@@ -1242,6 +1244,23 @@ static int damon_commit_targets(
 	return 0;
 }
 
+static bool damon_primitives_enabled_invalid(
+		struct damon_primitives_enabled *config)
+{
+	return config->page_table == config->page_fault;
+}
+
+static int damon_commit_sample_control(
+		struct damon_sample_control *dst,
+		struct damon_sample_control *src)
+{
+	if (damon_primitives_enabled_invalid(&src->primitives_enabled))
+		return -EINVAL;
+
+	dst->primitives_enabled = src->primitives_enabled;
+	return 0;
+}
+
 /**
  * damon_commit_ctx() - Commit parameters of a DAMON context to another.
  * @dst:	The commit destination DAMON context.
@@ -1278,6 +1297,8 @@ int damon_commit_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 			return err;
 	}
 	dst->ops = src->ops;
+	err = damon_commit_sample_control(&dst->sample_control,
+			&src->sample_control);
 	if (err)
 		return err;
 	dst->addr_unit = src->addr_unit;
