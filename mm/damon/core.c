@@ -1614,6 +1614,7 @@ void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
 {
 	struct damon_access_report access_report = {
 		.size = 1,	/* todo: set appripriately */
+		.cpu = smp_processor_id(),
 	};
 
 	if (huge_pmd)
