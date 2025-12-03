@@ -947,6 +947,12 @@ static inline unsigned long damon_sz_region(struct damon_region *r)
 #define damon_for_each_target_safe(t, next, ctx)	\
 	list_for_each_entry_safe(t, next, &(ctx)->adaptive_targets, list)
 
+#define damon_for_each_sample_filter(f, control) \
+	list_for_each_entry(f, &(control)->sample_filters, list)
+
+#define damon_for_each_sample_filter_safe(f, next, control) \
+	list_for_each_entry_safe(f, next, &(control)->sample_filters, list)
+
 #define damon_for_each_scheme(s, ctx) \
 	list_for_each_entry(s, &(ctx)->schemes, list)
 
@@ -1021,6 +1027,15 @@ bool damon_targets_empty(struct damon_ctx *ctx);
 void damon_free_target(struct damon_target *t);
 void damon_destroy_target(struct damon_target *t, struct damon_ctx *ctx);
 unsigned int damon_nr_regions(struct damon_target *t);
+
+struct damon_sample_filter *damon_new_sample_filter(
+		enum damon_sample_filter_type filter_type, bool matching,
+		bool allow);
+void damon_add_sample_filter(struct damon_sample_control *ctrl,
+		struct damon_sample_filter *filter);
+void damon_free_sample_filter(struct damon_sample_filter *filter);
+void damon_destroy_sample_filter(struct damon_sample_filter *filter,
+		struct damon_sample_control *ctrl);
 
 struct damon_ctx *damon_new_ctx(void);
 void damon_destroy_ctx(struct damon_ctx *ctx);
