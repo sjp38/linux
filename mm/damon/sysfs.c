@@ -750,6 +750,36 @@ static const struct kobj_type damon_sysfs_intervals_ktype = {
 };
 
 /*
+ * access check report filters directory
+ */
+
+struct damon_sysfs_sample_filters {
+	struct kobject kobj;
+};
+
+static struct damon_sysfs_sample_filters *
+damon_sysfs_sample_filters_alloc(void)
+{
+	return kzalloc(sizeof(struct damon_sysfs_sample_filters), GFP_KERNEL);
+}
+
+static void damon_sysfs_sample_filters_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_sample_filters, kobj));
+}
+
+static struct attribute *damon_sysfs_sample_filters_attrs[] = {
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_sample_filters);
+
+static const struct kobj_type damon_sysfs_sample_filters_ktype = {
+	.release = damon_sysfs_sample_filters_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_sample_filters_groups,
+};
+
+/*
  * access check primitives directory
  */
 
@@ -854,6 +884,7 @@ static const struct kobj_type damon_sysfs_primitives_ktype = {
 struct damon_sysfs_sample {
 	struct kobject kobj;
 	struct damon_sysfs_primitives *primitives;
+	struct damon_sysfs_sample_filters *filters;
 };
 
 static struct damon_sysfs_sample *damon_sysfs_sample_alloc(void)
@@ -871,6 +902,7 @@ static int damon_sysfs_sample_add_dirs(
 		struct damon_sysfs_sample *sample)
 {
 	struct damon_sysfs_primitives *primitives;
+	struct damon_sysfs_sample_filters *filters;
 	int err;
 
 	primitives = damon_sysfs_primitives_alloc(true, false);
@@ -883,6 +915,21 @@ static int damon_sysfs_sample_add_dirs(
 		goto put_primitives_out;
 	sample->primitives = primitives;
 
+	filters = damon_sysfs_sample_filters_alloc();
+	if (!filters) {
+		err = -ENOMEM;
+		goto put_primitives_out;
+	}
+	err = kobject_init_and_add(&filters->kobj,
+			&damon_sysfs_sample_filters_ktype, &sample->kobj,
+			"filters");
+	if (err)
+		goto put_filters_out;
+	sample->filters = filters;
+	return 0;
+put_filters_out:
+	kobject_put(&filters->kobj);
+	sample->filters = NULL;
 put_primitives_out:
 	kobject_put(&primitives->kobj);
 	sample->primitives = NULL;
@@ -894,6 +941,9 @@ static void damon_sysfs_sample_rm_dirs(
 {
 	if (sample->primitives)
 		kobject_put(&sample->primitives->kobj);
+	if (sample->filters) {
+		kobject_put(&sample->filters->kobj);
+	}
 }
 
 static void damon_sysfs_sample_release(struct kobject *kobj)
