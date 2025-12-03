@@ -78,6 +78,7 @@
 #include <linux/sched/sysctl.h>
 #include <linux/pgalloc.h>
 #include <linux/uaccess.h>
+#include <linux/damon.h>
 
 #include <trace/events/kmem.h>
 
@@ -6193,6 +6194,55 @@ static void fix_spurious_fault(struct vm_fault *vmf,
 							 vmf->pmd);
 	}
 }
+
+/*
+ * NOTE: This is only poc purpose "hack" that will not be upstreamed as is.
+ * More discussions between all stakeholders including maintainers of MM core,
+ * NUMA balancing, and DAMON should be made to make this upstreamable.
+ * (https://lore.kernel.org/20251128193947.80866-1-sj@kernel.org)
+ *
+ * This function is called from page fault handler, for page faults on
+ * P{TE,MD}-protected but vma-accessible pages.  DAMON is making the fake
+ * protection for access sampling purpose.  This function simply clear the
+ * protection and report this access to DAMON, by calling
+ * damon_report_page_fault().
+ *
+ * The protection clear code is copied from NUMA fault handling code for PTE.
+ * Again, this is only poc purpose "hack" to show what information DAMON want
+ * from page fault events, rather than an upstream-aimed version.
+ */
+static vm_fault_t do_damon_page(struct vm_fault *vmf, bool huge_pmd)
+{
+	struct vm_area_struct *vma = vmf->vma;
+	struct folio *folio;
+	pte_t pte, old_pte;
+	bool writable = false, ignore_writable = false;
+	bool pte_write_upgrade = vma_wants_manual_pte_write_upgrade(vma);
+
+	spin_lock(vmf->ptl);
+	old_pte = ptep_get(vmf->pte);
+	if (unlikely(!pte_same(old_pte, vmf->orig_pte))) {
+		pte_unmap_unlock(vmf->pte, vmf->ptl);
+		return 0;
+	}
+	pte = pte_modify(old_pte, vma->vm_page_prot);
+	writable = pte_write(pte);
+	if (!writable && pte_write_upgrade &&
+			can_change_pte_writable(vma, vmf->address, pte))
+		writable = true;
+	folio = vm_normal_folio(vma, vmf->address, pte);
+	if (folio && folio_test_large(folio))
+		numa_rebuild_large_mapping(vmf, vma, folio, pte,
+				ignore_writable, pte_write_upgrade);
+	else
+		numa_rebuild_single_mapping(vmf, vma, vmf->address, vmf->pte,
+				writable);
+	pte_unmap_unlock(vmf->pte, vmf->ptl);
+
+	damon_report_page_fault(vmf, huge_pmd);
+	return 0;
+}
+
 /*
  * These routines also need to handle stuff like marking pages dirty
  * and/or accessed for architectures that don't do it in hardware (most
@@ -6257,8 +6307,11 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 	if (!pte_present(vmf->orig_pte))
 		return do_swap_page(vmf);
 
-	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
+	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma)) {
+		if (sysctl_numa_balancing_mode == NUMA_BALANCING_DISABLED)
+			return do_damon_page(vmf, false);
 		return do_numa_page(vmf);
+	}
 
 	spin_lock(vmf->ptl);
 	entry = vmf->orig_pte;
@@ -6372,8 +6425,12 @@ retry_pud:
 		return 0;
 	}
 	if (pmd_trans_huge(vmf.orig_pmd)) {
-		if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma))
+		if (pmd_protnone(vmf.orig_pmd) && vma_is_accessible(vma)) {
+			if (sysctl_numa_balancing_mode ==
+					NUMA_BALANCING_DISABLED)
+				return do_damon_page(&vmf, true);
 			return do_huge_pmd_numa_page(&vmf);
+		}
 
 		if ((flags & (FAULT_FLAG_WRITE|FAULT_FLAG_UNSHARE)) &&
 		    !pmd_write(vmf.orig_pmd)) {
