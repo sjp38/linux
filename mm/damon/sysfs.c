@@ -759,6 +759,7 @@ struct damon_sysfs_sample_filter {
 	bool matching;
 	bool allow;
 	cpumask_t cpumask;
+	int *tid_arr;	/* first entry is the length of the array */
 };
 
 static struct damon_sysfs_sample_filter *damon_sysfs_sample_filter_alloc(void)
@@ -776,6 +777,10 @@ damon_sysfs_sample_filter_type_names[] = {
 	{
 		.type = DAMON_FILTER_TYPE_CPUMASK,
 		.name = "cpumask",
+	},
+	{
+		.type = DAMON_FILTER_TYPE_THREADS,
+		.name = "threads",
 	},
 };
 
@@ -888,6 +893,47 @@ static ssize_t cpumask_store(struct kobject *kobj, struct kobj_attribute *attr,
 	return count;
 }
 
+static ssize_t tid_arr_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	struct damon_sysfs_sample_filter *sample_filter = container_of(kobj,
+			struct damon_sysfs_sample_filter, kobj);
+	char *str;
+	int nr_tids, *tid_arr;
+	int i, ret;
+
+	if (!sample_filter->tid_arr)
+		return sysfs_emit(buf, "\n");
+
+	str = kcalloc(2048, sizeof(*str), GFP_KERNEL);
+	if (!str)
+		return -ENOMEM;
+	nr_tids = sample_filter->tid_arr[0];
+	tid_arr = &sample_filter->tid_arr[1];
+	for (i = 0; i < nr_tids; i++) {
+		snprintf(&str[strlen(str)], 2048 - strlen(str), "%d",
+				tid_arr[i]);
+		if (i < nr_tids - 1)
+			snprintf(&str[strlen(str)], 2048 - strlen(str), ",");
+	}
+	ret = sysfs_emit(buf, "%s\n", str);
+	kfree(str);
+	return ret;
+}
+
+static ssize_t tid_arr_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct damon_sysfs_sample_filter *sample_filter = container_of(kobj,
+			struct damon_sysfs_sample_filter, kobj);
+	int err;
+
+	err = parse_int_array(buf, count, &sample_filter->tid_arr);
+	if (err)
+		return err;
+	return count;
+}
+
 static void damon_sysfs_sample_filter_release(struct kobject *kobj)
 {
 	struct damon_sysfs_sample_filter *filter = container_of(kobj,
@@ -908,11 +954,15 @@ static struct kobj_attribute damon_sysfs_sample_filter_allow_attr =
 static struct kobj_attribute damon_sysfs_sample_filter_cpumask_attr =
 		__ATTR_RW_MODE(cpumask, 0600);
 
+static struct kobj_attribute damon_sysfs_sample_filter_tid_arr_attr =
+		__ATTR_RW_MODE(tid_arr, 0600);
+
 static struct attribute *damon_sysfs_sample_filter_attrs[] = {
 	&damon_sysfs_sample_filter_type_attr.attr,
 	&damon_sysfs_sample_filter_matching_attr.attr,
 	&damon_sysfs_sample_filter_allow_attr.attr,
 	&damon_sysfs_sample_filter_cpumask_attr.attr,
+	&damon_sysfs_sample_filter_tid_arr_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_sample_filter);
@@ -1957,6 +2007,25 @@ static inline bool damon_sysfs_kdamond_running(
 		damon_is_running(kdamond->damon_ctx);
 }
 
+static int damon_sysfs_set_threads_filter(struct damon_sample_filter *filter,
+		int *sysfs_tid_arr)
+{
+	int nr_tids, i;
+	pid_t *tid_arr;
+
+	if (!sysfs_tid_arr)
+		return -EINVAL;
+	nr_tids = sysfs_tid_arr[0];
+	tid_arr = kmalloc_array(nr_tids, sizeof(*tid_arr), GFP_KERNEL);
+	if (!tid_arr)
+		return -ENOMEM;
+	for (i = 0; i < nr_tids; i++)
+		tid_arr[i] = sysfs_tid_arr[i + 1];
+	filter->tid_arr = tid_arr;
+	filter->nr_tids = nr_tids;
+	return 0;
+}
+
 static int damon_sysfs_set_sample_filters(
 		struct damon_sample_control *control,
 		struct damon_sysfs_sample_filters *sysfs_filters)
@@ -1976,6 +2045,12 @@ static int damon_sysfs_set_sample_filters(
 		switch (filter->type) {
 		case DAMON_FILTER_TYPE_CPUMASK:
 			filter->cpumask = sysfs_filter->cpumask;
+			break;
+		case DAMON_FILTER_TYPE_THREADS:
+			err = damon_sysfs_set_threads_filter(filter,
+					sysfs_filter->tid_arr);
+			if (err)
+				damon_free_sample_filter(filter);
 			break;
 		default:
 			break;
