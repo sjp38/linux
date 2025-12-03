@@ -750,6 +750,41 @@ static const struct kobj_type damon_sysfs_intervals_ktype = {
 };
 
 /*
+ * sample directory
+ */
+
+struct damon_sysfs_sample {
+	struct kobject kobj;
+};
+
+static struct damon_sysfs_sample *damon_sysfs_sample_alloc(void)
+{
+	struct damon_sysfs_sample *sample = kmalloc(
+			sizeof(*sample), GFP_KERNEL);
+
+	if (!sample)
+		return NULL;
+	sample->kobj = (struct kobject){};
+	return sample;
+}
+
+static void damon_sysfs_sample_release(struct kobject *kobj)
+{
+	kfree(container_of(kobj, struct damon_sysfs_sample, kobj));
+}
+
+static struct attribute *damon_sysfs_sample_attrs[] = {
+	NULL,
+};
+ATTRIBUTE_GROUPS(damon_sysfs_sample);
+
+static const struct kobj_type damon_sysfs_sample_ktype = {
+	.release = damon_sysfs_sample_release,
+	.sysfs_ops = &kobj_sysfs_ops,
+	.default_groups = damon_sysfs_sample_groups,
+};
+
+/*
  * monitoring_attrs directory
  */
 
@@ -757,6 +792,7 @@ struct damon_sysfs_attrs {
 	struct kobject kobj;
 	struct damon_sysfs_intervals *intervals;
 	struct damon_sysfs_ul_range *nr_regions_range;
+	struct damon_sysfs_sample *sample;
 };
 
 static struct damon_sysfs_attrs *damon_sysfs_attrs_alloc(void)
@@ -773,6 +809,7 @@ static int damon_sysfs_attrs_add_dirs(struct damon_sysfs_attrs *attrs)
 {
 	struct damon_sysfs_intervals *intervals;
 	struct damon_sysfs_ul_range *nr_regions_range;
+	struct damon_sysfs_sample *sample;
 	int err;
 
 	intervals = damon_sysfs_intervals_alloc(5000, 100000, 60000000);
@@ -801,8 +838,23 @@ static int damon_sysfs_attrs_add_dirs(struct damon_sysfs_attrs *attrs)
 	if (err)
 		goto put_nr_regions_intervals_out;
 	attrs->nr_regions_range = nr_regions_range;
+
+	sample = damon_sysfs_sample_alloc();
+	if (!sample) {
+		err = -ENOMEM;
+		goto put_nr_regions_intervals_out;
+	}
+	err = kobject_init_and_add(&sample->kobj,
+			&damon_sysfs_sample_ktype, &attrs->kobj,
+			"sample");
+	if (err)
+		goto put_sample_out;
+	attrs->sample = sample;
 	return 0;
 
+put_sample_out:
+	kobject_put(&sample->kobj);
+	attrs->sample = NULL;
 put_nr_regions_intervals_out:
 	kobject_put(&nr_regions_range->kobj);
 	attrs->nr_regions_range = NULL;
@@ -819,6 +871,7 @@ static void damon_sysfs_attrs_rm_dirs(struct damon_sysfs_attrs *attrs)
 	kobject_put(&attrs->nr_regions_range->kobj);
 	damon_sysfs_intervals_rm_dirs(attrs->intervals);
 	kobject_put(&attrs->intervals->kobj);
+	kobject_put(&attrs->sample->kobj);
 }
 
 static void damon_sysfs_attrs_release(struct kobject *kobj)
