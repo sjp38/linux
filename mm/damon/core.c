@@ -1336,6 +1336,8 @@ static int damon_commit_sample_filter_arg(struct damon_sample_filter *dst,
 				src->nr_tids);
 		dst->nr_tids = src->nr_tids;
 		break;
+	case DAMON_FILTER_TYPE_WRITE:
+		break;
 	default:
 		break;
 	}
@@ -2969,6 +2971,9 @@ static bool damon_sample_filter_matching(struct damon_access_report *report,
 			matched = true;
 			break;
 		}
+		break;
+	case DAMON_FILTER_TYPE_WRITE:
+		matched = report->is_write;
 		break;
 	default:
 		break;
