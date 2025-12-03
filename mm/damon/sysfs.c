@@ -1957,6 +1957,35 @@ static inline bool damon_sysfs_kdamond_running(
 		damon_is_running(kdamond->damon_ctx);
 }
 
+static int damon_sysfs_set_sample_filters(
+		struct damon_sample_control *control,
+		struct damon_sysfs_sample_filters *sysfs_filters)
+{
+	int i, err;
+
+	for (i = 0; i < sysfs_filters->nr; i++) {
+		struct damon_sysfs_sample_filter *sysfs_filter =
+			sysfs_filters->filters_arr[i];
+		struct damon_sample_filter *filter;
+
+		filter = damon_new_sample_filter(
+				sysfs_filter->type, sysfs_filter->matching,
+				sysfs_filter->allow);
+		if (!filter)
+			return -ENOMEM;
+		switch (filter->type) {
+		case DAMON_FILTER_TYPE_CPUMASK:
+			filter->cpumask = sysfs_filter->cpumask;
+			break;
+		default:
+			break;
+		}
+		damon_add_sample_filter(control, filter);
+	}
+	return 0;
+}
+
+
 static int damon_sysfs_set_sample_control(
 		struct damon_sample_control *control,
 		struct damon_sysfs_sample *sysfs_sample)
@@ -1965,7 +1994,9 @@ static int damon_sysfs_set_sample_control(
 		sysfs_sample->primitives->page_table;
 	control->primitives_enabled.page_fault =
 		sysfs_sample->primitives->page_fault;
-	return 0;
+
+	return damon_sysfs_set_sample_filters(control,
+			sysfs_sample->filters);
 }
 
 static int damon_sysfs_apply_inputs(struct damon_ctx *ctx,
