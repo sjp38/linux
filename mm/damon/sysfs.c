@@ -2171,6 +2171,17 @@ static inline bool damon_sysfs_kdamond_running(
 		damon_is_running(kdamond->damon_ctx);
 }
 
+static int damon_sysfs_set_sample_control(
+		struct damon_sample_control *control,
+		struct damon_sysfs_sample *sysfs_sample)
+{
+	control->primitives_enabled.page_table =
+		sysfs_sample->primitives->page_table;
+	control->primitives_enabled.page_fault =
+		sysfs_sample->primitives->page_fault;
+	return 0;
+}
+
 static int damon_sysfs_apply_inputs(struct damon_ctx *ctx,
 		struct damon_sysfs_context *sys_ctx)
 {
@@ -2189,6 +2200,10 @@ static int damon_sysfs_apply_inputs(struct damon_ctx *ctx,
 	if (err)
 		return err;
 	err = damon_sysfs_set_probes(ctx, sys_ctx->attrs->probes);
+	if (err)
+		return err;
+	err = damon_sysfs_set_sample_control(&ctx->sample_control,
+			sys_ctx->attrs->sample);
 	if (err)
 		return err;
 	err = damon_sysfs_add_targets(ctx, sys_ctx->targets);
