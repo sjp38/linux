@@ -586,6 +586,13 @@ static struct damon_sample_filter *damon_nth_sample_filter(int n,
 	return NULL;
 }
 
+static struct damon_sample_filter *damon_last_sample_filter_or_null(
+		struct damon_sample_control *ctrl)
+{
+	return list_last_entry_or_null(&ctrl->sample_filters,
+			struct damon_sample_filter, list);
+}
+
 struct damon_ctx *damon_new_ctx(void)
 {
 	struct damon_ctx *ctx;
@@ -2924,10 +2931,44 @@ static void kdamond_init_ctx(struct damon_ctx *ctx)
 	}
 }
 
+static bool damon_sample_filter_matching(struct damon_access_report *report,
+		struct damon_sample_filter *filter)
+{
+	bool matched = false;
+
+	switch (filter->type) {
+	case DAMON_FILTER_TYPE_CPUMASK:
+		matched = cpumask_test_cpu(report->cpu, &filter->cpumask);
+		break;
+	default:
+		break;
+	}
+	return matched == filter->matching;
+}
+
+static bool damon_sample_filter_out(struct damon_access_report *report,
+		struct damon_sample_control *ctrl)
+{
+	struct damon_sample_filter *filter;
+
+	damon_for_each_sample_filter(filter, ctrl) {
+		if (damon_sample_filter_matching(report, filter) &&
+				!filter->allow)
+			return true;
+	}
+	filter = damon_last_sample_filter_or_null(ctrl);
+	if (!filter)
+		return false;
+	return !filter->allow;
+}
+
 static void kdamond_apply_access_report(struct damon_access_report *report,
 		struct damon_target *t, struct damon_ctx *ctx)
 {
 	struct damon_region *r;
+
+	if (damon_sample_filter_out(report, &ctx->sample_control))
+		return;
 
 	/* todo: make search faster, e.g., binary search? */
 	damon_for_each_region(r, t) {
