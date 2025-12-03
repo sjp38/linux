@@ -787,11 +787,13 @@ struct damon_primitives_enabled {
  * enum damon_sample_filter_type - Type of &struct damon_sample_filter.
  *
  * @DAMON_FILTER_TYPE_CPUMASK:	Filter by access-generated CPUs.
+ * @DAMON_FILTER_TYPE_THREADS:	Filter by access-generated threads.
  *
  * Read &struct damon_sample_control for more details.
  */
 enum damon_sample_filter_type {
 	DAMON_FILTER_TYPE_CPUMASK,
+	DAMON_FILTER_TYPE_THREADS,
 };
 
 /**
@@ -801,6 +803,9 @@ enum damon_sample_filter_type {
  * @matching:	Whether it is for condition-matching reports.
  * @allow:	Whether to include or excludie the @matching reports.
  * @cpumask:	Access-generated CPUs if @type is DAMON_FILTER_TYPE_CPUMASK.
+ * @tid_arr:	Array of access-generated thread ids, if @type is
+ *		DAMON_FILTER_TYPE_THREADS.
+ * @nr_tids:	Size of @tid_arr, if @type is DAMON_FILTER_TYPE_THREADS.
  * @list:	List head for siblings.
  *
  * Read &struct damon_sample_control for more details.
@@ -809,7 +814,13 @@ struct damon_sample_filter {
 	enum damon_sample_filter_type type;
 	bool matching;
 	bool allow;
-	cpumask_t cpumask;
+	union {
+		cpumask_t cpumask;
+		struct {
+			pid_t *tid_arr;
+			int nr_tids;
+		};
+	};
 	struct list_head list;
 };
 
@@ -823,9 +834,9 @@ struct damon_sample_filter {
  * that to make higher access pattern picture.  It can use multiple sampling
  * primitives including page table accessed bits and page fault events.  It can
  * also filter in/out specific types of sampled access events to monitor
- * accesses of specific types, such as access-generated CPUs.  This struct is
- * for controlling what sampling primitives to use (enable), and what sampled
- * access events should be filtered in/out.
+ * accesses of specific types, such as access-generated CPUs and threads.  This
+ * struct is for controlling what sampling primitives to use (enable), and what
+ * sampled access events should be filtered in/out.
  */
 struct damon_sample_control {
 	struct damon_primitives_enabled primitives_enabled;
