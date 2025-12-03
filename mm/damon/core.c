@@ -714,6 +714,46 @@ unsigned int damon_nr_regions(struct damon_target *t)
 	return t->nr_regions;
 }
 
+struct damon_sample_filter *damon_new_sample_filter(
+		enum damon_sample_filter_type filter_type, bool matching,
+		bool allow)
+{
+	struct damon_sample_filter *filter;
+
+	filter = kmalloc(sizeof(*filter), GFP_KERNEL);
+	if (!filter)
+		return NULL;
+	filter->type = filter_type;
+	filter->matching = matching;
+	filter->allow = allow;
+	INIT_LIST_HEAD(&filter->list);
+	return filter;
+}
+
+void damon_add_sample_filter(struct damon_sample_control *ctrl,
+		struct damon_sample_filter *filter)
+{
+	list_add_tail(&filter->list, &ctrl->sample_filters);
+}
+
+static void damon_del_sample_filter(struct damon_sample_filter *f,
+		struct damon_sample_control *ctrl)
+{
+	list_del(&f->list);
+}
+
+void damon_free_sample_filter(struct damon_sample_filter *f)
+{
+	kfree(f);
+}
+
+void damon_destroy_sample_filter(struct damon_sample_filter *f,
+		struct damon_sample_control *ctrl)
+{
+	damon_del_sample_filter(f, ctrl);
+	damon_free_sample_filter(f);
+}
+
 struct damon_ctx *damon_new_ctx(void)
 {
 	struct damon_ctx *ctx;
@@ -744,6 +784,7 @@ struct damon_ctx *damon_new_ctx(void)
 	INIT_LIST_HEAD(&ctx->probes);
 
 	ctx->sample_control.primitives_enabled.page_table = true;
+	INIT_LIST_HEAD(&ctx->sample_control.sample_filters);
 
 	ctx->addr_unit = 1;
 	ctx->min_region_sz = DAMON_MIN_REGION_SZ;
@@ -766,6 +807,7 @@ void damon_destroy_ctx(struct damon_ctx *ctx)
 {
 	struct damos *s, *next_s;
 	struct damon_probe *p, *next_p;
+	struct damon_sample_filter *f, *next_f;
 
 	damon_destroy_targets(ctx);
 
@@ -774,6 +816,9 @@ void damon_destroy_ctx(struct damon_ctx *ctx)
 
 	damon_for_each_probe_safe(p, next_p, ctx)
 		damon_destroy_probe(p);
+
+	damon_for_each_sample_filter_safe(f, next_f, &ctx->sample_control)
+		damon_destroy_sample_filter(f, &ctx->sample_control);
 
 	kfree(ctx);
 }
