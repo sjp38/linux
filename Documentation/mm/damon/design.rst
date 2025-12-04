@@ -136,6 +136,8 @@ the interference is the responsibility of sysadmins.  However, it solves the
 conflict with the reclaim logic using ``PG_idle`` and ``PG_young`` page flags,
 as Idle page tracking does.
 
+.. _damon_design_page_fault_access_check:
+
 Monitoring-purpose Page Faults Based Access Check
 -------------------------------------------------
 
