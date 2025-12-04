@@ -245,6 +245,20 @@ In this way, DAMON provides its best-effort quality and minimal overhead while
 keeping the bounds users set for their trade-off.
 
 
+Access Sampling Primitives Selection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some operations set implementations could utilize multiple access sampling
+primitives.  For example, the operations set implementation for physical
+address space (``paddr``) support two promitives at the moment: 1) page tables'
+Accessed bits, and access monitoring-purpose page fault events.  In future, it
+could be extended for more hardware features such as AMD IBS or CXL HMU, and
+support from the operations set implementation for virtual address spaces
+(``vaddr``).  DAMON API callers or ABI users can select what primitives to use.
+
+At the moment, only exclusive use of the primitives is supported.
+
+
 .. _damon_design_age_tracking:
 
 Age Tracking
