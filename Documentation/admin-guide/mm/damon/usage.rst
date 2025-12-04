@@ -232,7 +232,8 @@ writing to and rading from the files.
 For more details about the intervals and monitoring regions range, please refer
 to the Design document (:doc:`/mm/damon/design`).
 
-Under ``sample`` directory, a directory, ``primitives`` exist.
+Under ``sample`` directory, a directory, ``primitives`` and ``filters``
+exist.
 
 contexts/<N>/monitoring_attrs/sample/primitives/
 ------------------------------------------------
@@ -244,6 +245,26 @@ to these files, users can select whether to use the :ref:`page table accessed
 bit <damon_design_pte_accessed_bit_access_check>` and :ref:`page fault events
 <damon_design_page_fault_access_check>`, respectively.
 
+contexts/<N>/monitoring_attrs/sample/filters/
+---------------------------------------------
+
+This directory is for control of the :ref:`access sampling results filters
+<damon_design_sampling_results_filters>`.  At the beginning, this directory has
+only one file, ``nr_filters``.  Writing a positive integer ``<n>`` to the file
+generates directories of the number, named ``0`` to ``<n - 1>``.  The generated
+directories represent the sampling result filters to install to the DAMON
+context, in the order of the directory names.  Writing ``0`` to ``nr_filters``
+removes the directories.
+
+Under the individual filter directory, five files, ``type``, ``matching``,
+``allow``, ``cpumask`` and ``tid_arr`` exist.  The first three files are same
+to the properties of the filter specified on the :ref:`design doc
+<damon_design_sampling_results_filters>`.
+
+Users can specify the cpumask and thread id array of the filter by writing
+those to ``cpumask`` and ``tid_arr``.  The format for ``cpumask`` input is same
+to that for other cpumask inputs like that for cgroup cpusets.  For
+``tid_arr``, users can write array of the thread ids, separated by a comma.
 
 .. _damon_usage_sysfs_monitoring_intervals_goal:
 
