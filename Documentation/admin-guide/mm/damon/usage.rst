@@ -73,7 +73,7 @@ comma (",").
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
     │ │ │ │ │ │ sample/primitives/page_table,page_faults
     │ │ │ │ │ │ sample/filters/nr_filters
-    │ │ │ │ │ │ │ 0/type,matching,allow,cpumask
+    │ │ │ │ │ │ │ 0/type,matching,allow,cpumask,tid_arr
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ │ :ref:`probes <damon_usage_sysfs_probes>`/nr_probes
     │ │ │ │ │ │ │ 0/filters/nr_filters
@@ -278,13 +278,14 @@ context, in the order of the directory names.  Writing ``0`` to ``nr_filters``
 removes the directories.
 
 Under the individual filter directory, five files, ``type``, ``matching``,
-``allow``, and ``cpumask`` exist.  The first three files are same to the
-properties of the filter specified on the :ref:`design doc
+``allow``, ``cpumask`` and ``tid_arr`` exist.  The first three files are same
+to the properties of the filter specified on the :ref:`design doc
 <damon_design_sampling_results_filters>`.
 
-Users can specify the cpumask of the filter by writing it to ``cpumask``.  The
-format for ``cpumask`` input is same to that for other cpumask inputs like that
-for cgroup cpusets.
+Users can specify the cpumask and thread id array of the filter by writing
+those to ``cpumask`` and ``tid_arr``.  The format for ``cpumask`` input is same
+to that for other cpumask inputs like that for cgroup cpusets.  For
+``tid_arr``, users can write array of the thread ids, separated by a comma.
 
 .. _damon_usage_sysfs_monitoring_intervals_goal:
 
