@@ -119,7 +119,8 @@ struct damon_target {
 
 /**
  * struct damon_access_report - Represent single access report information.
- * @paddr:		The start address of the accessed address range.
+ * @paddr:		Start physical address of the accessed address range.
+ * @vaddr:		Start virtual address of the accessed address range.
  * @size:		The size of the accessed address range.
  * @cpu:		The id of the CPU that made the access.
  * @tid:		The task id of the task that made the access.
@@ -131,6 +132,7 @@ struct damon_target {
  */
 struct damon_access_report {
 	unsigned long paddr;
+	unsigned long vaddr;
 	unsigned long size;
 	unsigned int cpu;
 	pid_t tid;
