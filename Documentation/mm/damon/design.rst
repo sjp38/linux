@@ -117,6 +117,7 @@ to make a reasonable trade-off.  Below shows this in detail::
     <BIG UNMAPPED REGION 2>
     <stack>
 
+.. _damon_design_pte_accessed_bit_access_check:
 
 PTE Accessed-bit Based Access Check
 -----------------------------------
@@ -134,6 +135,23 @@ logic.  DAMON does nothing to avoid disturbing Idle page tracking, so handling
 the interference is the responsibility of sysadmins.  However, it solves the
 conflict with the reclaim logic using ``PG_idle`` and ``PG_young`` page flags,
 as Idle page tracking does.
+
+.. _damon_design_page_fault_access_check:
+
+Monitoring-purpose Page Faults Based Access Check
+-------------------------------------------------
+
+The operation set implementation for the physical address space (``paddr``) can
+do the access check using monitoring-purpose page fault events in a way similar
+to NUMA balancing hinting faults.  When it is being used, ``paddr`` installs
+the page protection in a way similar to that of NUMA balancing hinting faults.
+Then the page fault handler reports the faults happend by the installed page
+protection to DAMON core layer.
+
+``paddr`` uses :ref:`accessed-bit based check
+<damon_design_pte_accessed_bit_access_check>` by default, and users can change
+it to use this page faults based one, using :ref:`access sampling primitives
+selection <damon_design_sampling_primitives_selection>`.
 
 .. _damon_design_addr_unit:
 
@@ -243,6 +261,21 @@ maximum number of regions after the split.
 
 In this way, DAMON provides its best-effort quality and minimal overhead while
 keeping the bounds users set for their trade-off.
+
+.. _damon_design_sampling_primitives_selection:
+
+Access Sampling Primitives Selection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some operations set implementations could utilize multiple access sampling
+primitives.  For example, the operations set implementation for physical
+address space (``paddr``) support two promitives at the moment: 1) page tables'
+Accessed bits, and access monitoring-purpose page fault events.  In future, it
+could be extended for more hardware features such as AMD IBS or CXL HMU, and
+support from the operations set implementation for virtual address spaces
+(``vaddr``).  DAMON API callers or ABI users can select what primitives to use.
+
+At the moment, only exclusive use of the primitives is supported.
 
 
 .. _damon_design_age_tracking:
