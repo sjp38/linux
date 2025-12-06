@@ -1785,9 +1785,9 @@ void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
 	};
 
 	if (huge_pmd)
-		access_report.addr = PFN_PHYS(pmd_pfn(vmf->orig_pmd));
+		access_report.paddr = PFN_PHYS(pmd_pfn(vmf->orig_pmd));
 	else
-		access_report.addr = PFN_PHYS(pte_pfn(vmf->orig_pte));
+		access_report.paddr = PFN_PHYS(pte_pfn(vmf->orig_pte));
 	/* todo: report vmf->address as virtual address */
 
 	damon_report_access(&access_report);
@@ -3008,9 +3008,9 @@ static void kdamond_apply_access_report(struct damon_access_report *report,
 
 	/* todo: make search faster, e.g., binary search? */
 	damon_for_each_region(r, t) {
-		if (report->addr < r->ar.start)
+		if (report->paddr < r->ar.start)
 			continue;
-		if (r->ar.end < report->addr + report->size)
+		if (r->ar.end < report->paddr + report->size)
 			continue;
 		if (!r->access_reported)
 			damon_update_region_access_rate(r, true, &ctx->attrs);
