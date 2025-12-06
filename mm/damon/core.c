@@ -3002,15 +3002,20 @@ static void kdamond_apply_access_report(struct damon_access_report *report,
 		struct damon_target *t, struct damon_ctx *ctx)
 {
 	struct damon_region *r;
+	unsigned long addr;
 
 	if (damon_sample_filter_out(report, &ctx->sample_control))
 		return;
+	if (damon_target_has_pid(ctx))
+		addr = report->vaddr;
+	else
+		addr = report->paddr;
 
 	/* todo: make search faster, e.g., binary search? */
 	damon_for_each_region(r, t) {
-		if (report->paddr < r->ar.start)
+		if (addr < r->ar.start)
 			continue;
-		if (r->ar.end < report->paddr + report->size)
+		if (r->ar.end < addr + report->size)
 			continue;
 		if (!r->access_reported)
 			damon_update_region_access_rate(r, true, &ctx->attrs);
