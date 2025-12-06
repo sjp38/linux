@@ -546,6 +546,10 @@ struct damon_sample_filter *damon_new_sample_filter(
 	filter->matching = matching;
 	filter->allow = allow;
 	INIT_LIST_HEAD(&filter->list);
+	if (filter_type == DAMON_FILTER_TYPE_THREADS) {
+		filter->tid_arr = NULL;
+		filter->nr_tids = 0;
+	}
 	return filter;
 }
 
@@ -570,6 +574,10 @@ void damon_destroy_sample_filter(struct damon_sample_filter *f,
 		struct damon_sample_control *ctrl)
 {
 	damon_del_sample_filter(f, ctrl);
+	if (f->type == DAMON_FILTER_TYPE_THREADS) {
+		kfree(f->tid_arr);
+		f->nr_tids = 0;
+	}
 	damon_free_sample_filter(f);
 }
 
@@ -1316,6 +1324,17 @@ static int damon_commit_sample_filter_arg(struct damon_sample_filter *dst,
 	switch (src->type) {
 	case DAMON_FILTER_TYPE_CPUMASK:
 		dst->cpumask = src->cpumask;
+		break;
+	case DAMON_FILTER_TYPE_THREADS:
+		if (dst->type == DAMON_FILTER_TYPE_THREADS)
+			kfree(dst->tid_arr);
+		dst->tid_arr = kmalloc_array(src->nr_tids,
+				sizeof(*dst->tid_arr), GFP_KERNEL);
+		if (!dst->tid_arr)
+			return -ENOMEM;
+		memcpy(dst->tid_arr, src->tid_arr, sizeof(*dst->tid_arr) *
+				src->nr_tids);
+		dst->nr_tids = src->nr_tids;
 		break;
 	default:
 		break;
@@ -2936,10 +2955,19 @@ static bool damon_sample_filter_matching(struct damon_access_report *report,
 		struct damon_sample_filter *filter)
 {
 	bool matched = false;
+	int i;
 
 	switch (filter->type) {
 	case DAMON_FILTER_TYPE_CPUMASK:
 		matched = cpumask_test_cpu(report->cpu, &filter->cpumask);
+		break;
+	case DAMON_FILTER_TYPE_THREADS:
+		for (i = 0; i < filter->nr_tids; i++) {
+			if (report->tid != filter->tid_arr[i])
+				continue;
+			matched = true;
+			break;
+		}
 		break;
 	default:
 		break;
