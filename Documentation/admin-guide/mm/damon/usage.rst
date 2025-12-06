@@ -65,6 +65,7 @@ comma (",").
     │ │ │ │ │ :ref:`monitoring_attrs <sysfs_monitoring_attrs>`/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
+    │ │ │ │ │ │ sample/primitives/page_table,page_faults
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ :ref:`targets <sysfs_targets>`/nr_targets
     │ │ │ │ │ │ :ref:`0 <sysfs_target>`/pid_target,obsolete_target
@@ -215,9 +216,9 @@ contexts/<N>/monitoring_attrs/
 ------------------------------
 
 Files for specifying attributes of the monitoring including required quality
-and efficiency of the monitoring are in ``monitoring_attrs`` directory.
-Specifically, two directories, ``intervals`` and ``nr_regions`` exist in this
-directory.
+and efficiency of the monitoring, and types of accesses to monitor are in
+``monitoring_attrs`` directory.  Specifically, three directories, ``intervals``
+, ``nr_regions`` and ``sample`` exist in this directory.
 
 Under ``intervals`` directory, three files for DAMON's sampling interval
 (``sample_us``), aggregation interval (``aggr_us``), and update interval
@@ -231,6 +232,18 @@ writing to and rading from the files.
 
 For more details about the intervals and monitoring regions range, please refer
 to the Design document (:doc:`/mm/damon/design`).
+
+Under ``sample`` directory, a directory, ``primitives`` exists.
+
+contexts/<N>/monitoring_attrs/sample/primitives/
+------------------------------------------------
+
+This directory is for the access sampling primitives :ref:`selection
+<damon_design_sampling_primitives_selection>`.  Under ``primitives`` directory,
+two files, ``page_table`` and ``page_faults`` exist.  By writing ``Y`` or ``N``
+to these files, users can select whether to use the :ref:`page table accessed
+bit <damon_design_pte_accessed_bit_access_check>` and :ref:`page fault events
+<damon_design_page_fault_access_check>`, respectively.
 
 .. _damon_usage_sysfs_monitoring_intervals_goal:
 
