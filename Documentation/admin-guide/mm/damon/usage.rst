@@ -66,6 +66,8 @@ comma (",").
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
     │ │ │ │ │ │ sample/primitives/page_table,page_faults
+    │ │ │ │ │ │ sample/filters/nr_filters
+    │ │ │ │ │ │ │ 0/type,matching,allow,cpumask
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ :ref:`targets <sysfs_targets>`/nr_targets
     │ │ │ │ │ │ :ref:`0 <sysfs_target>`/pid_target,obsolete_target
@@ -233,7 +235,8 @@ writing to and rading from the files.
 For more details about the intervals and monitoring regions range, please refer
 to the Design document (:doc:`/mm/damon/design`).
 
-Under ``sample`` directory, a directory, ``primitives`` exists.
+Under ``sample`` directory, two directories, ``primitives`` and ``filters``
+exist.
 
 contexts/<N>/monitoring_attrs/sample/primitives/
 ------------------------------------------------
@@ -244,6 +247,26 @@ two files, ``page_table`` and ``page_faults`` exist.  By writing ``Y`` or ``N``
 to these files, users can select whether to use the :ref:`page table accessed
 bit <damon_design_pte_accessed_bit_access_check>` and :ref:`page fault events
 <damon_design_page_fault_access_check>`, respectively.
+
+contexts/<N>/monitoring_attrs/sample/filters/
+---------------------------------------------
+
+This directory is for control of the :ref:`access sampling results filters
+<damon_design_sampling_results_filters>`.  At the beginning, this directory has
+only one file, ``nr_filters``.  Writing a positive integer ``<n>`` to the file
+generates directories of the number, named ``0`` to ``<n - 1>``.  The generated
+directories represent the sampling result filters to install to the DAMON
+context, in the order of the directory names.  Writing ``0`` to ``nr_filters``
+removes the directories.
+
+Under the individual filter directory, five files, ``type``, ``matching``,
+``allow``, and ``cpumask`` exist.  The first three files are same to the
+properties of the filter specified on the :ref:`design doc
+<damon_design_sampling_results_filters>`.
+
+Users can specify the cpumask of the filter by writing it to ``cpumask``.  The
+format for ``cpumask`` input is same to that for other cpumask inputs like that
+for cgroup cpusets.
 
 .. _damon_usage_sysfs_monitoring_intervals_goal:
 
