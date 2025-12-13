@@ -1749,6 +1749,7 @@ void damon_report_access(struct damon_access_report *report)
 	if (!mutex_trylock(&damon_access_reports_lock))
 		return;
 	dst = &damon_access_reports[damon_access_reports_len++];
+	/* just drop all existing reports in favor of simplicity. */
 	if (damon_access_reports_len == DAMON_ACCESS_REPORTS_CAP)
 		damon_access_reports_len = 0;
 	*dst = *report;
