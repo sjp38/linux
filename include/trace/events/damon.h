@@ -40,9 +40,7 @@ TRACE_EVENT(damos_stat_after_apply_interval,
 		__entry->nr_snapshots = stat->nr_snapshots;
 	),
 
-	TP_printk("ctx_idx=%u scheme_idx=%u nr_tried=%lu sz_tried=%lu "
-			"nr_applied=%lu sz_tried=%lu sz_ops_filter_passed=%lu "
-			"qt_exceeds=%lu nr_snapshots=%lu",
+	TP_printk("ctx_idx=%u scheme_idx=%u nr_tried=%lu sz_tried=%lu nr_applied=%lu sz_tried=%lu sz_ops_filter_passed=%lu qt_exceeds=%lu nr_snapshots=%lu",
 			__entry->context_idx, __entry->scheme_idx,
 			__entry->nr_tried, __entry->sz_tried,
 			__entry->nr_applied, __entry->sz_applied,
