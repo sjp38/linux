@@ -10,6 +10,52 @@
 
 #ifdef CONFIG_SMP
 
+#if NR_CPUS == (1U << 0)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	0
+#elif NR_CPUS <= (1U << 1)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	1
+#elif NR_CPUS <= (1U << 2)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	3
+#elif NR_CPUS <= (1U << 3)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	7
+#elif NR_CPUS <= (1U << 4)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	7
+#elif NR_CPUS <= (1U << 5)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	11
+#elif NR_CPUS <= (1U << 6)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	21
+#elif NR_CPUS <= (1U << 7)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	21
+#elif NR_CPUS <= (1U << 8)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	37
+#elif NR_CPUS <= (1U << 9)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	73
+#elif NR_CPUS <= (1U << 10)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	149
+#elif NR_CPUS <= (1U << 11)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	293
+#elif NR_CPUS <= (1U << 12)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	585
+#elif NR_CPUS <= (1U << 13)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	1173
+#elif NR_CPUS <= (1U << 14)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	2341
+#elif NR_CPUS <= (1U << 15)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	4681
+#elif NR_CPUS <= (1U << 16)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	4681
+#elif NR_CPUS <= (1U << 17)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	8777
+#elif NR_CPUS <= (1U << 18)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	17481
+#elif NR_CPUS <= (1U << 19)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	34953
+#elif NR_CPUS <= (1U << 20)
+# define PERCPU_COUNTER_TREE_STATIC_NR_ITEMS	69905
+#else
+# error "Unsupported number of CPUs."
+#endif
+
 struct percpu_counter_tree_level_item {
 	atomic_t count;			/*
 					 * Count the number of carry fort this tree item.
@@ -17,6 +63,9 @@ struct percpu_counter_tree_level_item {
 					 * carry accounted for at this tree level.
 					 */
 } ____cacheline_aligned_in_smp;
+
+#define PERCPU_COUNTER_TREE_ITEMS_STATIC_SIZE	\
+	(PERCPU_COUNTER_TREE_STATIC_NR_ITEMS * sizeof(struct percpu_counter_tree_level_item))
 
 struct percpu_counter_tree {
 	/* Fast-path fields. */
@@ -91,6 +140,8 @@ int percpu_counter_tree_approximate_sum(struct percpu_counter_tree *counter)
 }
 
 #else	/* !CONFIG_SMP */
+
+#define PERCPU_COUNTER_TREE_ITEMS_STATIC_SIZE	0
 
 struct percpu_counter_tree_level_item;
 
