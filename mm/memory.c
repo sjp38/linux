@@ -7559,7 +7559,7 @@ void vma_pgtable_walk_end(struct vm_area_struct *vma)
 }
 
 static LIST_HEAD(faults_monitor_controls);
-DEFINE_SPINLOCK(faults_monitor_controls_lock);
+static DEFINE_SPINLOCK(faults_monitor_controls_lock);
 
 void faults_monitor_register(struct faults_monitor_control *control)
 {
