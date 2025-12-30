@@ -3286,9 +3286,6 @@ static int kdamond_fn(void *data)
 	}
 done:
 	damon_destroy_targets(ctx);
-
-	if (ctx->ops.cleanup)
-		ctx->ops.cleanup(ctx);
 	kfree(ctx->regions_score_histogram);
 	kdamond_call(ctx, true);
 	damos_walk_cancel(ctx);
