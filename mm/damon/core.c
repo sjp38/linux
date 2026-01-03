@@ -2825,6 +2825,24 @@ static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,
 			threshold / 2 < max_thres);
 }
 
+#ifdef CONFIG_DAMON_HARDENED
+static void damon_verify_split_region_at(unsigned long sz_r,
+		struct damon_region *r)
+{
+
+	if (sz_r == 0 || sz_r >= r->ar.end - r->ar.start) {
+		pr_err("%s called with region of %lu-%lu and sz_r %lu!\n",
+				__func__, r->ar.start, r->ar.end, sz_r);
+		BUG();
+	}
+}
+#else
+static void damon_verify_split_region_at(unsigned long sz_r,
+		struct damon_region *r)
+{
+}
+#endif
+
 /*
  * Split a region in two
  *
@@ -2836,11 +2854,7 @@ static void damon_split_region_at(struct damon_target *t,
 {
 	struct damon_region *new;
 
-	if (sz_r == 0 || sz_r >= r->ar.end - r->ar.start) {
-		pr_err("%s called with region of %lu-%lu and sz_r %lu!\n",
-				__func__, r->ar.start, r->ar.end, sz_r);
-		BUG();
-	}
+	damon_verify_split_region_at(sz_r, r);
 
 	new = damon_new_region(r->ar.start + sz_r, r->ar.end);
 	if (!new)
