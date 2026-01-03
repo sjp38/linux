@@ -2706,6 +2706,25 @@ static void kdamond_apply_schemes(struct damon_ctx *c)
 	mutex_unlock(&c->walk_control_lock);
 }
 
+#ifdef CONFIG_DAMON_HARDENED
+static void damon_verify_merge_two_regions(
+		struct damon_region *l, struct damon_region *r)
+{
+	if (l->ar.start < l->ar.end)
+		return;
+
+	pr_err("damn_merge_two_regions created incorrect left region\n");
+	pr_err("l: %lu-%lu, r: %lu-%lu\n",
+			l->ar.start, l->ar.end, r->ar.start, r->ar.end);
+	BUG();
+}
+#else
+static void damon_verify_merge_two_regions(
+		struct damon_region *l, struct damon_region *r)
+{
+}
+#endif
+
 /*
  * Merge two adjacent regions into one region
  */
@@ -2719,13 +2738,7 @@ static void damon_merge_two_regions(struct damon_target *t,
 	l->nr_accesses_bp = l->nr_accesses * 10000;
 	l->age = (l->age * sz_l + r->age * sz_r) / (sz_l + sz_r);
 	l->ar.end = r->ar.end;
-
-	if (l->ar.start >= l->ar.end) {
-		pr_err("%s made %lu-%lu region\n", __func__, l->ar.start,
-				r->ar.end);
-		pr_err("r: %lu-%lu\n", r->ar.start, r->ar.end);
-		BUG();
-	}
+	damon_verify_merge_two_regions(l, r);
 
 	damon_destroy_region(r, t);
 }
