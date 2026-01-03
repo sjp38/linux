@@ -550,7 +550,8 @@ void damon_destroy_target(struct damon_target *t, struct damon_ctx *ctx)
 	damon_free_target(t);
 }
 
-static void damon_nr_regions_verify(struct damon_target *t)
+#ifdef CONFIG_DAMON_HARDENED
+static void damon_verify_nr_regions(struct damon_target *t)
 {
 	struct damon_region *r;
 	unsigned int count = 0;
@@ -566,10 +567,15 @@ static void damon_nr_regions_verify(struct damon_target *t)
 		pr_err("%s expected %u but %u\n", __func__, count, t->nr_regions);
 	BUG_ON(count != t->nr_regions);
 }
+#else
+static void damon_verify_nr_regions(struct damon_target *t)
+{
+}
+#endif
 
 unsigned int damon_nr_regions(struct damon_target *t)
 {
-	damon_nr_regions_verify(t);
+	damon_verify_nr_regions(t);
 
 	return t->nr_regions;
 }
