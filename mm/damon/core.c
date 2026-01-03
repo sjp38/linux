@@ -1854,6 +1854,28 @@ static void damon_warn_fix_nr_accesses_corruption(struct damon_region *r)
 	r->nr_accesses_bp = r->nr_accesses * 10000;
 }
 
+#ifdef CONFIG_DAMON_HARDENED
+static void damon_verify_reset_aggregated(struct damon_region *r,
+		struct damon_ctx *c)
+{
+	if (r->nr_accesses_bp == r->last_nr_accesses * 10000)
+		return;
+	pr_err("reset time invalid region found!\n");
+	pr_err("nr_accesses_bp %u last_nr_acceses %u\n",
+			r->nr_accesses_bp, r->last_nr_accesses);
+	pr_err("passed_sis %lu next_aggregation_sis %lu\n",
+			c->passed_sample_intervals,
+			c->next_aggregation_sis);
+	BUG();
+}
+#else
+static void damon_verify_reset_aggregated(struct damon_region *r,
+		struct damon_ctx *c)
+{
+}
+#endif
+
+
 /*
  * Reset the aggregated monitoring results ('nr_accesses' of each region).
  */
@@ -1870,15 +1892,7 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)
 			damon_warn_fix_nr_accesses_corruption(r);
 			r->last_nr_accesses = r->nr_accesses;
 			r->nr_accesses = 0;
-			if (r->nr_accesses_bp != r->last_nr_accesses * 10000) {
-				pr_info("reset time invalid region found!\n");
-				pr_info("nr_accesses_bp %u last_nr_acceses %u\n",
-						r->nr_accesses_bp, r->last_nr_accesses);
-				pr_info("passed_sis %lu next_aggregation_sis %lu\n",
-						c->passed_sample_intervals,
-						c->next_aggregation_sis);
-				BUG();
-			}
+			damon_verify_reset_aggregated(r, c);
 		}
 		ti++;
 	}
