@@ -120,4 +120,15 @@ config DAMON_ACMA
 	  min/max memory for the system and maximum memory pressure stall time
 	  ratio.
 
+config DAMON_HARDENED
+	bool "Check integrity of DAMON code"
+	depends on DAMON
+	help
+	  This enables additional DAMON debugging-purpose integrity checks in
+	  DAMON code.  This can impose additional overhead but can be useful at
+	  finding bugs.  Hence it is enouraged to enable on DAMON development
+	  setups.
+
+	  If unsure, say N.
+
 endmenu
