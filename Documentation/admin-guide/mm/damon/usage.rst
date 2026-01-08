@@ -500,10 +500,11 @@ directory can be used for installing filters regardless of their handled
 layers.  Filters that requested by ``core_filters`` and ``ops_filters`` will be
 installed before those of ``filters``.  All three directories have same files.
 
-Use of ``filters`` directory can make expecting evaluation orders of given
-filters with the files under directory bit confusing.  Users are hence
-recommended to use ``core_filters`` and ``ops_filters`` directories.  The
-``filters`` directory could be deprecated in future.
+``filters`` directory is deprecated, hence use of it can make expecting
+evaluation orders of given filters with the files under directory bit
+confusing.  It is still functioning, but it will be broken and eventually
+removed in near future.  Users should ``core_filters`` and ``ops_filters``
+directories instead.
 
 In the beginning, the directory has only one file, ``nr_filters``.  Writing a
 number (``N``) to the file creates the number of child directories named ``0``
