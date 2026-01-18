@@ -5060,13 +5060,14 @@ static bool mas_next_setup(struct ma_state *mas, unsigned long max,
 }
 
 /**
- * mas_next() - Get the next entry.
+ * mas_next() - Advance the maple state to the next range, skipping zero entries.
  * @mas: The maple state
  * @max: The maximum index to check.
  *
  * Returns the next entry after @mas->index.
+ * Updates @mas->index and @mas->last to the range.
  * Must hold rcu_read_lock or the write lock.
- * Can return the zero entry.
+ * Skips entries reserved with XA_ZERO_ENTRY.
  *
  * Return: The next entry or %NULL
  */
@@ -5083,11 +5084,12 @@ void *mas_next(struct ma_state *mas, unsigned long max)
 EXPORT_SYMBOL_GPL(mas_next);
 
 /**
- * mas_next_range() - Advance the maple state to the next range
+ * mas_next_range() - Advance the maple state to the next range.
  * @mas: The maple state
  * @max: The maximum index to check.
  *
- * Sets @mas->index and @mas->last to the range.
+ * Returns the next entry after @mas->index.
+ * Updates @mas->index and @mas->last to the range.
  * Must hold rcu_read_lock or the write lock.
  * Can return the zero entry.
  *
