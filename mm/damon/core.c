@@ -2940,6 +2940,22 @@ static void kdamond_split_regions(struct damon_ctx *ctx)
 	last_nr_regions = nr_regions;
 }
 
+static void kdamond_ensure_sz_limit(struct damon_ctx *ctx,
+		unsigned long max_region_sz)
+{
+	struct damon_target *t;
+	struct damon_region *r, *next;
+
+	damon_for_each_target(t, ctx) {
+		damon_for_each_region_safe(r, next, t) {
+			while (damon_sz_region(r) > max_region_sz) {
+				damon_split_region_at(t, r, max_region_sz);
+				r = damon_next_region(r);
+			}
+		}
+	}
+}
+
 /*
  * Check whether current monitoring should be stopped
  *
@@ -3244,6 +3260,7 @@ static int kdamond_fn(void *data)
 		goto done;
 
 	sz_limit = damon_region_sz_limit(ctx);
+	kdamond_ensure_sz_limit(ctx, sz_limit);
 
 	while (!kdamond_need_stop(ctx)) {
 		/*
