@@ -1530,8 +1530,9 @@ static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)
 
 	if (ctx->attrs.min_nr_regions)
 		sz /= ctx->attrs.min_nr_regions;
-	if (sz < ctx->min_region_sz)
+	if (!sz)
 		sz = ctx->min_region_sz;
+	sz = ALIGN(sz, ctx->min_region_sz);
 
 	return sz;
 }
