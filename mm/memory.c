@@ -6878,6 +6878,14 @@ void follow_pfnmap_end(struct follow_pfnmap_args *args)
 EXPORT_SYMBOL_GPL(follow_pfnmap_end);
 
 #ifdef CONFIG_HAVE_IOREMAP_PROT
+#ifndef arch_mk_kernel_prot
+#define arch_mk_kernel_prot arch_mk_kernel_prot
+static inline pgprot_t arch_mk_kernel_prot(pgprot_t user_prot)
+{
+	return user_prot;
+}
+#endif
+
 /**
  * generic_access_phys - generic implementation for iomem mmap access
  * @vma: the vma to access
@@ -6895,6 +6903,7 @@ int generic_access_phys(struct vm_area_struct *vma, unsigned long addr,
 {
 	resource_size_t phys_addr;
 	pgprot_t prot = __pgprot(0);
+	pgprot_t kernel_prot;
 	void __iomem *maddr;
 	int offset = offset_in_page(addr);
 	int ret = -EINVAL;
@@ -6912,7 +6921,8 @@ retry:
 	if ((write & FOLL_WRITE) && !writable)
 		return -EINVAL;
 
-	maddr = ioremap_prot(phys_addr, PAGE_ALIGN(len + offset), prot);
+	kernel_prot = arch_mk_kernel_prot(prot);
+	maddr = ioremap_prot(phys_addr, PAGE_ALIGN(len + offset), kernel_prot);
 	if (!maddr)
 		return -ENOMEM;
 

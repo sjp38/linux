@@ -267,6 +267,14 @@ int arm64_ioremap_prot_hook_register(const ioremap_prot_hook_t hook);
 
 #define ioremap_prot ioremap_prot
 
+#define arch_mk_kernel_prot arch_mk_kernel_prot
+static inline pgprot_t arch_mk_kernel_prot(pgprot_t user_prot)
+{
+	ptdesc_t mem_type = pgprot_val(user_prot) & PTE_ATTRINDX_MASK;
+
+	return __pgprot_modify(PAGE_KERNEL, PTE_ATTRINDX_MASK, mem_type);
+}
+
 #define _PAGE_IOREMAP PROT_DEVICE_nGnRE
 
 #define ioremap_wc(addr, size)	\
