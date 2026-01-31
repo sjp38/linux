@@ -3356,7 +3356,7 @@ static int walk_system_ram(struct resource *res, void *arg)
 
 	if (a->end - a->start < resource_size(res)) {
 		a->start = res->start;
-		a->end = res->end;
+		a->end = res->end + 1;
 	}
 	return 0;
 }
