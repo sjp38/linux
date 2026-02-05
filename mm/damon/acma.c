@@ -426,9 +426,8 @@ static int damon_acma_apply_parameters(void)
 	}
 	damon_add_scheme(ctx, scale_up_scheme);
 
-	return damon_set_region_biggest_system_ram_default(target,
-					&monitor_region_start,
-					&monitor_region_end);
+	return damon_set_region_system_rams_default(target,
+			&monitor_region_start, &monitor_region_end);
 }
 
 static int damon_acma_turn(bool on)
