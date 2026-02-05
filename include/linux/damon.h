@@ -1130,6 +1130,11 @@ static inline void damon_report_page_fault(struct vm_fault *vmf, bool huge_pmd)
 }
 #endif
 
+int damon_set_region_system_rams_default(struct damon_target *t,
+				unsigned long *start, unsigned long *end,
+				unsigned long addr_unit,
+				unsigned long min_region_sz);
+
 int damon_set_region_biggest_system_ram_default(struct damon_target *t,
 				unsigned long *start, unsigned long *end,
 				unsigned long addr_unit,
