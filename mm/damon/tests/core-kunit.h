@@ -1060,6 +1060,25 @@ static void damon_test_commit_target_regions(struct kunit *test)
 			(unsigned long[][2]) {{3, 8}, {8, 10}}, 2);
 }
 
+static void damon_test_commit_ctx(struct kunit *test)
+{
+	struct damon_ctx *src, *dst;
+
+	src = damon_new_ctx();
+	if (!src)
+		kunit_skip(test, "src alloc fail");
+	dst = damon_new_ctx();
+	if (!dst) {
+		damon_destroy_ctx(src);
+		kunit_skip(test, "dst alloc fail");
+	}
+	/* Only power of two min_region_sz is allowed. */
+	src->min_region_sz = 4096;
+	KUNIT_EXPECT_EQ(test, damon_commit_ctx(dst, src), 0);
+	src->min_region_sz = 4097;
+	KUNIT_EXPECT_EQ(test, damon_commit_ctx(dst, src), -EINVAL);
+}
+
 static void damos_test_filter_out(struct kunit *test)
 {
 	struct damon_target *t;
@@ -1338,6 +1357,7 @@ static struct kunit_case damon_test_cases[] = {
 	KUNIT_CASE(damos_test_commit_pageout),
 	KUNIT_CASE(damos_test_commit_migrate_hot),
 	KUNIT_CASE(damon_test_commit_target_regions),
+	KUNIT_CASE(damon_test_commit_ctx),
 	KUNIT_CASE(damos_test_filter_out),
 	KUNIT_CASE(damon_test_feed_loop_next_input),
 	KUNIT_CASE(damon_test_set_filters_default_reject),
