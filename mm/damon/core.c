@@ -1537,6 +1537,7 @@ int damon_commit_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 		if (err)
 			return err;
 	}
+	dst->paused = src->paused;
 	dst->ops = src->ops;
 	err = damon_commit_sample_control(&dst->sample_control,
 			&src->sample_control);
@@ -3336,6 +3337,13 @@ static int kdamond_fn(void *data)
 		unsigned long next_aggregation_sis = ctx->next_aggregation_sis;
 		unsigned long next_ops_update_sis = ctx->next_ops_update_sis;
 		unsigned long sample_interval = ctx->attrs.sample_interval;
+
+		if (ctx->paused) {
+			kdamond_usleep(sample_interval);
+			/* allow caller resetting paused via damon_call() */
+			kdamond_call(ctx, false);
+			continue;
+		}
 
 		if (kdamond_wait_activation(ctx))
 			break;
