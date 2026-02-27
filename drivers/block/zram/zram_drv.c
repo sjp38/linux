@@ -2594,6 +2594,16 @@ static ssize_t recompress_store(struct device *dev,
 			if (ret)
 				return ret;
 
+			/*
+			 * "priority" overrides "algo".
+			 *
+			 * We can have several algorithms configured with
+			 * different params (compression/acceleration level,
+			 * C/D-dict, etc.) but under the same name.
+			 *
+			 * "algorithm" name lookup is ambiguous.
+			 */
+			algo = NULL;
 			prio_max = min(prio + 1, ZRAM_MAX_COMPS);
 			continue;
 		}
