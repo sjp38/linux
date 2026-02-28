@@ -503,7 +503,7 @@ static bool test_and_set_skip(struct compact_control *cc, struct page *page)
  *
  * Always returns true which makes it easier to track lock state in callers.
  */
-static bool compact_zone_lock_irqsave(struct zone *zone,
+static void compact_zone_lock_irqsave(struct zone *zone,
 				      unsigned long *flags,
 				      struct compact_control *cc)
 	__acquires(&zone->_lock)
@@ -511,13 +511,12 @@ static bool compact_zone_lock_irqsave(struct zone *zone,
 	/* Track if the lock is contended in async mode */
 	if (cc->mode == MIGRATE_ASYNC && !cc->contended) {
 		if (zone_trylock_irqsave(zone, *flags))
-			return true;
+			return;
 
 		cc->contended = true;
 	}
 
 	zone_lock_irqsave(zone, *flags);
-	return true;
 }
 
 static bool compact_lruvec_lock_irqsave(struct lruvec *lruvec,
@@ -650,7 +649,8 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 		/* If we already hold the lock, we can skip some rechecking. */
 		if (!locked) {
-			locked = compact_zone_lock_irqsave(cc->zone, &flags, cc);
+			compact_zone_lock_irqsave(cc->zone, &flags, cc);
+			locked = true;
 
 			/* Recheck this is a buddy page under lock */
 			if (!PageBuddy(page))
