@@ -519,20 +519,19 @@ static void compact_zone_lock_irqsave(struct zone *zone,
 	zone_lock_irqsave(zone, *flags);
 }
 
-static bool compact_lruvec_lock_irqsave(struct lruvec *lruvec,
+static void compact_lruvec_lock_irqsave(struct lruvec *lruvec,
 					unsigned long *flags,
 					struct compact_control *cc)
 	__acquires(&lruvec->lru_lock)
 {
 	if (cc->mode == MIGRATE_ASYNC && !cc->contended) {
 		if (spin_trylock_irqsave(&lruvec->lru_lock, *flags))
-			return true;
+			return;
 
 		cc->contended = true;
 	}
 
 	spin_lock_irqsave(&lruvec->lru_lock, *flags);
-	return true;
 }
 
 static struct lruvec *
