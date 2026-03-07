@@ -15,6 +15,7 @@
 #include <linux/gfp.h>
 #include <linux/userfaultfd_k.h>
 #include <linux/nodemask.h>
+#include <linux/pagemap.h>
 
 struct mmu_gather;
 struct node;
