@@ -432,7 +432,6 @@ struct damos *damon_new_scheme(struct damos_access_pattern *pattern,
 	scheme->quota = *(damos_quota_init(quota));
 	/* quota.goals should be separately set by caller */
 	INIT_LIST_HEAD(&scheme->quota.goals);
-	scheme->quota.goal_tuner = quota->goal_tuner;
 
 	scheme->wmarks = *wmarks;
 	scheme->wmarks.activated = true;
