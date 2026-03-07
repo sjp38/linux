@@ -978,7 +978,7 @@ struct damon_ctx {
 	/* Working thread of the given DAMON context */
 	struct task_struct *kdamond;
 	/* Protects @kdamond field access */
-	struct mutex kdamond_lock;
+	struct mutex __private kdamond_lock;
 
 /* public: */
 	struct damon_operations ops;

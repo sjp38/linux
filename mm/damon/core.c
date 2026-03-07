@@ -701,7 +701,7 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->next_aggregation_sis = 0;
 	ctx->next_ops_update_sis = 0;
 
-	mutex_init(&ctx->kdamond_lock);
+	mutex_init(&ACCESS_PRIVATE(ctx, kdamond_lock));
 	INIT_LIST_HEAD(&ctx->call_controls);
 	mutex_init(&ctx->call_controls_lock);
 	mutex_init(&ctx->walk_control_lock);
@@ -1640,6 +1640,16 @@ static unsigned long damon_apply_min_nr_regions(struct damon_ctx *ctx)
 
 static int kdamond_fn(void *data);
 
+static void damon_lock_kdamond(struct damon_ctx *ctx)
+{
+	mutex_lock(&ACCESS_PRIVATE(ctx, kdamond_lock));
+}
+
+static void damon_unlock_kdamond(struct damon_ctx *ctx)
+{
+	mutex_unlock(&ACCESS_PRIVATE(ctx, kdamond_lock));
+}
+
 /*
  * __damon_start() - Starts monitoring with given context.
  * @ctx:	monitoring context
@@ -1652,7 +1662,7 @@ static int __damon_start(struct damon_ctx *ctx)
 {
 	int err = -EBUSY;
 
-	mutex_lock(&ctx->kdamond_lock);
+	damon_lock_kdamond(ctx);
 	if (!ctx->kdamond) {
 		err = 0;
 		reinit_completion(&ctx->kdamond_started);
@@ -1665,7 +1675,7 @@ static int __damon_start(struct damon_ctx *ctx)
 			wait_for_completion(&ctx->kdamond_started);
 		}
 	}
-	mutex_unlock(&ctx->kdamond_lock);
+	damon_unlock_kdamond(ctx);
 
 	return err;
 }
@@ -1725,15 +1735,15 @@ static int __damon_stop(struct damon_ctx *ctx)
 {
 	struct task_struct *tsk;
 
-	mutex_lock(&ctx->kdamond_lock);
+	damon_lock_kdamond(ctx);
 	tsk = ctx->kdamond;
 	if (tsk) {
 		get_task_struct(tsk);
-		mutex_unlock(&ctx->kdamond_lock);
+		damon_unlock_kdamond(ctx);
 		kthread_stop_put(tsk);
 		return 0;
 	}
-	mutex_unlock(&ctx->kdamond_lock);
+	damon_unlock_kdamond(ctx);
 
 	return -EPERM;
 }
@@ -1768,9 +1778,9 @@ bool damon_is_running(struct damon_ctx *ctx)
 {
 	bool running;
 
-	mutex_lock(&ctx->kdamond_lock);
+	damon_lock_kdamond(ctx);
 	running = ctx->kdamond != NULL;
-	mutex_unlock(&ctx->kdamond_lock);
+	damon_unlock_kdamond(ctx);
 	return running;
 }
 
@@ -1784,10 +1794,10 @@ int damon_kdamond_pid(struct damon_ctx *ctx)
 {
 	int pid = -EINVAL;
 
-	mutex_lock(&ctx->kdamond_lock);
+	damon_lock_kdamond(ctx);
 	if (ctx->kdamond)
 		pid = ctx->kdamond->pid;
-	mutex_unlock(&ctx->kdamond_lock);
+	damon_unlock_kdamond(ctx);
 	return pid;
 }
 
@@ -3566,9 +3576,9 @@ done:
 	damos_walk_cancel(ctx);
 
 	pr_debug("kdamond (%d) finishes\n", current->pid);
-	mutex_lock(&ctx->kdamond_lock);
+	damon_lock_kdamond(ctx);
 	ctx->kdamond = NULL;
-	mutex_unlock(&ctx->kdamond_lock);
+	damon_unlock_kdamond(ctx);
 
 	mutex_lock(&damon_lock);
 	nr_running_ctxs--;
