@@ -227,6 +227,7 @@ enum damos_quota_goal_tuner {
  * @ms:			Maximum milliseconds that the scheme can use.
  * @sz:			Maximum bytes of memory that the action can be applied.
  * @goals:		Head of quota tuning goals (&damos_quota_goal) list.
+ * @goal_tuner:		Goal-based @esz tuning algorithm to use.
  * @esz:		Effective size quota in bytes.
  *
  * @weight_sz:		Weight of the region's size for prioritization.
