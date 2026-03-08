@@ -2946,6 +2946,32 @@ static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,
 }
 
 #ifdef CONFIG_DAMON_DEBUG_SANITY
+static void damon_verify_merged_regions(struct damon_ctx *c)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+
+	damon_for_each_target(t, c) {
+		unsigned int nr_regions = 0;
+
+		damon_for_each_region(r, t) {
+			WARN_ONCE(!damon_sz_region(r),
+					"empty region [%lu,%lu)\n",
+					r->ar.start, r->ar.end);
+			nr_regions++;
+		}
+		WARN_ONCE(damon_nr_regions(t) != nr_regions,
+				"nr_regions mismatch: %u != %u\n",
+				damon_nr_regions(t), nr_regions);
+	}
+}
+#else
+static void damon_verify_merged_regions(struct damon_ctx *c)
+{
+}
+#endif
+
+#ifdef CONFIG_DAMON_DEBUG_SANITY
 static void damon_verify_split_region_at(struct damon_region *r,
 		unsigned long sz_r)
 {
@@ -3384,6 +3410,7 @@ static int kdamond_fn(void *data)
 					sz_limit);
 			/* online updates might be made */
 			sz_limit = damon_apply_min_nr_regions(ctx);
+			damon_verify_merged_regions(ctx);
 		}
 
 		/*
