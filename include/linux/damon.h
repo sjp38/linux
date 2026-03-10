@@ -117,13 +117,13 @@ struct damon_target {
 };
 
 /**
- * struct damon_access_report - Represent single acces report information.
+ * struct damon_access_report - Represent single access report information.
  * @addr:		The start address of the accessed address range.
  * @size:		The size of the accessed address range.
  *
  * Any DAMON API callers that notified access events can report the information
  * to DAMON using damon_report_access().  This struct contains the reporting
- * infomration.  Refer to damon_report_access() for more details.
+ * information.  Refer to damon_report_access() for more details.
  */
 struct damon_access_report {
 	unsigned long addr;
