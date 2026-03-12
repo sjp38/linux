@@ -1805,6 +1805,9 @@ int remap_pfn_range_prepare(struct vm_area_desc *desc,
 			    struct mmap_action *action);
 int remap_pfn_range_complete(struct vm_area_struct *vma,
 			     struct mmap_action *action);
+int simple_ioremap_prepare(struct vm_area_desc *desc,
+			   struct mmap_action *action);
+/* No simple_ioremap_complete, is ultimately handled by remap complete. */
 
 static inline int io_remap_pfn_range_prepare(struct vm_area_desc *desc,
 					     struct mmap_action *action)
