@@ -159,6 +159,8 @@ static inline void *folio_raw_mapping(const struct folio *folio)
  * mmap hook and safely handle error conditions. On error, VMA hooks will be
  * mutated.
  *
+ * IMPORTANT: f_op->mmap() is deprecated, prefer f_op->mmap_prepare().
+ *
  * @file: File which backs the mapping.
  * @vma:  VMA which we are mapping.
  *
@@ -201,6 +203,14 @@ static inline void vma_close(struct vm_area_struct *vma)
 
 /* unmap_vmas is in mm/memory.c */
 void unmap_vmas(struct mmu_gather *tlb, struct unmap_desc *unmap);
+
+static inline void unmap_vma_locked(struct vm_area_struct *vma)
+{
+	const size_t len = vma_pages(vma) << PAGE_SHIFT;
+
+	mmap_assert_locked(vma->vm_mm);
+	do_munmap(vma->vm_mm, vma->vm_start, len, NULL);
+}
 
 #ifdef CONFIG_MMU
 
