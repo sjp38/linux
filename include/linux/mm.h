@@ -2727,7 +2727,7 @@ static inline bool folio_maybe_mapped_shared(struct folio *folio)
  * The caller must add any reference (e.g., from folio_try_get()) it might be
  * holding itself to the result.
  *
- * Returns the expected folio refcount.
+ * Returns: the expected folio refcount.
  */
 static inline int folio_expected_ref_count(const struct folio *folio)
 {
@@ -4243,7 +4243,7 @@ static inline struct vm_area_struct *find_exact_vma(struct mm_struct *mm,
  * @inner_start: The start of the inner range.
  * @inner_end: The exclusive end of the inner range.
  *
- * Returns %true if [inner_start, inner_end) is a subset of [outer_start,
+ * Returns: %true if [inner_start, inner_end) is a subset of [outer_start,
  * outer_end), otherwise %false.
  */
 static inline bool range_is_subset(unsigned long outer_start,
@@ -4260,7 +4260,7 @@ static inline bool range_is_subset(unsigned long outer_start,
  * @start: The start of the range we wish to check.
  * @end: The exclusive end of the range we wish to check.
  *
- * Returns %true if [@start, @end) is a subset of [@vma->vm_start,
+ * Returns: %true if [@start, @end) is a subset of [@vma->vm_start,
  * @vma->vm_end), %false otherwise.
  */
 static inline bool range_in_vma(const struct vm_area_struct *vma,
@@ -4279,7 +4279,7 @@ static inline bool range_in_vma(const struct vm_area_struct *vma,
  * @start: The start of the range we wish to check.
  * @end: The exclusive end of the range we wish to check.
  *
- * Returns %true if [@start, @end) is a subset of [@desc->start, @desc->end),
+ * Returns: %true if [@start, @end) is a subset of [@desc->start, @desc->end),
  * %false otherwise.
  */
 static inline bool range_in_vma_desc(const struct vm_area_desc *desc,
