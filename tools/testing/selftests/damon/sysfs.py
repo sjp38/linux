@@ -193,17 +193,43 @@ def assert_ctx_committed(ctx, dump):
     assert_true(dump['pause'] == ctx.pause, 'pause', dump)
 
 def assert_ctxs_committed(kdamonds):
+    paused_for_dump = False
+    if kdamonds.kdamonds[0].contexts[0].pause is False:
+        kdamonds.kdamonds[0].contexts[0].pause = True
+        err = kdamonds.kdamonds[0].commit()
+        if err is not None:
+            print('pause fail (%s)' % err)
+            kdamonds.stop()
+            exit(1)
+        paused_for_dump = True
+
     status, err = dump_damon_status_dict(kdamonds.kdamonds[0].pid)
     if err is not None:
         print(err)
         kdamonds.stop()
         exit(1)
 
+    if paused_for_dump:
+        # resume
+        kdamonds.kdamonds[0].contexts[0].pause = False
+        err = kdamonds.kdamonds[0].commit()
+        if err is not None:
+            print('resume fail (%s)' % err)
+            kdamonds.stop()
+            exit(1)
+
+        # restore for comparison
+        kdamonds.kdamonds[0].contexts[0].pause = True
+
     ctxs = kdamonds.kdamonds[0].contexts
     dump = status['contexts']
     assert_true(len(ctxs) == len(dump), 'ctxs length', dump)
     for idx, ctx in enumerate(ctxs):
         assert_ctx_committed(ctx, dump[idx])
+
+    if paused_for_dump:
+        # restore for the caller
+        kdamonds.kdamonds[0].contexts[0].pause = False
 
 def main():
     kdamonds = _damon_sysfs.Kdamonds(
@@ -302,6 +328,7 @@ def main():
         print('kdamond start failed: %s' % err)
         exit(1)
     kdamonds.kdamonds[0].contexts[0].targets[1].obsolete = True
+    kdamonds.kdamonds[0].contexts[0].pause = True
     kdamonds.kdamonds[0].commit()
     del kdamonds.kdamonds[0].contexts[0].targets[1]
     assert_ctxs_committed(kdamonds)
