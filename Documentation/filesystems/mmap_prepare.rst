@@ -5,19 +5,19 @@ mmap_prepare callback HOWTO
 ===========================
 
 Introduction
-############
+============
 
-The `struct file->f_op->mmap()` callback has been deprecated as it is both a
+The ``struct file->f_op->mmap()`` callback has been deprecated as it is both a
 stability and security risk, and doesn't always permit the merging of adjacent
 mappings resulting in unnecessary memory fragmentation.
 
-It has been replaced with the `file->f_op->mmap_prepare()` callback which solves
-these problems.
+It has been replaced with the ``file->f_op->mmap_prepare()`` callback which
+solves these problems.
 
 ## How To Use
 
-In your driver's `struct file_operations` struct, specify an `mmap_prepare`
-callback rather than an `mmap` one, e.g. for ext4:
+In your driver's struct file_operations struct, specify an ``mmap_prepare``
+callback rather than an ``mmap`` one, e.g. for ext4:
 
 
 .. code-block:: C
@@ -27,9 +27,9 @@ callback rather than an `mmap` one, e.g. for ext4:
         .mmap_prepare    = ext4_file_mmap_prepare,
     };
 
-This has a signature of `int (*mmap_prepare)(struct vm_area_desc *)`.
+This has a signature of ``int (*mmap_prepare)(struct vm_area_desc *)``.
 
-Examining the `struct vm_area_desc` type:
+Examining the struct vm_area_desc type:
 
 .. code-block:: C
 
@@ -57,7 +57,7 @@ Examining the `struct vm_area_desc` type:
 This is straightforward - you have all the fields you need to set up the
 mapping, and you can update the mutable and writable fields, for instance:
 
-.. code-block:: Cw
+.. code-block:: C
 
     static int ext4_file_mmap_prepare(struct vm_area_desc *desc)
     {
@@ -78,54 +78,54 @@ mapping, and you can update the mutable and writable fields, for instance:
     }
 
 Importantly, you no longer have to dance around with reference counts or locks
-when updating these fields - __you can simply go ahead and change them__.
+when updating these fields - **you can simply go ahead and change them**.
 
 Everything is taken care of by the mapping code.
 
 VMA Flags
-=========
+---------
 
-Along with `mmap_prepare`, VMA flags have undergone an overhaul. Where before
-you would invoke one of `vm_flags_init()`, `vm_flags_reset()`, `vm_flags_set()`,
-`vm_flags_clear()`, and `vm_flags_mod()` to modify flags (and to have the
+Along with ``mmap_prepare``, VMA flags have undergone an overhaul. Where before
+you would invoke one of vm_flags_init(), vm_flags_reset(), vm_flags_set(),
+vm_flags_clear(), and vm_flags_mod() to modify flags (and to have the
 locking done correctly for you, this is no longer necessary.
 
-Also, the legacy approach of specifying VMA flags via `VM_READ`, `VM_WRITE`,
-etc. - i.e. using a `VM_xxx` macro has changed too.
+Also, the legacy approach of specifying VMA flags via ``VM_READ``, ``VM_WRITE``,
+etc. - i.e. using a ``-VM_xxx``- macro has changed too.
 
-When implementing `mmap_prepare()`, reference flags by their bit number, defined
-as a `VMA_xxx_BIT` macro, e.g. `VMA_READ_BIT`, `VMA_WRITE_BIT` etc., and use one
-of (where `desc` is a pointer to `struct vma_area_desc`):
+When implementing mmap_prepare(), reference flags by their bit number, defined
+as a ``VMA_xxx_BIT`` macro, e.g. ``VMA_READ_BIT``, ``VMA_WRITE_BIT`` etc.,
+and use one of (where ``desc`` is a pointer to struct vma_area_desc):
 
-* `vma_desc_test_flags(desc, ...)` - Specify a comma-separated list of flags you
-  wish to test for (whether _any_ are set), e.g. - `vma_desc_test_flags(desc,
-  VMA_WRITE_BIT, VMA_MAYWRITE_BIT)` - returns `true` if either are set,
-  otherwise `false`.
-* `vma_desc_set_flags(desc, ...)` - Update the VMA descriptor flags to set
+* ``vma_desc_test_flags(desc, ...)`` - Specify a comma-separated list of flags
+  you wish to test for (whether _any_ are set), e.g. - ``vma_desc_test_flags(
+  desc, VMA_WRITE_BIT, VMA_MAYWRITE_BIT)`` - returns ``true`` if either are set,
+  otherwise ``false``.
+* ``vma_desc_set_flags(desc, ...)`` - Update the VMA descriptor flags to set
   additional flags specified by a comma-separated list,
-  e.g. - `vma_desc_set_flags(desc, VMA_PFNMAP_BIT, VMA_IO_BIT)`.
-* `vma_desc_clear_flags(desc, ...)` - Update the VMA descriptor flags to clear
-  flags specified by a comma-separated list, e.g. - `vma_desc_clear_flags(desc,
-  VMA_WRITE_BIT, VMA_MAYWRITE_BIT)`.
+  e.g. - ``vma_desc_set_flags(desc, VMA_PFNMAP_BIT, VMA_IO_BIT)``.
+* ``vma_desc_clear_flags(desc, ...)`` - Update the VMA descriptor flags to clear
+  flags specified by a comma-separated list, e.g. - ``vma_desc_clear_flags(
+  desc, VMA_WRITE_BIT, VMA_MAYWRITE_BIT)``.
 
 Actions
 =======
 
 You can now very easily have actions be performed upon a mapping once set up by
-utilising simple helper functions invoked upon the `struct vm_area_desc`
+utilising simple helper functions invoked upon the struct vm_area_desc
 pointer. These are:
 
-* `mmap_action_remap()` - Remaps a range consisting only of PFNs for a specific
+* mmap_action_remap() - Remaps a range consisting only of PFNs for a specific
   range starting a virtual address and PFN number of a set size.
 
-* `mmap_action_remap_full()` - Same as `mmap_action_remap()`, only remaps the
-  entire mapping from `start_pfn` onward.
+* mmap_action_remap_full() - Same as mmap_action_remap(), only remaps the
+  entire mapping from ``start_pfn`` onward.
 
-* `mmap_action_ioremap()` - Same as `mmap_action_remap()`, only performs an I/O
+* mmap_action_ioremap() - Same as mmap_action_remap(), only performs an I/O
   remap.
 
-* `mmap_action_ioremap_full()` - Same as `mmap_action_ioremap()`, only remaps
-  the entire mapping from `start_pfn` onward.
+* mmap_action_ioremap_full() - Same as mmap_action_ioremap(), only remaps
+  the entire mapping from ``start_pfn`` onward.
 
-**NOTE:** The 'action' field should never normally be manipulated directly,
+**NOTE:** The ``action`` field should never normally be manipulated directly,
 rather you ought to use one of these helpers.
