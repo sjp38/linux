@@ -3248,7 +3248,7 @@ static unsigned long damon_res_to_core_addr(resource_size_t ra,
 	return ra / addr_unit;
 }
 
-static bool damon_find_system_ram_range(unsigned long *start,
+static bool damon_find_system_rams_range(unsigned long *start,
 		unsigned long *end, unsigned long addr_unit)
 {
 	struct damon_system_ram_range_walk_arg arg = {};
@@ -3258,6 +3258,8 @@ static bool damon_find_system_ram_range(unsigned long *start,
 		return false;
 	*start = damon_res_to_core_addr(arg.res.start, addr_unit);
 	*end = damon_res_to_core_addr(arg.res.end + 1, addr_unit);
+	if (*end <= *start)
+		return false;
 	return true;
 }
 
@@ -3288,7 +3290,7 @@ int damon_set_region_system_rams_default(struct damon_target *t,
 		return -EINVAL;
 
 	if (!*start && !*end &&
-		!damon_find_system_ram_range(start, end, addr_unit))
+		!damon_find_system_rams_range(start, end, addr_unit))
 		return -EINVAL;
 
 	addr_range.start = *start;
