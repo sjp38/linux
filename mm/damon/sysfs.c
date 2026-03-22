@@ -2325,6 +2325,7 @@ static int damon_sysfs_turn_damon_on(struct damon_sysfs_kdamond *kdamond)
 	repeat_call_control->data = kdamond;
 	repeat_call_control->repeat = true;
 	repeat_call_control->dealloc_on_cancel = true;
+	repeat_call_control->cleanup_fn = NULL;
 	if (damon_call(ctx, repeat_call_control))
 		kfree(repeat_call_control);
 	return err;

@@ -3262,6 +3262,9 @@ static void kdamond_call(struct damon_ctx *ctx, bool cancel)
 		else
 			control->return_code = control->fn(control->data);
 
+		if ((!control->repeat || cancel) && control->cleanup_fn)
+			control->cleanup_fn(control);
+
 		if (!control->repeat)
 			complete(&control->completion);
 		else if (control->canceled && control->dealloc_on_cancel)
