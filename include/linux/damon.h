@@ -744,6 +744,7 @@ struct damon_operations {
  * @repeat:		Repeat invocations.
  * @return_code:	Return code from @fn invocation.
  * @dealloc_on_cancel:	If @repeat is true, de-allocate when canceled.
+ * @cleanup_fn:		Function to be called when this is removed.
  *
  * Control damon_call(), which requests specific kdamond to invoke a given
  * function.  Refer to damon_call() for more details.
@@ -754,6 +755,7 @@ struct damon_call_control {
 	bool repeat;
 	int return_code;
 	bool dealloc_on_cancel;
+	void (*cleanup_fn)(struct damon_call_control *control);
 /* private: internal use only */
 	/* informs if the kdamond finished handling of the request */
 	struct completion completion;
