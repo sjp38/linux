@@ -2260,22 +2260,17 @@ static struct damon_ctx *damon_sysfs_build_ctx(
 	return ctx;
 }
 
-struct damon_sysfs_repeat_call_arg {
-	struct damon_sysfs_kdamond *kdamond;
-	unsigned long next_update_jiffies;
-};
+static unsigned long damon_sysfs_next_update_jiffies;
 
 static int damon_sysfs_repeat_call_fn(void *data)
 {
-	struct damon_sysfs_repeat_call_arg *arg = data;
-	struct damon_sysfs_kdamond *sysfs_kdamond = arg->kdamond;
-	unsigned long next_update_jiffies = arg->next_update_jiffies;
+	struct damon_sysfs_kdamond *sysfs_kdamond = data;
 
 	if (!sysfs_kdamond->refresh_ms)
 		return 0;
-	if (time_before(jiffies, next_update_jiffies))
+	if (time_before(jiffies, damon_sysfs_next_update_jiffies))
 		return 0;
-	next_update_jiffies = jiffies +
+	damon_sysfs_next_update_jiffies = jiffies +
 		msecs_to_jiffies(sysfs_kdamond->refresh_ms);
 
 	if (!mutex_trylock(&damon_sysfs_lock))
@@ -2290,18 +2285,10 @@ out:
 	return 0;
 }
 
-static void damon_sysfs_repeat_cleanup(struct damon_call_control *control)
-{
-	struct damon_sysfs_repeat_call_arg *arg = control->data;
-
-	kfree(arg);
-}
-
 static int damon_sysfs_turn_damon_on(struct damon_sysfs_kdamond *kdamond)
 {
 	struct damon_ctx *ctx;
 	struct damon_call_control *repeat_call_control;
-	struct damon_sysfs_repeat_call_arg *repeat_call_arg;
 	int err;
 
 	if (damon_sysfs_kdamond_running(kdamond))
@@ -2317,11 +2304,6 @@ static int damon_sysfs_turn_damon_on(struct damon_sysfs_kdamond *kdamond)
 	repeat_call_control = kmalloc_obj(*repeat_call_control);
 	if (!repeat_call_control)
 		return -ENOMEM;
-	repeat_call_arg = kmalloc_obj(*repeat_call_arg);
-	if (!repeat_call_arg) {
-		kfree(repeat_call_control);
-		return -ENOMEM;
-	}
 
 	ctx = damon_sysfs_build_ctx(kdamond->contexts->contexts_arr[0]);
 	if (IS_ERR(ctx)) {
@@ -2336,19 +2318,16 @@ static int damon_sysfs_turn_damon_on(struct damon_sysfs_kdamond *kdamond)
 	}
 	kdamond->damon_ctx = ctx;
 
-	repeat_call_arg->kdamond = kdamond;
-	repeat_call_arg->next_update_jiffies =
+	damon_sysfs_next_update_jiffies =
 		jiffies + msecs_to_jiffies(kdamond->refresh_ms);
 
 	repeat_call_control->fn = damon_sysfs_repeat_call_fn;
-	repeat_call_control->data = repeat_call_arg;
+	repeat_call_control->data = kdamond;
 	repeat_call_control->repeat = true;
 	repeat_call_control->dealloc_on_cancel = true;
-	repeat_call_control->cleanup_fn = damon_sysfs_repeat_cleanup;
-	if (damon_call(ctx, repeat_call_control)) {
+	repeat_call_control->cleanup_fn = NULL;
+	if (damon_call(ctx, repeat_call_control))
 		kfree(repeat_call_control);
-		kfree(repeat_call_arg);
-	}
 	return err;
 }
 
