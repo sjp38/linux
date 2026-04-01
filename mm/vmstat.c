@@ -2032,6 +2032,29 @@ static int vmstat_refresh(const struct ctl_table *table, int write,
 }
 #endif /* CONFIG_PROC_FS */
 
+/*
+ * Return a per-cpu delay that spreads vmstat_update work across the stat
+ * interval.  Without this, round_jiffies_relative() aligns every CPU's
+ * timer to the same second boundary, causing a thundering-herd on
+ * zone->lock when multiple CPUs drain PCP pages simultaneously via
+ * decay_pcp_high() -> free_pcppages_bulk().
+ */
+static unsigned long vmstat_spread_delay(void)
+{
+	unsigned long interval = sysctl_stat_interval;
+	unsigned int nr_cpus = num_online_cpus();
+
+	if (nr_cpus <= 1)
+		return round_jiffies_relative(interval);
+
+	/*
+	 * Spread per-cpu vmstat work evenly across the interval.  Don't
+	 * use round_jiffies_relative() here -- it would snap every CPU
+	 * back to the same second boundary, defeating the spread.
+	 */
+	return interval + (interval * (smp_processor_id() % nr_cpus)) / nr_cpus;
+}
+
 static void vmstat_update(struct work_struct *w)
 {
 	if (refresh_cpu_vm_stats(true)) {
@@ -2042,7 +2065,7 @@ static void vmstat_update(struct work_struct *w)
 		 */
 		queue_delayed_work_on(smp_processor_id(), mm_percpu_wq,
 				this_cpu_ptr(&vmstat_work),
-				round_jiffies_relative(sysctl_stat_interval));
+				vmstat_spread_delay());
 	}
 }
 
