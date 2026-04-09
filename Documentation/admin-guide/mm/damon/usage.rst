@@ -71,9 +71,11 @@ comma (",").
     │ │ │ │ │ :ref:`monitoring_attrs <sysfs_monitoring_attrs>`/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
-    │ │ │ │ │ │ sample/primitives/page_table,page_faults
-    │ │ │ │ │ │ sample/filters/nr_filters
-    │ │ │ │ │ │ │ 0/type,matching,allow,cpumask,tid_arr
+    │ │ │ │ │ │ counters/nr_counters
+    │ │ │ │ │ │ │ 0/filters/nr_filters
+    │ │ │ │ │ │ │ │ 0/type (page_table_walk,page_faults,perf_event,page_type),
+    │ │ │ │ │ │ │ │     matching,allow,
+    │ │ │ │ │ │ │ │     memcg_path,addr_start,addr_end,min,max,cpumask,tid_arr
     │ │ │ │ │ │ nr_regions/min,max
     │ │ │ │ │ :ref:`targets <sysfs_targets>`/nr_targets
     │ │ │ │ │ │ :ref:`0 <sysfs_target>`/pid_target,obsolete_target
@@ -101,6 +103,8 @@ comma (",").
     │ │ │ │ │ │ │ :ref:`stats <sysfs_schemes_stats>`/nr_tried,sz_tried,nr_applied,sz_applied,sz_ops_filter_passed,qt_exceeds,nr_snapshots,max_nr_snapshots
     │ │ │ │ │ │ │ :ref:`tried_regions <sysfs_schemes_tried_regions>`/total_bytes
     │ │ │ │ │ │ │ │ 0/start,end,nr_accesses,age,sz_filter_passed
+    │ │ │ │ │ │ │ │ │ counts/
+    │ │ │ │ │ │ │ │ │ 0-N
     │ │ │ │ │ │ │ │ ...
     │ │ │ │ │ │ ...
     │ │ │ │ ...
