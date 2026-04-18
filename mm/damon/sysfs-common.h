@@ -59,3 +59,24 @@ void damos_sysfs_update_effective_quotas(
 		struct damon_ctx *ctx);
 
 int damon_sysfs_memcg_path_to_id(char *memcg_path, u64 *id);
+
+/*
+ * sample directory
+ */
+
+struct damon_sysfs_sample {
+	struct kobject kobj;
+	struct damon_sysfs_primitives *primitives;
+	struct damon_sysfs_sample_filters *filters;
+};
+
+struct damon_sysfs_sample *damon_sysfs_sample_alloc(void);
+int damon_sysfs_sample_add_dirs(struct damon_sysfs_sample *sample);
+void damon_sysfs_sample_rm_dirs(struct damon_sysfs_sample *sample);
+void damon_sysfs_sample_release(struct kobject *kobj);
+
+extern const struct kobj_type damon_sysfs_sample_ktype;
+
+int damon_sysfs_set_sample_control(
+		struct damon_sample_control *control,
+		struct damon_sysfs_sample *sysfs_sample);
