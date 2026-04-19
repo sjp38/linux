@@ -390,8 +390,12 @@ static int damon_reclaim_enabled_store(const char *val,
 	if (damon_reclaim_enabled() == enabled)
 		return 0;
 
-	/* Called before init function.  The function will handle this. */
-	if (!damon_initialized())
+	/*
+	 * Called before init function, or init function is failed.  If this is
+	 * called before init function, the function will handle 'enabled'.  If
+	 * init function is failed, just avoid turning DAMON on.
+	 */
+	if (!ctx)
 		return 0;
 
 	return damon_reclaim_turn(enabled);
