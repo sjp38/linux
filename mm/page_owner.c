@@ -732,7 +732,7 @@ read_page_owner(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 			continue;
 
 		/* NUMA node filter using bitmask */
-		mask = READ_ONCE(owner_filter.nid_mask);
+		mask = owner_filter.nid_mask;
 		if (!nodes_empty(mask)) {
 			int nid = page_to_nid(page);
 
@@ -1049,7 +1049,7 @@ static ssize_t nid_filter_write(struct file *file,
 		goto out_free;
 	}
 
-	WRITE_ONCE(owner_filter.nid_mask, mask);
+	owner_filter.nid_mask = mask;
 	ret = count;
 
 out_free:
@@ -1059,7 +1059,7 @@ out_free:
 
 static int nid_filter_show(struct seq_file *m, void *v)
 {
-	nodemask_t mask = READ_ONCE(owner_filter.nid_mask);
+	nodemask_t mask = owner_filter.nid_mask;
 
 	if (nodes_empty(mask))
 		seq_puts(m, "-1\n");
