@@ -20,6 +20,7 @@ struct damon_sysfs_scheme_region {
 	unsigned int nr_accesses;
 	unsigned int age;
 	unsigned long sz_filter_passed;
+	unsigned char probe_hits[DAMON_MAX_PROBES];
 	struct list_head list;
 };
 
@@ -34,6 +35,9 @@ static struct damon_sysfs_scheme_region *damon_sysfs_scheme_region_alloc(
 	sysfs_region->ar = region->ar;
 	sysfs_region->nr_accesses = region->nr_accesses_bp / 10000;
 	sysfs_region->age = region->age;
+	memcpy(sysfs_region->probe_hits, region->probe_hits,
+			sizeof(*sysfs_region->probe_hits) *
+			ARRAY_SIZE(sysfs_region->probe_hits));
 	INIT_LIST_HEAD(&sysfs_region->list);
 	return sysfs_region;
 }
@@ -83,6 +87,28 @@ static ssize_t sz_filter_passed_show(struct kobject *kobj,
 	return sysfs_emit(buf, "%lu\n", region->sz_filter_passed);
 }
 
+static ssize_t probe_hits_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	struct damon_sysfs_scheme_region *region = container_of(kobj,
+			struct damon_sysfs_scheme_region, kobj);
+	char *str;
+	int ret, i;
+
+	str = kcalloc(2048, sizeof(*str), GFP_KERNEL);
+	if (!str)
+		return -ENOMEM;
+	for (i = 0; i < DAMON_MAX_PROBES; i++) {
+		snprintf(&str[strlen(str)], 2048 - strlen(str), "%hhu",
+				region->probe_hits[i]);
+		if (i < DAMON_MAX_PROBES - 1)
+			snprintf(&str[strlen(str)], 2048 - strlen(str), ",");
+	}
+	ret = sysfs_emit(buf, "%s\n", str);
+	kfree(str);
+	return ret;
+}
+
 static void damon_sysfs_scheme_region_release(struct kobject *kobj)
 {
 	struct damon_sysfs_scheme_region *region = container_of(kobj,
@@ -107,12 +133,16 @@ static struct kobj_attribute damon_sysfs_scheme_region_age_attr =
 static struct kobj_attribute damon_sysfs_scheme_region_sz_filter_passed_attr =
 		__ATTR_RO_MODE(sz_filter_passed, 0400);
 
+static struct kobj_attribute damon_sysfs_scheme_region_probe_hits_attr =
+		__ATTR_RO_MODE(probe_hits, 0400);
+
 static struct attribute *damon_sysfs_scheme_region_attrs[] = {
 	&damon_sysfs_scheme_region_start_attr.attr,
 	&damon_sysfs_scheme_region_end_attr.attr,
 	&damon_sysfs_scheme_region_nr_accesses_attr.attr,
 	&damon_sysfs_scheme_region_age_attr.attr,
 	&damon_sysfs_scheme_region_sz_filter_passed_attr.attr,
+	&damon_sysfs_scheme_region_probe_hits_attr.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(damon_sysfs_scheme_region);
