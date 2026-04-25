@@ -71,25 +71,33 @@ static inline unsigned long virt_to_fix(const unsigned long vaddr)
 #endif
 
 /* Return a pointer with offset calculated */
-#define __set_fixmap_offset(idx, phys, flags)				\
-({									\
-	unsigned long ________addr;					\
-	__set_fixmap(idx, phys, flags);					\
-	________addr = fix_to_virt(idx) + ((phys) & (PAGE_SIZE - 1));	\
-	________addr;							\
-})
+static inline unsigned long
+__set_fixmap_offset(enum fixed_addresses idx, phys_addr_t phys, pgprot_t flags)
+{
+	__set_fixmap(idx, phys, flags);
+	return fix_to_virt(idx) + (phys & (PAGE_SIZE - 1));
+}
 
-#define set_fixmap_offset(idx, phys) \
-	__set_fixmap_offset(idx, phys, FIXMAP_PAGE_NORMAL)
+static inline unsigned long
+set_fixmap_offset(enum fixed_addresses idx, phys_addr_t phys)
+{
+	return __set_fixmap_offset(idx, phys, FIXMAP_PAGE_NORMAL);
+}
 
 /*
  * Some hardware wants to get fixmapped without caching.
  */
-#define set_fixmap_nocache(idx, phys) \
-	__set_fixmap(idx, phys, FIXMAP_PAGE_NOCACHE)
+static inline void
+set_fixmap_nocache(enum fixed_addresses idx, phys_addr_t phys)
+{
+	__set_fixmap(idx, phys, FIXMAP_PAGE_NOCACHE);
+}
 
-#define set_fixmap_offset_nocache(idx, phys) \
-	__set_fixmap_offset(idx, phys, FIXMAP_PAGE_NOCACHE)
+static inline void
+set_fixmap_offset_nocache(enum fixed_addresses idx, phys_addr_t phys)
+{
+	__set_fixmap_offset(idx, phys, FIXMAP_PAGE_NOCACHE);
+}
 
 /*
  * Some fixmaps are for IO
