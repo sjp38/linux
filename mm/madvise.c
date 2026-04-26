@@ -2046,6 +2046,9 @@ static ssize_t vector_madvise(struct mm_struct *mm, struct iov_iter *iter,
 
 	total_len = iov_iter_count(iter);
 
+	if (!madvise_behavior_valid(behavior))
+		return -EINVAL;
+
 	ret = madvise_lock(&madv_behavior);
 	if (ret)
 		return ret;
