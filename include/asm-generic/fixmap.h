@@ -102,8 +102,10 @@ set_fixmap_offset_nocache(enum fixed_addresses idx, phys_addr_t phys)
 /*
  * Some fixmaps are for IO
  */
-#define set_fixmap_io(idx, phys) \
-	__set_fixmap(idx, phys, FIXMAP_PAGE_IO)
+static inline void set_fixmap_io(enum fixed_addresses idx, phys_addr_t phys)
+{
+	__set_fixmap(idx, phys, FIXMAP_PAGE_IO);
+}
 
 #endif /* __ASSEMBLY__ */
 #endif /* __ASM_GENERIC_FIXMAP_H */
