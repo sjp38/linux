@@ -212,7 +212,6 @@ enum damos_quota_goal_metric {
  * @last_psi_total:	Last measured total PSI
  * @nid:		Node id.
  * @memcg_id:		Memcg id.
- * @list:		List head for siblings.
  *
  * Data structure for getting the current score of the quota tuning goal.  The
  * score is calculated by how close @current_value and @target_value are.  Then
@@ -241,6 +240,8 @@ struct damos_quota_goal {
 			u64 memcg_id;
 		};
 	};
+/* private: */
+	/* List head for siblings. */
 	struct list_head list;
 };
 
