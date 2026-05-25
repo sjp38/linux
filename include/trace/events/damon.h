@@ -132,14 +132,12 @@ TRACE_EVENT(damon_monitor_intervals_tune,
 	TP_printk("sample_us=%lu", __entry->sample_us)
 );
 
-TRACE_EVENT_CONDITION(damon_region_aggregated,
+TRACE_EVENT(damon_region_aggregated,
 
 	TP_PROTO(unsigned int target_id, struct damon_region *r,
 		unsigned int nr_regions, unsigned int nr_probes),
 
 	TP_ARGS(target_id, r, nr_regions, nr_probes),
-
-	TP_CONDITION(nr_probes > 0),
 
 	TP_STRUCT__entry(
 		__field(unsigned long, target_id)
