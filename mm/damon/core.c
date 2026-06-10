@@ -2138,7 +2138,6 @@ void damon_stop(struct damon_ctx **ctxs, int nr_ctxs)
 	for (i = 0; i < nr_ctxs; i++)
 		/* nr_running_ctxs is decremented in kdamond_fn */
 		__damon_stop(ctxs[i]);
-	return 0;
 }
 
 /**
