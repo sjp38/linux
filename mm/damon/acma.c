@@ -435,10 +435,9 @@ static int damon_acma_turn(bool on)
 	int err;
 
 	if (!on) {
-		err = damon_stop(&ctx, 1);
-		if (!err)
-			kdamond_pid = -1;
-		return err;
+		damon_stop(&ctx, 1);
+		kdamond_pid = -1;
+		return 0;
 	}
 
 	err = damon_acma_apply_parameters();
