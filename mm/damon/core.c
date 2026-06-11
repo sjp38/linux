@@ -2096,8 +2096,10 @@ int damon_start(struct damon_ctx **ctxs, int nr_ctxs, bool exclusive)
 
 	for (i = 0; i < nr_ctxs; i++) {
 		err = __damon_start(ctxs[i]);
-		if (err)
+		if (err) {
+			damon_stop(ctxs, i);
 			break;
+		}
 		nr_running_ctxs++;
 	}
 	if (exclusive && nr_running_ctxs)
