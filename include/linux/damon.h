@@ -973,8 +973,6 @@ struct damon_sample_control {
  * thread other than the kdamond should be made using safe DAMON APIs,
  * including damon_call() and damos_walk().
  *
- * @ops:	Set of monitoring operations for given use cases.
- * @probes:	Head of probes (&damon_probe) list.
  * @addr_unit:	Scale factor for core to ops address conversion.
  * @min_region_sz:	Minimum region size.
  * @pause:	Pause kdamond main loop.
@@ -1026,16 +1024,18 @@ struct damon_ctx {
 	struct mutex kdamond_lock;
 
 /* public: */
-	struct damon_operations ops;
-	struct list_head probes;
-	struct damon_sample_control sample_control;
 	unsigned long addr_unit;
 	unsigned long min_region_sz;
 	bool pause;
 
 /* private: */
+	/* Set of monitoring operations for given use cases. */
+	struct damon_operations ops;
 	/* Head of monitoring targets (&damon_target) list. */
 	struct list_head adaptive_targets;
+	/* Head of probes (&damon_probe) list. */
+	struct list_head probes;
+	struct damon_sample_control sample_control;
 	/* Head of schemes (&damos) list. */
 	struct list_head schemes;
 
