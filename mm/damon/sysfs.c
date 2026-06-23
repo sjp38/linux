@@ -782,6 +782,10 @@ damon_sysfs_filter_type_names[] = {
 		.type = DAMON_FILTER_TYPE_MEMCG,
 		.name = "memcg",
 	},
+	{
+		.type = DAMON_FILTER_TYPE_PGIDLE,
+		.name = "pgidle",
+	},
 };
 
 static ssize_t type_show(struct kobject *kobj,
