@@ -796,10 +796,12 @@ struct damon_intervals_goal {
  *
  * @DAMON_FILTER_TYPE_ANON:	Anonymous pages.
  * @DAMON_FILTER_TYPE_MEMCG:	Specific memcg's pages.
+ * @DAMON_FILTER_TYPE_PGIDLE:	Idle pages.
  */
 enum damon_filter_type {
 	DAMON_FILTER_TYPE_ANON,
 	DAMON_FILTER_TYPE_MEMCG,
+	DAMON_FILTER_TYPE_PGIDLE,
 };
 
 /**
