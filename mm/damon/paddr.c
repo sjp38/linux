@@ -209,6 +209,12 @@ static bool damon_pa_filter_match(struct damon_filter *filter,
 			matched = filter->memcg_id == mem_cgroup_id(memcg);
 		rcu_read_unlock();
 		break;
+	case DAMON_FILTER_TYPE_PGIDLE:
+		if (!folio)
+			matched = true;
+		else
+			matched = !damon_folio_young(folio);
+		break;
 	default:
 		break;
 	}
