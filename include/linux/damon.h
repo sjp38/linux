@@ -1058,6 +1058,7 @@ struct damon_ctx {
 	struct damon_operations ops;
 	/* Head of monitoring targets (&damon_target) list. */
 	struct list_head adaptive_targets;
+	struct list_head preps;
 	/* Head of probes (&damon_probe) list. */
 	struct list_head probes;
 	struct damon_sample_control sample_control;
