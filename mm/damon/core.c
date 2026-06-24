@@ -118,7 +118,7 @@ int damon_select_ops(struct damon_ctx *ctx, enum damon_ops_id id)
 	return err;
 }
 
-static struct damon_prep *damon_new_prep(enum damon_prep_action action)
+struct damon_prep *damon_new_prep(enum damon_prep_action action)
 {
 	struct damon_prep *prep;
 
@@ -130,7 +130,7 @@ static struct damon_prep *damon_new_prep(enum damon_prep_action action)
 	return prep;
 }
 
-static void damon_add_prep(struct damon_probe *p, struct damon_prep *prep)
+void damon_add_prep(struct damon_probe *p, struct damon_prep *prep)
 {
 	list_add_tail(&prep->list, &p->preps);
 }
