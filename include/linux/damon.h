@@ -1062,7 +1062,6 @@ struct damon_ctx {
 	struct damon_operations ops;
 	/* Head of monitoring targets (&damon_target) list. */
 	struct list_head adaptive_targets;
-	struct list_head preps;
 	/* Head of probes (&damon_probe) list. */
 	struct list_head probes;
 	struct damon_sample_control sample_control;
@@ -1123,8 +1122,8 @@ static inline unsigned long damon_sz_region(struct damon_region *r)
 #define damon_for_each_filter_safe(f, next, p) \
 	list_for_each_entry_safe(f, next, &(p)->filters, list)
 
-#define damon_for_each_prep(p, ctx) \
-	list_for_each_entry(p, &(ctx)->preps, list)
+#define damon_for_each_prep(p, prep) \
+	list_for_each_entry(p, &(prep)->preps, list)
 
 #define damon_for_each_probe(p, ctx) \
 	list_for_each_entry(p, &(ctx)->probes, list)

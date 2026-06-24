@@ -894,7 +894,6 @@ struct damon_ctx *damon_new_ctx(void)
 	ctx->attrs.max_nr_regions = 1000;
 
 	INIT_LIST_HEAD(&ctx->probes);
-	INIT_LIST_HEAD(&ctx->preps);
 
 	ctx->sample_control.primitives_enabled.page_table = true;
 	INIT_LIST_HEAD(&ctx->sample_control.sample_filters);
