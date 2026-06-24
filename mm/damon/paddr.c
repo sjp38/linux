@@ -183,11 +183,11 @@ static unsigned int damon_pa_check_accesses(struct damon_ctx *ctx)
 }
 
 static void damon_pa_prep_probes_region(struct damon_region *r,
-		struct damon_ctx *ctx)
+		struct damon_probe *probe, struct damon_ctx *ctx)
 {
 	struct damon_prep *p;
 
-	damon_for_each_prep(p, ctx) {
+	damon_for_each_prep(p, probe) {
 		switch (p->action) {
 		case DAMON_PREP_SET_PGIDLE:
 			damon_pa_mkold(damon_pa_phys_addr(r->sampling_addr,
@@ -203,10 +203,13 @@ static void damon_pa_prep_probes(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 	struct damon_region *r;
+	struct damon_probe *p;
 
 	damon_for_each_target(t, ctx) {
-		damon_for_each_region(r, t)
-			damon_pa_prep_probes_region(r, ctx);
+		damon_for_each_region(r, t) {
+			damon_for_each_probe(p, ctx)
+				damon_pa_prep_probes_region(r, p, ctx);
+		}
 	}
 }
 
