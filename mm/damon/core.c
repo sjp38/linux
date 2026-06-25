@@ -3228,6 +3228,16 @@ static unsigned long damon_probe_hits_wsum(struct damon_region *r, bool last,
 	return sum;
 }
 
+static unsigned long damon_merge_score(struct damon_region *r, bool last,
+		struct damon_ctx *ctx)
+{
+	if (ctx->has_probe_weights)
+		return damon_probe_hits_wsum(r, last, ctx);
+	if (last)
+		return r->last_nr_accesses;
+	return r->nr_accesses;
+}
+
 /*
  * Merge adjacent regions having similar access frequencies
  *
