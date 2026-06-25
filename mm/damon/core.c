@@ -1672,6 +1672,7 @@ static int __damon_commit_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 	int err;
 	struct damos *scheme;
 	struct damos_quota_goal *goal;
+	struct damon_probe *probe;
 
 	dst->maybe_corrupted = true;
 	if (!is_power_of_2(src->min_region_sz))
@@ -1717,6 +1718,11 @@ static int __damon_commit_ctx(struct damon_ctx *dst, struct damon_ctx *src)
 		return err;
 	dst->addr_unit = src->addr_unit;
 	dst->min_region_sz = src->min_region_sz;
+
+	damon_for_each_probe(probe, dst) {
+		if (probe->weight)
+			dst->has_probe_weights = true;
+	}
 
 	dst->maybe_corrupted = false;
 	return 0;
