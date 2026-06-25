@@ -898,6 +898,9 @@ struct damon_ctx {
 	struct list_head schemes;
 
 	struct rnd_state rnd_state;
+
+	/* has non-zero probe weights */
+	bool has_probe_weights;
 };
 
 /* Get a random number in [@l, @r) using @ctx's lockless PRNG. */
