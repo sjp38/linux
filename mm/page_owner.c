@@ -926,7 +926,6 @@ static ssize_t page_owner_write(struct file *file,
 	char *orig;
 	char *token;
 	int ret;
-	size_t max_input_len;
 	struct page_owner_filter_state *state = file->private_data;
 	enum page_owner_print_mode new_print_mode;
 	unsigned long flags;
@@ -935,9 +934,7 @@ static ssize_t page_owner_write(struct file *file,
 	 * Maximum input length for filter commands:
 	 * 32: print_mode command max length is 17 ("mode=stack_handle").
 	 */
-	max_input_len = 32;
-
-	if (count > max_input_len)
+	if (count > 32)
 		return -EINVAL;
 
 	kbuf = memdup_user_nul(buf, count);
