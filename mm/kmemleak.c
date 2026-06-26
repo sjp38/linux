@@ -1850,6 +1850,7 @@ static void kmemleak_scan(void)
 	int __maybe_unused i;
 	struct xarray dedup;
 	int new_leaks = 0;
+	int stop = 0;
 
 	jiffies_last_scan = jiffies;
 
@@ -1896,7 +1897,7 @@ static void kmemleak_scan(void)
 	for_each_possible_cpu(i) {
 		if (scan_large_block(__per_cpu_start + per_cpu_offset(i),
 				     __per_cpu_end + per_cpu_offset(i)))
-			break;
+			goto scan_gray;
 	}
 #endif
 
@@ -1908,7 +1909,6 @@ static void kmemleak_scan(void)
 		unsigned long start_pfn = zone->zone_start_pfn;
 		unsigned long end_pfn = zone_end_pfn(zone);
 		unsigned long pfn;
-		int stop = 0;
 
 		for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 			struct page *page = pfn_to_online_page(pfn);
@@ -1933,6 +1933,8 @@ static void kmemleak_scan(void)
 			break;
 	}
 	put_online_mems();
+	if (stop)
+		goto scan_gray;
 
 	/*
 	 * Scanning the task stacks (may introduce false negatives).
@@ -1944,6 +1946,7 @@ static void kmemleak_scan(void)
 	 * Scan the objects already referenced from the sections scanned
 	 * above.
 	 */
+scan_gray:
 	scan_gray_list();
 
 	/*
