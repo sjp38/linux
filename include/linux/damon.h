@@ -843,6 +843,7 @@ struct damon_attrs {
  * including damon_call() and damos_walk().
  *
  * @ops:	Set of monitoring operations for given use cases.
+ * @probes:	Head of probes (&damon_probe) list.
  * @addr_unit:	Scale factor for core to ops address conversion.
  * @min_region_sz:	Minimum region size.
  * @pause:	Pause kdamond main loop.
