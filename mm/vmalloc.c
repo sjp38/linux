@@ -3629,6 +3629,7 @@ static int vmap_batched(unsigned long addr, unsigned long end,
 				prot, pages + idx, prev_shift);
 
 out:
+	(void)start;	/* several archs use a macro for flush_cache_vmap() */
 	flush_cache_vmap(start, end);
 	return err;
 }
