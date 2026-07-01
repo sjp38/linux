@@ -3708,14 +3708,15 @@ static int kdamond_fn(void *data)
 		if (kdamond_wait_activation(ctx))
 			break;
 
-		if (ctx->ops.prepare_access_checks)
+		if (!ctx->has_probe_weights && ctx->ops.prepare_access_checks)
 			ctx->ops.prepare_access_checks(ctx);
 
 		kdamond_usleep(sample_interval);
 		ctx->passed_sample_intervals++;
 
-		if (ctx->ops.check_accesses)
+		if (!ctx->has_probe_weights && ctx->ops.check_accesses)
 			max_nr_accesses = ctx->ops.check_accesses(ctx);
+
 		if (ctx->ops.apply_probes)
 			ctx->ops.apply_probes(ctx);
 
