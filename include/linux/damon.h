@@ -1116,14 +1116,17 @@ static inline unsigned long damon_sz_region(struct damon_region *r)
 	return r->ar.end - r->ar.start;
 }
 
+#define damon_for_each_prep(p, prep) \
+	list_for_each_entry(p, &(prep)->preps, list)
+
+#define damon_for_each_prep_safe(p, next, prep) \
+	list_for_each_entry_safe(p, next, &(prep)->preps, list)
+
 #define damon_for_each_filter(f, p) \
 	list_for_each_entry(f, &(p)->filters, list)
 
 #define damon_for_each_filter_safe(f, next, p) \
 	list_for_each_entry_safe(f, next, &(p)->filters, list)
-
-#define damon_for_each_prep(p, prep) \
-	list_for_each_entry(p, &(prep)->preps, list)
 
 #define damon_for_each_probe(p, ctx) \
 	list_for_each_entry(p, &(ctx)->probes, list)
