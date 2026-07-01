@@ -819,7 +819,7 @@ read_page_owner(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 				spin_unlock_irqrestore(&state->lock, flags);
 				goto ext_put_continue;
 			}
-			nid = memdesc_nid(page_flags);
+			nid = memdesc_nid(&page_flags);
 			if (!node_isset(nid, state->nid_filter)) {
 				spin_unlock_irqrestore(&state->lock, flags);
 				goto ext_put_continue;
