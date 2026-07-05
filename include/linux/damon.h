@@ -74,6 +74,7 @@ struct damon_region {
 	/* for age calculation. */
 	unsigned int last_nr_accesses;
 	unsigned char last_probe_hits[DAMON_MAX_PROBES];
+	bool access_reported;
 };
 
 /**
