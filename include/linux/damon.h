@@ -876,6 +876,33 @@ struct damon_attrs {
 };
 
 /**
+ * struct damon_primitives_enabled - Enablement of access sampling primitives.
+ *
+ * @page_table:	Page table Accessed bits scanning.
+ * @page_fault:	Page faults monitoring.
+ *
+ * Read &struct damon_sample_control for more details.
+ */
+struct damon_primitives_enabled {
+	bool page_table;
+	bool page_fault;
+};
+
+/**
+ * struct damon_sample_control - Low level access check sampling rules.
+ *
+ * @primitives_enabled:	Enablement of access check primitives.
+ *
+ * DAMON collect low level access information using sampling, and aggregate
+ * that to make higher access pattern picture.  It can use multiple sampling
+ * primitives including page table accessed bits and page fault events.  This
+ * struct is for controlling what sampling primitives to use (enable).
+ */
+struct damon_sample_control {
+	struct damon_primitives_enabled primitives_enabled;
+};
+
+/**
  * struct damon_ctx - Represents a context for each monitoring.  This is the
  * main interface that allows users to set the attributes and get the results
  * of the monitoring.
@@ -958,6 +985,7 @@ struct damon_ctx {
 	struct list_head adaptive_targets;
 	/* Head of probes (&damon_probe) list. */
 	struct list_head probes;
+	struct damon_sample_control sample_control;
 	/* Head of schemes (&damos) list. */
 	struct list_head schemes;
 
