@@ -1062,7 +1062,8 @@ static inline unsigned long vma_anon_address(const struct vm_area_struct *vma,
 
 /*
  * At what user virtual address will none of the range be found in vma?
- * Assumes that vma_address() already returned a good starting address.
+ * Assumes that vma_anon_address() or vma_filebacked_address() already returned
+ * a good starting address.
  */
 static inline unsigned long vma_address_end(struct page_vma_mapped_walk *pvmw)
 {
