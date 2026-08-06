@@ -569,7 +569,7 @@ out:
 	return 0;
 }
 #else
-#define damon_young_hugetlb_entry NULL
+#define damon_va_probe_hugetlb_entry NULL
 #endif /* CONFIG_HUGETLB_PAGE */
 
 static void __damon_va_apply_probes(struct damon_ctx *ctx,
