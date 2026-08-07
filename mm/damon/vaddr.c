@@ -598,6 +598,7 @@ static unsigned int damon_va_apply_probes(struct damon_ctx *ctx,
 	struct damon_target *t;
 	struct mm_struct *mm;
 	struct damon_region *r;
+	unsigned int max_wsum = 0;
 
 	damon_for_each_target(t, ctx) {
 		mm = damon_get_mm(t);
@@ -606,12 +607,15 @@ static unsigned int damon_va_apply_probes(struct damon_ctx *ctx,
 				r->sampling_addr = damon_rand(ctx, r->ar.start,
 						r->ar.end);
 			__damon_va_apply_probes(ctx, mm, r);
+			if (return_max_wsum)
+				max_wsum = max(damon_probe_hits_wsum(r, false,
+							ctx), max_wsum);
 		}
 		if (mm)
 			mmput(mm);
 	}
 
-	return 0;
+	return max_wsum;
 }
 
 static bool damos_va_filter_young_match(struct damos_filter *filter,
