@@ -512,6 +512,9 @@ static void damon_va_prep_probes(struct damon_ctx *ctx, bool set_samples)
 		if (!mm)
 			continue;
 		damon_for_each_region(r, t) {
+			if (set_samples)
+				r->sampling_addr = damon_rand(ctx, r->ar.start,
+						r->ar.end);
 			damon_for_each_probe(p, ctx)
 				damon_va_prep_probe_region(ctx, mm, r, p);
 		}
