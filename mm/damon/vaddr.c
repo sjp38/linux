@@ -601,8 +601,12 @@ static unsigned int damon_va_apply_probes(struct damon_ctx *ctx,
 
 	damon_for_each_target(t, ctx) {
 		mm = damon_get_mm(t);
-		damon_for_each_region(r, t)
+		damon_for_each_region(r, t) {
+			if (set_samples)
+				r->sampling_addr = damon_rand(ctx, r->ar.start,
+						r->ar.end);
 			__damon_va_apply_probes(ctx, mm, r);
+		}
 		if (mm)
 			mmput(mm);
 	}
