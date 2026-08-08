@@ -12,6 +12,17 @@ config DAMON
 	  See https://www.kernel.org/doc/html/latest/mm/damon/index.html for
 	  more information.
 
+config DAMON_AUTOTUNE_PARAMS
+	bool "Auto-tune DAMON Parameters"
+	depends on DAMON
+	help
+	  This enables DAMON parameters auto-tuning features by default.  This
+	  only changes the default parameter values to enable auto-tuning
+	  features.  Users can manually turn off auto-tuning if needed in
+	  runtime.
+
+	  If unsure, say Y.
+
 config DAMON_DEBUG_SANITY
 	bool "Check sanity of DAMON code"
 	depends on DAMON
