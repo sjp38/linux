@@ -1224,6 +1224,7 @@ static int damos_commit_quota_goal(
 	if (!src->target_value)
 		return  -EINVAL;
 	dst->metric = src->metric;
+	dst->complement = src->complement;
 	dst->target_value = src->target_value;
 	if (dst->metric == DAMOS_QUOTA_USER_INPUT)
 		dst->current_value = src->current_value;
@@ -3239,6 +3240,19 @@ static void damos_set_quota_goal_current_value(struct damon_ctx *c,
 	default:
 		break;
 	}
+	if (!goal->complement)
+		return;
+
+	/* updte current_value to complemented value */
+
+	/* for user_input, users set complemented value on their own */
+	if (goal->metric == DAMOS_QUOTA_USER_INPUT)
+		return;
+	if (goal->metric == DAMOS_QUOTA_SOME_MEM_PSI_US)
+		goal->current_value = s->quota.reset_interval * 1000 -
+			goal->current_value;
+	else
+		goal->current_value = 10000 - goal->current_value;
 }
 
 /* Return the highest score since it makes schemes least aggressive */
