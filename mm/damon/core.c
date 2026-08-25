@@ -2740,7 +2740,7 @@ static bool damos_filter_match(struct damon_ctx *ctx, struct damon_target *t,
 	bool matched = false;
 	struct damon_target *ti;
 	int target_idx = 0;
-	unsigned long start, end;
+	unsigned long start, end, wsum;
 
 	switch (filter->type) {
 	case DAMOS_FILTER_TYPE_TARGET:
@@ -2774,6 +2774,11 @@ static bool damos_filter_match(struct damon_ctx *ctx, struct damon_target *t,
 		/* start inside the range */
 		damon_split_region_at(t, r, end - r->ar.start);
 		matched = true;
+		break;
+	case DAMOS_FILTER_TYPE_PROBE_HITS_WSUM:
+		wsum = damon_probe_hits_wsum(r, false, ctx);
+		matched = filter->range_min <= wsum &&
+			wsum <= filter->range_max;
 		break;
 	default:
 		return false;
