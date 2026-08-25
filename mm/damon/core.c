@@ -3424,6 +3424,15 @@ static void damos_set_quota_goal_current_value(struct damon_ctx *c,
 	default:
 		break;
 	}
+	switch (goal->metric) {
+	case DAMOS_QUOTA_USER_INPUT:
+	case DAMOS_QUOTA_SOME_MEM_PSI_US:
+		return;
+	default:
+		break;
+	}
+	if (goal->complement)
+		goal->current_value = 10000 - goal->current_value;
 }
 
 /* Return the highest score since it makes schemes least aggressive */
