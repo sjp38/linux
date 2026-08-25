@@ -209,7 +209,7 @@ static int damon_acma_set_scheme_quota(struct damos *scheme, struct damos *old,
 {
 	if (old)
 		damon_acma_copy_quota_status(&scheme->quota, &old->quota);
-	goal = damos_new_quota_goal(goal_metric, quota_mem_pressure_us);
+	goal = damos_new_quota_goal(goal_metric, false, quota_mem_pressure_us);
 	if (!goal)
 		return -ENOMEM;
 	damos_add_quota_goal(&scheme->quota, goal);
