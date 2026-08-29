@@ -595,6 +595,21 @@ damos_sysfs_filter_type_names[] = {
 	},
 };
 
+static ssize_t avail_types_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	int len = 0;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(damos_sysfs_filter_type_names); i++) {
+		const struct damos_sysfs_filter_type_name *type_name;
+
+		type_name = &damos_sysfs_filter_type_names[i];
+		len += sysfs_emit_at(buf, len, "%s\n", type_name->name);
+	}
+	return len;
+}
+
 static ssize_t type_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
@@ -843,6 +858,9 @@ static void damon_sysfs_scheme_filter_release(struct kobject *kobj)
 	kfree(filter);
 }
 
+static struct kobj_attribute damon_sysfs_scheme_filter_avail_types_attr =
+		__ATTR_RO_MODE(avail_types, 0400);
+
 static struct kobj_attribute damon_sysfs_scheme_filter_type_attr =
 		__ATTR_RW_MODE(type, 0600);
 
@@ -871,6 +889,7 @@ static struct kobj_attribute damon_sysfs_scheme_filter_damon_target_idx_attr =
 		__ATTR_RW_MODE(damon_target_idx, 0600);
 
 static struct attribute *damon_sysfs_scheme_filter_attrs[] = {
+	&damon_sysfs_scheme_filter_avail_types_attr.attr,
 	&damon_sysfs_scheme_filter_type_attr.attr,
 	&damon_sysfs_scheme_filter_matching_attr.attr,
 	&damon_sysfs_scheme_filter_allow_attr.attr,
