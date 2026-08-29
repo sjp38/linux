@@ -782,6 +782,21 @@ damon_sysfs_prep_action_names[] = {
 	},
 };
 
+static ssize_t avail_prep_actions_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	int len = 0;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(damon_sysfs_prep_action_names); i++) {
+		const struct damon_sysfs_prep_action_name *action_name;
+
+		action_name = &damon_sysfs_prep_action_names[i];
+		len += sysfs_emit_at(buf, len, "%s\n", action_name->name);
+	}
+	return len;
+}
+
 static ssize_t prep_action_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
@@ -831,10 +846,14 @@ static void damon_sysfs_prep_release(struct kobject *kobj)
 	kfree(prep);
 }
 
+static struct kobj_attribute damon_sysfs_prep_avail_prep_actions_attr =
+		__ATTR_RO_MODE(avail_prep_actions, 0400);
+
 static struct kobj_attribute damon_sysfs_prep_prep_action_attr =
 		__ATTR_RW_MODE(prep_action, 0600);
 
 static struct attribute *damon_sysfs_prep_attrs[] = {
+	&damon_sysfs_prep_avail_prep_actions_attr.attr,
 	&damon_sysfs_prep_prep_action_attr.attr,
 	NULL,
 };
