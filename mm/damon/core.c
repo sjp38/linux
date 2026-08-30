@@ -3530,6 +3530,22 @@ static void damos_trace_esz(struct damon_ctx *c, struct damos *s,
 	trace_damos_esz(cidx, sidx, quota->esz);
 }
 
+static void damos_reset_invalid_charge_target_from(struct damos_quota *quota,
+		struct damon_ctx *c)
+{
+	struct damon_target *t;
+
+	t = quota->charge_target_from;
+	if (!t)
+		return;
+	if (!c->ops.target_valid)
+		return;
+	if (c->ops.target_valid(t))
+		return;
+	quota->charge_target_from = NULL;
+	quota->charge_addr_from = 0;
+}
+
 static void damos_adjust_quota(struct damon_ctx *c, struct damos *s)
 {
 	struct damos_quota *quota = &s->quota;
@@ -3569,6 +3585,8 @@ static void damos_adjust_quota(struct damon_ctx *c, struct damos *s)
 		if (trace_damos_esz_enabled() && quota->esz != cached_esz)
 			damos_trace_esz(c, s, quota);
 	}
+
+	damos_reset_invalid_charge_target_from(quota, c);
 
 	if (!c->ops.get_scheme_score)
 		return;
