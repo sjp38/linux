@@ -5403,13 +5403,25 @@ void __unmap_hugepage_range(struct mmu_gather *tlb, struct vm_area_struct *vma,
 }
 
 void __hugetlb_zap_begin(struct vm_area_struct *vma,
-			 unsigned long *start, unsigned long *end)
+			 unsigned long *start, unsigned long *end,
+			 struct zap_details *details)
 {
+	zap_flags_t zap_flags = details ? details->zap_flags : 0;
+
 	if (!vma->vm_file)	/* hugetlbfs_file_mmap error */
 		return;
 
 	adjust_range_if_pmd_sharing_possible(vma, start, end);
-	hugetlb_vma_lock_write(vma);
+
+	/*
+	 * A final unmap cannot race with a fault in this VMA because
+	 * mmap_lock prevents the fault from entering a VMA which is being
+	 * removed.  Skip the private resv_map lock in that case to avoid
+	 * inverting its lock order with mmap_lock.  Shareable mappings
+	 * still need the VMA lock to protect PMD sharing.
+	 */
+	if (!(zap_flags & ZAP_FLAG_UNMAP) || __vma_shareable_lock(vma))
+		hugetlb_vma_lock_write(vma);
 	if (vma->vm_file)
 		i_mmap_lock_write(vma->vm_file->f_mapping);
 }

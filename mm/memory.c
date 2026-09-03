@@ -2268,7 +2268,7 @@ void unmap_vmas(struct mmu_gather *tlb, struct unmap_desc *unmap)
 		unsigned long start = max(vma->vm_start, unmap->vma_start);
 		unsigned long end = min(vma->vm_end, unmap->vma_end);
 
-		hugetlb_zap_begin(vma, &start, &end);
+		hugetlb_zap_begin(vma, &start, &end, &details);
 		__zap_vma_range(tlb, vma, start, end, &details);
 		hugetlb_zap_end(vma, &details);
 		vma = mas_find(unmap->mas, unmap->tree_end - 1);
