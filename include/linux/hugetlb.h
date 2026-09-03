@@ -321,7 +321,8 @@ static inline void adjust_range_if_pmd_sharing_possible(
 
 static inline void hugetlb_zap_begin(
 				struct vm_area_struct *vma,
-				unsigned long *start, unsigned long *end)
+				unsigned long *start, unsigned long *end,
+				struct zap_details *details)
 {
 }
 
