@@ -1014,6 +1014,7 @@ static void damos_test_commit_quota_goals_for(struct kunit *test,
 		 * Make it kfree()-able.
 		 */
 		goal = damos_new_quota_goal(dst_goals[i].metric,
+				dst_goals[i].complementfalse,
 				dst_goals[i].target_value);
 		if (!goal)
 			goto out;
