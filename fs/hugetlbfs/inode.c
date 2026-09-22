@@ -920,6 +920,9 @@ static struct inode *hugetlbfs_get_inode(struct super_block *sb,
 		simple_inode_init_ts(inode);
 		info->resv_map = resv_map;
 		info->seals = F_SEAL_SEAL;
+#ifdef CONFIG_HUGETLB_PMD_PAGE_TABLE_SHARING
+		info->pmd_sharing_seen = false;
+#endif
 		switch (mode & S_IFMT) {
 		default:
 			init_special_inode(inode, mode, dev);
