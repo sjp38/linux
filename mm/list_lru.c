@@ -677,9 +677,7 @@ int __list_lru_init(struct list_lru *lru, bool memcg_aware, struct shrinker *shr
 	else
 		lru->shrinker_id = -1;
 
-	if (mem_cgroup_disabled() ||
-	    (mem_cgroup_kmem_disabled() &&
-	     (!shrinker || !(shrinker->flags & SHRINKER_NONSLAB))))
+	if (mem_cgroup_disabled() || mem_cgroup_kmem_disabled())
 		memcg_aware = false;
 #endif
 
