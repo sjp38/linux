@@ -72,11 +72,10 @@ static int lru_shrinker_id(struct list_lru *lru)
 }
 
 static inline struct list_lru_one *
-list_lru_from_memcg(struct list_lru *lru, int nid, struct mem_cgroup *memcg)
+list_lru_from_memcg_idx(struct list_lru *lru, int nid, int idx)
 {
-	if (list_lru_memcg_aware(lru) && memcg && !mem_cgroup_is_root(memcg)) {
-		struct list_lru_memcg *mlru =
-			xa_load(&lru->xa, mem_cgroup_id(memcg));
+	if (list_lru_memcg_aware(lru) && idx >= 0) {
+		struct list_lru_memcg *mlru = xa_load(&lru->xa, idx);
 
 		return mlru ? &mlru->node[nid] : NULL;
 	}
@@ -92,7 +91,7 @@ lock_list_lru_of_memcg(struct list_lru *lru, int nid,
 
 	rcu_read_lock();
 again:
-	l = list_lru_from_memcg(lru, nid, *memcg);
+	l = list_lru_from_memcg_idx(lru, nid, memcg_kmem_id(*memcg));
 	if (likely(l)) {
 		lock_list_lru(l, irq, irq_flags);
 		if (likely(READ_ONCE(l->nr_items) != LONG_MIN)) {
@@ -133,7 +132,7 @@ static inline bool list_lru_memcg_aware(struct list_lru *lru)
 }
 
 static inline struct list_lru_one *
-list_lru_from_memcg(struct list_lru *lru, int nid, struct mem_cgroup *memcg)
+list_lru_from_memcg_idx(struct list_lru *lru, int nid, int idx)
 {
 	return &lru->node[nid].lru;
 }
@@ -314,7 +313,7 @@ unsigned long list_lru_count_one(struct list_lru *lru,
 	long count;
 
 	rcu_read_lock();
-	l = list_lru_from_memcg(lru, nid, memcg);
+	l = list_lru_from_memcg_idx(lru, nid, memcg_kmem_id(memcg));
 	count = l ? READ_ONCE(l->nr_items) : 0;
 	rcu_read_unlock();
 
@@ -503,10 +502,11 @@ static void memcg_reparent_list_lru_one(struct list_lru *lru, int nid,
 					struct list_lru_one *src,
 					struct mem_cgroup *dst_memcg)
 {
+	int dst_idx = dst_memcg->kmemcg_id;
 	struct list_lru_one *dst;
 
 	spin_lock_irq(&src->lock);
-	dst = list_lru_from_memcg(lru, nid, dst_memcg);
+	dst = list_lru_from_memcg_idx(lru, nid, dst_idx);
 	spin_lock_nested(&dst->lock, SINGLE_DEPTH_NESTING);
 
 	list_splice_init(&src->list, &dst->list);
@@ -536,7 +536,7 @@ void memcg_reparent_list_lrus(struct mem_cgroup *memcg, struct mem_cgroup *paren
 		 * allocating a new mlru since CSS_DYING is already set for this
 		 * memcg a rcu grace period ago.
 		 */
-		mlru = xa_load(&lru->xa, mem_cgroup_id(memcg));
+		mlru = xa_load(&lru->xa, memcg->kmemcg_id);
 		if (!mlru)
 			continue;
 
@@ -551,7 +551,7 @@ void memcg_reparent_list_lrus(struct mem_cgroup *memcg, struct mem_cgroup *paren
 		for_each_node(i)
 			memcg_reparent_list_lru_one(lru, i, &mlru->node[i], parent);
 
-		xa_erase_irq(&lru->xa, mem_cgroup_id(memcg));
+		xa_erase_irq(&lru->xa, memcg->kmemcg_id);
 
 		/*
 		 * Here all list_lrus corresponding to the cgroup are guaranteed
@@ -566,10 +566,9 @@ void memcg_reparent_list_lrus(struct mem_cgroup *memcg, struct mem_cgroup *paren
 static inline bool memcg_list_lru_allocated(struct mem_cgroup *memcg,
 					    struct list_lru *lru)
 {
-	if (!memcg || mem_cgroup_is_root(memcg))
-		return true;
+	int idx = memcg->kmemcg_id;
 
-	return xa_load(&lru->xa, mem_cgroup_id(memcg));
+	return idx < 0 || xa_load(&lru->xa, idx);
 }
 
 static int __memcg_list_lru_alloc(struct mem_cgroup *memcg,
@@ -603,7 +602,7 @@ static int __memcg_list_lru_alloc(struct mem_cgroup *memcg,
 			if (!mlru)
 				return -ENOMEM;
 		}
-		xas_set(&xas, mem_cgroup_id(pos));
+		xas_set(&xas, pos->kmemcg_id);
 		do {
 			xas_lock_irqsave(&xas, flags);
 			if (!xas_load(&xas) && !css_is_dying(&pos->css)) {
