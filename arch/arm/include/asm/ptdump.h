@@ -32,7 +32,7 @@ void ptdump_check_wx(void);
 
 #endif /* CONFIG_ARM_PTDUMP_CORE */
 
-#ifdef CONFIG_ARM_DEBUG_WX
+#ifdef CONFIG_ARM_CHECK_WX
 #define arm_debug_checkwx() ptdump_check_wx()
 #else
 #define arm_debug_checkwx() do { } while (0)

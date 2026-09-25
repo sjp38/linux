@@ -33,7 +33,7 @@ bool ptdump_check_wx(void);
 
 static inline void debug_checkwx(void)
 {
-	if (IS_ENABLED(CONFIG_DEBUG_WX))
+	if (IS_ENABLED(CONFIG_CHECK_WX))
 		ptdump_check_wx();
 }
 
