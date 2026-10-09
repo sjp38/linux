@@ -49,13 +49,6 @@ LDLIBS = -lrt -lpthread -lm
 # warnings.
 CFLAGS += -U_FORTIFY_SOURCE
 
-KDIR ?= $(if $(O),$(O),$(realpath ../../../..))
-ifneq (,$(wildcard $(KDIR)/Module.symvers))
-TEST_GEN_MODS_DIR := page_frag
-else
-PAGE_FRAG_WARNING = "missing Module.symvers, please have the kernel built first"
-endif
-
 TEST_GEN_FILES = cow
 TEST_GEN_FILES += compaction_test
 TEST_GEN_FILES += gup
@@ -277,14 +270,5 @@ all: warn_missing_liburing
 warn_missing_liburing:
 	@echo ; \
 	echo "Warning: missing liburing support. Some tests will be skipped." ; \
-	echo
-endif
-
-ifneq ($(PAGE_FRAG_WARNING),)
-all: warn_missing_page_frag
-
-warn_missing_page_frag:
-	@echo ; \
-	echo "Warning: $(PAGE_FRAG_WARNING). page_frag test will be skipped." ; \
 	echo
 endif

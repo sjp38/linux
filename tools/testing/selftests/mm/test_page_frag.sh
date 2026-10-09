@@ -11,7 +11,7 @@
 #     a) analyse performance of page fragment allocations;
 #     b) stressing and stability check of page_frag subsystem.
 
-DRIVER="./page_frag/page_frag_test.ko"
+DRIVER="test_page_frag"
 CPU_LIST=$(grep -m 2 processor /proc/cpuinfo | cut -d ' ' -f 2)
 TEST_CPU_0=$(echo $CPU_LIST | awk '{print $1}')
 
@@ -52,13 +52,13 @@ check_test_requirements()
 		exit $ksft_skip
 	fi
 
-	if ! which insmod > /dev/null 2>&1; then
-		echo "$0: You need insmod installed"
+	if ! command -v modprobe > /dev/null 2>&1; then
+		echo "$0: You need modprobe installed"
 		exit $ksft_skip
 	fi
 
-	if [ ! -f $DRIVER ]; then
-		echo "$0: You need to compile page_frag_test module"
+	if ! modinfo "$DRIVER" > /dev/null 2>&1; then
+		echo "$0: You need CONFIG_TEST_PAGE_FRAG=m and the module installed"
 		exit $ksft_skip
 	fi
 }
@@ -67,21 +67,21 @@ run_nonaligned_check()
 {
 	echo "Run performance tests to evaluate how fast nonaligned alloc API is."
 
-	insmod $DRIVER $NONALIGNED_PARAM > /dev/null 2>&1
+	modprobe "$DRIVER" $NONALIGNED_PARAM > /dev/null 2>&1
 }
 
 run_aligned_check()
 {
 	echo "Run performance tests to evaluate how fast aligned alloc API is."
 
-	insmod $DRIVER $ALIGNED_PARAM > /dev/null 2>&1
+	modprobe "$DRIVER" $ALIGNED_PARAM > /dev/null 2>&1
 }
 
 run_smoke_check()
 {
 	echo "Run smoke test."
 
-	insmod $DRIVER $SMOKE_PARAM > /dev/null 2>&1
+	modprobe "$DRIVER" $SMOKE_PARAM > /dev/null 2>&1
 }
 
 usage()
@@ -144,7 +144,7 @@ function run_manual_check()
 	validate_passed_args $@
 
 	echo "Run the test with following parameters: $@"
-	insmod $DRIVER $@ > /dev/null 2>&1
+	modprobe "$DRIVER" "$@" > /dev/null 2>&1
 }
 
 function run_test()

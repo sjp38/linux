@@ -2593,6 +2593,17 @@ config TEST_BITOPS
 
 	  If unsure, say N.
 
+config TEST_PAGE_FRAG
+	tristate "Test module for page fragment allocation"
+	depends on m
+	help
+	  This builds the "test_page_frag" module to test the correctness
+	  and performance of the page fragment allocator. The test runs
+	  at module load time and does not remain loaded after completion.
+	  Use tools/testing/selftests/mm/test_page_frag.sh to run it.
+
+	  If unsure, say N.
+
 config TEST_VMALLOC
 	tristate "Test module for stress/performance analysis of vmalloc allocator"
 	default n

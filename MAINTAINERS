@@ -17278,6 +17278,7 @@ F:	include/linux/cma.h
 F:	include/linux/dmapool.h
 F:	include/linux/ioremap.h
 F:	include/linux/page_idle.h
+F:	lib/test_page_frag.c
 F:	mm/backing-dev.c
 F:	mm/cma.c
 F:	mm/cma_debug.c
