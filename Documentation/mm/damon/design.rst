@@ -355,6 +355,50 @@ monitoring.
 Refer to the :ref:`admin guide <damon_usage_sysfs_probes>` to know how users
 can use the mode.
 
+Data Attributes Reporting
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Infrastructure for receiving attribute information from DAMON-external kernel
+components.
+
+Because DAMON is not hooked in every place but runs in its own worker thread,
+it cannot retrieve some types of data attribute information by itself.  Many of
+those are available to DAMON-external kernel components such as perf event
+callbacks and page fault handler.  For such cases, DAMON provides attributes
+reporting infrastructure.  Using its API, any kernel components can report
+their finding to DAMON.
+
+The API for doing the report is a function, damon_report_attrs().  The function
+receives the attribute information and saves it in DAMON's internal buffer.
+The function is safe to be called in any context including NMI.  The internal
+buffer has a fixed size and keeps only latest reports of the size.  Because one
+buffer size doesn't fit all, multiple report buffers of different size and
+rules can be generated and shared by multiple reporters.  DAMON provides API
+for such management of report buffers.  damon_report_attrs() can specify into
+which buffer the report should be saved.  DAMON user interface (ABI) for doing
+the buffer setup, and enable/disable reports of supported types is also
+supported.
+
+The data attribute probe supports the reports.  The probes can be configured to
+hit for a given memory region depending on the existence of specific types of
+reports that associated with the memory region in given report buffers.
+
+For example, per-CPUs write-only monitoring can be configured using this
+infrastructure like below.
+
+The user sets a report buffer and enable CPU instruction sampling report for
+the buffer.  DAMON will enable perf event counter for CPU cycles sampling.  The
+sampling callback will save the sampling time CPU instruction and the id of the
+CPU that was executing it, into the DAMON report buffer, using
+damon_report_attrs().  DAMON can automatically adjust the perf event sampling
+frequency to minimize old report drops due to the buffer size limit.
+
+The user further sets a DAMON probe.  The probe hits for a given DAMON region
+if a store instruction for a memory in the region that was executed from a
+given CPUs group exists in the report buffer.  As a result, the probe hit
+counts represent relative frequency of writes from a given CPUs group to a
+given memory region.
+
 Dynamic Target Space Updates Handling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
