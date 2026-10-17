@@ -63,6 +63,11 @@ comma (",").
 .. parsed-literal::
 
     :ref:`/sys/kernel/mm/damon <sysfs_root>`/admin
+    │ attr_reports
+    │ │ queue/nr_queues
+    │ │ │ 0/size
+    │ │ attrs/nr_attrs
+    │ │ │ 0/report_type
     │ :ref:`kdamonds <sysfs_kdamonds>`/nr_kdamonds
     │ │ :ref:`0 <sysfs_kdamond>`/state,pid,refresh_ms
     │ │ │ :ref:`contexts <sysfs_contexts>`/nr_contexts
