@@ -836,9 +836,12 @@ struct damon_report {
  * enum damon_prep_action - DAMON probing preparation action.
  *
  * @DAMON_PREP_SET_PGIDLE:	Set the probing memory as idle page.
+ * @DAMON_PREP_SET_FLUSH_PGIDLE:	Set the probing memory as idle page and
+ *					flush TLB for the memory.
  */
 enum damon_prep_action {
 	DAMON_PREP_SET_PGIDLE,
+	DAMON_PREP_SET_FLUSH_PGIDLE,
 };
 
 /**
