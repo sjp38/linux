@@ -103,12 +103,13 @@ module_param(quota_autotune_feedback, ulong, 0600);
 static bool autotune_monitoring_intervals __read_mostly = true;
 module_param(autotune_monitoring_intervals, bool, 0600);
 
+/* Watermarks are effectively disabled by default. */
 static struct damos_watermarks damon_reclaim_wmarks = {
 	.metric = DAMOS_WMARK_FREE_MEM_RATE,
 	.interval = 5000000,	/* 5 seconds */
-	.high = 500,		/* 50 percent */
-	.mid = 400,		/* 40 percent */
-	.low = 200,		/* 20 percent */
+	.high = 1000,		/* 100 percent */
+	.mid = 1000,		/* 100 percent */
+	.low = 0,		/* 0 percent */
 };
 DEFINE_DAMON_MODULES_WMARKS_PARAMS(damon_reclaim_wmarks);
 
