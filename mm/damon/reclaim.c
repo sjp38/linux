@@ -98,9 +98,9 @@ module_param(quota_autotune_feedback, ulong, 0600);
  * sampling intervals 5 milliseconds in minimum, and 10 seconds in maximum.
  * Setting this to ``N`` disables the auto-tuning.
  *
- * Disabled by default.
+ * Enabled by default.
  */
-static bool autotune_monitoring_intervals __read_mostly;
+static bool autotune_monitoring_intervals __read_mostly = true;
 module_param(autotune_monitoring_intervals, bool, 0600);
 
 static struct damos_watermarks damon_reclaim_wmarks = {
