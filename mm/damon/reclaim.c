@@ -69,9 +69,9 @@ DEFINE_DAMON_MODULES_DAMOS_QUOTAS(damon_reclaim_quota);
  * compared to this value to see if the aim is satisfied.  Value zero means
  * disabling this auto-tuning feature.
  *
- * Disabled by default.
+ * 500 microseconds (0.05% of default quota reset interval) by default.
  */
-static unsigned long quota_mem_pressure_us __read_mostly;
+static unsigned long quota_mem_pressure_us __read_mostly = 500;
 module_param(quota_mem_pressure_us, ulong, 0600);
 
 /*
