@@ -94,7 +94,7 @@ amount of access events in each DAMON-snapshot, while keeping the sampling
 interval 5 milliseconds in minimum, and 10 seconds in maximum.  Setting this as
 ``N`` disables the auto-tuning.
 
-Disabled by default.
+Enabled by default.
 
 quota_ms
 --------
@@ -144,7 +144,7 @@ per quota reset interval (``quota_reset_interval_ms``) is collected and
 compared to this value to see if the aim is satisfied.  Value zero means
 disabling this auto-tuning feature.
 
-Disabled by default.
+500 microseconds (0.05 percent of default quota reset interval) by default.
 
 quota_autotune_feedback
 -----------------------
@@ -195,7 +195,8 @@ granularity reclamation logic.
 
 To keep DAMON_RECLAIM always active regardless of the free memory rate, set
 ``wmarks_high``, ``wmarks_mid`` and ``wmarks_low`` to ``1000``, ``1000`` and
-``0``, respectively.
+``0``, respectively.  Use of watermarks is not recommended and therefore
+disabled by default.
 
 sample_interval
 ---------------
