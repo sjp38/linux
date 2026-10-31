@@ -976,6 +976,24 @@ struct damon_ctx {
 	unsigned long region_split_rotation;
 };
 
+enum damon_report_type {
+	DAMON_REPORT_TYPE_FOO,
+};
+
+struct damon_report {
+	enum damon_report_type type;
+	unsigned long jiffies;
+	unsigned long addr;
+};
+
+struct damon_report_queue {
+	atomic_t lock;
+	unsigned int head;
+	unsigned int tail;
+	unsigned int size;
+	struct damon_report *reports;
+};
+
 /* Get a random number in [@l, @r) using @ctx's lockless PRNG. */
 static inline unsigned long damon_rand(struct damon_ctx *ctx,
 				       unsigned long l, unsigned long r)
