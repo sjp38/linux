@@ -612,6 +612,9 @@ static __must_check int do_mlock(unsigned long start, size_t len,
 
 	start = untagged_addr(start);
 
+	if (!len)
+		return 0;
+
 	if (!can_do_mlock())
 		return -EPERM;
 
@@ -677,6 +680,9 @@ SYSCALL_DEFINE2(munlock, unsigned long, start, size_t, len)
 	int ret;
 
 	start = untagged_addr(start);
+
+	if (!len)
+		return 0;
 
 	len = PAGE_ALIGN(len + (offset_in_page(start)));
 	start &= PAGE_MASK;
