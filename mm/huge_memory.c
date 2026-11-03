@@ -4575,6 +4575,13 @@ static bool thp_underused_never(unsigned long max_ptes_none)
 	return max_ptes_none == HPAGE_PMD_NR - 1;
 }
 
+/*
+ * Smallest mTHP folio that is queued for underused splitting. Kept
+ * conservative, as small folios are unlikely to free enough memory to be
+ * worth queueing and scanning.
+ */
+#define THP_UNDERUSED_MIN_SIZE	SZ_2M
+
 /* partially_mapped=false won't clear PG_partially_mapped folio flag */
 void deferred_split_folio(struct folio *folio, bool partially_mapped)
 {
@@ -4599,6 +4606,13 @@ void deferred_split_folio(struct folio *folio, bool partially_mapped)
 		 * list_lru lock here and a shrinker scan later.
 		 */
 		if (thp_underused_never(khugepaged_max_ptes_none))
+			return;
+		/*
+		 * Keep queueing PMD-sized folios as before, even where the PMD
+		 * size is below the minimum (eg 1M on s390).
+		 */
+		if (folio_size(folio) < THP_UNDERUSED_MIN_SIZE &&
+		    !is_pmd_order(folio_order(folio)))
 			return;
 	}
 
