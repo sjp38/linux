@@ -822,6 +822,7 @@ DEFINE_MTHP_STAT_ATTR(shmem_fallback_charge, MTHP_STAT_SHMEM_FALLBACK_CHARGE);
 DEFINE_MTHP_STAT_ATTR(split, MTHP_STAT_SPLIT);
 DEFINE_MTHP_STAT_ATTR(split_failed, MTHP_STAT_SPLIT_FAILED);
 DEFINE_MTHP_STAT_ATTR(split_deferred, MTHP_STAT_SPLIT_DEFERRED);
+DEFINE_MTHP_STAT_ATTR(split_underused, MTHP_STAT_SPLIT_UNDERUSED);
 DEFINE_MTHP_STAT_ATTR(nr_anon, MTHP_STAT_NR_ANON);
 DEFINE_MTHP_STAT_ATTR(nr_anon_partially_mapped, MTHP_STAT_NR_ANON_PARTIALLY_MAPPED);
 DEFINE_MTHP_STAT_ATTR(collapse_exceed_swap_pte, MTHP_STAT_COLLAPSE_EXCEED_SWAP);
@@ -842,6 +843,7 @@ static struct attribute *anon_stats_attrs[] = {
 	&swpout_fallback_attr.attr,
 #endif
 	&split_deferred_attr.attr,
+	&split_underused_attr.attr,
 	&nr_anon_attr.attr,
 	&nr_anon_partially_mapped_attr.attr,
 	&collapse_exceed_swap_pte_attr.attr,
@@ -4703,6 +4705,7 @@ static unsigned long deferred_split_scan(struct shrinker *shrink,
 					    deferred_split_isolate, &dispose);
 
 	list_for_each_entry_safe(folio, next, &dispose, _deferred_list) {
+		const unsigned int order = folio_order(folio);
 		bool did_split = false;
 		bool underused = false;
 
@@ -4724,8 +4727,11 @@ static unsigned long deferred_split_scan(struct shrinker *shrink,
 			goto requeue;
 		if (!split_folio(folio)) {
 			did_split = true;
-			if (underused)
-				count_vm_event(THP_UNDERUSED_SPLIT_PAGE);
+			if (underused) {
+				if (is_pmd_order(order))
+					count_vm_event(THP_UNDERUSED_SPLIT_PAGE);
+				count_mthp_stat(order, MTHP_STAT_SPLIT_UNDERUSED);
+			}
 			split++;
 		}
 		folio_unlock(folio);

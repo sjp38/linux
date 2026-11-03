@@ -719,6 +719,12 @@ split_deferred
         it would free up some memory. Pages on split queue are going to
         be split under memory pressure, if splitting is possible.
 
+split_underused
+	is incremented when a huge page on the split queue was split
+	because it was underused. This happens when the number of zero-filled
+	pages in the huge page is above a certain threshold scaled from
+	/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none.
+
 nr_anon
        the number of anonymous THP we have in the whole system. These THPs
        might be currently entirely mapped or have partially unmapped/unused
