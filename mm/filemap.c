@@ -3410,7 +3410,7 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 
 	if (force_thp_readahead) {
 		unsigned long folio_nr_pages = 1UL << thp_order;
-		bool random_read = vma_test(vma, VMA_RAND_READ_BIT);
+		const bool random_read = vma_test(vma, VMA_RAND_READ_BIT);
 
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
 		ractl._index &= ~(folio_nr_pages - 1);
