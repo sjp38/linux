@@ -2309,6 +2309,8 @@ static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
 			struct damon_sysfs_kdamond, kobj);
 	struct damon_ctx *ctx;
 	bool running = false;
+	enum damon_sysfs_cmd cmd;
+	int i;
 
 	if (!mutex_trylock(&damon_sysfs_lock))
 		return -EBUSY;
@@ -2319,9 +2321,15 @@ static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
 
 	mutex_unlock(&damon_sysfs_lock);
 
-	return sysfs_emit(buf, "%s\n", running ?
-			damon_sysfs_cmd_strs[DAMON_SYSFS_CMD_ON] :
-			damon_sysfs_cmd_strs[DAMON_SYSFS_CMD_OFF]);
+	cmd = running ? DAMON_SYSFS_CMD_ON : DAMON_SYSFS_CMD_OFF;
+	for (i = 0; i < ARRAY_SIZE(damon_sysfs_cmd_names); i++) {
+		const struct damon_sysfs_cmd_name *cmd_name;
+
+		cmd_name = &damon_sysfs_cmd_names[i];
+		if (cmd_name->cmd == cmd)
+			return sysfs_emit(buf, "%s\n", cmd_name->name);
+	}
+	return -EINVAL;
 }
 
 static int damon_sysfs_set_attrs(struct damon_ctx *ctx,
