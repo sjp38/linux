@@ -2262,20 +2262,6 @@ enum damon_sysfs_cmd {
 	NR_DAMON_SYSFS_CMDS,
 };
 
-/* Should match with enum damon_sysfs_cmd */
-static const char * const damon_sysfs_cmd_strs[] = {
-	"on",
-	"off",
-	"commit",
-	"commit_schemes_quota_goals",
-	"update_schemes_stats",
-	"update_schemes_tried_bytes",
-	"update_schemes_tried_regions",
-	"clear_schemes_tried_regions",
-	"update_schemes_effective_quotas",
-	"update_tuned_intervals",
-};
-
 struct damon_sysfs_cmd_name {
 	enum damon_sysfs_cmd cmd;
 	char *name;
