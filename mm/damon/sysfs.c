@@ -2876,14 +2876,17 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 {
 	struct damon_sysfs_kdamond *kdamond = container_of(kobj,
 			struct damon_sysfs_kdamond, kobj);
-	enum damon_sysfs_cmd cmd;
 	ssize_t ret = -EINVAL;
+	int i;
 
 	if (!mutex_trylock(&damon_sysfs_lock))
 		return -EBUSY;
-	for (cmd = 0; cmd < NR_DAMON_SYSFS_CMDS; cmd++) {
-		if (sysfs_streq(buf, damon_sysfs_cmd_strs[cmd])) {
-			ret = damon_sysfs_handle_cmd(cmd, kdamond);
+	for (i = 0; i < ARRAY_SIZE(damon_sysfs_cmd_names); i++) {
+		const struct damon_sysfs_cmd_name *cmd_name;
+
+		cmd_name = &damon_sysfs_cmd_names[i];
+		if (sysfs_streq(buf, cmd_name->name)) {
+			ret = damon_sysfs_handle_cmd(cmd_name->cmd, kdamond);
 			break;
 		}
 	}
