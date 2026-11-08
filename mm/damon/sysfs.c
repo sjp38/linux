@@ -2276,6 +2276,54 @@ static const char * const damon_sysfs_cmd_strs[] = {
 	"update_tuned_intervals",
 };
 
+struct damon_sysfs_cmd_name {
+	enum damon_sysfs_cmd cmd;
+	char *name;
+};
+
+static const struct damon_sysfs_cmd_name damon_sysfs_cmd_names[] = {
+	{
+		.cmd = DAMON_SYSFS_CMD_ON,
+		.name = "on",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_OFF,
+		.name = "off",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_COMMIT,
+		.name = "commit",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_COMMIT_SCHEMES_QUOTA_GOALS,
+		.name = "commit_schemes_quota_goals",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_UPDATE_SCHEMES_STATS,
+		.name = "update_schemes_stats",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_UPDATE_SCHEMES_TRIED_BYTES,
+		.name = "update_schemes_tried_bytes",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_UPDATE_SCHEMES_TRIED_REGIONS,
+		.name = "update_schemes_tried_regions",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_CLEAR_SCHEMES_TRIED_REGIONS,
+		.name = "clear_schemes_tried_regions",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_UPDATE_SCHEMES_EFFECTIVE_QUOTAS,
+		.name = "update_schemes_effective_quotas",
+	},
+	{
+		.cmd = DAMON_SYSFS_CMD_UPDATE_TUNED_INTERVALS,
+		.name = "update_tuned_intervals",
+	},
+};
+
 static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
