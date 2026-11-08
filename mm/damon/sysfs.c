@@ -2341,9 +2341,7 @@ static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
 
 	mutex_unlock(&damon_sysfs_lock);
 
-	return sysfs_emit(buf, "%s\n", running ?
-			damon_sysfs_cmd_strs[DAMON_SYSFS_CMD_ON] :
-			damon_sysfs_cmd_strs[DAMON_SYSFS_CMD_OFF]);
+	return sysfs_emit(buf, "%s\n", running ? "on" : "off");
 }
 
 static int damon_sysfs_set_attrs(struct damon_ctx *ctx,
