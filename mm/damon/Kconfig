@@ -65,7 +65,7 @@ config DAMON_PADDR
 	  that works for the physical address space.
 
 config DAMON_VADDR_KUNIT_TEST
-	bool "Test for DAMON operations" if !KUNIT_ALL_TESTS
+	bool "Test for DAMON virtual address operations" if !KUNIT_ALL_TESTS
 	depends on DAMON_VADDR && KUNIT=y
 	default KUNIT_ALL_TESTS
 	help
