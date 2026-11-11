@@ -78,7 +78,7 @@ comma (",").
     │ │ │ │ │ │ │ │ │ 0/prep_action
     │ │ │ │ │ │ │ │ │ ...
     │ │ │ │ │ │ │ │ filters/nr_filters
-    │ │ │ │ │ │ │ │ │ 0/type,matching,allow,path,min,max,report_type
+    │ │ │ │ │ │ │ │ │ 0/type,matching,allow,path,min,max,filter_report_type
     │ │ │ │ │ │ │ │ │ ...
     │ │ │ │ │ │ │ ...
     │ │ │ │ │ :ref:`targets <sysfs_targets>`/nr_targets
@@ -116,8 +116,8 @@ comma (",").
     │ │ │ │ ...
     │ │ ...
     │ reports/
-    │ │ producers/state,nr_producers
-    │ │ │ 0/report_type,addr_start,addr_end
+    │ │ producers/nr_producers
+    │ │ │ 0/report_type,producer_state,addr_start,addr_end
     │ │ │ ...
 
 .. _sysfs_root:
@@ -317,10 +317,12 @@ filter <sysfs_filters>`.  When the filter ``type`` is ``hugepage_size``,
 ``min`` and ``max`` files act as files of the same names for :ref:`DAMOS
 filter <sysfs_filters>`.
 
-When the filter ``type`` is ``report``, ``report_type`` should be set together.
-Then, the filter matches/unmatches if a report of the given ``report_type``
-exists.  It will ignore reports that generated before the last time the filter
-was applied.  Based on the ``report_type``, more files may need to be set.
+When the filter ``type`` is ``report``, the filter matches/unmatches if a
+:ref:`report <damon_design_attr_reporting>` for the probing memory is found in
+DAMON's internal buffer.  The type of the reports for the filter should also be
+specified by writing the type name to ``filter_report_type`` file.  It will
+ignore reports that are not produced in the last :ref:`sampling interval
+<damon_design_monitoring>`.
 
 .. _sysfs_targets:
 
@@ -738,46 +740,44 @@ Please note that it's highly recommended to use user space tools like `damo
 <https://github.com/damonitor/damo>`_ rather than manually reading and writing
 the files as above.  Above is only for an example.
 
+.. _damon_usage_sysfs_reports_producers:
+
 reports/producers/
 ------------------
 
-Under the `admin/` directory, ``reports/producers`` directory exists.  This
-directory is for configuring DAMON report producers.
+Under the `admin/` directory, ``reports/producers/`` directory exists.  This
+directory is for configuring :ref:`DAMON report producers
+<damon_design_attr_reporting>`.  The file below exists in the directory.
 
-In the directory, ``state`` file exists.  Users can write below commands to the
-``state`` file.
-
-- ``on``: Read the whole configuration of producers and start running them.
-- ``off``: Stop the producers.
-
-Reading the file shows the last successfully written input to the file.
-
-Under the ``producers`` directory, ``nr_producers`` file exists.  Writing an
-integer ``N`` to the file creates the number of directories named ``0`` to
-``N-1``.  Each number-named directory is for configuring each report producer.
+``nr_producers`` file is for generating report producers setup files.  Writing
+an integer ``N`` to the file creates the number of directories named ``0`` to
+``N-1``.  Each number-named directory is for configuring each report producer
+and called "producer directory".
 
 reports/producers/<N>/
 ----------------------
 
-In each producer directory, below files exist.
+Files below exist in each producer directory.
 
 ``report_type`` file is for setting the type of the report to produce.  Users
 can set the type by writing the type name to the file.  Reading the file shows
-the last successfully written input.
+the last successfully written input.  Refer to the :ref:`design document
+<damon_design_attr_reporting>` for the list of supported report types.
 
-- ``user_report``: User-provided attribute reports.
+``producer_state`` file is for reading and updating the state.  Reading it
+shows ``on`` or ``off`` if the producer is enabled or disabled, respectively.
+Users can write below keywords for the producer to the file.
 
-``addr_start`` and ``addr_end`` files are for setting the user-reporting memory
-address range.  Users can set the start and end address of the address range by
-writing the addresses to the files.  Note that it is open-end range
-(``[addr_start,addr_end)``).  Reading the files shows the last successfully
-written input.
+- ``on``: Enable the producer.
+- ``off``: Disable the producer.
+- ``submit``: Generate and submit a new ``user_report`` type report, if
+  ``report_type`` is ``user_report``, and the producer is enabled.
 
-``submit`` file is for submitting the user-provided report to DAMON report
-system.  Users can do that by writing ``Y`` to the file.  Then, a user-provided
-attribute report for the ``[addr_start,addr_end)`` memory region is generated
-and added to the DAMON internal report queue.  The file is write-only.  Reading
-is not supported.
+``addr_start`` and ``addr_end`` files are used only for ``user_report`` report
+type.  Those set the address range of memory to manually report .  Users can
+set the start and end address of the address range by writing the addresses to
+the files.  Note that it is open-end range (``[addr_start,addr_end)``).
+Reading the files shows the last successfully written input.
 
 .. _tracepoint:
 
