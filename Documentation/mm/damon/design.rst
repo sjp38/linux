@@ -303,6 +303,8 @@ filter types.  Currently below filter types are supported.
 - ``hugepage_size``: Matches if the page for the memory is a part of a hugepage
   of a given size range.
 - ``active``: Same to that for DAMOS filters.
+- ``report``: Matches if a :ref:`report <damon_design_attr_reporting>` for the
+  memory is made after last filtering.
 
 If such probes are registered, DAMON executes the probes for each region's
 sampling memory when it does the access :ref:`sampling
@@ -356,47 +358,58 @@ monitoring.
 Refer to the :ref:`admin guide <damon_usage_sysfs_probes>` to know how users
 can use the mode.
 
+.. _damon_design_attr_reporting:
+
 Data Attributes Reporting
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Infrastructure for receiving attribute information from DAMON worker thread
 external components.
 
-Because DAMON collects data attributes in its own worker thread, it cannot
-retrieve some types of data attribute information by itself.  For example, it
-cannot know which CPU or task accessed the given memory.  It cannot know
-whether the access was for a read or a write.  Many of those are available to
-DAMON worker thread external kernel components such as perf event callbacks and
-page fault handler.  Users may also have some attribute information.  For such
-cases, DAMON provides attributes reporting infrastructure.  Using its API,
-kernel components and users can report their findings to DAMON.
+Because DAMON collects data attributes in its own worker thread (kdamond), it
+cannot retrieve some types of data attribute information by itself.  For
+example, it cannot know which CPU or task accessed the given memory.  It cannot
+know whether the access was for a read or a write.  Many of those are available
+to kdamond-external components.  For example, kernel components such as perf
+event callbacks and page fault handler could know detailed access information.
+Users may also have some attribute information.
 
-DAMON provides a kernel API and a user space ABI for submitting a report of
-data attribute information to DAMON.  The report is saved in DAMON's internal
-queue.  The queue is automatically managed by DAMON with its best effort.
-DAMON user ABI also provides an interface for asking ask specific kernel
-components to start or stop reporting their findings to DAMON.  Using the
-interfaces, users can directly report their findings, or let kernel components
-to do their reporting.
+DAMON provides attributes reporting infrastructure to get such information from
+kdamond-external entities.  Using its API and ABI, kdamond-external kernel
+components and users can report their findings.
+
+DAMON provides the kernel API for submitting a report of data attribute
+information to DAMON.  The report is saved in DAMON's internal queue.  The
+queue is automatically managed by DAMON with its best effort.
+
+DAMON provides the user :ref:`ABI <damon_usage_sysfs_reports_producers>` for
+configuring report producers.  Each producer is configured for a specific
+report type.  Users can dynamically enable and disable those.  When enabled, it
+generates and submits reports of the given type.  Below report types are
+supported.
+
+- ``user_report``: User-provided report.  To use this, the user should set the
+  address range of the memory to report for.  This type of report is not
+  automatically generated and submitted to DAMON.  The user should manually
+  generate and submit each report using the interface.
 
 The data attribute probe supports the reports.  The probes can be configured to
-hit for a given memory region if a specific type of reports that associated
-with the memory region exists in the reports queue.
+hit for a given memory region if a specific type of valid reports that are
+associated with the probing memory exist in the reports queue.
 
 For example, per-CPUs write-only monitoring can be configured using this
 infrastructure like below.
 
-The user enables CPU instruction sampling report producer.  For the enablement
-request, DAMON will enable perf event counter for CPU cycles sampling.  The
-sampling callback will save the sampling time CPU instruction and register
-contents with a few meta data such as id of the CPU that was executing it, into
-the DAMON report queue, using the DAMON API.
+The user requests DAMON to enable CPU instruction sampling report producer.
+DAMON enables perf event counter for CPU cycles sampling.  The sampling
+callback will save the sampling time CPU instruction and register contents with
+a few meta data such as id of the CPU that was executing it, into the DAMON
+report queue, using the DAMON API.
 
-The user further sets a DAMON probe.  The probe hits for a given DAMON region
-if a sample of store instruction for a memory in the region that was executed
-from a given CPUs group exists in the report queue.  As a result, the probe hit
-count represents relative frequency of writes from a given CPUs group to a
-given memory region.
+The user further sets a DAMON probe.  The probe hits if a sample of store
+instruction for the probing memory that was executed from a given CPUs group
+exists in the report queue.  As a result, the probe hit count represents
+relative frequency of writes from a given CPUs group to a given memory region.
 
 Dynamic Target Space Updates Handling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
