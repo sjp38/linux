@@ -485,7 +485,7 @@ static phys_addr_t __init cma_find_free_range(phys_addr_t align,
 	phys_addr_t max = 0;
 	u64 i;
 
-	/* no point searching if the system can't addres above 4G */
+	/* no point searching if the system can't address above 4G */
 	if (!IS_ENABLED(CONFIG_PHYS_ADDR_T_64BIT))
 		return 0;
 
