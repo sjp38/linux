@@ -7,6 +7,7 @@
 
 #include <linux/damon.h>
 #include <linux/delay.h>
+#include <linux/freezer.h>
 #include <linux/kthread.h>
 #include <linux/memcontrol.h>
 #include <linux/mm.h>
@@ -4173,7 +4174,7 @@ static bool kdamond_need_stop(struct damon_ctx *ctx)
 {
 	struct damon_target *t;
 
-	if (kthread_should_stop())
+	if (kthread_freezable_should_stop(NULL))
 		return true;
 
 	if (!ctx->ops.target_valid)
@@ -4497,6 +4498,7 @@ static int kdamond_fn(void *data)
 
 	sz_limit = damon_apply_min_nr_regions(ctx);
 
+	set_freezable();
 	while (!kdamond_need_stop(ctx)) {
 		/*
 		 * ctx->attrs and ctx->next_{aggregation,ops_update}_sis could
