@@ -1834,6 +1834,9 @@ static int damon_commit_filter(struct damon_filter *dst,
 		dst->range_min = src->range_min;
 		dst->range_max = src->range_max;
 		break;
+	case DAMON_FILTER_TYPE_REPORT_MADE:
+		dst->report_type = src->report_type;
+		break;
 	default:
 		break;
 	}
@@ -1876,6 +1879,9 @@ static int damon_commit_filters(struct damon_probe *dst,
 			}
 			new_filter->range_min = src_filter->range_min;
 			new_filter->range_max = src_filter->range_max;
+			break;
+		case DAMON_FILTER_TYPE_REPORT_MADE:
+			new_filter->report_type = src_filter->report_type;
 			break;
 		default:
 			break;
