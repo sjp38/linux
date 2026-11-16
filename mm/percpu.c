@@ -2022,6 +2022,9 @@ retry_pop:
 		if (!nr_to_pop)
 			break;
 
+		if (slot == pcpu_sidelined_slot)
+			continue;
+
 		list_for_each_entry(chunk, &pcpu_chunk_lists[slot], list) {
 			nr_unpop = chunk->nr_pages - chunk->nr_populated;
 			if (nr_unpop)
