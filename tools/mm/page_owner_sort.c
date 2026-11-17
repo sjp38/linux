@@ -489,7 +489,8 @@ static int get_allocator(const char *buf, const char *migrate_info)
 
 	if (strstr(migrate_info, "CMA"))
 		allocator |= ALLOCATOR_CMA;
-	if (strstr(migrate_info, "slab"))
+	if (strstr(migrate_info, "slab") || strstr(buf, "new_slab") ||
+	    strstr(buf, "allocate_slab"))
 		allocator |= ALLOCATOR_SLAB;
 	tmp = strstr(buf, "__vmalloc_node_range");
 	if (tmp) {
