@@ -1057,39 +1057,49 @@ static bool may_enter_fs(struct folio *folio, gfp_t gfp_mask)
  *
  * Reclaim can't tell which filesystem a writeback depends on. As a crude
  * workaround, memcg_wait_writeback() times out and, if any filesystem is being
- * frozen at that point, sets memcg_wb_wait_skip. While it is set, legacy memcg
- * reclaim neither waits for nor throttles on writeback, so that the task a
- * freeze may be waiting for isn't held up in reclaim and can drop its freeze
- * protection. This can cause premature memcg OOM kills.
+ * frozen at that point, sets a skip flag on the reclaim target memcg. While
+ * it is set, reclaim against that target neither waits for nor throttles on
+ * writeback, so that the task a freeze may be waiting for isn't held up in
+ * reclaim and can drop its freeze protection. This can cause premature memcg
+ * OOM kills in that reclaim target.
  */
-static bool memcg_wb_wait_skip;
-
-/*
- * Test memcg_wb_wait_skip. It takes effect only while a filesystem is being
- * frozen and is cleared here once none is. A freeze that starts before it is
- * cleared inherits the skip.
- */
-static bool memcg_skip_wb_wait(void)
+#ifdef CONFIG_MEMCG
+/* Retain the skip across separate reclaim attempts against the same limit. */
+static bool memcg_skip_wb_wait(struct scan_control *sc)
 {
-	if (!READ_ONCE(memcg_wb_wait_skip))
+	struct mem_cgroup *memcg = sc->target_mem_cgroup;
+
+	if (!memcg || !READ_ONCE(memcg->wb_wait_skip))
 		return false;
 	if (atomic_read(&sb_nr_freezing))
 		return true;
-	WRITE_ONCE(memcg_wb_wait_skip, false);
+	WRITE_ONCE(memcg->wb_wait_skip, false);
 	return false;
 }
 
-/* wait for writeback of @folio, see memcg_wb_wait_skip for the timeout */
-static void memcg_wait_writeback(struct folio *folio)
+/* Wait for writeback, unless a freeze stalls this reclaim target. */
+static void memcg_wait_writeback(struct folio *folio, struct scan_control *sc)
 {
 	while (!folio_wait_bit_timeout(folio, PG_writeback, 15 * HZ)) {
 		if (atomic_read(&sb_nr_freezing)) {
-			WRITE_ONCE(memcg_wb_wait_skip, true);
-			pr_warn("memcg1 writeback wait timed out during fs freeze, skipping waits, may OOM early\n");
+			WRITE_ONCE(sc->target_mem_cgroup->wb_wait_skip, true);
+			pr_warn("memcg writeback wait timed out during fs freeze; "
+				"skipping waits for reclaim target, may OOM early\n");
 			return;
 		}
 	}
 }
+#else
+static bool memcg_skip_wb_wait(struct scan_control *sc)
+{
+	return false;
+}
+
+static void memcg_wait_writeback(struct folio *folio, struct scan_control *sc)
+{
+	folio_wait_writeback(folio);
+}
+#endif
 
 /*
  * shrink_folio_list() returns the number of reclaimed pages
@@ -1237,7 +1247,7 @@ retry:
 
 			/* Case 2 above */
 			} else if (writeback_throttling_sane(sc) ||
-			    memcg_skip_wb_wait() ||
+			    memcg_skip_wb_wait(sc) ||
 			    !folio_test_reclaim(folio) ||
 			    !may_enter_fs(folio, sc->gfp_mask) ||
 			    (mapping &&
@@ -1263,7 +1273,7 @@ retry:
 			/* Case 3 above */
 			} else {
 				folio_unlock(folio);
-				memcg_wait_writeback(folio);
+				memcg_wait_writeback(folio, sc);
 				/* then go back and try same folio again */
 				list_add_tail(&folio->lru, folio_list);
 				continue;
@@ -2025,7 +2035,7 @@ static void handle_reclaim_writeback(unsigned long nr_taken,
 		 * enough for cgroupv1 writeback throttling to work
 		 * on a large system.
 		 */
-		if (!writeback_throttling_sane(sc) && !memcg_skip_wb_wait())
+		if (!writeback_throttling_sane(sc) && !memcg_skip_wb_wait(sc))
 			reclaim_throttle(pgdat, VMSCAN_THROTTLE_WRITEBACK);
 	}
 

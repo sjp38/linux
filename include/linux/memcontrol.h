@@ -255,6 +255,8 @@ struct mem_cgroup {
 	struct list_head memory_peaks;
 	struct list_head swap_peaks;
 	spinlock_t	 peaks_lock;
+	/* Legacy writeback wait timed out during a filesystem freeze. */
+	bool wb_wait_skip;
 
 	/* memory.events and memory.events.local */
 	struct cgroup_file events_file;
