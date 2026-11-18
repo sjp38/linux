@@ -682,6 +682,62 @@ static int sanity_tests_sd(void)
 	return 0;
 }
 
+static void test_walk_end_after_refill(void)
+{
+	/* One more range than the internal buffer holds on x86-64. */
+	struct page_region vec[513];
+	size_t len = 2 * ARRAY_SIZE(vec) * page_size;
+	long ret, walk_end;
+	char *mem;
+	bool ok;
+	size_t i;
+
+	mem = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (mem == MAP_FAILED)
+		ksft_exit_fail_msg("mmap: %s\n", strerror(errno));
+	if (madvise(mem, len, MADV_NOHUGEPAGE) && errno != EINVAL)
+		ksft_exit_fail_msg("MADV_NOHUGEPAGE: %s\n", strerror(errno));
+
+	wp_init(mem, len);
+	for (i = 0; i < ARRAY_SIZE(vec); i++)
+		mem[2 * i * page_size] = 1;
+
+	ret = pagemap_ioc(mem, len, vec, ARRAY_SIZE(vec), 0, 0,
+			  PAGE_IS_WRITTEN, 0, 0, PAGE_IS_WRITTEN, &walk_end);
+	ok = ret == ARRAY_SIZE(vec) && walk_end == (long)(mem + len);
+	for (i = 0; ok && i < ARRAY_SIZE(vec); i++) {
+		uintptr_t addr = (uintptr_t)(mem + 2 * i * page_size);
+
+		ok = vec[i].start == addr && vec[i].end == addr + page_size;
+	}
+	ksft_test_result(ok, "PAGEMAP_SCAN walk_end after buffer refill\n");
+
+	wp_free(mem, len);
+	munmap(mem, len);
+}
+
+static void test_hugetlb_walk_end(char *mem, size_t len)
+{
+	const int flags = PM_SCAN_WP_MATCHING | PM_SCAN_CHECK_WPASYNC;
+	struct page_region range;
+	long ret, walk_end;
+	bool ok;
+
+	mem[0] = 1;
+	ret = pagemap_ioc(mem, len, &range, 1, flags, 1, PAGE_IS_WRITTEN,
+			  0, 0, PAGE_IS_WRITTEN, &walk_end);
+	ok = ret == 0 && walk_end == (long)mem &&
+	     !(pagemap_get_entry(pagemap_fd, mem) & PM_UFFD_WP);
+	if (ok) {
+		ret = pagemap_ioc((void *)walk_end, len, &range, 1, flags, len / page_size,
+				  PAGE_IS_WRITTEN, 0, 0, PAGE_IS_WRITTEN, &walk_end);
+		ok = ret == 1 && walk_end == (long)(mem + len) &&
+		     range.start == (uintptr_t)mem && range.end == (uintptr_t)(mem + len) &&
+		     (pagemap_get_entry(pagemap_fd, mem) & PM_UFFD_WP);
+	}
+	ksft_test_result(ok, "PAGEMAP_SCAN HugeTLB write-protect retry\n");
+}
+
 static int base_tests(char *prefix, char *mem, size_t mem_size, int skip)
 {
 	size_t vec_size;
@@ -1661,7 +1717,7 @@ int main(int __attribute__((unused)) argc, char *argv[])
 	if (!hugetlb_setup_default(4))
 		ksft_print_msg("HugeTLB test will be skipped\n");
 
-	ksft_set_plan(119);
+	ksft_set_plan(121);
 
 	pagemap_fd = open(PAGEMAP, O_RDONLY);
 	if (pagemap_fd < 0)
@@ -1669,6 +1725,7 @@ int main(int __attribute__((unused)) argc, char *argv[])
 
 	/* 1. Sanity testing */
 	sanity_tests_sd();
+	test_walk_end_after_refill();
 
 	/* 2. Normal page testing */
 	mem_size = 10 * page_size;
@@ -1730,10 +1787,12 @@ int main(int __attribute__((unused)) argc, char *argv[])
 		wp_addr_range(mem, mem_size);
 
 		base_tests("Hugetlb mem testing:", mem, mem_size, 0);
+		test_hugetlb_walk_end(mem, mem_size);
 
 		wp_free(mem, mem_size);
 	} else {
 		base_tests("Hugetlb mem testing:", NULL, 0, 1);
+		ksft_test_result_skip("PAGEMAP_SCAN HugeTLB write-protect retry: no huge page\n");
 	}
 
 	/* 7. File Hugetlb testing */
