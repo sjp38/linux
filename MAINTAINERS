@@ -17550,9 +17550,7 @@ L:	linux-mm@kvack.org
 S:	Maintained
 W:	https://damonitor.github.io
 P:	Documentation/mm/damon/maintainer-profile.rst
-T:	git git://git.kernel.org/pub/scm/linux/kernel/git/akpm/mm
-T:	quilt git://git.kernel.org/pub/scm/linux/kernel/git/akpm/25-new
-T:	git git://git.kernel.org/pub/scm/linux/kernel/git/sj/linux.git damon/next
+T:	git git://git.kernel.org/pub/scm/linux/kernel/git/mm/damon.git damon/for-next
 F:	Documentation/ABI/testing/sysfs-kernel-mm-damon
 F:	Documentation/admin-guide/mm/damon/
 F:	Documentation/mm/damon/
