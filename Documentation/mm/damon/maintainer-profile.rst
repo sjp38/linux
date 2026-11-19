@@ -7,15 +7,17 @@ The DAMON subsystem covers the files that are listed in 'DAMON' section of
 'MAINTAINERS' file.
 
 The mailing lists for the subsystem are damon@lists.linux.dev and
-linux-mm@kvack.org.  Patches should be made against the `mm-new tree
-<https://git.kernel.org/akpm/mm/h/mm-new>`_ whenever possible and posted to the
-mailing lists.
+linux-mm@kvack.org.  Patches should be made against the mm/damon.git's
+`for-next <https://git.kernel.org/mm/damon/h/for-next>`_ tree whenever possible
+and posted to the mailing lists.
 
 Submit checklist addendum
 -------------------------
 
 When making DAMON changes, you should do below.
 
+- Ensure the patch can be ``git am``-ed on the latest mm/damon.git for-next
+  tree.
 - Build changes related outputs including kernel and documents.
 - Ensure the builds introduce no new errors or warnings.
 - Run and ensure no new failures for DAMON `selftests
