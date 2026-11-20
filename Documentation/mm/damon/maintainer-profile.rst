@@ -13,8 +13,8 @@ Non-hotfix patches should be made against the mm/damon.git `for-next
 <https://git.kernel.org/mm/damon/h/for-next>`_ tree.  Hotfix patches should be
 made against the mm/damon.git `for-next-fixes
 <https://git.kernel.org/mm/damon/h/for-next-fixes>`_ tree.  If there is a
-reason to not use those branches as the basline of the patch, please explicitly
-explain the reason and what baseline is used.
+reason to not use those branches as the baseline of the patch, please
+explicitly explain the reason and what baseline is used.
 
 Patches should be posted to the mailing lists whenever possible.
 
@@ -45,11 +45,11 @@ Key cycle dates
 
 Patches can be sent to and reviewed on the mailing lists anytime.
 
-Patches that reviewed and no problem is found will be merged into mm/damon.git
-``for-next-fixes`` or ``for-next`` trees.  The merge destination is decided
-based on whether the patch is a hotfix or not.  Being merged into damon.git is
-only for additional review and testing.  All patches in damon.git can be
-reviewed, modified and dropped at anytime.
+Patches that are reviewed and no problem is found will be merged into
+mm/damon.git ``for-next-fixes`` or ``for-next`` trees.  The merge destination
+is decided based on whether the patch is a hotfix or not.  Being merged into
+damon.git is only for additional review and testing.  All patches in damon.git
+can be reviewed, modified and dropped at any time.
 
 ``for-next`` tree is closed for new patches from -rc6 release to next -rc1
 release.
@@ -71,11 +71,11 @@ channel.  There is a simple tool called `HacKerMaiL
 <https://github.com/damonitor/hackermail>`_ (``hkml``), which is for people who
 are not very familiar with the mailing lists based communication.  The tool
 could be particularly helpful for DAMON community members since it is developed
-and maintained by DAMON maintainer.  The tool is also officially announced to
-support DAMON and general Linux kernel development workflow.
+and maintained by the DAMON maintainer.  The tool is also officially announced
+to support DAMON and general Linux kernel development workflow.
 
 In other words, `hkml <https://github.com/damonitor/hackermail>`_ is a mailing
-tool for DAMON community, which DAMON maintainer is committed to support.
+tool for the DAMON community, which DAMON maintainer is committed to support.
 Please feel free to try and report issues or feature requests for the tool to
 the maintainer.
 
