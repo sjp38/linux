@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Data Access Monitor Unit Tests
+ * DAMON Physical Address Space Operation Set Unit Tests
  */
 
 #ifdef CONFIG_DAMON_PADDR_KUNIT_TEST
