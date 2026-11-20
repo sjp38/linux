@@ -12,7 +12,9 @@ linux-mm@kvack.org.
 Non-hotfix patches should be made against the mm/damon.git `for-next
 <https://git.kernel.org/mm/damon/h/for-next>`_ tree.  Hotfix patches should be
 made against the mm/damon.git `for-next-fixes
-<https://git.kernel.org/mm/damon/h/for-next-fixes>`_ tree.
+<https://git.kernel.org/mm/damon/h/for-next-fixes>`_ tree.  If there is a
+reason to not use those branches as the basline of the patch, please explicitly
+explain the reason and what baseline is used.
 
 Patches should be posted to the mailing lists whenever possible.
 
@@ -41,7 +43,16 @@ Further doing below and putting the results will be helpful.
 Key cycle dates
 ---------------
 
-Patches can be sent anytime.
+Patches can be sent to and reviewed on the mailing lists anytime.
+
+Patches that reviewed and no problem is found will be merged into mm/damon.git
+``for-next-fixes`` or ``for-next`` trees.  The merge destination is decided
+based on whether the patch is a hotfix or not.  Being merged into damon.git is
+only for additional review and testing.  All patches in damon.git can be
+reviewed, modified and dropped at anytime.
+
+``for-next`` tree is closed for new patches from -rc6 release to next -rc1
+release.
 
 Review cadence
 --------------
