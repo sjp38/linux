@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Data Access Monitor
+ * DAMON Core
  */
 
 #define pr_fmt(fmt) "damon: " fmt

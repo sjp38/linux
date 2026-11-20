@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Common Code for Data Access Monitoring
+ * Common Code for DAMON Operation Set
  */
 
 #include <linux/hugetlb.h>

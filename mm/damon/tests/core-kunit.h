@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Data Access Monitor Unit Tests
+ * DAMON Core Unit Tests
  */
 
 #ifdef CONFIG_DAMON_KUNIT_TEST
