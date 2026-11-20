@@ -3,13 +3,18 @@
 DAMON Maintainer Entry Profile
 ==============================
 
-The DAMON subsystem covers the files that are listed in 'DAMON' section of
-'MAINTAINERS' file.
+The DAMON subsystem covers the files that are listed in 'MEMORY MANAGEMENT -
+DAMON' section of 'MAINTAINERS' file.
 
 The mailing lists for the subsystem are damon@lists.linux.dev and
-linux-mm@kvack.org.  Patches should be made against the mm/damon.git's
-`for-next <https://git.kernel.org/mm/damon/h/for-next>`_ tree whenever possible
-and posted to the mailing lists.
+linux-mm@kvack.org.
+
+Non-hotfix patches should be made against the mm/damon.git `for-next
+<https://git.kernel.org/mm/damon/h/for-next>`_ tree.  Hotfix patches should be
+made against the mm/damon.git `for-next-fixes
+<https://git.kernel.org/mm/damon/h/for-next-fixes>`_ tree.
+
+Patches should be posted to the mailing lists whenever possible.
 
 Submit checklist addendum
 -------------------------
