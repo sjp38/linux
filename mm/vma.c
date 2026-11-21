@@ -2375,15 +2375,10 @@ static void vm_lock_mapping(struct mm_struct *mm, struct address_space *mapping)
  * mapping->flags avoid to take the same lock twice, if more than one
  * vma in this mm is backed by the same anon rmap or address_space.
  *
- * We take locks in following order, accordingly to comment at beginning
- * of mm/rmap.c:
- *   - all hugetlbfs_i_mmap_rwsem_key locks (aka mapping->i_mmap_rwsem for
- *     hugetlb mapping);
- *   - all vmas marked locked
- *   - all i_mmap_rwsem locks;
- *   - all anon_vma->rwseml
+ * Mark all vmas locked, before taking mm_all_locks_mutex. Then take remaining
+ * locks in the order mandated by the comment at the top of mm/rmap.c.
  *
- * We can take all locks within these types randomly because the VM code
+ * We can take locks of the same type in arbitrary order because the VM code
  * doesn't nest them and we protected from parallel mm_take_all_locks() by
  * mm_all_locks_mutex.
  *
@@ -2400,19 +2395,23 @@ int mm_take_all_locks(struct mm_struct *mm)
 
 	mmap_assert_write_locked(mm);
 
-	mutex_lock(&mm_all_locks_mutex);
-
 	/*
-	 * vma_start_write() does not have a complement in mm_drop_all_locks()
-	 * because vma_start_write() is always asymmetrical; it marks a VMA as
+	 * VMA write locks do not have a complement in mm_drop_all_locks(),
+	 * because VMA write locking is always asymmetrical; it marks a VMA as
 	 * being written to until mmap_write_unlock() or mmap_write_downgrade()
 	 * is reached.
 	 */
 	for_each_vma(vmi, vma) {
+		int err;
+
 		if (signal_pending(current))
-			goto out_unlock;
-		vma_start_write(vma);
+			return -EINTR;
+		err = vma_start_write_killable(vma);
+		if (err)
+			return err;
 	}
+
+	mutex_lock(&mm_all_locks_mutex);
 
 	vma_iter_init(&vmi, mm, 0);
 	for_each_vma(vmi, vma) {
