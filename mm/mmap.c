@@ -265,8 +265,8 @@ static inline u64 file_mmap_size_max(struct file *file, struct inode *inode)
 	return ULONG_MAX;
 }
 
-static inline bool file_mmap_ok(struct file *file, struct inode *inode,
-				unsigned long pgoff, unsigned long len)
+bool file_mmap_ok(struct file *file, struct inode *inode, unsigned long pgoff,
+		  unsigned long len)
 {
 	u64 maxsize = file_mmap_size_max(file, inode);
 

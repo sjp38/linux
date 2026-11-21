@@ -1748,6 +1748,7 @@ static int check_prep_vma(struct vma_remap_struct *vrm)
 	struct mm_struct *mm = current->mm;
 	unsigned long addr = vrm->addr;
 	unsigned long old_len, new_len, pgoff;
+	struct file *file;
 
 	if (!vma)
 		return -EFAULT;
@@ -1826,6 +1827,11 @@ static int check_prep_vma(struct vma_remap_struct *vrm)
 
 	if (vma_is_fixed_mapping(vma))
 		return -EFAULT;
+
+	/* The expanded range must obey the same offset limits as mmap(). */
+	file = vma->vm_file;
+	if (file && !file_mmap_ok(file, file_inode(file), pgoff, new_len))
+		return -EINVAL;
 
 	if (!mlock_future_ok(mm, vma_test(vma, VMA_LOCKED_BIT), vrm->delta))
 		return -EAGAIN;

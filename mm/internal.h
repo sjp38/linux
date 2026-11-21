@@ -951,6 +951,8 @@ extern long faultin_page_range(struct mm_struct *mm, unsigned long start,
 		unsigned long end, bool write, int *locked);
 bool mlock_future_ok(const struct mm_struct *mm, bool is_vma_locked,
 		unsigned long bytes);
+bool file_mmap_ok(struct file *file, struct inode *inode, unsigned long pgoff,
+		  unsigned long len);
 
 /*
  * NOTE: This function can't tell whether the folio is "fully mapped" in the
