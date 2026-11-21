@@ -1509,10 +1509,12 @@ static unsigned long mremap_to(struct vma_remap_struct *vrm)
 static int vma_expandable(struct vm_area_struct *vma, unsigned long delta)
 {
 	unsigned long end = vma->vm_end + delta;
+	struct vm_area_struct *next;
 
 	if (end < vma->vm_end) /* overflow */
 		return 0;
-	if (find_vma_intersection(vma->vm_mm, vma->vm_end, end))
+	next = find_vma(vma->vm_mm, vma->vm_end);
+	if (next && end > vm_start_gap(next)) /* intersection, or in its gap */
 		return 0;
 	if (get_unmapped_area(NULL, vma->vm_start, end - vma->vm_start,
 			      0, MAP_FIXED) & ~PAGE_MASK)
