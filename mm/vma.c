@@ -3369,8 +3369,6 @@ unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info)
 {
 	unsigned long length, gap, gap_end;
 	unsigned long low_limit, high_limit;
-	struct vm_area_struct *tmp;
-	VMA_ITERATOR(vmi, current->mm, 0);
 
 	/* Adjust search length to account for worst case alignment overhead */
 	length = info->length + info->align_mask + info->start_gap;
@@ -3381,31 +3379,31 @@ unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info)
 	if (low_limit < mmap_min_addr)
 		low_limit = mmap_min_addr;
 	high_limit = info->high_limit;
-retry:
-	if (vma_iter_area_highest(&vmi, low_limit, high_limit, length))
-		return -ENOMEM;
 
-	gap = vma_iter_end(&vmi) - info->length;
-	gap -= (gap - info->align_offset) & info->align_mask;
-	gap_end = vma_iter_end(&vmi);
-	tmp = vma_next(&vmi);
-	 /* Avoid prev check if possible */
-	if (tmp && vma_test_any_mask(tmp, VMA_STARTGAP_FLAGS)) {
-		if (vm_start_gap(tmp) < gap_end) {
+	while (low_limit < high_limit) {
+		VMA_ITERATOR(vmi, current->mm, 0);
+		struct vm_area_struct *tmp;
+
+		if (vma_iter_area_highest(&vmi, low_limit, high_limit, length))
+			break;
+
+		gap = vma_iter_end(&vmi) - info->length;
+		gap -= (gap - info->align_offset) & info->align_mask;
+		gap_end = vma_iter_end(&vmi);
+		tmp = vma_next(&vmi);
+		/* Avoid prev check if possible */
+		if (tmp && vma_test_any_mask(tmp, VMA_STARTGAP_FLAGS)) {
+			if (vm_start_gap(tmp) >= gap_end)
+				return gap;
 			high_limit = vm_start_gap(tmp);
-			vma_iter_reset(&vmi);
-			goto retry;
-		}
-	} else {
-		tmp = vma_prev(&vmi);
-		if (tmp && vm_end_gap(tmp) > gap) {
+		} else {
+			tmp = vma_prev(&vmi);
+			if (!tmp || vm_end_gap(tmp) <= gap)
+				return gap;
 			high_limit = tmp->vm_start;
-			vma_iter_reset(&vmi);
-			goto retry;
 		}
 	}
-
-	return gap;
+	return -ENOMEM;
 }
 
 /*
