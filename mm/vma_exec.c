@@ -45,6 +45,7 @@ int relocate_vma_down(struct vm_area_struct *vma, unsigned long shift)
 	struct vm_area_struct *next;
 	struct mmu_gather tlb;
 	PAGETABLE_MOVE(pmc, vma, vma, old_start, new_start, length);
+	int err;
 
 	BUG_ON(new_start > new_end);
 
@@ -68,8 +69,10 @@ int relocate_vma_down(struct vm_area_struct *vma, unsigned long shift)
 	 * process cleanup to remove whatever mess we made.
 	 */
 	pmc.for_stack = true;
-	if (length != move_page_tables(&pmc))
-		return -ENOMEM;
+	if (length != move_page_tables(&pmc)) {
+		err = -ENOMEM;
+		goto err_unacct;
+	}
 
 	tlb_gather_mmu(&tlb, mm);
 	next = vma_next(&vmi);
@@ -93,7 +96,20 @@ int relocate_vma_down(struct vm_area_struct *vma, unsigned long shift)
 
 	vma_prev(&vmi);
 	/* Shrink the vma to just the new range */
-	return vma_shrink(&vmi, vma, new_end);
+	err = vma_shrink(&vmi, vma, new_end);
+	if (err)
+		goto err_unacct;
+
+	return 0;
+
+err_unacct:
+	/*
+	 * The vma now spans more than was charged, so exit_mmap() must not
+	 * derive the uncharge from its size.
+	 */
+	vm_unacct_memory(length >> PAGE_SHIFT);
+	vma_clear_flags(vma, VMA_ACCOUNT_BIT);
+	return err;
 }
 
 /*
