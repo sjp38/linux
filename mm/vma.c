@@ -3235,6 +3235,10 @@ int do_brk_flags(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	vma_flags_set(&vma_flags, VMA_ACCOUNT_BIT);
 	vma_flags_set_mask(&vma_flags, mm->def_vma_flags);
 
+	/* The flags are implied, so under MDWE drop exec rather than fail. */
+	if (mm_flags_test(MMF_HAS_MDWE, mm))
+		vma_flags_clear(&vma_flags, VMA_EXEC_BIT);
+
 	vma_flags = ksm_vma_flags(mm, NULL, vma_flags);
 	if (!may_expand_vm(mm, &vma_flags, len >> PAGE_SHIFT))
 		return -ENOMEM;
