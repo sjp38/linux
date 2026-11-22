@@ -18,15 +18,14 @@ static int nr_thpsizes;
 static unsigned long thpsizes[20];
 static int nr_hugetlbsizes;
 static unsigned long hugetlbsizes[10];
+static uint64_t uffd_features;
 
 static void check_uffd_wp_feature_supported(void)
 {
-	uint64_t features = 0;
-
-	if (uffd_get_features(&features))
+	if (uffd_get_features(&uffd_features))
 		ksft_exit_skip("failed to get available features (%d)\n", errno);
 
-	if (!(features & UFFD_FEATURE_PAGEFAULT_FLAG_WP))
+	if (!(uffd_features & UFFD_FEATURE_PAGEFAULT_FLAG_WP))
 		ksft_exit_skip("uffd-wp feature not supported\n");
 }
 
@@ -179,6 +178,12 @@ static void test_one_folio(uffd_global_test_opts_t *gopts, size_t size, bool pri
 				private ? "true" : "false",
 				swapout ? "true" : "false",
 				hugetlb ? "true" : "false");
+
+	if ((!private || hugetlb) &&
+	    !(uffd_features & UFFD_FEATURE_WP_HUGETLBFS_SHMEM)) {
+		ksft_test_result_skip("uffd-wp on shmem and hugetlbfs is not supported\n");
+		return;
+	}
 
 	/* Allocate a folio of required size and type. */
 	mem = alloc_one_folio(size, private, hugetlb);
