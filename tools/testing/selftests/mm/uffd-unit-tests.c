@@ -176,15 +176,44 @@ out:
 }
 
 
-static bool uffd_feature_supported(uffd_test_case_t *test)
+/*
+ * Filter test->uffd_feature_required down to the features needed for @mem_type.
+ * For example, UFFD_FEATURE_WP_HUGETLBFS_SHMEM (gated on
+ * CONFIG_PTE_MARKER_UFFD_WP) only applies to shmem and hugetlbfs, so anonymous
+ * subtests should still run when it is absent.
+ */
+static uint64_t uffd_test_features(const uffd_test_case_t *test,
+				   const mem_type_t *mem_type)
+{
+	const uint64_t shmem = UFFD_FEATURE_MISSING_SHMEM |
+			       UFFD_FEATURE_MINOR_SHMEM;
+	const uint64_t hugetlb = UFFD_FEATURE_MISSING_HUGETLBFS |
+				 UFFD_FEATURE_MINOR_HUGETLBFS;
+	uint64_t features = test->uffd_feature_required;
+
+	switch (mem_type->mem_flag) {
+	case MEM_ANON:
+		return features & ~(shmem | hugetlb |
+				    UFFD_FEATURE_WP_HUGETLBFS_SHMEM);
+	case MEM_SHMEM:
+	case MEM_SHMEM_PRIVATE:
+		return features & ~hugetlb;
+	case MEM_HUGETLB:
+	case MEM_HUGETLB_PRIVATE:
+		return features & ~shmem;
+	default:
+		return features;
+	}
+}
+
+static bool uffd_feature_supported(uint64_t required)
 {
 	uint64_t features;
 
 	if (uffd_get_features(&features))
 		return false;
 
-	return (features & test->uffd_feature_required) ==
-	    test->uffd_feature_required;
+	return (features & required) == required;
 }
 
 static int pagemap_open(void)
@@ -2742,6 +2771,7 @@ uffd_test_case_t uffd_tests[] = {
 		.uffd_feature_required =
 		UFFD_FEATURE_MINOR_HUGETLBFS | UFFD_FEATURE_MINOR_SHMEM |
 		UFFD_FEATURE_PAGEFAULT_FLAG_WP |
+		UFFD_FEATURE_WP_HUGETLBFS_SHMEM |
 		/*
 		 * HACK: here we leveraged WP_UNPOPULATED to detect whether
 		 * minor mode supports wr-protect.  There's no feature flag
@@ -2961,6 +2991,7 @@ int main(int argc, char *argv[])
 	mem_type_t *mem_type;
 	uffd_test_args_t args;
 	const char *errmsg;
+	uint64_t features;
 	int i, j, opt;
 
 	while ((opt = getopt(argc, argv, "f:hl")) != -1) {
@@ -3036,11 +3067,12 @@ int main(int argc, char *argv[])
 			/* Initialize test arguments */
 			args.mem_type = mem_type;
 
-			if (!uffd_feature_supported(test)) {
+			features = uffd_test_features(test, mem_type);
+			if (!uffd_feature_supported(features)) {
 				uffd_test_skip("feature missing");
 				continue;
 			}
-			if (uffd_test_ctx_init(&gopts, test->uffd_feature_required, &errmsg)) {
+			if (uffd_test_ctx_init(&gopts, features, &errmsg)) {
 				uffd_test_skip(errmsg);
 				continue;
 			}
