@@ -2808,6 +2808,7 @@ static void damos_walk_complete(struct damon_ctx *ctx, struct damos *s)
 static void damos_walk_cancel(struct damon_ctx *ctx)
 {
 	struct damos_walk_control *control;
+	struct damos *s;
 
 	mutex_lock(&ctx->walk_control_lock);
 	control = ctx->walk_control;
@@ -2815,6 +2816,9 @@ static void damos_walk_cancel(struct damon_ctx *ctx)
 
 	if (!control)
 		return;
+
+	damon_for_each_scheme(s, ctx)
+		s->walk_completed = false;
 	control->canceled = true;
 	complete(&control->completion);
 	mutex_lock(&ctx->walk_control_lock);
