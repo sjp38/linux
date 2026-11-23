@@ -3447,6 +3447,9 @@ static int __init damon_sysfs_init(void)
 	struct damon_sysfs_ui_dir *admin;
 	int err;
 
+	if (!damon_initialized())
+		return -ENOMEM;
+
 	damon_sysfs_root = kobject_create_and_add("damon", mm_kobj);
 	if (!damon_sysfs_root)
 		return -ENOMEM;
