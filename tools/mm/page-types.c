@@ -575,27 +575,39 @@ static int unpoison_page(unsigned long offset)
 	return 0;
 }
 
-static int mark_page_idle(unsigned long offset)
+static unsigned long page_idle_offset;
+static uint64_t page_idle_buf;
+
+static int flush_page_idle(void)
 {
-	static unsigned long off;
-	static uint64_t buf;
 	int len;
 
-	if ((offset / 64 == off / 64) || buf == 0) {
-		buf |= 1UL << (offset % 64);
-		off = offset;
+	if (!page_idle_buf)
 		return 0;
-	}
 
-	len = pwrite(page_idle_fd, &buf, 8, 8 * (off / 64));
+	len = pwrite(page_idle_fd, &page_idle_buf, 8,
+		     8 * (page_idle_offset / 64));
 	if (len < 0) {
 		perror("mark page idle");
 		return len;
 	}
 
-	buf = 1UL << (offset % 64);
-	off = offset;
+	page_idle_buf = 0;
+	return 0;
+}
 
+static int mark_page_idle(unsigned long offset)
+{
+	int ret;
+
+	if (offset / 64 != page_idle_offset / 64) {
+		ret = flush_page_idle();
+		if (ret < 0)
+			return ret;
+	}
+
+	page_idle_buf |= 1ULL << (offset % 64);
+	page_idle_offset = offset;
 	return 0;
 }
 
@@ -797,9 +809,6 @@ static void walk_addr_ranges(void)
 			walk_pfn(opt_offset[i], opt_offset[i], opt_size[i], 0);
 		else
 			walk_task(opt_offset[i], opt_size[i]);
-
-	if (opt_mark_idle)
-		mark_page_idle(0);
 
 	close(kpageflags_fd);
 }
@@ -1363,6 +1372,9 @@ int main(int argc, char *argv[])
 		walk_page_cache();
 	else
 		walk_addr_ranges();
+
+	if (opt_mark_idle && flush_page_idle() < 0)
+		return EXIT_FAILURE;
 
 	if (opt_list == 1)
 		flush_page_range();
