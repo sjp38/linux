@@ -343,3 +343,21 @@ terminals you can run different filters simultaneously::
 
 	# Terminal 2: Filter node 1 (runs concurrently)
 	./page_owner_filter -n 1 > node1_output.txt
+
+The shell can also be used instead of the page_owner_filter tool, as long as the
+same file descriptor is used to write filter commands then read filtered output.
+For example, using file descriptor 3::
+
+	# Open file in read-write mode
+	exec 3<>/sys/kernel/debug/page_owner
+
+	# Write filter command(s)
+	echo 'mode=handle' >&3
+	# (and/or)
+	echo 'nid=0' >&3
+
+	# Read filtered output
+	cat <&3 >output.txt
+
+	# Close file
+	exec 3>&-
