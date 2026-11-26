@@ -234,6 +234,7 @@ int freeze_super(struct super_block *super, enum freeze_holder who,
 		 const void *freeze_owner);
 int thaw_super(struct super_block *super, enum freeze_holder who,
 	       const void *freeze_owner);
+extern atomic_t sb_nr_freezing;
 
 int sb_init_dio_done_wq(struct super_block *sb);
 

@@ -48,6 +48,9 @@ static int thaw_super_locked(struct super_block *sb, enum freeze_holder who,
 static LIST_HEAD(super_blocks);
 static DEFINE_SPINLOCK(sb_lock);
 
+/* nr of superblocks that freeze_super() is in the middle of freezing */
+atomic_t sb_nr_freezing;
+
 static char *sb_writers_name[SB_FREEZE_LEVELS] = {
 	"sb_writers",
 	"sb_pagefaults",
@@ -2235,6 +2238,7 @@ retry:
 		return 0;
 	}
 
+	atomic_inc(&sb_nr_freezing);
 	sb->s_writers.frozen = SB_FREEZE_WRITE;
 	/* Release s_umount to preserve sb_start_write -> s_umount ordering */
 	super_unlock_excl(sb);
@@ -2249,6 +2253,7 @@ retry:
 	ret = sync_filesystem(sb);
 	if (ret) {
 		sb->s_writers.frozen = SB_UNFROZEN;
+		atomic_dec(&sb_nr_freezing);
 		sb_freeze_unlock(sb, SB_FREEZE_PAGEFAULT);
 		wake_up_var(&sb->s_writers.frozen);
 		deactivate_locked_super(sb);
@@ -2265,6 +2270,7 @@ retry:
 			printk(KERN_ERR
 				"VFS:Filesystem freeze failed\n");
 			sb->s_writers.frozen = SB_UNFROZEN;
+			atomic_dec(&sb_nr_freezing);
 			sb_freeze_unlock(sb, SB_FREEZE_FS);
 			wake_up_var(&sb->s_writers.frozen);
 			deactivate_locked_super(sb);
@@ -2278,6 +2284,7 @@ retry:
 	WARN_ON_ONCE(freeze_inc(sb, who) > 1);
 	sb->s_writers.freeze_owner = freeze_owner;
 	sb->s_writers.frozen = SB_FREEZE_COMPLETE;
+	atomic_dec(&sb_nr_freezing);
 	wake_up_var(&sb->s_writers.frozen);
 	lockdep_sb_freeze_release(sb);
 	super_unlock_excl(sb);

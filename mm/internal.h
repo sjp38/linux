@@ -1259,6 +1259,7 @@ struct migration_target_control {
  */
 ssize_t splice_folio_into_pipe(struct pipe_inode_info *pipe,
 			       struct folio *folio, loff_t fpos, size_t size);
+bool folio_wait_bit_timeout(struct folio *folio, int bit_nr, long timeout);
 
 static inline bool vma_is_single_threaded_private(struct vm_area_struct *vma)
 {

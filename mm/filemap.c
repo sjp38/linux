@@ -1247,8 +1247,8 @@ static inline bool folio_trylock_flag(struct folio *folio, int bit_nr,
 	return true;
 }
 
-static inline int folio_wait_bit_common(struct folio *folio, int bit_nr,
-		int state, enum behavior behavior)
+static inline int folio_wait_bit_common_timeout(struct folio *folio, int bit_nr, int state,
+		enum behavior behavior, long timeout)
 {
 	wait_queue_head_t *q = folio_waitqueue(folio);
 	int unfairness = sysctl_page_lock_unfairness;
@@ -1326,7 +1326,9 @@ repeat:
 			if (signal_pending_state(state, current))
 				break;
 
-			io_schedule();
+			timeout = io_schedule_timeout(timeout);
+			if (!timeout)
+				break;
 			continue;
 		}
 
@@ -1393,6 +1395,13 @@ repeat:
 	}
 
 	return wait->flags & WQ_FLAG_WOKEN ? 0 : -EINTR;
+}
+
+static inline int folio_wait_bit_common(struct folio *folio, int bit_nr, int state,
+		enum behavior behavior)
+{
+	return folio_wait_bit_common_timeout(folio, bit_nr, state, behavior,
+					     MAX_SCHEDULE_TIMEOUT);
 }
 
 #ifdef CONFIG_MIGRATION
@@ -1491,6 +1500,13 @@ int folio_wait_bit_killable(struct folio *folio, int bit_nr)
 	return folio_wait_bit_common(folio, bit_nr, TASK_KILLABLE, SHARED);
 }
 EXPORT_SYMBOL(folio_wait_bit_killable);
+
+/* wait up to @timeout jiffies for @bit_nr to clear, true if it cleared */
+bool folio_wait_bit_timeout(struct folio *folio, int bit_nr, long timeout)
+{
+	return !folio_wait_bit_common_timeout(folio, bit_nr, TASK_UNINTERRUPTIBLE, SHARED,
+					      timeout);
+}
 
 /**
  * folio_put_wait_locked - Drop a reference and wait for it to be unlocked
