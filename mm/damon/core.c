@@ -2427,6 +2427,30 @@ int damon_kdamond_pid(struct damon_ctx *ctx)
 }
 
 /**
+ * damon_estimated_bw() - Estimate memory bandwidth.
+ * @ctx:	DAMON context to calculate the badiwdth for.
+ *
+ * Return: estimated bandwidth persecond (addr_unit units).
+ */
+u64 damon_estimated_bw(struct damon_ctx *ctx)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+	u64 access_bytes = 0;
+	u64 remainder, bytes_per_us;
+
+	damon_for_each_target(t, ctx) {
+		damon_for_each_region(r, t)
+			access_bytes += (u64)(r->ar.end - r->ar.start) *
+				r->nr_accesses;
+	}
+	bytes_per_us = div64_u64_rem(access_bytes,
+			ctx->attrs.aggr_interval, &remainder);
+	return bytes_per_us * USEC_PER_SEC + div64_u64(remainder *
+			USEC_PER_SEC, ctx->attrs.aggr_interval);
+}
+
+/**
  * damon_call() - Invoke a given function on DAMON worker thread (kdamond).
  * @ctx:	DAMON context to call the function for.
  * @control:	Control variable of the call request.
