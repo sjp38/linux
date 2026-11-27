@@ -2535,12 +2535,20 @@ static noinline_for_stack void kdamond_tune_intervals(struct damon_ctx *c)
 	damon_set_attrs(c, &new_attrs);
 }
 
+static bool damos_core_filter_out(struct damon_ctx *ctx,
+		struct damon_target *t, struct damon_region *r,
+		struct damos *s);
+
 static bool __damos_valid_target(struct damon_region *r, struct damos *s,
-		struct damon_ctx *c)
+		struct damon_ctx *c, struct damon_target *t)
 {
 	unsigned long sz;
-	unsigned int nr_accesses = damon_nr_accesses_mvsum(r, c);
+	unsigned int nr_accesses;
 
+	if (damos_core_filter_out(c, t, r, s))
+		return false;
+
+	nr_accesses = damon_nr_accesses_mvsum(r, c);
 	sz = damon_sz_region(r);
 	return s->pattern.min_sz_region <= sz &&
 		sz <= s->pattern.max_sz_region &&
@@ -2563,9 +2571,9 @@ static bool damos_quota_is_set(struct damos_quota *quota)
 }
 
 static bool damos_valid_target(struct damon_ctx *c, struct damon_region *r,
-		struct damos *s)
+		struct damos *s, struct damon_target *t)
 {
-	bool ret = __damos_valid_target(r, s, c);
+	bool ret = __damos_valid_target(r, s, c, t);
 
 	if (!ret || !damos_quota_is_set(&s->quota) || !c->ops.get_scheme_score)
 		return ret;
@@ -2896,8 +2904,6 @@ static void damos_apply_scheme(struct damon_ctx *c, struct damon_target *t,
 	}
 
 	if (c->ops.apply_scheme) {
-		if (damos_core_filter_out(c, t, r, s))
-			return;
 		sz = damon_sz_region(r);
 		if (damos_quota_is_set(quota) &&
 				quota->charged_sz + sz > quota->esz) {
@@ -2957,7 +2963,7 @@ static void damon_do_apply_schemes(struct damon_ctx *c,
 				s->max_nr_snapshots <= s->stat.nr_snapshots)
 			continue;
 
-		if (damos_valid_target(c, r, s))
+		if (damos_valid_target(c, r, s, t))
 			damos_apply_scheme(c, t, r, s);
 
 		if (damon_is_last_region(r, t))
@@ -3218,7 +3224,7 @@ static phys_addr_t damos_calc_eligible_bytes(struct damon_ctx *c,
 		damon_for_each_region(r, t) {
 			phys_addr_t addr, end_addr;
 
-			if (!__damos_valid_target(r, s, c))
+			if (!__damos_valid_target(r, s, c, t))
 				continue;
 
 			/* Convert from core address units to physical bytes */
@@ -3565,9 +3571,7 @@ static void damos_adjust_quota(struct damon_ctx *c, struct damos *s)
 			(DAMOS_MAX_SCORE + 1));
 	damon_for_each_target(t, c) {
 		damon_for_each_region(r, t) {
-			if (!__damos_valid_target(r, s, c))
-				continue;
-			if (damos_core_filter_out(c, t, r, s))
+			if (!__damos_valid_target(r, s, c, t))
 				continue;
 			score = c->ops.get_scheme_score(c, r, s);
 			c->regions_score_histogram[score] +=
