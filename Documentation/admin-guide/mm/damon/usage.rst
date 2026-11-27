@@ -67,7 +67,7 @@ comma (",").
     │ │ :ref:`0 <sysfs_kdamond>`/state,pid,refresh_ms
     │ │ │ :ref:`contexts <sysfs_contexts>`/nr_contexts
     │ │ │ │ :ref:`0 <sysfs_context>`/avail_operations,operations,addr_unit,
-    │ │ │ │   pause
+    │ │ │ │   pause,estimated_bw
     │ │ │ │ │ :ref:`monitoring_attrs <sysfs_monitoring_attrs>`/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
@@ -238,6 +238,10 @@ the last successfully written content.
 
 ``pause`` file is for setting and getting the :ref:`pause request
 <damon_design_execution_model_and_data_structures>` parameter of the context.
+
+``estimated_bw`` file is for reading an estimated memory access bandwidth for
+the monitoring targets.  The bandwidth is in the ``addr_unit`` bytes per
+second.
 
 .. _sysfs_monitoring_attrs:
 
