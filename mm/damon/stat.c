@@ -51,73 +51,6 @@ static struct damon_ctx *damon_stat_context;
 
 static unsigned long damon_stat_last_refresh_jiffies;
 
-static int damon_stat_idletime(const struct damon_region *r)
-{
-	if (r->nr_accesses)
-		return -1 * (r->age + 1);
-	return r->age + 1;
-}
-
-static int damon_stat_cmp_regions(const void *a, const void *b)
-{
-	const struct damon_region *ra = *(const struct damon_region **)a;
-	const struct damon_region *rb = *(const struct damon_region **)b;
-
-	return damon_stat_idletime(ra) - damon_stat_idletime(rb);
-}
-
-static int damon_stat_sort_regions(struct damon_ctx *c,
-		struct damon_region ***sorted_ptr, int *nr_regions_ptr,
-		unsigned long *total_sz_ptr)
-{
-	struct damon_target *t;
-	struct damon_region *r;
-	struct damon_region **region_pointers;
-	unsigned int nr_regions = 0;
-	unsigned long total_sz = 0;
-
-	damon_for_each_target(t, c) {
-		/* there is only one target */
-		region_pointers = kmalloc_objs(*region_pointers,
-					       damon_nr_regions(t));
-		if (!region_pointers)
-			return -ENOMEM;
-		damon_for_each_region(r, t) {
-			region_pointers[nr_regions++] = r;
-			total_sz += r->ar.end - r->ar.start;
-		}
-	}
-	sort(region_pointers, nr_regions, sizeof(*region_pointers),
-			damon_stat_cmp_regions, NULL);
-	*sorted_ptr = region_pointers;
-	*nr_regions_ptr = nr_regions;
-	*total_sz_ptr = total_sz;
-	return 0;
-}
-
-static void damon_stat_set_idletime_percentiles(struct damon_ctx *c)
-{
-	struct damon_region **sorted_regions, *region;
-	int nr_regions;
-	unsigned long total_sz, accounted_bytes = 0, percentile;
-	int err, i, next_percentile = 0;
-
-	err = damon_stat_sort_regions(c, &sorted_regions, &nr_regions,
-			&total_sz);
-	if (err)
-		return;
-	for (i = 0; i < nr_regions; i++) {
-		region = sorted_regions[i];
-		accounted_bytes += region->ar.end - region->ar.start;
-		percentile = div64_ul((u64)accounted_bytes * 100, total_sz);
-		while (next_percentile <= percentile)
-			memory_idle_ms_percentiles[next_percentile++] =
-				div_s64((s64)damon_stat_idletime(region) *
-				c->attrs.aggr_interval, USEC_PER_MSEC);
-	}
-	kfree(sorted_regions);
-}
-
 static int damon_stat_damon_call_fn(void *data)
 {
 	struct damon_ctx *c = data;
@@ -130,7 +63,7 @@ static int damon_stat_damon_call_fn(void *data)
 
 	aggr_interval_us = c->attrs.aggr_interval;
 	estimated_memory_bandwidth = damon_estimated_bw(c);
-	damon_stat_set_idletime_percentiles(c);
+	damon_idletime_pcts(c, memory_idle_ms_percentiles);
 	return 0;
 }
 
