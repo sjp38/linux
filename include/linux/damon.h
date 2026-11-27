@@ -1348,6 +1348,7 @@ void damon_stop(struct damon_ctx **ctxs, int nr_ctxs);
 bool damon_is_running(struct damon_ctx *ctx);
 int damon_kdamond_pid(struct damon_ctx *ctx);
 u64 damon_estimated_bw(struct damon_ctx *ctx);
+int damon_idletime_pcts(struct damon_ctx *ctx, long *ms_pcts);
 
 int damon_call(struct damon_ctx *ctx, struct damon_call_control *control);
 int damos_walk(struct damon_ctx *ctx, struct damos_walk_control *control);

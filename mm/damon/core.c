@@ -15,6 +15,7 @@
 #include <linux/psi.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/sort.h>
 #include <linux/string.h>
 
 /* for damon_get_folio() used by node eligible memory metrics */
@@ -2448,6 +2449,80 @@ u64 damon_estimated_bw(struct damon_ctx *ctx)
 			ctx->attrs.aggr_interval, &remainder);
 	return bytes_per_us * USEC_PER_SEC + div64_u64(remainder *
 			USEC_PER_SEC, ctx->attrs.aggr_interval);
+}
+
+static int damon_idletime_idletime(const struct damon_region *r)
+{
+	if (r->nr_accesses)
+		return -1 * (r->age + 1);
+	return r->age + 1;
+}
+
+static int damon_idletime_cmp_regions(const void *a, const void *b)
+{
+	const struct damon_region *ra = *(const struct damon_region **)a;
+	const struct damon_region *rb = *(const struct damon_region **)b;
+
+	return damon_idletime_idletime(ra) - damon_idletime_idletime(rb);
+}
+
+static int damon_idletime_sort_regions(struct damon_ctx *c,
+		struct damon_region ***sorted_ptr, int *nr_regions_ptr,
+		unsigned long *total_sz_ptr)
+{
+	struct damon_target *t;
+	struct damon_region *r;
+	struct damon_region **region_pointers;
+	unsigned int nr_regions = 0;
+	unsigned long total_sz = 0;
+
+	damon_for_each_target(t, c) {
+		/* there is only one target */
+		region_pointers = kmalloc_objs(*region_pointers,
+					       damon_nr_regions(t));
+		if (!region_pointers)
+			return -ENOMEM;
+		damon_for_each_region(r, t) {
+			region_pointers[nr_regions++] = r;
+			total_sz += r->ar.end - r->ar.start;
+		}
+	}
+	sort(region_pointers, nr_regions, sizeof(*region_pointers),
+			damon_idletime_cmp_regions, NULL);
+	*sorted_ptr = region_pointers;
+	*nr_regions_ptr = nr_regions;
+	*total_sz_ptr = total_sz;
+	return 0;
+}
+
+/* damon_idletime_pcts() - Calculate idle time percentiles.
+ * @ctx:	DAMON context to calculate the idle time percentiels for.
+ * @ms_pcts:	Buffer to save the percentile values.
+ *
+ * Return: 0 on success, negative error code otherwise.
+ */
+int damon_idletime_pcts(struct damon_ctx *ctx, long *ms_pcts)
+{
+	struct damon_region **sorted_regions, *region;
+	int nr_regions;
+	unsigned long total_sz, accounted_bytes = 0, percentile;
+	int err, i, next_percentile = 0;
+
+	err = damon_idletime_sort_regions(ctx, &sorted_regions, &nr_regions,
+			&total_sz);
+	if (err)
+		return err;
+	for (i = 0; i < nr_regions; i++) {
+		region = sorted_regions[i];
+		accounted_bytes += region->ar.end - region->ar.start;
+		percentile = div64_ul((u64)accounted_bytes * 100, total_sz);
+		while (next_percentile <= percentile)
+			ms_pcts[next_percentile++] =
+				div_s64((s64)damon_idletime_idletime(region) *
+				ctx->attrs.aggr_interval, USEC_PER_MSEC);
+	}
+	kfree(sorted_regions);
+	return 0;
 }
 
 /**
