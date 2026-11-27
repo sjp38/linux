@@ -774,8 +774,8 @@ auto-tuning mechanism tries to make ``current_value`` of ``complement``-ed
   (1/10,000).
 - ``inactive_mem_bp``: Inactive to active + inactive (LRU) memory size ratio in
   bp (1/10,000).
-- ``node_eligible_mem_bp``: Scheme target access pattern-eligible memory ratio
-  of a node in bp (1/10,000).
+- ``node_eligible_mem_bp``: Scheme action eligible memory ratio of a node in bp
+  (1/10,000).
 - ``hugepage_mem_bp``: Total huge page to total used memory ratio in bp
   (1/10,000).
 
