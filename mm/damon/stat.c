@@ -51,24 +51,6 @@ static struct damon_ctx *damon_stat_context;
 
 static unsigned long damon_stat_last_refresh_jiffies;
 
-static void damon_stat_set_estimated_memory_bandwidth(struct damon_ctx *c)
-{
-	struct damon_target *t;
-	struct damon_region *r;
-	u64 access_bytes = 0;
-	u64 remainder, bytes_per_us;
-
-	damon_for_each_target(t, c) {
-		damon_for_each_region(r, t)
-			access_bytes += (u64)(r->ar.end - r->ar.start) *
-				r->nr_accesses;
-	}
-	bytes_per_us = div64_u64_rem(access_bytes,
-			c->attrs.aggr_interval, &remainder);
-	estimated_memory_bandwidth = bytes_per_us * USEC_PER_SEC +
-		div64_u64(remainder * USEC_PER_SEC, c->attrs.aggr_interval);
-}
-
 static int damon_stat_idletime(const struct damon_region *r)
 {
 	if (r->nr_accesses)
@@ -147,7 +129,7 @@ static int damon_stat_damon_call_fn(void *data)
 	damon_stat_last_refresh_jiffies = jiffies;
 
 	aggr_interval_us = c->attrs.aggr_interval;
-	damon_stat_set_estimated_memory_bandwidth(c);
+	estimated_memory_bandwidth = damon_estimated_bw(c);
 	damon_stat_set_idletime_percentiles(c);
 	return 0;
 }
