@@ -67,7 +67,7 @@ comma (",").
     │ │ :ref:`0 <sysfs_kdamond>`/state,pid,refresh_ms
     │ │ │ :ref:`contexts <sysfs_contexts>`/nr_contexts
     │ │ │ │ :ref:`0 <sysfs_context>`/avail_operations,operations,addr_unit,
-    │ │ │ │   pause,estimated_bw
+    │ │ │ │   pause,estimated_bw,idle_ms_percentiles
     │ │ │ │ │ :ref:`monitoring_attrs <sysfs_monitoring_attrs>`/
     │ │ │ │ │ │ intervals/sample_us,aggr_us,update_us
     │ │ │ │ │ │ │ intervals_goal/access_bp,aggrs,min_sample_us,max_sample_us
@@ -242,6 +242,9 @@ the last successfully written content.
 ``estimated_bw`` file is for reading an estimated memory access bandwidth for
 the monitoring targets.  The bandwidth is in the ``addr_unit`` bytes per
 second.
+
+``idle_ms_percentiles`` file is for reading the access idle time percentiles
+for the mointoring targets.  The values are in ``milliseconds`` unit.
 
 .. _sysfs_monitoring_attrs:
 
