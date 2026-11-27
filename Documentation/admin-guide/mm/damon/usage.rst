@@ -220,22 +220,18 @@ details).  At the moment, only one context per kdamond is supported, so only
 contexts/<N>/
 -------------
 
-In each context directory, four files (``avail_operations``, ``operations``,
-``addr_unit`` and ``pause``) and three directories (``monitoring_attrs``,
-``targets``, and ``schemes``) exist.
+In each context directory, below files and directories exist.
 
-DAMON supports multiple types of :ref:`monitoring operations
-<damon_design_configurable_operations_set>`, including those for virtual address
-space and the physical address space.  You can get the list of available
-monitoring operations set on the currently running kernel by reading
-``avail_operations`` file.  Based on the kernel configuration, the file will
-list different available operation sets.  Please refer to the :ref:`design
-<damon_operations_set>` for the list of all available operation sets and their
-brief explanations.
+``avail_operations`` file is for showing available :ref:`monitoring operation
+set <damon_design_configurable_operations_set>`.  Users can get the list of
+available monitoring operation set on the currently running kernel by reading
+this file.  Please refer to the :ref:`design <damon_operations_set>` for the
+list of all available operation sets and their brief explanations.
 
-You can set and get what type of monitoring operations DAMON will use for the
-context by writing one of the keywords listed in ``avail_operations`` file and
-reading from the ``operations`` file.
+``operations`` file is for setting and getting the type of operation set that
+DAMON will use for the context.  Users can write one of the keywords listed in
+``avail_operations`` file to the file for the setup.  Reading the file shows
+the last successfully written content.
 
 ``addr_unit`` file is for setting and getting the :ref:`address unit
 <damon_design_addr_unit>` parameter of the operations set.
